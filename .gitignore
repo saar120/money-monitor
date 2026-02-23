@@ -1,0 +1,23 @@
+node_modules/
+dist/
+*.js.map
+*.d.ts.map
+
+# Environment & secrets
+.env
+*.pem
+
+# Database files
+data/
+*.db
+*.sqlite
+
+# OS files
+.DS_Store
+Thumbs.db
+
+# IDE
+.vscode/
+.idea/
+*.swp
+*.swo
