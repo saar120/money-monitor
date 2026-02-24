@@ -1,6 +1,15 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { getAccounts, createAccount, updateAccount, deleteAccount, triggerScrape, type Account } from '../api/client';
+import { ref, onMounted, onUnmounted } from 'vue';
+import {
+  getAccounts,
+  createAccount,
+  updateAccount,
+  deleteAccount,
+  triggerScrape,
+  createScrapeEventSource,
+  submitOtp,
+  type Account,
+} from '../api/client';
 
 const accounts = ref<Account[]>([]);
 const loading = ref(false);
@@ -9,6 +18,14 @@ const showAddForm = ref(false);
 const newCompanyId = ref('');
 const newDisplayName = ref('');
 const credentialFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
+
+// SSE & OTP state
+let eventSource: EventSource | null = null;
+const scrapingAccounts = ref(new Set<number>());
+const otpAccountId = ref<number | null>(null);
+const otpMessage = ref('');
+const otpCode = ref('');
+const otpSubmitting = ref(false);
 
 const providers = [
   { id: 'hapoalim', name: 'Bank Hapoalim' },
@@ -30,6 +47,52 @@ const providers = [
   { id: 'behatsdaa', name: 'Behatsdaa' },
   { id: 'pagi', name: 'Pagi' },
 ];
+
+function connectSse() {
+  eventSource = createScrapeEventSource();
+
+  eventSource.onmessage = (event) => {
+    const data = JSON.parse(event.data) as {
+      type: string;
+      accountId?: number;
+      message?: string;
+    };
+
+    switch (data.type) {
+      case 'otp-required':
+        if (data.accountId != null) {
+          otpAccountId.value = data.accountId;
+          otpMessage.value = data.message ?? 'Enter OTP code';
+          otpCode.value = '';
+        }
+        break;
+
+      case 'scrape-started':
+        if (data.accountId != null) {
+          scrapingAccounts.value.add(data.accountId);
+          scrapingAccounts.value = new Set(scrapingAccounts.value);
+        }
+        break;
+
+      case 'scrape-done':
+      case 'scrape-error':
+        if (data.accountId != null) {
+          scrapingAccounts.value.delete(data.accountId);
+          scrapingAccounts.value = new Set(scrapingAccounts.value);
+          if (otpAccountId.value === data.accountId) {
+            otpAccountId.value = null;
+          }
+          fetchAccounts();
+        }
+        break;
+    }
+  };
+
+  eventSource.onerror = () => {
+    eventSource?.close();
+    setTimeout(connectSse, 3000);
+  };
+}
 
 async function fetchAccounts() {
   loading.value = true;
@@ -77,6 +140,7 @@ async function handleDelete(account: Account) {
 }
 
 async function handleScrape(account: Account) {
+  if (scrapingAccounts.value.has(account.id)) return;
   try {
     const result = await triggerScrape(account.id);
     alert(`Scrape complete: ${result.transactionsFound} found, ${result.transactionsNew} new`);
@@ -86,7 +150,33 @@ async function handleScrape(account: Account) {
   }
 }
 
-onMounted(fetchAccounts);
+async function handleOtpSubmit() {
+  if (!otpAccountId.value || !otpCode.value.trim()) return;
+  otpSubmitting.value = true;
+  try {
+    await submitOtp(otpAccountId.value, otpCode.value.trim());
+    otpAccountId.value = null;
+    otpCode.value = '';
+  } catch (err) {
+    alert(`OTP submit failed: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    otpSubmitting.value = false;
+  }
+}
+
+function handleOtpCancel() {
+  otpAccountId.value = null;
+  otpCode.value = '';
+}
+
+onMounted(() => {
+  fetchAccounts();
+  connectSse();
+});
+
+onUnmounted(() => {
+  eventSource?.close();
+});
 </script>
 
 <template>
@@ -142,7 +232,13 @@ onMounted(fetchAccounts);
           </p>
         </div>
         <div class="account-actions">
-          <button @click="handleScrape(account)" title="Trigger scrape">Scrape</button>
+          <button
+            @click="handleScrape(account)"
+            :disabled="scrapingAccounts.has(account.id)"
+            title="Trigger scrape"
+          >
+            {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
+          </button>
           <button @click="handleToggleActive(account)">
             {{ account.isActive ? 'Disable' : 'Enable' }}
           </button>
@@ -150,6 +246,28 @@ onMounted(fetchAccounts);
         </div>
       </div>
       <p v-if="accounts.length === 0">No accounts configured. Add one to get started.</p>
+    </div>
+
+    <!-- OTP Modal -->
+    <div v-if="otpAccountId !== null" class="otp-overlay" @click.self="handleOtpCancel">
+      <div class="otp-modal card">
+        <h3>Enter OTP Code</h3>
+        <p>{{ otpMessage }}</p>
+        <input
+          v-model="otpCode"
+          inputmode="numeric"
+          autocomplete="one-time-code"
+          placeholder="Enter code..."
+          class="otp-input"
+          @keyup.enter="handleOtpSubmit"
+        />
+        <div class="otp-actions">
+          <button class="btn-primary" @click="handleOtpSubmit" :disabled="!otpCode.trim() || otpSubmitting">
+            {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
+          </button>
+          <button @click="handleOtpCancel">Cancel</button>
+        </div>
+      </div>
     </div>
   </div>
 </template>
@@ -170,6 +288,10 @@ onMounted(fetchAccounts);
   background: #fff;
   font-size: 0.8rem;
 }
+.account-actions button:disabled {
+  opacity: 0.6;
+  cursor: not-allowed;
+}
 .btn-primary { padding: 0.5rem 1rem; background: #36A2EB; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
 .btn-danger { background: #e74c3c; color: #fff; border-color: #e74c3c; }
 .btn-small { padding: 0.25rem 0.5rem; font-size: 0.8rem; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #f5f5f5; }
@@ -179,4 +301,45 @@ onMounted(fetchAccounts);
 .form-row input, .form-row select { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
 .cred-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
 .cred-row input { flex: 1; }
+
+/* OTP Modal */
+.otp-overlay {
+  position: fixed;
+  inset: 0;
+  background: rgba(0, 0, 0, 0.5);
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  z-index: 1000;
+}
+.otp-modal {
+  width: 360px;
+  max-width: 90vw;
+  text-align: center;
+}
+.otp-modal h3 { margin-top: 0; }
+.otp-modal p { color: #666; margin-bottom: 1rem; }
+.otp-input {
+  width: 100%;
+  padding: 0.75rem;
+  font-size: 1.25rem;
+  text-align: center;
+  letter-spacing: 0.25em;
+  border: 2px solid #36A2EB;
+  border-radius: 4px;
+  margin-bottom: 1rem;
+}
+.otp-actions {
+  display: flex;
+  gap: 0.5rem;
+  justify-content: center;
+}
+.otp-actions button {
+  padding: 0.5rem 1.5rem;
+  border: 1px solid #ddd;
+  border-radius: 4px;
+  cursor: pointer;
+  background: #fff;
+}
+.otp-actions .btn-primary { border: none; }
 </style>

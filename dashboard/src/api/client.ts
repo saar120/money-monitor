@@ -16,7 +16,7 @@ export function clearApiToken(): void {
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
-    'Content-Type': 'application/json',
+    ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
     ...options?.headers as Record<string, string>,
   };
 
@@ -143,6 +143,21 @@ export function triggerScrape(accountId: number) {
 
 export function triggerScrapeAll() {
   return request<{ results: Array<{ success: boolean; accountId: number }> }>('/scrape/all', { method: 'POST' });
+}
+
+export function createScrapeEventSource(): EventSource {
+  const token = getApiToken();
+  const url = token
+    ? `${BASE_URL}/scrape/events?token=${encodeURIComponent(token)}`
+    : `${BASE_URL}/scrape/events`;
+  return new EventSource(url);
+}
+
+export function submitOtp(accountId: number, code: string) {
+  return request<{ success: boolean }>('/scrape/otp', {
+    method: 'POST',
+    body: JSON.stringify({ accountId, code }),
+  });
 }
 
 export function getScrapeLogs(params: { accountId?: number; limit?: number } = {}) {

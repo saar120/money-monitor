@@ -6,6 +6,8 @@ import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import type { Account, ScraperTransaction, NewTransaction } from '../shared/types.js';
+import { waitForOtp } from './otp-bridge.js';
+import { broadcastSseEvent } from '../api/sse.js';
 
 function computeHash(accountId: number, txn: ScraperTransaction): string {
   const raw = `${accountId}:${txn.date}:${txn.chargedAmount}:${txn.description}`;
@@ -73,12 +75,25 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
       combineInstallments: false,
-      showBrowser: false,
+      showBrowser: config.SCRAPE_SHOW_BROWSER,
+      timeout: config.SCRAPE_TIMEOUT,
+      defaultTimeout: config.SCRAPE_TIMEOUT,
+      args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
     });
+
+    const otpCodeRetriever = async () => {
+      return waitForOtp(account.id, () => {
+        broadcastSseEvent({
+          type: 'otp-required',
+          accountId: account.id,
+          message: `OTP required for ${account.displayName}`,
+        });
+      });
+    };
 
     // Cast to any since credential shape varies by company
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await scraper.scrape(credentials as any);
+    const result = await scraper.scrape({ ...credentials as any, otpCodeRetriever });
 
     if (!result.success) {
       db.insert(scrapeLogs).values({

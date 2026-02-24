@@ -64,6 +64,13 @@ export function escapeLike(input: string): string {
   return input.replace(/[%_]/g, '\\$&');
 }
 
+// ─── OTP ───
+
+export const otpSubmitSchema = z.object({
+  accountId: z.coerce.number().int().positive(),
+  code: z.string().min(1).max(20),
+});
+
 // ─── Scrape Logs Query ───
 
 export const scrapeLogsQuerySchema = z.object({
