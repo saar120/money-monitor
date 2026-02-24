@@ -1,0 +1,74 @@
+import type { FastifyInstance } from 'fastify';
+import { eq, and, gte, lte, sql } from 'drizzle-orm';
+import { db } from '../db/connection.js';
+import { transactions, accounts } from '../db/schema.js';
+
+export async function summaryRoutes(app: FastifyInstance) {
+
+  app.get<{
+    Querystring: {
+      accountId?: string;
+      startDate?: string;
+      endDate?: string;
+      groupBy?: string;
+    }
+  }>('/api/transactions/summary', async (request, reply) => {
+    const { accountId, startDate, endDate, groupBy = 'category' } = request.query;
+
+    const conditions = [];
+    if (accountId) conditions.push(eq(transactions.accountId, parseInt(accountId, 10)));
+    if (startDate) conditions.push(gte(transactions.date, startDate));
+    if (endDate) conditions.push(lte(transactions.date, endDate));
+
+    const where = conditions.length > 0 ? and(...conditions) : undefined;
+
+    if (groupBy === 'month') {
+      const rows = db
+        .select({
+          month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+          totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
+          transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
+        })
+        .from(transactions)
+        .where(where)
+        .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+        .orderBy(sql`month desc`)
+        .all();
+
+      return reply.send({ groupBy: 'month', summary: rows });
+    }
+
+    if (groupBy === 'account') {
+      const rows = db
+        .select({
+          accountId: transactions.accountId,
+          displayName: accounts.displayName,
+          companyId: accounts.companyId,
+          totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
+          transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
+        })
+        .from(transactions)
+        .innerJoin(accounts, eq(transactions.accountId, accounts.id))
+        .where(where)
+        .groupBy(transactions.accountId)
+        .all();
+
+      return reply.send({ groupBy: 'account', summary: rows });
+    }
+
+    // Default: group by category
+    const rows = db
+      .select({
+        category: sql<string>`COALESCE(${transactions.category}, 'uncategorized')`.as('category'),
+        totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
+        transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
+      })
+      .from(transactions)
+      .where(where)
+      .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
+      .orderBy(sql`total_amount desc`)
+      .all();
+
+    return reply.send({ groupBy: 'category', summary: rows });
+  });
+}
