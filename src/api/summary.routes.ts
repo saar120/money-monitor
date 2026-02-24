@@ -2,21 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
+import { summaryQuerySchema } from './validation.js';
 
 export async function summaryRoutes(app: FastifyInstance) {
 
-  app.get<{
-    Querystring: {
-      accountId?: string;
-      startDate?: string;
-      endDate?: string;
-      groupBy?: string;
+  app.get('/api/transactions/summary', async (request, reply) => {
+    const parsed = summaryQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
     }
-  }>('/api/transactions/summary', async (request, reply) => {
-    const { accountId, startDate, endDate, groupBy = 'category' } = request.query;
+    const { accountId, startDate, endDate, groupBy } = parsed.data;
 
     const conditions = [];
-    if (accountId) conditions.push(eq(transactions.accountId, parseInt(accountId, 10)));
+    if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
 

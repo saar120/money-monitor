@@ -3,8 +3,8 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions } from '../db/schema.js';
 import { setCredentials, deleteCredentials } from '../scraper/credential-store.js';
-import { COMPANY_IDS } from '../shared/types.js';
 import { randomUUID } from 'node:crypto';
+import { createAccountSchema, updateAccountSchema } from './validation.js';
 
 export async function accountsRoutes(app: FastifyInstance) {
 
@@ -13,24 +13,15 @@ export async function accountsRoutes(app: FastifyInstance) {
     return reply.send({ accounts: rows });
   });
 
-  app.post<{
-    Body: {
-      companyId: string;
-      displayName: string;
-      credentials: Record<string, string>;
-    }
-  }>('/api/accounts', async (request, reply) => {
-    const { companyId, displayName, credentials } = request.body;
-
-    if (!COMPANY_IDS.includes(companyId as typeof COMPANY_IDS[number])) {
+  app.post('/api/accounts', async (request, reply) => {
+    const parsed = createAccountSchema.safeParse(request.body);
+    if (!parsed.success) {
       return reply.status(400).send({
-        error: `Invalid companyId. Must be one of: ${COMPANY_IDS.join(', ')}`,
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
       });
     }
-
-    if (!displayName || !credentials || Object.keys(credentials).length === 0) {
-      return reply.status(400).send({ error: 'displayName and credentials are required' });
-    }
+    const { companyId, displayName, credentials } = parsed.data;
 
     const credentialsRef = randomUUID();
     setCredentials(credentialsRef, credentials);
@@ -44,21 +35,21 @@ export async function accountsRoutes(app: FastifyInstance) {
     return reply.status(201).send({ account: result });
   });
 
-  app.put<{
-    Params: { id: string };
-    Body: {
-      displayName?: string;
-      isActive?: boolean;
-      credentials?: Record<string, string>;
-    }
-  }>('/api/accounts/:id', async (request, reply) => {
+  app.put<{ Params: { id: string } }>('/api/accounts/:id', async (request, reply) => {
     const id = parseInt(request.params.id, 10);
     if (isNaN(id)) return reply.status(400).send({ error: 'Invalid account ID' });
 
     const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
-    const { displayName, isActive, credentials } = request.body;
+    const parsed = updateAccountSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const { displayName, isActive, credentials } = parsed.data;
 
     if (credentials && Object.keys(credentials).length > 0) {
       setCredentials(existing.credentialsRef, credentials);

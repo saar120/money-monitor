@@ -1,62 +1,35 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, like, desc, sql, count } from 'drizzle-orm';
+import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
+import { transactionQuerySchema } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
-  app.get<{
-    Querystring: {
-      accountId?: string;
-      startDate?: string;
-      endDate?: string;
-      category?: string;
-      status?: string;
-      minAmount?: string;
-      maxAmount?: string;
-      search?: string;
-      offset?: string;
-      limit?: string;
-      sortBy?: string;
-      sortOrder?: string;
+  app.get('/api/transactions', async (request, reply) => {
+    const parsed = transactionQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
     }
-  }>('/api/transactions', async (request, reply) => {
     const {
       accountId, startDate, endDate, category, status,
       minAmount, maxAmount, search,
-      offset: offsetParam, limit: limitParam,
-      sortBy = 'date', sortOrder = 'desc',
-    } = request.query;
-
-    const limit = Math.min(parseInt(limitParam ?? '50', 10), 500);
-    const offset = parseInt(offsetParam ?? '0', 10);
+      offset, limit, sortBy, sortOrder,
+    } = parsed.data;
 
     const conditions = [];
 
-    if (accountId) {
-      conditions.push(eq(transactions.accountId, parseInt(accountId, 10)));
-    }
-    if (startDate) {
-      conditions.push(gte(transactions.date, startDate));
-    }
-    if (endDate) {
-      conditions.push(lte(transactions.date, endDate));
-    }
-    if (category) {
-      conditions.push(eq(transactions.category, category));
-    }
-    if (status) {
-      conditions.push(eq(transactions.status, status));
-    }
-    if (minAmount) {
-      conditions.push(gte(transactions.chargedAmount, parseFloat(minAmount)));
-    }
-    if (maxAmount) {
-      conditions.push(lte(transactions.chargedAmount, parseFloat(maxAmount)));
-    }
-    if (search) {
-      conditions.push(like(transactions.description, `%${search}%`));
-    }
+    if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
+    if (startDate) conditions.push(gte(transactions.date, startDate));
+    if (endDate) conditions.push(lte(transactions.date, endDate));
+    if (category) conditions.push(eq(transactions.category, category));
+    if (status) conditions.push(eq(transactions.status, status));
+    if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
+    if (maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, maxAmount));
+    if (search) conditions.push(like(transactions.description, `%${search}%`));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

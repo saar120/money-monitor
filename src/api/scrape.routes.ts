@@ -3,6 +3,7 @@ import { eq, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, scrapeLogs } from '../db/schema.js';
 import { scrapeAccount, scrapeAllAccounts } from '../scraper/scraper.service.js';
+import { scrapeLogsQuerySchema } from './validation.js';
 
 export async function scrapeRoutes(app: FastifyInstance) {
 
@@ -26,15 +27,18 @@ export async function scrapeRoutes(app: FastifyInstance) {
     return reply.send({ results });
   });
 
-  app.get<{
-    Querystring: { accountId?: string; limit?: string }
-  }>('/api/scrape/logs', async (request, reply) => {
-    const limit = parseInt(request.query.limit ?? '50', 10);
-    const accountIdParam = request.query.accountId;
+  app.get('/api/scrape/logs', async (request, reply) => {
+    const parsed = scrapeLogsQuerySchema.safeParse(request.query);
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+    const { accountId, limit } = parsed.data;
 
     let logs;
-    if (accountIdParam) {
-      const accountId = parseInt(accountIdParam, 10);
+    if (accountId !== undefined) {
       logs = db.select().from(scrapeLogs)
         .where(eq(scrapeLogs.accountId, accountId))
         .orderBy(desc(scrapeLogs.startedAt))
