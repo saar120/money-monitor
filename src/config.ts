@@ -12,6 +12,8 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
   API_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
+  SCRAPE_TIMEOUT: z.coerce.number().default(120000),
+  SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
 });
 
 export const config = envSchema.parse(process.env);

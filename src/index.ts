@@ -78,6 +78,12 @@ if (config.API_TOKEN) {
   app.addHook('onRequest', async (request, reply) => {
     if (!request.url.startsWith('/api/')) return;
     if (request.url === '/api/health') return;
+    // SSE endpoints can't send Authorization headers; accept token as query param
+    if (request.url.startsWith('/api/scrape/events')) {
+      const token = (request.query as Record<string, string>).token;
+      if (token === config.API_TOKEN) return;
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
 
     const auth = request.headers.authorization;
     if (auth !== `Bearer ${config.API_TOKEN}`) {
