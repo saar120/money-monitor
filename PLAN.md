@@ -15,10 +15,10 @@ A self-hosted backend service that aggregates financial data from Israeli banks 
 | Database | **SQLite (via better-sqlite3)** | Zero-config, single-file, perfect for self-hosted MVP |
 | ORM / Query | **Drizzle ORM** | Lightweight, TypeScript-first, great SQLite support |
 | Scraping | **israeli-bank-scrapers** | The core library for fetching bank/card data |
-| Scheduling | **node-cron** | Simple cron-based scheduling for periodic scrapes |
+| Scheduling | **node-cron** | Cron-based scheduling, pinned to Israel timezone (`Asia/Jerusalem`) |
 | AI Analysis | **Anthropic SDK (@anthropic-ai/sdk)** | Direct Claude API for transaction analysis and chat |
-| Dashboard | **React + Vite** | Fast dev experience, simple SPA |
-| Charts | **Recharts** | Declarative React charting library |
+| Dashboard | **Vue 3 + Vite** | Fast dev experience, simple SPA, Composition API |
+| Charts | **Chart.js (via vue-chartjs)** | Lightweight, flexible charting for Vue |
 
 ---
 
@@ -26,7 +26,7 @@ A self-hosted backend service that aggregates financial data from Israeli banks 
 
 ```
 ┌─────────────────────────────────────────────────────┐
-│                    Dashboard (React SPA)             │
+│                    Dashboard (Vue 3 SPA)             │
 │  ┌──────────┐  ┌──────────────┐  ┌───────────────┐  │
 │  │ Overview  │  │ Transactions │  │  AI Chat      │  │
 │  │ & Charts  │  │   Table      │  │  Interface    │  │
@@ -100,22 +100,22 @@ money-monitor/
 │   └── shared/
 │       └── types.ts              # Shared TypeScript types
 │
-├── dashboard/                    # React SPA (Vite)
+├── dashboard/                    # Vue 3 SPA (Vite)
 │   ├── package.json
 │   ├── vite.config.ts
 │   ├── index.html
 │   └── src/
-│       ├── App.tsx
-│       ├── main.tsx
+│       ├── App.vue
+│       ├── main.ts
 │       ├── api/                  # API client (fetch wrapper)
 │       │   └── client.ts
 │       ├── components/
-│       │   ├── Layout.tsx
-│       │   ├── Overview.tsx      # Summary cards + charts
-│       │   ├── TransactionTable.tsx
-│       │   ├── AccountManager.tsx
-│       │   └── AiChat.tsx        # Chat interface for AI analysis
-│       └── hooks/
+│       │   ├── AppLayout.vue
+│       │   ├── OverviewDashboard.vue   # Summary cards + charts
+│       │   ├── TransactionTable.vue
+│       │   ├── AccountManager.vue
+│       │   └── AiChat.vue              # Chat interface for AI analysis
+│       └── composables/
 │           └── useApi.ts
 │
 └── PLAN.md
@@ -213,7 +213,7 @@ Represents a configured bank/card provider that we scrape.
 
 Wraps `israeli-bank-scrapers` with:
 - **scraper.service.ts**: Creates a scraper instance per account, runs scrape with credentials, deduplicates transactions (hash-based), and upserts into DB.
-- **scheduler.ts**: Uses `node-cron` to run scrapes on a configurable schedule (default: daily at 6am). Scrapes all active accounts sequentially (scrapers use headless browser, so parallel would be resource-heavy).
+- **scheduler.ts**: Uses `node-cron` to run scrapes on a configurable schedule (default: daily at 6am Israel time, `Asia/Jerusalem`). Scrapes all active accounts sequentially (scrapers use headless browser, so parallel would be resource-heavy). The cron schedule is pinned to Israel timezone to ensure consistent scrape times regardless of server location.
 - **credential-store.ts**: Encrypts credentials at rest using AES-256 with a master key from env var. Stores as encrypted JSON in `data/credentials.enc`. Never exposes raw credentials via API.
 
 **Supported providers (from israeli-bank-scrapers):**
@@ -242,12 +242,12 @@ Uses the **Anthropic SDK** (`@anthropic-ai/sdk`) with tool use to build a financ
 
 ### 3. Dashboard (`dashboard/`)
 
-Simple React SPA with four main views:
+Vue 3 SPA (Composition API + `<script setup>`) with four main views:
 
 **Overview page:**
 - Total spending this month vs last month
-- Spending breakdown by category (pie/donut chart)
-- Monthly spending trend (bar chart)
+- Spending breakdown by category (pie/donut chart via vue-chartjs)
+- Monthly spending trend (bar chart via vue-chartjs)
 - Per-account summary cards
 
 **Transactions page:**
@@ -264,7 +264,7 @@ Simple React SPA with four main views:
 
 **AI Chat page:**
 - Chat interface to ask questions about your finances
-- Renders markdown responses
+- Renders markdown responses (via vue-markdown or v-html with sanitization)
 - Shows when agent is "thinking" or using tools
 - Suggested starter questions ("What are my top spending categories?", "Any unusual charges this month?")
 
@@ -292,8 +292,8 @@ Simple React SPA with four main views:
 11. AI routes (chat + batch categorize)
 
 ### Phase 5: Dashboard
-12. Vite + React project setup
-13. Overview page with charts
+12. Vite + Vue 3 project setup (Composition API, `<script setup>`)
+13. Overview page with charts (vue-chartjs)
 14. Transactions table page
 15. Account management page
 16. AI chat interface
@@ -315,7 +315,8 @@ HOST=0.0.0.0
 CREDENTIALS_MASTER_KEY=<random-32-byte-hex>
 
 # Scraping
-SCRAPE_CRON="0 6 * * *"          # Daily at 6am
+SCRAPE_CRON="0 6 * * *"          # Daily at 6am Israel time
+SCRAPE_TIMEZONE=Asia/Jerusalem    # All scheduling pinned to Israel timezone
 SCRAPE_START_DATE_MONTHS_BACK=3   # How far back to scrape on first run
 
 # Anthropic
