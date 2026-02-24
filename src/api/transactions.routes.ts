@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
-import { transactionQuerySchema } from './validation.js';
+import { transactionQuerySchema, escapeLike } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
@@ -29,7 +29,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (status) conditions.push(eq(transactions.status, status));
     if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
     if (maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, maxAmount));
-    if (search) conditions.push(like(transactions.description, `%${search}%`));
+    if (search) conditions.push(like(transactions.description, `%${escapeLike(search)}%`));
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 

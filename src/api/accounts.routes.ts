@@ -6,11 +6,16 @@ import { setCredentials, deleteCredentials } from '../scraper/credential-store.j
 import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
 
+function stripCredentialsRef(account: Record<string, unknown>) {
+  const { credentialsRef, ...safe } = account;
+  return safe;
+}
+
 export async function accountsRoutes(app: FastifyInstance) {
 
   app.get('/api/accounts', async (_request, reply) => {
     const rows = db.select().from(accounts).all();
-    return reply.send({ accounts: rows });
+    return reply.send({ accounts: rows.map(stripCredentialsRef) });
   });
 
   app.post('/api/accounts', async (request, reply) => {
@@ -32,7 +37,7 @@ export async function accountsRoutes(app: FastifyInstance) {
       credentialsRef,
     }).returning().get();
 
-    return reply.status(201).send({ account: result });
+    return reply.status(201).send({ account: stripCredentialsRef(result) });
   });
 
   app.put<{ Params: { id: string } }>('/api/accounts/:id', async (request, reply) => {
@@ -64,7 +69,7 @@ export async function accountsRoutes(app: FastifyInstance) {
     }
 
     const updated = db.select().from(accounts).where(eq(accounts.id, id)).get();
-    return reply.send({ account: updated });
+    return reply.send({ account: updated ? stripCredentialsRef(updated) : null });
   });
 
   app.delete<{

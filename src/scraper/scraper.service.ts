@@ -50,7 +50,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       accountId: account.id,
       transactionsFound: 0,
       transactionsNew: 0,
-      error: `No credentials found for ref: ${account.credentialsRef}`,
+      error: 'No credentials found for this account',
       errorType: 'MISSING_CREDENTIALS',
     };
     db.insert(scrapeLogs).values({
@@ -118,13 +118,15 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       for (const txn of txns) {
         const mapped = mapTransaction(account.id, txn);
         try {
-          db.insert(transactions)
+          const result = db.insert(transactions)
             .values(mapped)
             .onConflictDoNothing({ target: transactions.hash })
             .run();
-          totalNew++;
+          if (result.changes > 0) {
+            totalNew++;
+          }
         } catch {
-          // Hash conflict = duplicate, skip silently
+          // Unexpected DB error, skip this transaction
         }
       }
     }

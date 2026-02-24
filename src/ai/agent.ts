@@ -55,9 +55,10 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<string> 
 }
 
 export async function batchCategorize(batchSize: number = 50): Promise<{ categorized: number }> {
-  const { eq, isNull } = await import('drizzle-orm');
+  const { eq, isNull, inArray } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
   const { transactions } = await import('../db/schema.js');
+  const { CATEGORIES } = await import('./prompts.js');
 
   const uncategorized = db.select()
     .from(transactions)
@@ -68,6 +69,9 @@ export async function batchCategorize(batchSize: number = 50): Promise<{ categor
   if (uncategorized.length === 0) {
     return { categorized: 0 };
   }
+
+  const validIds = new Set(uncategorized.map(t => t.id));
+  const validCategories = new Set<string>(CATEGORIES);
 
   const txnList = uncategorized.map(t =>
     `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
@@ -92,6 +96,9 @@ export async function batchCategorize(batchSize: number = 50): Promise<{ categor
   try {
     const results: Array<{ id: number; category: string }> = JSON.parse(text);
     for (const { id, category } of results) {
+      if (!validIds.has(id)) continue;
+      if (!validCategories.has(category)) continue;
+
       db.update(transactions)
         .set({ category })
         .where(eq(transactions.id, id))

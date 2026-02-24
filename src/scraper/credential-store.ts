@@ -1,12 +1,17 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
 import { config } from '../config.js';
 
 const CREDENTIALS_FILE = 'data/credentials.enc';
 const ALGORITHM = 'aes-256-gcm';
 
+let cachedKey: Buffer | null = null;
+
 function deriveKey(): Buffer {
-  return scryptSync(config.CREDENTIALS_MASTER_KEY, 'money-monitor-salt', 32);
+  if (!cachedKey) {
+    cachedKey = scryptSync(config.CREDENTIALS_MASTER_KEY, 'money-monitor-salt', 32);
+  }
+  return cachedKey;
 }
 
 function encrypt(plaintext: string): string {
@@ -41,8 +46,9 @@ function loadAll(): CredentialMap {
 }
 
 function saveAll(credentials: CredentialMap): void {
-  mkdirSync('data', { recursive: true });
-  writeFileSync(CREDENTIALS_FILE, encrypt(JSON.stringify(credentials)));
+  mkdirSync('data', { recursive: true, mode: 0o700 });
+  writeFileSync(CREDENTIALS_FILE, encrypt(JSON.stringify(credentials)), { mode: 0o600 });
+  chmodSync(CREDENTIALS_FILE, 0o600);
 }
 
 export function getCredentials(ref: string): Record<string, string> | null {

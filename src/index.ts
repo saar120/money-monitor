@@ -57,7 +57,36 @@ app.addHook('onResponse', (request, reply, done) => {
   done();
 });
 
-await app.register(cors, { origin: true });
+// CORS: restrict to known origins only
+const allowedOrigins = config.CORS_ORIGIN
+  ? config.CORS_ORIGIN.split(',').map(o => o.trim())
+  : [`http://localhost:${config.PORT}`, `http://127.0.0.1:${config.PORT}`, 'http://localhost:5173', 'http://127.0.0.1:5173'];
+
+await app.register(cors, {
+  origin: (origin, cb) => {
+    // Allow requests with no origin (same-origin, curl, etc.)
+    if (!origin || allowedOrigins.includes(origin)) {
+      cb(null, true);
+    } else {
+      cb(new Error('Not allowed by CORS'), false);
+    }
+  },
+});
+
+// API token authentication
+if (config.API_TOKEN) {
+  app.addHook('onRequest', async (request, reply) => {
+    if (!request.url.startsWith('/api/')) return;
+    if (request.url === '/api/health') return;
+
+    const auth = request.headers.authorization;
+    if (auth !== `Bearer ${config.API_TOKEN}`) {
+      return reply.status(401).send({ error: 'Unauthorized' });
+    }
+  });
+} else {
+  app.log.warn('API_TOKEN is not set — API endpoints have no authentication. Set API_TOKEN in .env for security.');
+}
 
 // Health check
 app.get('/api/health', async () => {

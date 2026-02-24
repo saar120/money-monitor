@@ -57,6 +57,13 @@ export const categorizeSchema = z.object({
   batchSize: z.number().int().min(1).max(500).default(50),
 });
 
+// ─── Helpers ───
+
+/** Escape SQL LIKE wildcard characters (%, _) in user input */
+export function escapeLike(input: string): string {
+  return input.replace(/[%_]/g, '\\$&');
+}
+
 // ─── Scrape Logs Query ───
 
 export const scrapeLogsQuerySchema = z.object({

@@ -3,6 +3,7 @@ import { eq, and, gte, lte, like, sql, count, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
 import { CATEGORIES } from './prompts.js';
+import { escapeLike } from '../api/validation.js';
 
 export const tools: Tool[] = [
   {
@@ -120,7 +121,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
   if (input.status) conditions.push(eq(transactions.status, input.status));
   if (input.min_amount) conditions.push(gte(transactions.chargedAmount, input.min_amount));
   if (input.max_amount) conditions.push(lte(transactions.chargedAmount, input.max_amount));
-  if (input.search) conditions.push(like(transactions.description, `%${input.search}%`));
+  if (input.search) conditions.push(like(transactions.description, `%${escapeLike(input.search)}%`));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const limit = Math.min(input.limit ?? 50, 200);
