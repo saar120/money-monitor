@@ -1,0 +1,51 @@
+import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
+import type { accounts, transactions, scrapeLogs } from '../db/schema.js';
+
+// DB row types
+export type Account = InferSelectModel<typeof accounts>;
+export type NewAccount = InferInsertModel<typeof accounts>;
+export type Transaction = InferSelectModel<typeof transactions>;
+export type NewTransaction = InferInsertModel<typeof transactions>;
+export type ScrapeLog = InferSelectModel<typeof scrapeLogs>;
+export type NewScrapeLog = InferInsertModel<typeof scrapeLogs>;
+
+// Scraper result types (from israeli-bank-scrapers)
+export interface ScraperTransaction {
+  type: string;
+  identifier?: number | string;
+  date: string;
+  processedDate: string;
+  originalAmount: number;
+  originalCurrency: string;
+  chargedAmount: number;
+  description: string;
+  memo?: string;
+  installments?: {
+    number: number;
+    total: number;
+  };
+  status: string;
+}
+
+export interface ScraperAccountResult {
+  accountNumber: string;
+  balance?: number;
+  txns: ScraperTransaction[];
+}
+
+export interface ScraperResult {
+  success: boolean;
+  accounts?: ScraperAccountResult[];
+  errorType?: string;
+  errorMessage?: string;
+}
+
+// Supported company IDs (from israeli-bank-scrapers CompanyTypes)
+export const COMPANY_IDS = [
+  'hapoalim', 'leumi', 'discount', 'mizrahi', 'otsarHahayal',
+  'mercantile', 'massad', 'beinleumi', 'union',
+  'isracard', 'amex', 'max', 'visaCal',
+  'beyahadBishvilha', 'yahav', 'oneZero', 'behatsdaa', 'pagi',
+] as const;
+
+export type CompanyId = typeof COMPANY_IDS[number];
