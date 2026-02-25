@@ -1,6 +1,6 @@
 import { createScraper, CompanyTypes } from 'israeli-bank-scrapers';
 import { createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
@@ -133,9 +133,26 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       for (const txn of txns) {
         const mapped = mapTransaction(account.id, txn);
         try {
+          // When a pending transaction settles it often gets a new date,
+          // which changes its hash. Delete any stale pending record with
+          // matching account + description + amount before upserting.
+          if (mapped.status === 'completed') {
+            db.delete(transactions)
+              .where(and(
+                eq(transactions.accountId, mapped.accountId),
+                eq(transactions.description, mapped.description),
+                eq(transactions.chargedAmount, mapped.chargedAmount),
+                eq(transactions.status, 'pending'),
+              ))
+              .run();
+          }
+
           const result = db.insert(transactions)
             .values(mapped)
-            .onConflictDoNothing({ target: transactions.hash })
+            .onConflictDoUpdate({
+              target: transactions.hash,
+              set: { status: mapped.status },
+            })
             .run();
           if (result.changes > 0) {
             totalNew++;
