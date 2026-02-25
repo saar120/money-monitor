@@ -243,7 +243,7 @@ onUnmounted(() => {
                 </Badge>
               </div>
               <CardDescription class="text-sm">
-                {{ providers.find(p => p.id === account.companyId)?.name ?? account.companyId }}
+                {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
                 <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
               </CardDescription>
               <p class="text-xs text-muted-foreground mt-1">
@@ -320,7 +320,7 @@ onUnmounted(() => {
                 <SelectValue placeholder="Select provider..." />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="p in providers" :key="p.id" :value="p.id">
+                <SelectItem v-for="p in PROVIDERS" :key="p.id" :value="p.id">
                   {{ p.name }}
                 </SelectItem>
               </SelectContent>
@@ -332,16 +332,43 @@ onUnmounted(() => {
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
 
-          <div class="space-y-1.5">
-            <label class="text-sm font-medium">Credentials</label>
-            <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
-              <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
-              <Input v-model="field.value" type="password" placeholder="Value" />
+          <div v-if="newCompanyId" class="space-y-3">
+            <!-- OTP note banner (e.g. OneZero) -->
+            <div
+              v-if="selectedProvider?.otpNote"
+              class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+            >
+              {{ selectedProvider.otpNote }}
             </div>
-            <Button variant="outline" size="sm" @click="addCredentialField">
-              <Plus class="h-3 w-3 mr-1" />
-              Add Field
-            </Button>
+
+            <!-- Known provider: render labeled fields -->
+            <template v-if="selectedProvider && selectedProvider.fields.length > 0">
+              <div v-for="field in selectedProvider.fields" :key="field.key" class="space-y-1">
+                <label class="text-sm font-medium">{{ field.label }}</label>
+                <Input
+                  v-model="credentialValues[field.key]"
+                  :type="field.type"
+                  :placeholder="field.placeholder ?? ''"
+                  :autocomplete="field.type === 'password' ? 'current-password' : 'off'"
+                />
+                <p v-if="field.hint" class="text-xs text-muted-foreground">{{ field.hint }}</p>
+              </div>
+            </template>
+
+            <!-- Unknown provider: generic key-value fallback -->
+            <template v-else>
+              <div class="space-y-1.5">
+                <label class="text-sm font-medium">Credentials</label>
+                <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
+                  <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
+                  <Input v-model="field.value" type="password" placeholder="Value" />
+                </div>
+                <Button variant="outline" size="sm" @click="addCredentialField">
+                  <Plus class="h-3 w-3 mr-1" />
+                  Add Field
+                </Button>
+              </div>
+            </template>
           </div>
         </div>
 
