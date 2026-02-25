@@ -1,6 +1,10 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
 import { aiChat, type ChatMessage } from '../api/client';
+import { Button } from '@/components/ui/button';
+import { Textarea } from '@/components/ui/textarea';
+import { Card } from '@/components/ui/card';
+import { SendHorizontal, Bot, User } from 'lucide-vue-next';
 
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
@@ -44,108 +48,115 @@ async function sendMessage(text?: string) {
     await scrollToBottom();
   }
 }
+
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Enter' && !e.shiftKey) {
+    e.preventDefault();
+    sendMessage();
+  }
+}
 </script>
 
 <template>
-  <div class="chat-page">
-    <h1>AI Financial Advisor</h1>
+  <div class="flex flex-col h-[calc(100vh-6rem)]">
+    <h1 class="text-2xl font-semibold tracking-tight mb-4 flex-shrink-0">AI Financial Advisor</h1>
 
-    <div class="chat-container" ref="chatContainer">
-      <div v-if="messages.length === 0" class="empty-state">
-        <p>Ask me anything about your finances. Try one of these:</p>
-        <div class="suggestions">
-          <button v-for="s in suggestions" :key="s" @click="sendMessage(s)" class="suggestion">
-            {{ s }}
-          </button>
+    <!-- Chat area -->
+    <Card class="flex-1 overflow-hidden flex flex-col min-h-0">
+      <div ref="chatContainer" class="flex-1 overflow-y-auto p-4 space-y-4">
+
+        <!-- Empty state with suggestions -->
+        <div v-if="messages.length === 0" class="flex flex-col items-center justify-center h-full text-center py-8">
+          <div class="w-12 h-12 rounded-full bg-primary/10 flex items-center justify-center mb-4">
+            <Bot class="h-6 w-6 text-primary" />
+          </div>
+          <p class="text-muted-foreground text-sm mb-4">
+            Ask me anything about your finances
+          </p>
+          <div class="flex flex-wrap gap-2 justify-center max-w-lg">
+            <Button
+              v-for="s in suggestions"
+              :key="s"
+              variant="outline"
+              size="sm"
+              class="rounded-full text-xs h-auto py-1.5 px-3"
+              @click="sendMessage(s)"
+            >
+              {{ s }}
+            </Button>
+          </div>
+        </div>
+
+        <!-- Messages -->
+        <div
+          v-for="(msg, i) in messages"
+          :key="i"
+          class="flex gap-3"
+          :class="msg.role === 'user' ? 'justify-end' : 'justify-start'"
+        >
+          <!-- AI avatar -->
+          <div
+            v-if="msg.role === 'assistant'"
+            class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"
+          >
+            <Bot class="h-4 w-4 text-primary" />
+          </div>
+
+          <div
+            class="max-w-[75%] rounded-2xl px-4 py-2.5 text-sm leading-relaxed"
+            :class="msg.role === 'user'
+              ? 'bg-primary text-primary-foreground rounded-br-sm'
+              : 'bg-muted text-foreground rounded-bl-sm'"
+          >
+            <div class="text-[10px] font-semibold opacity-60 mb-1">
+              {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
+            </div>
+            <div v-html="msg.content.replace(/\n/g, '<br>')" />
+          </div>
+
+          <!-- User avatar -->
+          <div
+            v-if="msg.role === 'user'"
+            class="w-7 h-7 rounded-full bg-primary flex items-center justify-center flex-shrink-0 mt-0.5"
+          >
+            <User class="h-4 w-4 text-primary-foreground" />
+          </div>
+        </div>
+
+        <!-- Typing indicator -->
+        <div v-if="loading" class="flex gap-3 justify-start">
+          <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
+            <Bot class="h-4 w-4 text-primary" />
+          </div>
+          <div class="bg-muted rounded-2xl rounded-bl-sm px-4 py-3">
+            <div class="flex gap-1 items-center h-4">
+              <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.3s]" />
+              <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce [animation-delay:-0.15s]" />
+              <span class="w-1.5 h-1.5 rounded-full bg-muted-foreground/60 animate-bounce" />
+            </div>
+          </div>
         </div>
       </div>
 
-      <div v-for="(msg, i) in messages" :key="i" :class="['message', msg.role]">
-        <div class="message-bubble">
-          <div class="message-role">{{ msg.role === 'user' ? 'You' : 'AI Advisor' }}</div>
-          <div class="message-content" v-html="msg.content.replace(/\n/g, '<br>')"></div>
-        </div>
+      <!-- Input area -->
+      <div class="border-t border-border p-3 flex gap-2 items-end flex-shrink-0">
+        <Textarea
+          v-model="input"
+          placeholder="Ask about your finances... (Enter to send, Shift+Enter for newline)"
+          class="resize-none min-h-[40px] max-h-32 text-sm"
+          rows="1"
+          :disabled="loading"
+          @keydown="handleKeydown"
+        />
+        <Button
+          size="icon"
+          :disabled="loading || !input.trim()"
+          @click="sendMessage()"
+          class="flex-shrink-0"
+        >
+          <SendHorizontal class="h-4 w-4" />
+        </Button>
       </div>
-
-      <div v-if="loading" class="message assistant">
-        <div class="message-bubble">
-          <div class="message-role">AI Advisor</div>
-          <div class="message-content typing">Analyzing your finances...</div>
-        </div>
-      </div>
-    </div>
-
-    <div class="chat-input">
-      <input
-        v-model="input"
-        @keyup.enter="sendMessage()"
-        placeholder="Ask about your finances..."
-        :disabled="loading"
-      />
-      <button @click="sendMessage()" :disabled="loading || !input.trim()">Send</button>
-    </div>
+    </Card>
   </div>
 </template>
-
-<style scoped>
-.chat-page {
-  display: flex;
-  flex-direction: column;
-  height: calc(100vh - 4rem);
-}
-.chat-page h1 { margin-bottom: 1rem; flex-shrink: 0; }
-.chat-container {
-  flex: 1;
-  overflow-y: auto;
-  background: #fff;
-  border-radius: 8px;
-  padding: 1.5rem;
-  margin-bottom: 1rem;
-}
-.empty-state { text-align: center; padding: 2rem; color: #666; }
-.suggestions { display: flex; flex-wrap: wrap; gap: 0.5rem; justify-content: center; margin-top: 1rem; }
-.suggestion {
-  padding: 0.5rem 1rem;
-  background: #f0f7ff;
-  border: 1px solid #36A2EB;
-  border-radius: 20px;
-  color: #36A2EB;
-  cursor: pointer;
-  font-size: 0.875rem;
-}
-.suggestion:hover { background: #36A2EB; color: #fff; }
-.message { margin-bottom: 1rem; display: flex; }
-.message.user { justify-content: flex-end; }
-.message.assistant { justify-content: flex-start; }
-.message-bubble {
-  max-width: 80%;
-  padding: 0.75rem 1rem;
-  border-radius: 12px;
-}
-.message.user .message-bubble { background: #36A2EB; color: #fff; }
-.message.assistant .message-bubble { background: #f0f0f0; color: #333; }
-.message-role { font-size: 0.75rem; font-weight: 600; margin-bottom: 0.25rem; opacity: 0.7; }
-.typing { font-style: italic; opacity: 0.7; }
-.chat-input {
-  display: flex;
-  gap: 0.5rem;
-  flex-shrink: 0;
-}
-.chat-input input {
-  flex: 1;
-  padding: 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 8px;
-  font-size: 1rem;
-}
-.chat-input button {
-  padding: 0.75rem 1.5rem;
-  background: #36A2EB;
-  color: #fff;
-  border: none;
-  border-radius: 8px;
-  cursor: pointer;
-  font-size: 1rem;
-}
-.chat-input button:disabled { opacity: 0.5; cursor: default; }
-</style>

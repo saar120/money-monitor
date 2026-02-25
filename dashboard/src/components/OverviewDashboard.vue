@@ -7,6 +7,9 @@ import {
 } from 'chart.js';
 import { getSummary } from '../api/client';
 import { useApi } from '../composables/useApi';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Badge } from '@/components/ui/badge';
+import { Skeleton } from '@/components/ui/skeleton';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -66,88 +69,110 @@ function formatCurrency(amount: number): string {
 </script>
 
 <template>
-  <div class="overview">
-    <h1>Overview</h1>
+  <div class="space-y-6">
+    <h1 class="text-2xl font-semibold tracking-tight">Overview</h1>
 
-    <div class="summary-cards">
-      <div class="card">
-        <h3>This Month</h3>
-        <p class="amount">{{ formatCurrency(thisMonthTotal) }}</p>
-      </div>
-      <div class="card">
-        <h3>Last Month</h3>
-        <p class="amount">{{ formatCurrency(lastMonthTotal) }}</p>
-      </div>
-      <div class="card">
-        <h3>Difference</h3>
-        <p class="amount" :class="thisMonthTotal > lastMonthTotal ? 'negative' : 'positive'">
-          {{ formatCurrency(thisMonthTotal - lastMonthTotal) }}
-        </p>
-      </div>
+    <!-- Stat Cards -->
+    <div class="grid grid-cols-3 gap-4">
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="text-sm font-medium text-muted-foreground">This Month</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="categorySummary.loading.value">
+            <Skeleton class="h-8 w-32" />
+          </div>
+          <div v-else class="text-2xl font-bold">{{ formatCurrency(thisMonthTotal) }}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="text-sm font-medium text-muted-foreground">Last Month</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="lastMonthSummary.loading.value">
+            <Skeleton class="h-8 w-32" />
+          </div>
+          <div v-else class="text-2xl font-bold">{{ formatCurrency(lastMonthTotal) }}</div>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader class="pb-2">
+          <CardTitle class="text-sm font-medium text-muted-foreground">Difference</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <div v-if="categorySummary.loading.value || lastMonthSummary.loading.value">
+            <Skeleton class="h-8 w-32" />
+          </div>
+          <template v-else>
+            <div
+              class="text-2xl font-bold"
+              :class="thisMonthTotal > lastMonthTotal ? 'text-destructive' : 'text-green-500'"
+            >
+              {{ formatCurrency(Math.abs(thisMonthTotal - lastMonthTotal)) }}
+            </div>
+            <Badge
+              v-if="thisMonthTotal > lastMonthTotal"
+              variant="destructive"
+              class="mt-2"
+            >
+              ↑ More than last month
+            </Badge>
+            <Badge
+              v-else
+              class="mt-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+            >
+              ↓ Less than last month
+            </Badge>
+          </template>
+        </CardContent>
+      </Card>
     </div>
 
-    <div class="charts-row">
-      <div class="chart-container">
-        <h3>Spending by Category</h3>
-        <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" />
-        <p v-else-if="categorySummary.loading.value">Loading...</p>
-        <p v-else>No data yet</p>
-      </div>
-      <div class="chart-container">
-        <h3>Monthly Trend</h3>
-        <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" />
-        <p v-else-if="monthlySummary.loading.value">Loading...</p>
-        <p v-else>No data yet</p>
-      </div>
+    <!-- Charts Row -->
+    <div class="grid grid-cols-2 gap-4">
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">Spending by Category</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" />
+          <Skeleton v-else-if="categorySummary.loading.value" class="h-48 w-full rounded-md" />
+          <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
+        </CardContent>
+      </Card>
+
+      <Card>
+        <CardHeader>
+          <CardTitle class="text-base">Monthly Trend</CardTitle>
+        </CardHeader>
+        <CardContent>
+          <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" />
+          <Skeleton v-else-if="monthlySummary.loading.value" class="h-48 w-full rounded-md" />
+          <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
+        </CardContent>
+      </Card>
     </div>
 
-    <div class="account-summary" v-if="accountSummary.data.value">
-      <h3>Per Account (This Month)</h3>
-      <div class="account-cards">
-        <div class="card" v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
-          <h4>{{ acc.displayName }}</h4>
-          <p>{{ formatCurrency(acc.totalAmount) }}</p>
-          <small>{{ acc.transactionCount }} transactions</small>
-        </div>
-        <p v-if="accountSummary.data.value.summary.length === 0">No account data yet</p>
+    <!-- Per Account -->
+    <div v-if="accountSummary.data.value">
+      <h2 class="text-lg font-semibold mb-3">Per Account (This Month)</h2>
+      <p v-if="accountSummary.data.value.summary.length === 0" class="text-muted-foreground text-sm">
+        No account data yet
+      </p>
+      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
+        <Card v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
+          <CardHeader class="pb-1">
+            <CardTitle class="text-sm font-medium truncate">{{ acc.displayName }}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div class="text-xl font-bold">{{ formatCurrency(acc.totalAmount) }}</div>
+            <p class="text-xs text-muted-foreground mt-1">{{ acc.transactionCount }} transactions</p>
+          </CardContent>
+        </Card>
       </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.overview h1 { margin-bottom: 1.5rem; }
-.summary-cards {
-  display: grid;
-  grid-template-columns: repeat(3, 1fr);
-  gap: 1rem;
-  margin-bottom: 2rem;
-}
-.card {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-.amount { font-size: 1.5rem; font-weight: bold; margin: 0.5rem 0; }
-.positive { color: #27ae60; }
-.negative { color: #e74c3c; }
-.charts-row {
-  display: grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 1.5rem;
-  margin-bottom: 2rem;
-}
-.chart-container {
-  background: #fff;
-  padding: 1.5rem;
-  border-radius: 8px;
-  box-shadow: 0 1px 3px rgba(0,0,0,0.1);
-}
-.account-cards {
-  display: grid;
-  grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-  gap: 1rem;
-  margin-top: 1rem;
-}
-</style>
