@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
 import {
   getAccounts,
   createAccount,
@@ -10,6 +10,7 @@ import {
   submitOtp,
   type Account,
 } from '../api/client';
+import { PROVIDERS } from '@/lib/providers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -49,7 +50,19 @@ const showAddDialog = ref(false);
 
 const newCompanyId = ref('');
 const newDisplayName = ref('');
+// For providers with known schema
+const credentialValues = ref<Record<string, string>>({});
+// For providers with unknown schema (generic fallback)
 const credentialFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
+
+const selectedProvider = computed(() =>
+  PROVIDERS.find((p) => p.id === newCompanyId.value) ?? null,
+);
+
+watch(newCompanyId, () => {
+  credentialValues.value = {};
+  credentialFields.value = [{ key: '', value: '' }];
+});
 
 // SSE & OTP state
 let eventSource: EventSource | null = null;
@@ -58,27 +71,6 @@ const otpAccountId = ref<number | null>(null);
 const otpMessage = ref('');
 const otpCode = ref('');
 const otpSubmitting = ref(false);
-
-const providers = [
-  { id: 'hapoalim', name: 'Bank Hapoalim' },
-  { id: 'leumi', name: 'Bank Leumi' },
-  { id: 'discount', name: 'Bank Discount' },
-  { id: 'mizrahi', name: 'Bank Mizrahi' },
-  { id: 'otsarHahayal', name: 'Otsar Hahayal' },
-  { id: 'mercantile', name: 'Mercantile' },
-  { id: 'massad', name: 'Massad' },
-  { id: 'beinleumi', name: 'First International' },
-  { id: 'union', name: 'Union Bank' },
-  { id: 'yahav', name: 'Bank Yahav' },
-  { id: 'isracard', name: 'Isracard' },
-  { id: 'amex', name: 'American Express (Israel)' },
-  { id: 'max', name: 'Max (Leumi Card)' },
-  { id: 'visaCal', name: 'Visa Cal' },
-  { id: 'beyahadBishvilha', name: 'Beyond (Beyahad)' },
-  { id: 'oneZero', name: 'One Zero' },
-  { id: 'behatsdaa', name: 'Behatsdaa' },
-  { id: 'pagi', name: 'Pagi' },
-];
 
 function connectSse() {
   eventSource = createScrapeEventSource();
@@ -142,8 +134,13 @@ function addCredentialField() {
 
 async function handleAdd() {
   const credentials: Record<string, string> = {};
-  for (const field of credentialFields.value) {
-    if (field.key) credentials[field.key] = field.value;
+
+  if (selectedProvider.value && selectedProvider.value.fields.length > 0) {
+    Object.assign(credentials, credentialValues.value);
+  } else {
+    for (const field of credentialFields.value) {
+      if (field.key) credentials[field.key] = field.value;
+    }
   }
 
   await createAccount({
@@ -154,6 +151,7 @@ async function handleAdd() {
 
   newCompanyId.value = '';
   newDisplayName.value = '';
+  credentialValues.value = {};
   credentialFields.value = [{ key: '', value: '' }];
   showAddDialog.value = false;
   fetchAccounts();
