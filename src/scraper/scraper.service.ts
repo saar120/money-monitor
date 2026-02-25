@@ -131,6 +131,8 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       totalFound += txns.length;
 
       for (const txn of txns) {
+        if (txn.status === 'pending') continue;
+
         const mapped = mapTransaction(account.id, txn);
         try {
           const result = db.insert(transactions)
