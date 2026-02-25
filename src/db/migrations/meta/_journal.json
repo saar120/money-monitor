@@ -8,6 +8,13 @@
       "when": 1771942241517,
       "tag": "0000_tricky_anthem",
       "breakpoints": true
+    },
+    {
+      "idx": 1,
+      "version": "6",
+      "when": 1771942841517,
+      "tag": "0001_add_ignored_to_transactions",
+      "breakpoints": true
     }
   ]
 }
