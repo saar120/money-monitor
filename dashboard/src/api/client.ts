@@ -82,6 +82,7 @@ export interface Transaction {
   installmentNumber: number | null;
   installmentTotal: number | null;
   category: string | null;
+  ignored: boolean;
   hash: string;
   createdAt: string;
 }
@@ -114,6 +115,13 @@ export function getTransactions(filters: TransactionFilters = {}) {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
   return request<{ transactions: Transaction[]; pagination: Pagination }>(`/transactions?${params}`);
+}
+
+export function ignoreTransaction(id: number, ignored: boolean) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/ignore`, {
+    method: 'PATCH',
+    body: JSON.stringify({ ignored }),
+  });
 }
 
 // ─── Summary ───
