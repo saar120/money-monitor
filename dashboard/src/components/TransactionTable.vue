@@ -1,6 +1,27 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
 import { getTransactions, getAccounts, type Transaction, type TransactionFilters } from '../api/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import {
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
+} from '@/components/ui/table';
+import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Skeleton } from '@/components/ui/skeleton';
+import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-vue-next';
 
 const transactions = ref<Transaction[]>([]);
 const total = ref(0);
@@ -14,7 +35,7 @@ const filters = ref<TransactionFilters>({
   sortOrder: 'desc',
 });
 const search = ref('');
-const selectedAccount = ref<number | undefined>();
+const selectedAccount = ref<string>('all');
 const startDate = ref('');
 const endDate = ref('');
 const selectedCategory = ref('');
@@ -25,7 +46,7 @@ async function fetchTransactions() {
     const params: TransactionFilters = {
       ...filters.value,
       search: search.value || undefined,
-      accountId: selectedAccount.value,
+      accountId: selectedAccount.value !== 'all' ? Number(selectedAccount.value) : undefined,
       startDate: startDate.value || undefined,
       endDate: endDate.value || undefined,
       category: selectedCategory.value || undefined,
@@ -78,6 +99,9 @@ function formatCurrency(amount: number): string {
   return `₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 2 })}`;
 }
 
+const currentPage = () => Math.floor((filters.value.offset ?? 0) / (filters.value.limit ?? 50)) + 1;
+const totalPages = () => Math.ceil(total.value / (filters.value.limit ?? 50));
+
 onMounted(async () => {
   const accountData = await getAccounts();
   accounts.value = accountData.accounts;
@@ -86,115 +110,174 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="transactions-page">
-    <h1>Transactions</h1>
+  <div class="space-y-4">
+    <h1 class="text-2xl font-semibold tracking-tight">Transactions</h1>
 
-    <div class="filters">
-      <input v-model="search" placeholder="Search description..." @keyup.enter="applyFilters" />
-      <select v-model="selectedAccount" @change="applyFilters">
-        <option :value="undefined">All Accounts</option>
-        <option v-for="acc in accounts" :key="acc.id" :value="acc.id">{{ acc.displayName }}</option>
-      </select>
-      <input v-model="startDate" type="date" @change="applyFilters" />
-      <input v-model="endDate" type="date" @change="applyFilters" />
-      <input v-model="selectedCategory" placeholder="Category" @keyup.enter="applyFilters" />
-      <button @click="applyFilters">Filter</button>
-    </div>
+    <!-- Filters -->
+    <Card>
+      <CardContent class="pt-4">
+        <div class="flex flex-wrap gap-2">
+          <Input
+            v-model="search"
+            placeholder="Search description..."
+            class="w-48"
+            @keyup.enter="applyFilters"
+          />
 
-    <div class="table-wrapper">
-      <table>
-        <thead>
-          <tr>
-            <th @click="sort('date')" class="sortable">
-              Date {{ filters.sortBy === 'date' ? (filters.sortOrder === 'asc' ? '↑' : '↓') : '' }}
-            </th>
-            <th>Description</th>
-            <th @click="sort('chargedAmount')" class="sortable">
-              Amount {{ filters.sortBy === 'chargedAmount' ? (filters.sortOrder === 'asc' ? '↑' : '↓') : '' }}
-            </th>
-            <th>Category</th>
-            <th>Status</th>
-            <th>Account</th>
-          </tr>
-        </thead>
-        <tbody>
-          <tr v-if="loading">
-            <td colspan="6">Loading...</td>
-          </tr>
-          <tr v-else-if="transactions.length === 0">
-            <td colspan="6">No transactions found</td>
-          </tr>
-          <tr v-for="txn in transactions" :key="txn.id">
-            <td>{{ formatDate(txn.date) }}</td>
-            <td>{{ txn.description }}</td>
-            <td :class="txn.chargedAmount >= 0 ? 'positive' : 'negative'">
-              {{ formatCurrency(txn.chargedAmount) }}
-            </td>
-            <td>{{ txn.category ?? '—' }}</td>
-            <td><span :class="'status-' + txn.status">{{ txn.status }}</span></td>
-            <td>{{ txn.accountId }}</td>
-          </tr>
-        </tbody>
-      </table>
-    </div>
+          <Select v-model="selectedAccount" @update:model-value="applyFilters">
+            <SelectTrigger class="w-44">
+              <SelectValue placeholder="All Accounts" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="all">All Accounts</SelectItem>
+              <SelectItem
+                v-for="acc in accounts"
+                :key="acc.id"
+                :value="String(acc.id)"
+              >
+                {{ acc.displayName }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
-    <div class="pagination">
-      <button @click="prevPage" :disabled="(filters.offset ?? 0) === 0">Previous</button>
-      <span>{{ (filters.offset ?? 0) + 1 }}–{{ Math.min((filters.offset ?? 0) + (filters.limit ?? 50), total) }} of {{ total }}</span>
-      <button @click="nextPage" :disabled="(filters.offset ?? 0) + (filters.limit ?? 50) >= total">Next</button>
+          <Input
+            v-model="startDate"
+            type="date"
+            class="w-36"
+            @change="applyFilters"
+          />
+          <Input
+            v-model="endDate"
+            type="date"
+            class="w-36"
+            @change="applyFilters"
+          />
+
+          <Input
+            v-model="selectedCategory"
+            placeholder="Category"
+            class="w-36"
+            @keyup.enter="applyFilters"
+          />
+
+          <Button @click="applyFilters" variant="default" size="sm">Filter</Button>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Table -->
+    <Card>
+      <CardHeader class="pb-2">
+        <CardTitle class="text-base">
+          {{ total }} transaction{{ total !== 1 ? 's' : '' }}
+        </CardTitle>
+      </CardHeader>
+      <CardContent class="p-0">
+        <div class="overflow-x-auto">
+          <Table>
+            <TableHeader>
+              <TableRow>
+                <TableHead
+                  class="cursor-pointer select-none"
+                  @click="sort('date')"
+                >
+                  <span class="flex items-center gap-1">
+                    Date
+                    <ChevronUp v-if="filters.sortBy === 'date' && filters.sortOrder === 'asc'" class="h-3 w-3" />
+                    <ChevronDown v-else-if="filters.sortBy === 'date' && filters.sortOrder === 'desc'" class="h-3 w-3" />
+                    <ChevronsUpDown v-else class="h-3 w-3 opacity-40" />
+                  </span>
+                </TableHead>
+                <TableHead>Description</TableHead>
+                <TableHead
+                  class="cursor-pointer select-none text-right"
+                  @click="sort('chargedAmount')"
+                >
+                  <span class="flex items-center justify-end gap-1">
+                    Amount
+                    <ChevronUp v-if="filters.sortBy === 'chargedAmount' && filters.sortOrder === 'asc'" class="h-3 w-3" />
+                    <ChevronDown v-else-if="filters.sortBy === 'chargedAmount' && filters.sortOrder === 'desc'" class="h-3 w-3" />
+                    <ChevronsUpDown v-else class="h-3 w-3 opacity-40" />
+                  </span>
+                </TableHead>
+                <TableHead>Category</TableHead>
+                <TableHead>Status</TableHead>
+                <TableHead>Account</TableHead>
+              </TableRow>
+            </TableHeader>
+            <TableBody>
+              <TableRow v-if="loading">
+                <TableCell colspan="6" class="py-8">
+                  <div class="space-y-2">
+                    <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
+                  </div>
+                </TableCell>
+              </TableRow>
+              <TableRow v-else-if="transactions.length === 0">
+                <TableCell colspan="6" class="text-center text-muted-foreground py-12">
+                  No transactions found
+                </TableCell>
+              </TableRow>
+              <TableRow v-else v-for="txn in transactions" :key="txn.id">
+                <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
+                  {{ formatDate(txn.date) }}
+                </TableCell>
+                <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
+                <TableCell
+                  class="text-right font-medium tabular-nums"
+                  :class="txn.chargedAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'"
+                >
+                  {{ formatCurrency(txn.chargedAmount) }}
+                </TableCell>
+                <TableCell>
+                  <Badge v-if="txn.category" variant="secondary" class="text-xs">
+                    {{ txn.category }}
+                  </Badge>
+                  <span v-else class="text-muted-foreground text-sm">—</span>
+                </TableCell>
+                <TableCell>
+                  <Badge
+                    :variant="txn.status === 'completed' ? 'default' : 'secondary'"
+                    class="text-xs"
+                    :class="txn.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : ''"
+                  >
+                    {{ txn.status }}
+                  </Badge>
+                </TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ txn.accountId }}</TableCell>
+              </TableRow>
+            </TableBody>
+          </Table>
+        </div>
+      </CardContent>
+    </Card>
+
+    <!-- Pagination -->
+    <div class="flex items-center justify-between">
+      <p class="text-sm text-muted-foreground">
+        Page {{ currentPage() }} of {{ totalPages() || 1 }}
+        &nbsp;·&nbsp;
+        {{ (filters.offset ?? 0) + 1 }}–{{ Math.min((filters.offset ?? 0) + (filters.limit ?? 50), total) }}
+        of {{ total }}
+      </p>
+      <div class="flex gap-2">
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="(filters.offset ?? 0) === 0"
+          @click="prevPage"
+        >
+          Previous
+        </Button>
+        <Button
+          variant="outline"
+          size="sm"
+          :disabled="(filters.offset ?? 0) + (filters.limit ?? 50) >= total"
+          @click="nextPage"
+        >
+          Next
+        </Button>
+      </div>
     </div>
   </div>
 </template>
-
-<style scoped>
-.filters {
-  display: flex;
-  gap: 0.5rem;
-  margin-bottom: 1rem;
-  flex-wrap: wrap;
-}
-.filters input, .filters select {
-  padding: 0.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-}
-.filters button {
-  padding: 0.5rem 1rem;
-  background: #36A2EB;
-  color: #fff;
-  border: none;
-  border-radius: 4px;
-  cursor: pointer;
-}
-.table-wrapper { overflow-x: auto; }
-table {
-  width: 100%;
-  border-collapse: collapse;
-  background: #fff;
-  border-radius: 8px;
-  overflow: hidden;
-}
-th, td { padding: 0.75rem 1rem; text-align: left; border-bottom: 1px solid #eee; }
-th { background: #f8f9fa; font-weight: 600; }
-th.sortable { cursor: pointer; }
-th.sortable:hover { background: #e9ecef; }
-.positive { color: #27ae60; }
-.negative { color: #e74c3c; }
-.status-completed { color: #27ae60; }
-.status-pending { color: #f39c12; }
-.pagination {
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  gap: 1rem;
-  margin-top: 1rem;
-}
-.pagination button {
-  padding: 0.5rem 1rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  background: #fff;
-}
-.pagination button:disabled { opacity: 0.5; cursor: default; }
-</style>

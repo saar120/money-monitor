@@ -10,10 +10,42 @@ import {
   submitOtp,
   type Account,
 } from '../api/client';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Badge } from '@/components/ui/badge';
+import { Card, CardContent, CardTitle, CardDescription } from '@/components/ui/card';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
+import {
+  AlertDialog,
+  AlertDialogAction,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogTrigger,
+} from '@/components/ui/alert-dialog';
+import { Skeleton } from '@/components/ui/skeleton';
+import { Loader2, Plus, Trash2, RefreshCw, Power } from 'lucide-vue-next';
 
 const accounts = ref<Account[]>([]);
 const loading = ref(false);
-const showAddForm = ref(false);
+const showAddDialog = ref(false);
 
 const newCompanyId = ref('');
 const newDisplayName = ref('');
@@ -123,7 +155,7 @@ async function handleAdd() {
   newCompanyId.value = '';
   newDisplayName.value = '';
   credentialFields.value = [{ key: '', value: '' }];
-  showAddForm.value = false;
+  showAddDialog.value = false;
   fetchAccounts();
 }
 
@@ -133,10 +165,8 @@ async function handleToggleActive(account: Account) {
 }
 
 async function handleDelete(account: Account) {
-  if (confirm(`Delete "${account.displayName}"? This will also delete its transactions.`)) {
-    await deleteAccount(account.id, true);
-    fetchAccounts();
-  }
+  await deleteAccount(account.id, true);
+  fetchAccounts();
 }
 
 async function handleScrape(account: Account) {
@@ -180,166 +210,187 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="accounts-page">
-    <div class="header">
-      <h1>Accounts</h1>
-      <button class="btn-primary" @click="showAddForm = !showAddForm">
-        {{ showAddForm ? 'Cancel' : '+ Add Account' }}
-      </button>
+  <div class="space-y-6">
+    <!-- Header -->
+    <div class="flex items-center justify-between">
+      <h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
+      <Button @click="showAddDialog = true">
+        <Plus class="h-4 w-4 mr-2" />
+        Add Account
+      </Button>
     </div>
 
-    <div v-if="showAddForm" class="add-form card">
-      <h3>Add New Account</h3>
-      <div class="form-row">
-        <label>Provider</label>
-        <select v-model="newCompanyId">
-          <option value="">Select provider...</option>
-          <option v-for="p in providers" :key="p.id" :value="p.id">{{ p.name }}</option>
-        </select>
-      </div>
-      <div class="form-row">
-        <label>Display Name</label>
-        <input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
-      </div>
-      <div class="form-row">
-        <label>Credentials</label>
-        <div v-for="(field, i) in credentialFields" :key="i" class="cred-row">
-          <input v-model="field.key" placeholder="Field name (e.g. userCode)" />
-          <input v-model="field.value" type="password" placeholder="Value" />
-        </div>
-        <button class="btn-small" @click="addCredentialField">+ Add Field</button>
-      </div>
-      <button class="btn-primary" @click="handleAdd" :disabled="!newCompanyId || !newDisplayName">
-        Save Account
-      </button>
+    <!-- Loading skeletons -->
+    <div v-if="loading" class="space-y-3">
+      <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
     </div>
 
-    <div v-if="loading" class="loading">Loading...</div>
-    <div v-else class="accounts-list">
-      <div v-for="account in accounts" :key="account.id" class="card account-card">
-        <div class="account-info">
-          <h3>{{ account.displayName }}</h3>
-          <p class="meta">
-            {{ providers.find(p => p.id === account.companyId)?.name ?? account.companyId }}
-            <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
-          </p>
-          <p class="meta">
-            <span :class="account.isActive ? 'active' : 'inactive'">
-              {{ account.isActive ? 'Active' : 'Inactive' }}
-            </span>
-            <span v-if="account.lastScrapedAt"> · Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}</span>
-            <span v-else> · Never scraped</span>
-          </p>
+    <!-- Account cards -->
+    <div v-else class="space-y-3">
+      <p v-if="accounts.length === 0" class="text-muted-foreground text-sm text-center py-12">
+        No accounts configured. Add one to get started.
+      </p>
+
+      <Card v-for="account in accounts" :key="account.id">
+        <CardContent class="pt-4">
+          <div class="flex items-start justify-between gap-4">
+            <div class="flex-1 min-w-0">
+              <div class="flex items-center gap-2 mb-1">
+                <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
+                <Badge
+                  :variant="account.isActive ? 'default' : 'secondary'"
+                  class="text-xs"
+                >
+                  {{ account.isActive ? 'Active' : 'Inactive' }}
+                </Badge>
+              </div>
+              <CardDescription class="text-sm">
+                {{ providers.find(p => p.id === account.companyId)?.name ?? account.companyId }}
+                <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
+              </CardDescription>
+              <p class="text-xs text-muted-foreground mt-1">
+                <span v-if="account.lastScrapedAt">
+                  Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
+                </span>
+                <span v-else>Never scraped</span>
+              </p>
+            </div>
+
+            <div class="flex items-center gap-2 flex-shrink-0">
+              <Button
+                variant="outline"
+                size="sm"
+                :disabled="scrapingAccounts.has(account.id)"
+                @click="handleScrape(account)"
+              >
+                <Loader2 v-if="scrapingAccounts.has(account.id)" class="h-3 w-3 mr-1 animate-spin" />
+                <RefreshCw v-else class="h-3 w-3 mr-1" />
+                {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
+              </Button>
+
+              <Button
+                variant="outline"
+                size="sm"
+                @click="handleToggleActive(account)"
+              >
+                <Power class="h-3 w-3 mr-1" />
+                {{ account.isActive ? 'Disable' : 'Enable' }}
+              </Button>
+
+              <AlertDialog>
+                <AlertDialogTrigger as-child>
+                  <Button variant="destructive" size="sm">
+                    <Trash2 class="h-3 w-3" />
+                  </Button>
+                </AlertDialogTrigger>
+                <AlertDialogContent>
+                  <AlertDialogHeader>
+                    <AlertDialogTitle>Delete "{{ account.displayName }}"?</AlertDialogTitle>
+                    <AlertDialogDescription>
+                      This will permanently delete the account and all its transactions. This action cannot be undone.
+                    </AlertDialogDescription>
+                  </AlertDialogHeader>
+                  <AlertDialogFooter>
+                    <AlertDialogCancel>Cancel</AlertDialogCancel>
+                    <AlertDialogAction
+                      class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+                      @click="handleDelete(account)"
+                    >
+                      Delete
+                    </AlertDialogAction>
+                  </AlertDialogFooter>
+                </AlertDialogContent>
+              </AlertDialog>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+    </div>
+
+    <!-- Add Account Dialog -->
+    <Dialog v-model:open="showAddDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Add New Account</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <div class="space-y-1.5">
+            <label class="text-sm font-medium">Provider</label>
+            <Select v-model="newCompanyId">
+              <SelectTrigger>
+                <SelectValue placeholder="Select provider..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="p in providers" :key="p.id" :value="p.id">
+                  {{ p.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="text-sm font-medium">Display Name</label>
+            <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
+          </div>
+
+          <div class="space-y-1.5">
+            <label class="text-sm font-medium">Credentials</label>
+            <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
+              <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
+              <Input v-model="field.value" type="password" placeholder="Value" />
+            </div>
+            <Button variant="outline" size="sm" @click="addCredentialField">
+              <Plus class="h-3 w-3 mr-1" />
+              Add Field
+            </Button>
+          </div>
         </div>
-        <div class="account-actions">
-          <button
-            @click="handleScrape(account)"
-            :disabled="scrapingAccounts.has(account.id)"
-            title="Trigger scrape"
+
+        <DialogFooter>
+          <DialogClose as-child>
+            <Button variant="outline">Cancel</Button>
+          </DialogClose>
+          <Button
+            :disabled="!newCompanyId || !newDisplayName"
+            @click="handleAdd"
           >
-            {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
-          </button>
-          <button @click="handleToggleActive(account)">
-            {{ account.isActive ? 'Disable' : 'Enable' }}
-          </button>
-          <button class="btn-danger" @click="handleDelete(account)">Delete</button>
-        </div>
-      </div>
-      <p v-if="accounts.length === 0">No accounts configured. Add one to get started.</p>
-    </div>
+            Save Account
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
-    <!-- OTP Modal -->
-    <div v-if="otpAccountId !== null" class="otp-overlay" @click.self="handleOtpCancel">
-      <div class="otp-modal card">
-        <h3>Enter OTP Code</h3>
-        <p>{{ otpMessage }}</p>
-        <input
-          v-model="otpCode"
-          inputmode="numeric"
-          autocomplete="one-time-code"
-          placeholder="Enter code..."
-          class="otp-input"
-          @keyup.enter="handleOtpSubmit"
-        />
-        <div class="otp-actions">
-          <button class="btn-primary" @click="handleOtpSubmit" :disabled="!otpCode.trim() || otpSubmitting">
-            {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
-          </button>
-          <button @click="handleOtpCancel">Cancel</button>
+    <!-- OTP Dialog -->
+    <Dialog :open="otpAccountId !== null" @update:open="(v) => { if (!v) handleOtpCancel() }">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Two-Factor Authentication</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <p class="text-sm text-muted-foreground">{{ otpMessage }}</p>
+          <Input
+            v-model="otpCode"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="Enter code..."
+            class="text-center text-lg tracking-widest font-mono"
+            @keyup.enter="handleOtpSubmit"
+          />
         </div>
-      </div>
-    </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="handleOtpCancel">Cancel</Button>
+          <Button
+            :disabled="!otpCode.trim() || otpSubmitting"
+            @click="handleOtpSubmit"
+          >
+            <Loader2 v-if="otpSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>
-
-<style scoped>
-.header { display: flex; justify-content: space-between; align-items: center; margin-bottom: 1.5rem; }
-.card { background: #fff; padding: 1.5rem; border-radius: 8px; box-shadow: 0 1px 3px rgba(0,0,0,0.1); margin-bottom: 1rem; }
-.account-card { display: flex; justify-content: space-between; align-items: center; }
-.meta { color: #666; font-size: 0.875rem; margin: 0.25rem 0; }
-.active { color: #27ae60; font-weight: 600; }
-.inactive { color: #999; }
-.account-actions { display: flex; gap: 0.5rem; }
-.account-actions button {
-  padding: 0.4rem 0.75rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  background: #fff;
-  font-size: 0.8rem;
-}
-.account-actions button:disabled {
-  opacity: 0.6;
-  cursor: not-allowed;
-}
-.btn-primary { padding: 0.5rem 1rem; background: #36A2EB; color: #fff; border: none; border-radius: 4px; cursor: pointer; }
-.btn-danger { background: #e74c3c; color: #fff; border-color: #e74c3c; }
-.btn-small { padding: 0.25rem 0.5rem; font-size: 0.8rem; border: 1px solid #ddd; border-radius: 4px; cursor: pointer; background: #f5f5f5; }
-.add-form { margin-bottom: 1.5rem; }
-.form-row { margin-bottom: 1rem; }
-.form-row label { display: block; font-weight: 600; margin-bottom: 0.25rem; }
-.form-row input, .form-row select { width: 100%; padding: 0.5rem; border: 1px solid #ddd; border-radius: 4px; }
-.cred-row { display: flex; gap: 0.5rem; margin-bottom: 0.5rem; }
-.cred-row input { flex: 1; }
-
-/* OTP Modal */
-.otp-overlay {
-  position: fixed;
-  inset: 0;
-  background: rgba(0, 0, 0, 0.5);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  z-index: 1000;
-}
-.otp-modal {
-  width: 360px;
-  max-width: 90vw;
-  text-align: center;
-}
-.otp-modal h3 { margin-top: 0; }
-.otp-modal p { color: #666; margin-bottom: 1rem; }
-.otp-input {
-  width: 100%;
-  padding: 0.75rem;
-  font-size: 1.25rem;
-  text-align: center;
-  letter-spacing: 0.25em;
-  border: 2px solid #36A2EB;
-  border-radius: 4px;
-  margin-bottom: 1rem;
-}
-.otp-actions {
-  display: flex;
-  gap: 0.5rem;
-  justify-content: center;
-}
-.otp-actions button {
-  padding: 0.5rem 1.5rem;
-  border: 1px solid #ddd;
-  border-radius: 4px;
-  cursor: pointer;
-  background: #fff;
-}
-.otp-actions .btn-primary { border: none; }
-</style>

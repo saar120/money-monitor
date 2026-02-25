@@ -1,81 +1,42 @@
 <script setup lang="ts">
 import { useRoute } from 'vue-router';
+import { LayoutDashboard, Receipt, Building2, Bot } from 'lucide-vue-next';
+import { Separator } from '@/components/ui/separator';
 
 const route = useRoute();
 
 const navItems = [
-  { path: '/', label: 'Overview', icon: '📊' },
-  { path: '/transactions', label: 'Transactions', icon: '📋' },
-  { path: '/accounts', label: 'Accounts', icon: '🏦' },
-  { path: '/chat', label: 'AI Chat', icon: '🤖' },
+  { path: '/', label: 'Overview', icon: LayoutDashboard },
+  { path: '/transactions', label: 'Transactions', icon: Receipt },
+  { path: '/accounts', label: 'Accounts', icon: Building2 },
+  { path: '/chat', label: 'AI Chat', icon: Bot },
 ];
 </script>
 
 <template>
-  <div class="app-layout">
-    <nav class="sidebar">
-      <div class="logo">Money Monitor</div>
-      <ul>
-        <li v-for="item in navItems" :key="item.path">
-          <router-link
-            :to="item.path"
-            :class="{ active: route.path === item.path }"
-          >
-            <span class="icon">{{ item.icon }}</span>
-            {{ item.label }}
-          </router-link>
-        </li>
-      </ul>
-    </nav>
-    <main class="content">
+  <div class="flex min-h-screen bg-background text-foreground">
+    <aside class="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
+      <div class="px-4 py-5">
+        <span class="text-base font-bold tracking-tight">Money Monitor</span>
+      </div>
+      <Separator />
+      <nav class="flex-1 p-3 space-y-0.5">
+        <RouterLink
+          v-for="item in navItems"
+          :key="item.path"
+          :to="item.path"
+          class="flex items-center gap-3 px-3 py-2 rounded-md text-sm font-medium transition-colors no-underline"
+          :class="route.path === item.path
+            ? 'bg-accent text-accent-foreground'
+            : 'text-muted-foreground hover:bg-accent hover:text-accent-foreground'"
+        >
+          <component :is="item.icon" class="h-4 w-4 flex-shrink-0" />
+          {{ item.label }}
+        </RouterLink>
+      </nav>
+    </aside>
+    <main class="flex-1 overflow-y-auto p-6 min-w-0">
       <slot />
     </main>
   </div>
 </template>
-
-<style scoped>
-.app-layout {
-  display: flex;
-  min-height: 100vh;
-}
-.sidebar {
-  width: 220px;
-  background: #1a1a2e;
-  color: #fff;
-  padding: 1rem;
-  flex-shrink: 0;
-}
-.logo {
-  font-size: 1.25rem;
-  font-weight: bold;
-  margin-bottom: 2rem;
-  padding: 0.5rem;
-}
-.sidebar ul {
-  list-style: none;
-  padding: 0;
-  margin: 0;
-}
-.sidebar li a {
-  display: flex;
-  align-items: center;
-  gap: 0.5rem;
-  padding: 0.75rem;
-  color: #ccc;
-  text-decoration: none;
-  border-radius: 6px;
-  margin-bottom: 0.25rem;
-}
-.sidebar li a:hover,
-.sidebar li a.active {
-  background: #16213e;
-  color: #fff;
-}
-.icon { font-size: 1.1rem; }
-.content {
-  flex: 1;
-  padding: 2rem;
-  background: #f5f5f5;
-  overflow-y: auto;
-}
-</style>
