@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
-import { getTransactions, getAccounts, type Transaction, type TransactionFilters } from '../api/client';
+import { ref, onMounted, onUnmounted } from 'vue';
+import { getTransactions, getAccounts, ignoreTransaction, type Transaction, type TransactionFilters } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +39,9 @@ const selectedAccount = ref<string>('all');
 const startDate = ref('');
 const endDate = ref('');
 const selectedCategory = ref('');
+
+// Context menu state
+const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
 
 async function fetchTransactions() {
   loading.value = true;
@@ -102,10 +105,39 @@ function formatCurrency(amount: number): string {
 const currentPage = () => Math.floor((filters.value.offset ?? 0) / (filters.value.limit ?? 50)) + 1;
 const totalPages = () => Math.ceil(total.value / (filters.value.limit ?? 50));
 
+function openContextMenu(event: MouseEvent, txn: Transaction) {
+  event.preventDefault();
+  contextMenu.value = { x: event.clientX, y: event.clientY, txn };
+}
+
+function closeContextMenu() {
+  contextMenu.value = null;
+}
+
+async function toggleIgnore() {
+  if (!contextMenu.value) return;
+  const { txn } = contextMenu.value;
+  closeContextMenu();
+  try {
+    const result = await ignoreTransaction(txn.id, !txn.ignored);
+    // Update in-place so the row reacts immediately without a full refetch
+    const idx = transactions.value.findIndex(t => t.id === txn.id);
+    if (idx !== -1) transactions.value[idx] = result.transaction;
+  } catch (err) {
+    console.error('Failed to update transaction:', err);
+  }
+}
+
 onMounted(async () => {
   const accountData = await getAccounts();
   accounts.value = accountData.accounts;
   fetchTransactions();
+  document.addEventListener('click', closeContextMenu);
+  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+});
+
+onUnmounted(() => {
+  document.removeEventListener('click', closeContextMenu);
 });
 </script>
 
@@ -218,7 +250,14 @@ onMounted(async () => {
                   No transactions found
                 </TableCell>
               </TableRow>
-              <TableRow v-else v-for="txn in transactions" :key="txn.id">
+              <TableRow
+                v-else
+                v-for="txn in transactions"
+                :key="txn.id"
+                :class="txn.ignored ? 'opacity-40' : ''"
+                class="cursor-context-menu"
+                @contextmenu="openContextMenu($event, txn)"
+              >
                 <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
@@ -279,5 +318,22 @@ onMounted(async () => {
         </Button>
       </div>
     </div>
+
+    <!-- Context Menu -->
+    <Teleport to="body">
+      <div
+        v-if="contextMenu"
+        class="fixed z-50 min-w-[140px] rounded-md border bg-popover text-popover-foreground shadow-md py-1"
+        :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
+        @click.stop
+      >
+        <button
+          class="w-full px-3 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+          @click="toggleIgnore"
+        >
+          {{ contextMenu.txn.ignored ? 'Unignore transaction' : 'Ignore transaction' }}
+        </button>
+      </div>
+    </Teleport>
   </div>
 </template>
