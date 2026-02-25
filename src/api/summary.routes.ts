@@ -20,8 +20,9 @@ export async function summaryRoutes(app: FastifyInstance) {
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));
+    conditions.push(eq(transactions.ignored, false));
 
-    const where = conditions.length > 0 ? and(...conditions) : undefined;
+    const where = and(...conditions);
 
     if (groupBy === 'month') {
       const rows = db

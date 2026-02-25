@@ -28,6 +28,7 @@ export const transactions = sqliteTable('transactions', {
   installmentNumber: integer('installment_number'),
   installmentTotal: integer('installment_total'),
   category: text('category'),
+  ignored: integer('ignored', { mode: 'boolean' }).notNull().default(false),
   hash: text('hash').notNull().unique(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
