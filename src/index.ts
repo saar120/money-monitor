@@ -72,6 +72,7 @@ await app.register(cors, {
       cb(new Error('Not allowed by CORS'), false);
     }
   },
+  methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
 });
 
 // API token authentication

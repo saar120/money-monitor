@@ -9,7 +9,6 @@
     "build": "tsc && cd dashboard && npm run build",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
-    "db:migrate": "drizzle-kit migrate",
     "db:studio": "drizzle-kit studio",
     "dashboard:dev": "cd dashboard && npm run dev",
     "dashboard:build": "cd dashboard && npm run build"
@@ -22,6 +21,7 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
+    "@anthropic-ai/claude-agent-sdk": "^0.2.59",
     "@anthropic-ai/sdk": "^0.78.0",
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
