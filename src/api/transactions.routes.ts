@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
-import { transactionQuerySchema, ignoreTransactionSchema, escapeLike } from './validation.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
@@ -88,6 +88,30 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const [updated] = db
       .update(transactions)
       .set({ ignored: parsed.data.ignored })
+      .where(eq(transactions.id, id))
+      .returning()
+      .all();
+
+    return reply.send({ transaction: updated });
+  });
+
+  app.patch('/api/transactions/:id', async (request, reply) => {
+    const id = Number((request.params as { id: string }).id);
+    if (!Number.isInteger(id) || id <= 0) {
+      return reply.status(400).send({ error: 'Invalid transaction id' });
+    }
+
+    const parsed = updateTransactionSchema.safeParse(request.body);
+    if (!parsed.success) {
+      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
+    }
+
+    const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
+    if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
+
+    const [updated] = db
+      .update(transactions)
+      .set({ category: parsed.data.category })
       .where(eq(transactions.id, id))
       .returning()
       .all();

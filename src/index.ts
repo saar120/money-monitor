@@ -11,6 +11,7 @@ import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
 import { summaryRoutes } from './api/summary.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
+import { categoriesRoutes } from './api/categories.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 
 const app = Fastify({
@@ -105,6 +106,7 @@ await app.register(accountsRoutes);
 await app.register(transactionsRoutes);
 await app.register(summaryRoutes);
 await app.register(aiRoutes);
+await app.register(categoriesRoutes);
 
 // Serve dashboard static files in production
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
