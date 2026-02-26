@@ -1,13 +1,9 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
-import { buildAgentFinancialPrompt } from './prompts.js';
-import { fileURLToPath } from 'url';
-import { dirname, join } from 'path';
+import { buildFinancialAdvisorPrompt } from './prompts.js';
+import { buildTools, handleToolCall } from './tools.js';
 
-const __filename = fileURLToPath(import.meta.url);
-const __dirname = dirname(__filename);
-const PROJECT_ROOT = join(__dirname, '..', '..');
-const DB_PATH = join(PROJECT_ROOT, 'data', 'money-monitor.db');
+const client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -21,53 +17,52 @@ async function getCategoryNames(): Promise<string[]> {
   return rows.map(r => r.name);
 }
 
-function buildSdkEnv(): Record<string, string | undefined> {
-  const env: Record<string, string | undefined> = { ...process.env };
-  if (config.CLAUDE_CODE_OAUTH_TOKEN) {
-    env['CLAUDE_CODE_OAUTH_TOKEN'] = config.CLAUDE_CODE_OAUTH_TOKEN;
-    delete env['ANTHROPIC_API_KEY'];
-  }
-  return env;
-}
-
 export async function chat(conversationHistory: ChatMessage[]): Promise<string> {
   const categoryNames = await getCategoryNames();
-  const systemPrompt = buildAgentFinancialPrompt(categoryNames, DB_PATH);
+  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames);
+  const tools = buildTools(categoryNames);
 
-  const historyLines = conversationHistory.slice(0, -1).map(m =>
-    `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
-  );
-  const lastMsg = conversationHistory[conversationHistory.length - 1];
-  const prompt = historyLines.length > 0
-    ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
-    : lastMsg.content;
+  const messages: Anthropic.MessageParam[] = conversationHistory.map(msg => ({
+    role: msg.role,
+    content: msg.content,
+  }));
 
-  console.log(`[chat] starting query, messages=${conversationHistory.length}, auth=${config.CLAUDE_CODE_OAUTH_TOKEN ? 'oauth' : 'apiKey'}`);
+  const MAX_TOOL_ROUNDS = 10;
 
-  for await (const msg of query({
-    prompt,
-    options: {
-      cwd: PROJECT_ROOT,
+  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
+    const response = await client.messages.create({
       model: config.ANTHROPIC_MODEL,
-      systemPrompt,
-      allowedTools: ['Bash'],
-      env: buildSdkEnv(),
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
-    },
-  })) {
-    if (msg.type === 'result') {
-      if (msg.subtype === 'success') {
-        console.log(`[chat] success, turns=${msg.num_turns}, cost=$${msg.total_cost_usd?.toFixed(4)}`);
-        return msg.result;
-      } else {
-        console.error(`[chat] agent error: subtype=${msg.subtype}`, msg.errors);
-        throw new Error(`Agent error (${msg.subtype}): ${msg.errors?.join(', ') || 'unknown'}`);
+      max_tokens: 4096,
+      system: systemPrompt,
+      tools,
+      messages,
+    });
+
+    const toolUseBlocks = response.content.filter(block => block.type === 'tool_use');
+    const textBlocks = response.content.filter(block => block.type === 'text');
+
+    if (toolUseBlocks.length === 0) {
+      return textBlocks.map(b => b.type === 'text' ? b.text : '').join('\n');
+    }
+
+    messages.push({ role: 'assistant', content: response.content });
+
+    const toolResults: Anthropic.ToolResultBlockParam[] = [];
+    for (const block of toolUseBlocks) {
+      if (block.type === 'tool_use') {
+        const result = await handleToolCall(block.name, block.input as Record<string, unknown>);
+        toolResults.push({
+          type: 'tool_result',
+          tool_use_id: block.id,
+          content: result,
+        });
       }
     }
+
+    messages.push({ role: 'user', content: toolResults });
   }
 
-  return 'No response generated.';
+  return 'I reached the maximum number of analysis steps. Please try a more specific question.';
 }
 
 export async function batchCategorize(
@@ -78,10 +73,12 @@ export async function batchCategorize(
   const { db } = await import('../db/connection.js');
   const { transactions, categories } = await import('../db/schema.js');
 
+  // Fetch category names from DB
   const categoryRows = db.select({ name: categories.name }).from(categories).all();
   const categoryNames = categoryRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
+  // Fetch uncategorized transactions — either specific IDs or next batch
   const uncategorized = ids && ids.length > 0
     ? db.select().from(transactions)
         .where(isNull(transactions.category))
@@ -103,36 +100,36 @@ export async function batchCategorize(
 
   const categoryList = categoryNames.join(', ');
 
-  let text = '';
-  for await (const msg of query({
-    prompt: `Categorize these transactions into one of: ${categoryList}\n\nTransactions:\n${txnList}\n\nRespond with ONLY a JSON array: [{"id":1,"category":"food"},...]`,
-    options: {
-      cwd: PROJECT_ROOT,
-      model: config.ANTHROPIC_MODEL,
-      systemPrompt: 'You are a transaction categorizer. Respond with ONLY a valid JSON array, no markdown, no explanation.',
-      allowedTools: [],
-      env: buildSdkEnv(),
-      permissionMode: 'bypassPermissions',
-      allowDangerouslySkipPermissions: true,
-    },
-  })) {
-    if (msg.type === 'result' && msg.subtype === 'success') {
-      text = msg.result;
-    }
-  }
+  const response = await client.messages.create({
+    model: config.ANTHROPIC_MODEL,
+    max_tokens: 4096,
+    system: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
+    messages: [{
+      role: 'user',
+      content: `Categorize these transactions:\n${txnList}`,
+    }],
+  });
+
+  const text = response.content
+    .filter(b => b.type === 'text')
+    .map(b => b.type === 'text' ? b.text : '')
+    .join('');
 
   let categorized = 0;
   try {
-    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-    const results: Array<{ id: number; category: string }> = JSON.parse(clean);
+    const results: Array<{ id: number; category: string }> = JSON.parse(text);
     for (const { id, category } of results) {
       if (!validIds.has(id)) continue;
       if (!validCategories.has(category)) continue;
-      db.update(transactions).set({ category }).where(eq(transactions.id, id)).run();
+
+      db.update(transactions)
+        .set({ category })
+        .where(eq(transactions.id, id))
+        .run();
       categorized++;
     }
   } catch {
-    // If parsing fails, return 0
+    // If parsing fails, return 0 — the model response was malformed
   }
 
   return { categorized };
