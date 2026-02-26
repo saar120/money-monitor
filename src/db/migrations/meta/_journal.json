@@ -16,5 +16,13 @@
       "tag": "0001_add_ignored_to_transactions",
       "breakpoints": true
     }
+    ,
+    {
+      "idx": 2,
+      "version": "6",
+      "when": 1771943441517,
+      "tag": "0002_categories",
+      "breakpoints": true
+    }
   ]
 }
