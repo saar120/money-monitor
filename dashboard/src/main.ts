@@ -10,6 +10,7 @@ const router = createRouter({
     { path: '/transactions', component: () => import('./components/TransactionTable.vue') },
     { path: '/accounts', component: () => import('./components/AccountManager.vue') },
     { path: '/chat', component: () => import('./components/AiChat.vue') },
+    { path: '/categories', component: () => import('./components/CategoryManager.vue') },
   ],
 });
 
