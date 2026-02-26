@@ -2,73 +2,74 @@ import type { Tool } from '@anthropic-ai/sdk/resources/messages';
 import { eq, and, gte, lte, like, sql, count, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
-import { CATEGORIES } from './prompts.js';
 import { escapeLike } from '../api/validation.js';
 
-export const tools: Tool[] = [
-  {
-    name: 'query_transactions',
-    description: 'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        account_id: { type: 'number', description: 'Filter by account ID' },
-        start_date: { type: 'string', description: 'Start date (ISO string, e.g. "2026-01-01")' },
-        end_date: { type: 'string', description: 'End date (ISO string, e.g. "2026-01-31")' },
-        category: { type: 'string', description: 'Filter by category' },
-        status: { type: 'string', enum: ['completed', 'pending'], description: 'Transaction status' },
-        min_amount: { type: 'number', description: 'Minimum charged amount' },
-        max_amount: { type: 'number', description: 'Maximum charged amount' },
-        search: { type: 'string', description: 'Search term for description (partial match)' },
-        limit: { type: 'number', description: 'Max results to return (default 50, max 200)' },
-      },
-      required: [],
-    },
-  },
-  {
-    name: 'get_spending_summary',
-    description: 'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        group_by: {
-          type: 'string',
-          enum: ['category', 'month', 'account'],
-          description: 'How to group the results (default: category)',
+export function buildTools(categoryNames: string[]): Tool[] {
+  return [
+    {
+      name: 'query_transactions',
+      description: 'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          account_id: { type: 'number', description: 'Filter by account ID' },
+          start_date: { type: 'string', description: 'Start date (ISO string, e.g. "2026-01-01")' },
+          end_date: { type: 'string', description: 'End date (ISO string, e.g. "2026-01-31")' },
+          category: { type: 'string', description: 'Filter by category' },
+          status: { type: 'string', enum: ['completed', 'pending'], description: 'Transaction status' },
+          min_amount: { type: 'number', description: 'Minimum charged amount' },
+          max_amount: { type: 'number', description: 'Maximum charged amount' },
+          search: { type: 'string', description: 'Search term for description (partial match)' },
+          limit: { type: 'number', description: 'Max results to return (default 50, max 200)' },
         },
-        account_id: { type: 'number', description: 'Filter by account ID' },
-        start_date: { type: 'string', description: 'Start date (ISO string)' },
-        end_date: { type: 'string', description: 'End date (ISO string)' },
+        required: [],
       },
-      required: [],
     },
-  },
-  {
-    name: 'categorize_transaction',
-    description: 'Assign a category to a specific transaction by its ID.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {
-        transaction_id: { type: 'number', description: 'The transaction ID' },
-        category: {
-          type: 'string',
-          enum: CATEGORIES as unknown as string[],
-          description: 'The category to assign',
+    {
+      name: 'get_spending_summary',
+      description: 'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          group_by: {
+            type: 'string',
+            enum: ['category', 'month', 'account'],
+            description: 'How to group the results (default: category)',
+          },
+          account_id: { type: 'number', description: 'Filter by account ID' },
+          start_date: { type: 'string', description: 'Start date (ISO string)' },
+          end_date: { type: 'string', description: 'End date (ISO string)' },
         },
+        required: [],
       },
-      required: ['transaction_id', 'category'],
     },
-  },
-  {
-    name: 'get_account_balances',
-    description: 'Get a list of all configured accounts with their latest scrape info and transaction counts.',
-    input_schema: {
-      type: 'object' as const,
-      properties: {},
-      required: [],
+    {
+      name: 'categorize_transaction',
+      description: 'Assign a category to a specific transaction by its ID.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {
+          transaction_id: { type: 'number', description: 'The transaction ID' },
+          category: {
+            type: 'string',
+            enum: categoryNames,
+            description: 'The category to assign',
+          },
+        },
+        required: ['transaction_id', 'category'],
+      },
     },
-  },
-];
+    {
+      name: 'get_account_balances',
+      description: 'Get a list of all configured accounts with their latest scrape info and transaction counts.',
+      input_schema: {
+        type: 'object' as const,
+        properties: {},
+        required: [],
+      },
+    },
+  ];
+}
 
 interface QueryTransactionsInput {
   account_id?: number;

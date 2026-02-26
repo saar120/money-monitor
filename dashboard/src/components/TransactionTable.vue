@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
-import { getTransactions, getAccounts, ignoreTransaction, type Transaction, type TransactionFilters } from '../api/client';
+import { getTransactions, getAccounts, ignoreTransaction, getCategories, updateTransactionCategory, type Transaction, type TransactionFilters, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -39,6 +39,9 @@ const selectedAccount = ref<string>('all');
 const startDate = ref('');
 const endDate = ref('');
 const selectedCategory = ref('');
+
+const availableCategories = ref<Category[]>([]);
+const updatingCategoryFor = ref<number | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
@@ -114,6 +117,19 @@ function closeContextMenu() {
   contextMenu.value = null;
 }
 
+async function updateCategory(txn: Transaction, newCategory: string | null) {
+  updatingCategoryFor.value = txn.id;
+  try {
+    const result = await updateTransactionCategory(txn.id, newCategory);
+    const idx = transactions.value.findIndex(t => t.id === txn.id);
+    if (idx !== -1) transactions.value[idx] = result.transaction;
+  } catch (err) {
+    console.error('Failed to update category:', err);
+  } finally {
+    updatingCategoryFor.value = null;
+  }
+}
+
 async function toggleIgnore() {
   if (!contextMenu.value) return;
   const { txn } = contextMenu.value;
@@ -129,8 +145,9 @@ async function toggleIgnore() {
 }
 
 onMounted(async () => {
-  const accountData = await getAccounts();
+  const [accountData, catData] = await Promise.all([getAccounts(), getCategories()]);
   accounts.value = accountData.accounts;
+  availableCategories.value = catData.categories;
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
   document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
@@ -185,12 +202,17 @@ onUnmounted(() => {
             @change="applyFilters"
           />
 
-          <Input
-            v-model="selectedCategory"
-            placeholder="Category"
-            class="w-36"
-            @keyup.enter="applyFilters"
-          />
+          <Select v-model="selectedCategory" @update:model-value="applyFilters">
+            <SelectTrigger class="w-36">
+              <SelectValue placeholder="All categories" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All categories</SelectItem>
+              <SelectItem v-for="cat in availableCategories" :key="cat.name" :value="cat.name">
+                {{ cat.label }}
+              </SelectItem>
+            </SelectContent>
+          </Select>
 
           <Button @click="applyFilters" variant="default" size="sm">Filter</Button>
         </div>
@@ -268,11 +290,41 @@ onUnmounted(() => {
                 >
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
-                <TableCell>
-                  <Badge v-if="txn.category" variant="secondary" class="text-xs">
-                    {{ txn.category }}
-                  </Badge>
-                  <span v-else class="text-muted-foreground text-sm">—</span>
+                <TableCell @click.stop>
+                  <Select
+                    :model-value="txn.category ?? ''"
+                    :disabled="updatingCategoryFor === txn.id"
+                    @update:model-value="(val) => updateCategory(txn, val === '__none__' || val == null ? null : String(val))"
+                  >
+                    <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
+                      <SelectValue>
+                        <Badge
+                          v-if="txn.category"
+                          variant="secondary"
+                          class="text-xs"
+                          :style="{ backgroundColor: (availableCategories.find(c => c.name === txn.category)?.color ?? '#94a3b8') + '33', color: availableCategories.find(c => c.name === txn.category)?.color ?? undefined }"
+                        >
+                          {{ availableCategories.find(c => c.name === txn.category)?.label ?? txn.category }}
+                        </Badge>
+                        <span v-else class="text-muted-foreground">—</span>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="__none__">
+                        <span class="text-muted-foreground">None</span>
+                      </SelectItem>
+                      <SelectItem
+                        v-for="cat in availableCategories"
+                        :key="cat.name"
+                        :value="cat.name"
+                      >
+                        <div class="flex items-center gap-2">
+                          <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: cat.color ?? '#94a3b8' }" />
+                          {{ cat.label }}
+                        </div>
+                      </SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <Badge

@@ -43,3 +43,11 @@ export const scrapeLogs = sqliteTable('scrape_logs', {
   startedAt: text('started_at').notNull().default(sql`(datetime('now'))`),
   completedAt: text('completed_at'),
 });
+
+export const categories = sqliteTable('categories', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  label: text('label').notNull(),
+  color: text('color'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});

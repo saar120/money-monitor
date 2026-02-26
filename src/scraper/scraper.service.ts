@@ -8,6 +8,7 @@ import { config } from '../config.js';
 import type { Account, ScraperTransaction, NewTransaction } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
+import { batchCategorize } from '../ai/agent.js';
 
 function computeHash(accountId: number, txn: ScraperTransaction): string {
   const raw = `${accountId}:${txn.date}:${txn.chargedAmount}:${txn.description}`;
@@ -118,6 +119,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
 
     let totalFound = 0;
     let totalNew = 0;
+    const newIds: number[] = [];
 
     for (const scraperAccount of result.accounts ?? []) {
       if (scraperAccount.accountNumber && !account.accountNumber) {
@@ -141,6 +143,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
             .run();
           if (result.changes > 0) {
             totalNew++;
+            newIds.push(Number(result.lastInsertRowid));
           }
         } catch {
           // Unexpected DB error, skip this transaction
@@ -160,6 +163,13 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       startedAt,
       completedAt: new Date().toISOString(),
     }).run();
+
+    // Best-effort: categorize newly imported transactions in background
+    if (newIds.length > 0) {
+      batchCategorize(newIds.length, newIds).catch(() => {
+        // Categorization failure must not break the scrape response
+      });
+    }
 
     return {
       success: true,

@@ -81,3 +81,22 @@ export const scrapeLogsQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
   limit: z.coerce.number().int().min(1).max(500).default(50),
 });
+
+// ─── Categories ───
+
+export const createCategorySchema = z.object({
+  name: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/, 'Name must be lowercase alphanumeric, dashes, or underscores'),
+  label: z.string().min(1).max(100),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+export const updateCategorySchema = z.object({
+  label: z.string().min(1).max(100).optional(),
+  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+});
+
+// ─── Transaction Update ───
+
+export const updateTransactionSchema = z.object({
+  category: z.string().min(1).max(50).nullable(),
+});
