@@ -176,6 +176,45 @@ export function getScrapeLogs(params: { accountId?: number; limit?: number } = {
   return request<{ logs: Array<Record<string, unknown>> }>(`/scrape/logs?${query}`);
 }
 
+// ─── Categories ───
+
+export interface Category {
+  id: number;
+  name: string;
+  label: string;
+  color: string | null;
+  createdAt: string;
+}
+
+export function getCategories() {
+  return request<{ categories: Category[] }>('/categories');
+}
+
+export function createCategory(data: { name: string; label: string; color?: string }) {
+  return request<{ category: Category }>('/categories', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateCategory(id: number, data: { label?: string; color?: string }) {
+  return request<{ category: Category }>(`/categories/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteCategory(id: number) {
+  return request<{ deleted: boolean }>(`/categories/${id}`, { method: 'DELETE' });
+}
+
+export function updateTransactionCategory(id: number, category: string | null) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify({ category }),
+  });
+}
+
 // ─── AI ───
 
 export interface ChatMessage {
