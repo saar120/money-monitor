@@ -294,7 +294,7 @@ onUnmounted(() => {
                   <Select
                     :model-value="txn.category ?? ''"
                     :disabled="updatingCategoryFor === txn.id"
-                    @update:model-value="(val: string) => updateCategory(txn, val === '__none__' ? null : val)"
+                    @update:model-value="(val) => updateCategory(txn, val === '__none__' || val == null ? null : String(val))"
                   >
                     <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
                       <SelectValue>
