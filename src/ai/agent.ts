@@ -1,7 +1,7 @@
 import Anthropic from '@anthropic-ai/sdk';
 import { config } from '../config.js';
-import { FINANCIAL_ADVISOR_PROMPT } from './prompts.js';
-import { tools, handleToolCall } from './tools.js';
+import { buildFinancialAdvisorPrompt } from './prompts.js';
+import { buildTools, handleToolCall } from './tools.js';
 
 const client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
 
@@ -10,7 +10,18 @@ export interface ChatMessage {
   content: string;
 }
 
+async function getCategoryNames(): Promise<string[]> {
+  const { db } = await import('../db/connection.js');
+  const { categories } = await import('../db/schema.js');
+  const rows = db.select({ name: categories.name }).from(categories).all();
+  return rows.map(r => r.name);
+}
+
 export async function chat(conversationHistory: ChatMessage[]): Promise<string> {
+  const categoryNames = await getCategoryNames();
+  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames);
+  const tools = buildTools(categoryNames);
+
   const messages: Anthropic.MessageParam[] = conversationHistory.map(msg => ({
     role: msg.role,
     content: msg.content,
@@ -22,7 +33,7 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<string> 
     const response = await client.messages.create({
       model: config.ANTHROPIC_MODEL,
       max_tokens: 4096,
-      system: FINANCIAL_ADVISOR_PROMPT,
+      system: systemPrompt,
       tools,
       messages,
     });
@@ -54,33 +65,45 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<string> 
   return 'I reached the maximum number of analysis steps. Please try a more specific question.';
 }
 
-export async function batchCategorize(batchSize: number = 50): Promise<{ categorized: number }> {
-  const { eq, isNull, inArray } = await import('drizzle-orm');
+export async function batchCategorize(
+  batchSize: number = 50,
+  ids?: number[],
+): Promise<{ categorized: number }> {
+  const { eq, isNull } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
-  const { transactions } = await import('../db/schema.js');
-  const { CATEGORIES } = await import('./prompts.js');
+  const { transactions, categories } = await import('../db/schema.js');
 
-  const uncategorized = db.select()
-    .from(transactions)
-    .where(isNull(transactions.category))
-    .limit(batchSize)
-    .all();
+  // Fetch category names from DB
+  const categoryRows = db.select({ name: categories.name }).from(categories).all();
+  const categoryNames = categoryRows.map(r => r.name);
+  if (categoryNames.length === 0) return { categorized: 0 };
 
-  if (uncategorized.length === 0) {
-    return { categorized: 0 };
-  }
+  // Fetch uncategorized transactions — either specific IDs or next batch
+  const uncategorized = ids && ids.length > 0
+    ? db.select().from(transactions)
+        .where(isNull(transactions.category))
+        .all()
+        .filter(t => ids.includes(t.id))
+    : db.select().from(transactions)
+        .where(isNull(transactions.category))
+        .limit(batchSize)
+        .all();
+
+  if (uncategorized.length === 0) return { categorized: 0 };
 
   const validIds = new Set(uncategorized.map(t => t.id));
-  const validCategories = new Set<string>(CATEGORIES);
+  const validCategories = new Set(categoryNames);
 
   const txnList = uncategorized.map(t =>
     `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
   ).join('\n');
 
+  const categoryList = categoryNames.join(', ');
+
   const response = await client.messages.create({
     model: config.ANTHROPIC_MODEL,
     max_tokens: 4096,
-    system: 'You are a transaction categorizer. Assign each transaction one of these categories: food, transport, housing, utilities, entertainment, health, shopping, education, subscriptions, income, transfer, other. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.',
+    system: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
     messages: [{
       role: 'user',
       content: `Categorize these transactions:\n${txnList}`,
