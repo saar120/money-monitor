@@ -34,6 +34,7 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<string> 
       model: config.ANTHROPIC_MODEL,
       systemPrompt,
       mcpServers: { 'financial-tools': server },
+      tools: [],
       allowedTools: ['mcp__financial-tools__*'],
       maxTurns: 10,
     },
