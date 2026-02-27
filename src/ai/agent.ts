@@ -1,9 +1,7 @@
-import Anthropic from '@anthropic-ai/sdk';
+import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
 import { buildFinancialAdvisorPrompt } from './prompts.js';
-import { buildTools, handleToolCall } from './tools.js';
-
-const client = new Anthropic({ apiKey: config.ANTHROPIC_API_KEY });
+import { buildFinancialMcpServer } from './tools.js';
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -20,49 +18,36 @@ async function getCategoryNames(): Promise<string[]> {
 export async function chat(conversationHistory: ChatMessage[]): Promise<string> {
   const categoryNames = await getCategoryNames();
   const systemPrompt = buildFinancialAdvisorPrompt(categoryNames);
-  const tools = buildTools(categoryNames);
+  const server = buildFinancialMcpServer(categoryNames);
 
-  const messages: Anthropic.MessageParam[] = conversationHistory.map(msg => ({
-    role: msg.role,
-    content: msg.content,
-  }));
+  const historyLines = conversationHistory.slice(0, -1).map(m =>
+    `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
+  );
+  const lastMsg = conversationHistory[conversationHistory.length - 1];
+  const prompt = historyLines.length > 0
+    ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
+    : lastMsg.content;
 
-  const MAX_TOOL_ROUNDS = 10;
-
-  for (let round = 0; round < MAX_TOOL_ROUNDS; round++) {
-    const response = await client.messages.create({
+  for await (const msg of query({
+    prompt,
+    options: {
       model: config.ANTHROPIC_MODEL,
-      max_tokens: 4096,
-      system: systemPrompt,
-      tools,
-      messages,
-    });
-
-    const toolUseBlocks = response.content.filter(block => block.type === 'tool_use');
-    const textBlocks = response.content.filter(block => block.type === 'text');
-
-    if (toolUseBlocks.length === 0) {
-      return textBlocks.map(b => b.type === 'text' ? b.text : '').join('\n');
-    }
-
-    messages.push({ role: 'assistant', content: response.content });
-
-    const toolResults: Anthropic.ToolResultBlockParam[] = [];
-    for (const block of toolUseBlocks) {
-      if (block.type === 'tool_use') {
-        const result = await handleToolCall(block.name, block.input as Record<string, unknown>);
-        toolResults.push({
-          type: 'tool_result',
-          tool_use_id: block.id,
-          content: result,
-        });
+      systemPrompt,
+      mcpServers: { 'financial-tools': server },
+      allowedTools: ['mcp__financial-tools__*'],
+      maxTurns: 10,
+    },
+  })) {
+    if (msg.type === 'result') {
+      if (msg.subtype === 'success') return msg.result;
+      if (msg.subtype === 'error_max_turns') {
+        return 'I reached the maximum number of analysis steps. Please try a more specific question.';
       }
+      throw new Error(`Agent error (${msg.subtype})`);
     }
-
-    messages.push({ role: 'user', content: toolResults });
   }
 
-  return 'I reached the maximum number of analysis steps. Please try a more specific question.';
+  return 'No response generated.';
 }
 
 export async function batchCategorize(
@@ -73,12 +58,10 @@ export async function batchCategorize(
   const { db } = await import('../db/connection.js');
   const { transactions, categories } = await import('../db/schema.js');
 
-  // Fetch category names from DB
   const categoryRows = db.select({ name: categories.name }).from(categories).all();
   const categoryNames = categoryRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
-  // Fetch uncategorized transactions — either specific IDs or next batch
   const uncategorized = ids && ids.length > 0
     ? db.select().from(transactions)
         .where(isNull(transactions.category))
@@ -100,28 +83,28 @@ export async function batchCategorize(
 
   const categoryList = categoryNames.join(', ');
 
-  const response = await client.messages.create({
-    model: config.ANTHROPIC_MODEL,
-    max_tokens: 4096,
-    system: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
-    messages: [{
-      role: 'user',
-      content: `Categorize these transactions:\n${txnList}`,
-    }],
-  });
-
-  const text = response.content
-    .filter(b => b.type === 'text')
-    .map(b => b.type === 'text' ? b.text : '')
-    .join('');
+  let text = '';
+  for await (const msg of query({
+    prompt: `Categorize these transactions:\n${txnList}`,
+    options: {
+      model: config.ANTHROPIC_MODEL,
+      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
+      allowedTools: [],
+      maxTurns: 1,
+    },
+  })) {
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      text = msg.result;
+    }
+  }
 
   let categorized = 0;
   try {
-    const results: Array<{ id: number; category: string }> = JSON.parse(text);
+    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+    const results: Array<{ id: number; category: string }> = JSON.parse(clean);
     for (const { id, category } of results) {
       if (!validIds.has(id)) continue;
       if (!validCategories.has(category)) continue;
-
       db.update(transactions)
         .set({ category })
         .where(eq(transactions.id, id))
