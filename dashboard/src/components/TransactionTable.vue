@@ -38,7 +38,7 @@ const search = ref('');
 const selectedAccount = ref<string>('all');
 const startDate = ref('');
 const endDate = ref('');
-const selectedCategory = ref('');
+const selectedCategory = ref('all');
 
 const availableCategories = ref<Category[]>([]);
 const updatingCategoryFor = ref<number | null>(null);
@@ -55,7 +55,7 @@ async function fetchTransactions() {
       accountId: selectedAccount.value !== 'all' ? Number(selectedAccount.value) : undefined,
       startDate: startDate.value || undefined,
       endDate: endDate.value || undefined,
-      category: selectedCategory.value || undefined,
+      category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
     };
     const result = await getTransactions(params);
     transactions.value = result.transactions;
@@ -207,7 +207,7 @@ onUnmounted(() => {
               <SelectValue placeholder="All categories" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All categories</SelectItem>
+              <SelectItem value="all">All categories</SelectItem>
               <SelectItem v-for="cat in availableCategories" :key="cat.name" :value="cat.name">
                 {{ cat.label }}
               </SelectItem>
