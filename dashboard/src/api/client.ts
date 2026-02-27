@@ -229,3 +229,10 @@ export function aiChat(messages: ChatMessage[]) {
 export function aiCategorize(batchSize = 50) {
   return request<{ categorized: number }>('/ai/categorize', { method: 'POST', body: JSON.stringify({ batchSize }) });
 }
+
+export function aiRecategorize(startDate?: string, endDate?: string) {
+  return request<{ categorized: number }>('/ai/recategorize', {
+    method: 'POST',
+    body: JSON.stringify({ startDate, endDate }),
+  });
+}
