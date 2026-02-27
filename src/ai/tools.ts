@@ -57,7 +57,7 @@ export function buildFinancialMcpServer(categoryNames: string[]) {
           category: categoryEnum.describe('The category to assign'),
         },
         async (args) => {
-          const result = categorizeTransaction(args as { transaction_id: number; category: string });
+          const result = categorizeTransaction({ transaction_id: args.transaction_id, category: String(args.category) });
           return { content: [{ type: 'text' as const, text: result }] };
         },
       ),
@@ -102,13 +102,13 @@ interface CategorizeTransactionInput {
 
 function queryTransactions(input: QueryTransactionsInput): string {
   const conditions = [];
-  if (input.account_id) conditions.push(eq(transactions.accountId, input.account_id));
+  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
   if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
   if (input.category) conditions.push(eq(transactions.category, input.category));
   if (input.status) conditions.push(eq(transactions.status, input.status));
-  if (input.min_amount) conditions.push(gte(transactions.chargedAmount, input.min_amount));
-  if (input.max_amount) conditions.push(lte(transactions.chargedAmount, input.max_amount));
+  if (input.min_amount != null) conditions.push(gte(transactions.chargedAmount, input.min_amount));
+  if (input.max_amount != null) conditions.push(lte(transactions.chargedAmount, input.max_amount));
   if (input.search) conditions.push(like(transactions.description, `%${escapeLike(input.search)}%`));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -127,7 +127,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
 
 function getSpendingSummary(input: GetSpendingSummaryInput): string {
   const conditions = [];
-  if (input.account_id) conditions.push(eq(transactions.accountId, input.account_id));
+  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
   if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
 
