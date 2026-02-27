@@ -89,7 +89,7 @@ export async function batchCategorize(
     options: {
       model: config.ANTHROPIC_MODEL,
       systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
-      allowedTools: [],
+      tools: [],
       maxTurns: 1,
     },
   })) {
