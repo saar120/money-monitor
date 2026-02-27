@@ -1,9 +1,16 @@
 <script setup lang="ts">
-import { useRoute } from 'vue-router';
+import { ref } from 'vue';
+import { useRoute, useRouter } from 'vue-router';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag } from 'lucide-vue-next';
 import { Separator } from '@/components/ui/separator';
 
 const route = useRoute();
+const router = useRouter();
+const mainEl = ref<HTMLElement | null>(null);
+
+router.afterEach(() => {
+  mainEl.value?.scrollTo(0, 0);
+});
 
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
@@ -36,7 +43,7 @@ const navItems = [
         </RouterLink>
       </nav>
     </aside>
-    <main class="flex-1 overflow-y-auto p-6 min-w-0">
+    <main ref="mainEl" class="flex-1 overflow-y-auto p-6 min-w-0">
       <slot />
     </main>
   </div>
