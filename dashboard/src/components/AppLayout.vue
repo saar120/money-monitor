@@ -22,7 +22,7 @@ const navItems = [
 </script>
 
 <template>
-  <div class="flex min-h-screen bg-background text-foreground">
+  <div class="flex h-screen bg-background text-foreground">
     <aside class="w-56 flex-shrink-0 border-r border-border bg-card flex flex-col">
       <div class="px-4 py-5">
         <span class="text-base font-bold tracking-tight">Money Monitor</span>
