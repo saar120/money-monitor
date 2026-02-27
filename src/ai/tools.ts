@@ -1,75 +1,80 @@
-import type { Tool } from '@anthropic-ai/sdk/resources/messages';
+import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
+import { z } from 'zod';
 import { eq, and, gte, lte, like, sql, count, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
 import { escapeLike } from '../api/validation.js';
 
-export function buildTools(categoryNames: string[]): Tool[] {
-  return [
-    {
-      name: 'query_transactions',
-      description: 'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
-      input_schema: {
-        type: 'object' as const,
-        properties: {
-          account_id: { type: 'number', description: 'Filter by account ID' },
-          start_date: { type: 'string', description: 'Start date (ISO string, e.g. "2026-01-01")' },
-          end_date: { type: 'string', description: 'End date (ISO string, e.g. "2026-01-31")' },
-          category: { type: 'string', description: 'Filter by category' },
-          status: { type: 'string', enum: ['completed', 'pending'], description: 'Transaction status' },
-          min_amount: { type: 'number', description: 'Minimum charged amount' },
-          max_amount: { type: 'number', description: 'Maximum charged amount' },
-          search: { type: 'string', description: 'Search term for description (partial match)' },
-          limit: { type: 'number', description: 'Max results to return (default 50, max 200)' },
+export function buildFinancialMcpServer(categoryNames: string[]) {
+  const categoryEnum = categoryNames.length > 0
+    ? z.enum(categoryNames as [string, ...string[]])
+    : z.string();
+
+  return createSdkMcpServer({
+    name: 'financial-tools',
+    version: '1.0.0',
+    tools: [
+      tool(
+        'query_transactions',
+        'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
+        {
+          account_id: z.number().optional().describe('Filter by account ID'),
+          start_date: z.string().optional().describe('Start date (ISO string, e.g. "2026-01-01")'),
+          end_date: z.string().optional().describe('End date (ISO string, e.g. "2026-01-31")'),
+          category: z.string().optional().describe('Filter by category'),
+          status: z.enum(['completed', 'pending']).optional().describe('Transaction status'),
+          min_amount: z.number().optional().describe('Minimum charged amount'),
+          max_amount: z.number().optional().describe('Maximum charged amount'),
+          search: z.string().optional().describe('Search term for description (partial match)'),
+          limit: z.number().optional().describe('Max results to return (default 50, max 200)'),
         },
-        required: [],
-      },
-    },
-    {
-      name: 'get_spending_summary',
-      description: 'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
-      input_schema: {
-        type: 'object' as const,
-        properties: {
-          group_by: {
-            type: 'string',
-            enum: ['category', 'month', 'account'],
-            description: 'How to group the results (default: category)',
-          },
-          account_id: { type: 'number', description: 'Filter by account ID' },
-          start_date: { type: 'string', description: 'Start date (ISO string)' },
-          end_date: { type: 'string', description: 'End date (ISO string)' },
+        async (args) => {
+          const result = queryTransactions(args);
+          return { content: [{ type: 'text' as const, text: result }] };
         },
-        required: [],
-      },
-    },
-    {
-      name: 'categorize_transaction',
-      description: 'Assign a category to a specific transaction by its ID.',
-      input_schema: {
-        type: 'object' as const,
-        properties: {
-          transaction_id: { type: 'number', description: 'The transaction ID' },
-          category: {
-            type: 'string',
-            enum: categoryNames,
-            description: 'The category to assign',
-          },
+      ),
+      tool(
+        'get_spending_summary',
+        'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
+        {
+          group_by: z.enum(['category', 'month', 'account']).optional().describe(
+            'How to group the results (default: category)',
+          ),
+          account_id: z.number().optional().describe('Filter by account ID'),
+          start_date: z.string().optional().describe('Start date (ISO string)'),
+          end_date: z.string().optional().describe('End date (ISO string)'),
         },
-        required: ['transaction_id', 'category'],
-      },
-    },
-    {
-      name: 'get_account_balances',
-      description: 'Get a list of all configured accounts with their latest scrape info and transaction counts.',
-      input_schema: {
-        type: 'object' as const,
-        properties: {},
-        required: [],
-      },
-    },
-  ];
+        async (args) => {
+          const result = getSpendingSummary(args);
+          return { content: [{ type: 'text' as const, text: result }] };
+        },
+      ),
+      tool(
+        'categorize_transaction',
+        'Assign a category to a specific transaction by its ID.',
+        {
+          transaction_id: z.number().describe('The transaction ID'),
+          category: categoryEnum.describe('The category to assign'),
+        },
+        async (args) => {
+          const result = categorizeTransaction({ transaction_id: args.transaction_id, category: String(args.category) });
+          return { content: [{ type: 'text' as const, text: result }] };
+        },
+      ),
+      tool(
+        'get_account_balances',
+        'Get a list of all configured accounts with their latest scrape info and transaction counts.',
+        {},
+        async () => {
+          const result = getAccountBalances();
+          return { content: [{ type: 'text' as const, text: result }] };
+        },
+      ),
+    ],
+  });
 }
+
+// ── Private query functions (unchanged Drizzle ORM logic) ──────────────────────
 
 interface QueryTransactionsInput {
   account_id?: number;
@@ -95,33 +100,15 @@ interface CategorizeTransactionInput {
   category: string;
 }
 
-export async function handleToolCall(
-  toolName: string,
-  input: Record<string, unknown>,
-): Promise<string> {
-  switch (toolName) {
-    case 'query_transactions':
-      return queryTransactions(input as QueryTransactionsInput);
-    case 'get_spending_summary':
-      return getSpendingSummary(input as GetSpendingSummaryInput);
-    case 'categorize_transaction':
-      return categorizeTransaction(input as unknown as CategorizeTransactionInput);
-    case 'get_account_balances':
-      return getAccountBalances();
-    default:
-      return JSON.stringify({ error: `Unknown tool: ${toolName}` });
-  }
-}
-
 function queryTransactions(input: QueryTransactionsInput): string {
   const conditions = [];
-  if (input.account_id) conditions.push(eq(transactions.accountId, input.account_id));
+  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
   if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
   if (input.category) conditions.push(eq(transactions.category, input.category));
   if (input.status) conditions.push(eq(transactions.status, input.status));
-  if (input.min_amount) conditions.push(gte(transactions.chargedAmount, input.min_amount));
-  if (input.max_amount) conditions.push(lte(transactions.chargedAmount, input.max_amount));
+  if (input.min_amount != null) conditions.push(gte(transactions.chargedAmount, input.min_amount));
+  if (input.max_amount != null) conditions.push(lte(transactions.chargedAmount, input.max_amount));
   if (input.search) conditions.push(like(transactions.description, `%${escapeLike(input.search)}%`));
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
@@ -140,7 +127,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
 
 function getSpendingSummary(input: GetSpendingSummaryInput): string {
   const conditions = [];
-  if (input.account_id) conditions.push(eq(transactions.accountId, input.account_id));
+  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
   if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
 

@@ -10,6 +10,7 @@ const envSchema = z.object({
   SCRAPE_START_DATE_MONTHS_BACK: z.coerce.number().default(3),
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   API_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
   SCRAPE_TIMEOUT: z.coerce.number().default(120000),
