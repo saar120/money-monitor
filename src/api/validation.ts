@@ -61,6 +61,11 @@ export const categorizeSchema = z.object({
   batchSize: z.number().int().min(1).max(500).default(50),
 });
 
+export const recategorizeSchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
 // ─── Helpers ───
 
 /** Escape SQL LIKE wildcard characters (%, _) in user input */

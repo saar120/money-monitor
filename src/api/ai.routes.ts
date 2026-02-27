@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { chat, batchCategorize } from '../ai/agent.js';
-import { chatSchema, categorizeSchema } from './validation.js';
+import { chat, batchCategorize, recategorize } from '../ai/agent.js';
+import { chatSchema, categorizeSchema, recategorizeSchema } from './validation.js';
 
 export async function aiRoutes(app: FastifyInstance) {
 
@@ -36,6 +36,24 @@ export async function aiRoutes(app: FastifyInstance) {
       return reply.send(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Categorization failed';
+      return reply.status(500).send({ error: message });
+    }
+  });
+
+  app.post('/api/ai/recategorize', async (request, reply) => {
+    const parsed = recategorizeSchema.safeParse(request.body ?? {});
+    if (!parsed.success) {
+      return reply.status(400).send({
+        error: 'Validation failed',
+        details: parsed.error.flatten().fieldErrors,
+      });
+    }
+
+    try {
+      const result = await recategorize(parsed.data.startDate, parsed.data.endDate);
+      return reply.send(result);
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Recategorization failed';
       return reply.status(500).send({ error: message });
     }
   });

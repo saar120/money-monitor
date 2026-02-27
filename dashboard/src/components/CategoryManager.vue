@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { getCategories, createCategory, updateCategory, deleteCategory, type Category } from '../api/client';
+import { getCategories, createCategory, updateCategory, deleteCategory, aiRecategorize, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -25,6 +25,27 @@ const newLabel = ref('');
 const newColor = ref('#94a3b8');
 const showNewForm = ref(false);
 const saving = ref(false);
+
+// Re-categorize state
+const recatStartDate = ref('');
+const recatEndDate = ref('');
+const recatLoading = ref(false);
+const recatResult = ref('');
+const recatError = ref('');
+
+async function runRecategorize() {
+  recatLoading.value = true;
+  recatResult.value = '';
+  recatError.value = '';
+  try {
+    const res = await aiRecategorize(recatStartDate.value || undefined, recatEndDate.value || undefined);
+    recatResult.value = `${res.categorized} transactions categorized`;
+  } catch (e: unknown) {
+    recatError.value = e instanceof Error ? e.message : 'Recategorization failed';
+  } finally {
+    recatLoading.value = false;
+  }
+}
 
 async function load() {
   loading.value = true;
@@ -184,6 +205,33 @@ onMounted(load);
             </TableRow>
           </TableBody>
         </Table>
+      </CardContent>
+    </Card>
+
+    <!-- Re-categorize section -->
+    <Card>
+      <CardHeader class="pb-2">
+        <CardTitle class="text-sm">Re-categorize Transactions</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <p class="text-xs text-muted-foreground mb-3">
+          Re-run AI categorization over all transactions in a date range, overwriting existing categories. Leave dates empty to process all transactions.
+        </p>
+        <div class="flex gap-2 items-end flex-wrap">
+          <div class="space-y-1">
+            <label class="text-xs text-muted-foreground">Start Date</label>
+            <Input v-model="recatStartDate" type="date" class="w-36" />
+          </div>
+          <div class="space-y-1">
+            <label class="text-xs text-muted-foreground">End Date</label>
+            <Input v-model="recatEndDate" type="date" class="w-36" />
+          </div>
+          <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
+            {{ recatLoading ? 'Running...' : 'Re-categorize All' }}
+          </Button>
+        </div>
+        <p v-if="recatResult" class="text-sm text-green-600 mt-2">{{ recatResult }}</p>
+        <p v-if="recatError" class="text-sm text-destructive mt-2">{{ recatError }}</p>
       </CardContent>
     </Card>
   </div>

@@ -118,3 +118,69 @@ export async function batchCategorize(
 
   return { categorized };
 }
+
+export async function recategorize(
+  startDate?: string,
+  endDate?: string,
+): Promise<{ categorized: number }> {
+  const { eq, gte, lte, and } = await import('drizzle-orm');
+  const { db } = await import('../db/connection.js');
+  const { transactions, categories } = await import('../db/schema.js');
+
+  const categoryRows = db.select({ name: categories.name }).from(categories).all();
+  const categoryNames = categoryRows.map(r => r.name);
+  if (categoryNames.length === 0) return { categorized: 0 };
+
+  const conditions = [];
+  if (startDate) conditions.push(gte(transactions.date, startDate));
+  if (endDate) conditions.push(lte(transactions.date, endDate));
+
+  const toProcess = conditions.length > 0
+    ? db.select().from(transactions).where(and(...conditions)).all()
+    : db.select().from(transactions).all();
+
+  if (toProcess.length === 0) return { categorized: 0 };
+
+  const validIds = new Set(toProcess.map(t => t.id));
+  const validCategories = new Set(categoryNames);
+
+  const txnList = toProcess.map(t =>
+    `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
+  ).join('\n');
+
+  const categoryList = categoryNames.join(', ');
+
+  let text = '';
+  for await (const msg of query({
+    prompt: `Categorize these transactions:\n${txnList}`,
+    options: {
+      model: config.ANTHROPIC_MODEL,
+      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
+      tools: [],
+      maxTurns: 1,
+    },
+  })) {
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      text = msg.result;
+    }
+  }
+
+  let categorized = 0;
+  try {
+    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+    const results: Array<{ id: number; category: string }> = JSON.parse(clean);
+    for (const { id, category } of results) {
+      if (!validIds.has(id)) continue;
+      if (!validCategories.has(category)) continue;
+      db.update(transactions)
+        .set({ category })
+        .where(eq(transactions.id, id))
+        .run();
+      categorized++;
+    }
+  } catch {
+    // malformed model response — return 0
+  }
+
+  return { categorized };
+}
