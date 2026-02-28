@@ -78,9 +78,11 @@ export async function batchCategorize(
   const validIds = new Set(uncategorized.map(t => t.id));
   const validCategories = new Set(categoryNames);
 
-  const txnList = uncategorized.map(t =>
-    `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
-  ).join('\n');
+  const txnList = uncategorized.map(t => {
+    const meta = t.meta ? JSON.parse(t.meta) : {};
+    const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
+    return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${bankCat}`;
+  }).join('\n');
 
   const categoryList = categoryNames.join(', ');
 
@@ -144,9 +146,11 @@ export async function recategorize(
   const validIds = new Set(toProcess.map(t => t.id));
   const validCategories = new Set(categoryNames);
 
-  const txnList = toProcess.map(t =>
-    `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
-  ).join('\n');
+  const txnList = toProcess.map(t => {
+    const meta = t.meta ? JSON.parse(t.meta) : {};
+    const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
+    return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${bankCat}`;
+  }).join('\n');
 
   const categoryList = categoryNames.join(', ');
 
