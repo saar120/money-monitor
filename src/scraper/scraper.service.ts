@@ -93,29 +93,40 @@ export interface ScrapeResult {
   accountId: number;
   transactionsFound: number;
   transactionsNew: number;
+  durationMs: number;
   error?: string;
   errorType?: string;
 }
 
-export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
+export async function scrapeAccount(account: Account, sessionId?: number, signal?: AbortSignal): Promise<ScrapeResult> {
   const startedAt = new Date().toISOString();
+  const startMs = Date.now();
+
+  if (signal?.aborted) {
+    return { success: false, accountId: account.id, transactionsFound: 0, transactionsNew: 0, durationMs: 0, error: 'Cancelled', errorType: 'CANCELLED' };
+  }
 
   const credentials = getCredentials(account.credentialsRef);
   if (!credentials) {
+    const durationMs = Date.now() - startMs;
     const errorResult = {
       success: false,
       accountId: account.id,
       transactionsFound: 0,
       transactionsNew: 0,
+      durationMs,
       error: 'No credentials found for this account',
       errorType: 'MISSING_CREDENTIALS',
     };
     db.insert(scrapeLogs).values({
       accountId: account.id,
+      sessionId: sessionId ?? null,
       status: 'error',
       errorType: 'MISSING_CREDENTIALS',
       errorMessage: errorResult.error,
       transactionsFound: 0,
+      transactionsNew: 0,
+      durationMs,
       startedAt,
       completedAt: new Date().toISOString(),
     }).run();
@@ -171,12 +182,16 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
     const result = await scraper.scrape({ ...credentials as any, otpCodeRetriever });
 
     if (!result.success) {
+      const durationMs = Date.now() - startMs;
       db.insert(scrapeLogs).values({
         accountId: account.id,
+        sessionId: sessionId ?? null,
         status: 'error',
         errorType: result.errorType ?? 'UNKNOWN_ERROR',
         errorMessage: result.errorMessage ?? 'Scrape failed',
         transactionsFound: 0,
+        transactionsNew: 0,
+        durationMs,
         startedAt,
         completedAt: new Date().toISOString(),
       }).run();
@@ -186,6 +201,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
         accountId: account.id,
         transactionsFound: 0,
         transactionsNew: 0,
+        durationMs,
         error: result.errorMessage,
         errorType: result.errorType,
       };
@@ -233,10 +249,14 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       .where(eq(accounts.credentialsRef, account.credentialsRef))
       .run();
 
+    const durationMs = Date.now() - startMs;
     db.insert(scrapeLogs).values({
       accountId: account.id,
+      sessionId: sessionId ?? null,
       status: 'success',
       transactionsFound: totalFound,
+      transactionsNew: totalNew,
+      durationMs,
       startedAt,
       completedAt: new Date().toISOString(),
     }).run();
@@ -253,16 +273,21 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       accountId: account.id,
       transactionsFound: totalFound,
       transactionsNew: totalNew,
+      durationMs,
     };
 
   } catch (err) {
+    const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
     db.insert(scrapeLogs).values({
       accountId: account.id,
+      sessionId: sessionId ?? null,
       status: 'error',
       errorType: 'EXCEPTION',
       errorMessage,
       transactionsFound: 0,
+      transactionsNew: 0,
+      durationMs,
       startedAt,
       completedAt: new Date().toISOString(),
     }).run();
@@ -272,13 +297,14 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       accountId: account.id,
       transactionsFound: 0,
       transactionsNew: 0,
+      durationMs,
       error: errorMessage,
       errorType: 'EXCEPTION',
     };
   }
 }
 
-export async function scrapeAllAccounts(): Promise<ScrapeResult[]> {
+export async function scrapeAllAccounts(sessionId?: number, signal?: AbortSignal): Promise<ScrapeResult[]> {
   const activeAccounts = db
     .select()
     .from(accounts)
@@ -297,7 +323,8 @@ export async function scrapeAllAccounts(): Promise<ScrapeResult[]> {
 
   const results: ScrapeResult[] = [];
   for (const account of uniqueAccounts) {
-    const result = await scrapeAccount(account);
+    if (signal?.aborted) break;
+    const result = await scrapeAccount(account, sessionId, signal);
     results.push(result);
   }
   return results;
