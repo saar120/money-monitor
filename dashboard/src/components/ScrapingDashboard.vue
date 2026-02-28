@@ -116,14 +116,26 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
   return 'outline';
 }
 
+function sessionAccountNames(session: ScrapeSession): string {
+  const logs = session.logs ?? [];
+  if (logs.length === 0) return '';
+  const names = [...new Set(logs.map(l => l.accountName))];
+  return names.join(', ');
+}
+
 function sessionSummary(session: ScrapeSession): string {
   const logs = session.logs ?? [];
+  if (logs.length === 0) return 'No results';
   const ok = logs.filter(l => l.status === 'success').length;
   const fail = logs.filter(l => l.status === 'error').length;
+  const totalFound = logs.reduce((sum, l) => sum + (l.transactionsFound ?? 0), 0);
+  const totalNew = logs.reduce((sum, l) => sum + (l.transactionsNew ?? 0), 0);
   const parts: string[] = [];
   if (ok > 0) parts.push(`${ok} ok`);
   if (fail > 0) parts.push(`${fail} failed`);
-  return parts.join(', ') || 'No results';
+  parts.push(`${totalFound} txns`);
+  if (totalNew > 0) parts.push(`${totalNew} new`);
+  return parts.join(' · ');
 }
 
 function toggleExpand(sessionId: number) {
@@ -464,7 +476,8 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
               {{ session.status }}
             </Badge>
             <Badge variant="outline">{{ triggerLabel(session.trigger) }}</Badge>
-            <span class="flex-1 text-muted-foreground text-right">{{ sessionSummary(session) }}</span>
+            <span class="truncate text-muted-foreground">{{ sessionAccountNames(session) }}</span>
+            <span class="flex-shrink-0 text-muted-foreground ml-auto">{{ sessionSummary(session) }}</span>
           </button>
 
           <!-- Expanded per-account logs -->
@@ -487,8 +500,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
               />
               <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
               <span v-if="log.status === 'success'" class="text-muted-foreground">
-                {{ log.transactionsFound }} txns
-                <template v-if="log.transactionsNew">({{ log.transactionsNew }} new)</template>
+                {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
               </span>
               <span v-else class="text-red-500 truncate">
                 {{ log.errorMessage ?? log.errorType ?? 'Error' }}
