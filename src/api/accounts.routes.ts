@@ -7,6 +7,7 @@ import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
 import { getAccountType } from '../shared/types.js';
 import type { CompanyId } from '../shared/types.js';
+import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
 
 function stripCredentialsRef(account: Record<string, unknown>) {
   const { credentialsRef, ...safe } = account;
@@ -33,11 +34,14 @@ export async function accountsRoutes(app: FastifyInstance) {
     const credentialsRef = randomUUID();
     setCredentials(credentialsRef, credentials);
 
+    const isManualLoginCompany = MANUAL_LOGIN_COMPANIES.has(companyId);
     const result = db.insert(accounts).values({
       companyId,
       displayName,
       credentialsRef,
       accountType: getAccountType(companyId as CompanyId),
+      manualLogin: isManualLoginCompany,
+      showBrowser: isManualLoginCompany,
     }).returning().get();
 
     return reply.status(201).send({ account: stripCredentialsRef(result) });
@@ -57,7 +61,7 @@ export async function accountsRoutes(app: FastifyInstance) {
         details: parsed.error.flatten().fieldErrors,
       });
     }
-    const { displayName, isActive, credentials } = parsed.data;
+    const { displayName, isActive, manualLogin, showBrowser, credentials } = parsed.data;
 
     if (credentials && Object.keys(credentials).length > 0) {
       setCredentials(existing.credentialsRef, credentials);
@@ -66,6 +70,8 @@ export async function accountsRoutes(app: FastifyInstance) {
     const updateSet: Record<string, unknown> = {};
     if (displayName !== undefined) updateSet.displayName = displayName;
     if (isActive !== undefined) updateSet.isActive = isActive;
+    if (manualLogin !== undefined) updateSet.manualLogin = manualLogin;
+    if (showBrowser !== undefined) updateSet.showBrowser = showBrowser;
 
     if (Object.keys(updateSet).length > 0) {
       db.update(accounts).set(updateSet).where(eq(accounts.id, id)).run();
@@ -85,7 +91,14 @@ export async function accountsRoutes(app: FastifyInstance) {
     const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
-    deleteCredentials(existing.credentialsRef);
+    // Only delete credentials if no other account shares them
+    const siblings = db.select({ id: accounts.id }).from(accounts)
+      .where(eq(accounts.credentialsRef, existing.credentialsRef))
+      .all();
+
+    if (siblings.length <= 1) {
+      deleteCredentials(existing.credentialsRef);
+    }
 
     db.delete(scrapeLogs).where(eq(scrapeLogs.accountId, id)).run();
 

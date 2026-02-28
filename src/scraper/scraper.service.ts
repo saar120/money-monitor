@@ -1,18 +1,18 @@
 import { createScraper, CompanyTypes } from 'israeli-bank-scrapers';
 import { createHash } from 'node:crypto';
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
-import type { Account, ScraperTransaction, NewTransaction, CompanyId } from '../shared/types.js';
+import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
 
-const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
+export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
 function computeHash(accountId: number, txn: ScraperTransaction): string {
   const raw = `${accountId}:${txn.date}:${txn.chargedAmount}:${txn.description}`;
@@ -40,6 +40,52 @@ function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransact
     meta: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
     hash: computeHash(accountId, txn),
   };
+}
+
+/** Find or create a DB account row for a specific card returned by the scraper. */
+function resolveAccountForCard(
+  parentAccount: Account,
+  scraperAccount: ScraperAccountResult,
+): Account {
+  const cardNumber = scraperAccount.accountNumber;
+
+  // 1. If the parent account has no accountNumber yet, claim it for this card
+  if (!parentAccount.accountNumber) {
+    db.update(accounts)
+      .set({ accountNumber: cardNumber })
+      .where(eq(accounts.id, parentAccount.id))
+      .run();
+    return { ...parentAccount, accountNumber: cardNumber };
+  }
+
+  // 2. If this card matches the parent, return it
+  if (parentAccount.accountNumber === cardNumber) {
+    return parentAccount;
+  }
+
+  // 3. Look for an existing sibling account with same credentialsRef + accountNumber
+  const existing = db.select().from(accounts)
+    .where(
+      and(
+        eq(accounts.credentialsRef, parentAccount.credentialsRef),
+        eq(accounts.accountNumber, cardNumber),
+      )
+    )
+    .get();
+
+  if (existing) return existing;
+
+  // 4. Auto-create a new account for this card
+  const suffix = cardNumber.slice(-4);
+  const newAccount = db.insert(accounts).values({
+    companyId: parentAccount.companyId,
+    displayName: `${parentAccount.displayName} (${suffix})`,
+    accountNumber: cardNumber,
+    accountType: getAccountType(parentAccount.companyId as CompanyId),
+    credentialsRef: parentAccount.credentialsRef,
+  }).returning().get();
+
+  return newAccount;
 }
 
 export interface ScrapeResult {
@@ -82,13 +128,13 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
   try {
     const accountType = getAccountType(account.companyId as CompanyId);
 
-    const needsManualLogin = MANUAL_LOGIN_COMPANIES.has(account.companyId);
+    const needsManualLogin = account.manualLogin;
 
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
       combineInstallments: false,
-      showBrowser: needsManualLogin ? true : config.SCRAPE_SHOW_BROWSER,
+      showBrowser: needsManualLogin || account.showBrowser,
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
       args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
@@ -155,17 +201,12 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
     const newIds: number[] = [];
 
     for (const scraperAccount of result.accounts ?? []) {
-      if (scraperAccount.accountNumber && !account.accountNumber) {
-        db.update(accounts)
-          .set({ accountNumber: scraperAccount.accountNumber })
-          .where(eq(accounts.id, account.id))
-          .run();
-      }
+      const targetAccount = resolveAccountForCard(account, scraperAccount);
 
       if (scraperAccount.balance != null) {
         db.update(accounts)
           .set({ balance: scraperAccount.balance })
-          .where(eq(accounts.id, account.id))
+          .where(eq(accounts.id, targetAccount.id))
           .run();
       }
 
@@ -175,7 +216,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       for (const txn of txns) {
         if (txn.status === 'pending') continue;
 
-        const mapped = mapTransaction(account.id, txn);
+        const mapped = mapTransaction(targetAccount.id, txn);
         try {
           const result = db.insert(transactions)
             .values(mapped)
@@ -191,9 +232,10 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       }
     }
 
+    // Update lastScrapedAt for all accounts sharing this credential
     db.update(accounts)
       .set({ lastScrapedAt: new Date().toISOString() })
-      .where(eq(accounts.id, account.id))
+      .where(eq(accounts.credentialsRef, account.credentialsRef))
       .run();
 
     db.insert(scrapeLogs).values({
@@ -248,8 +290,18 @@ export async function scrapeAllAccounts(): Promise<ScrapeResult[]> {
     .where(eq(accounts.isActive, true))
     .all();
 
-  const results: ScrapeResult[] = [];
+  // Deduplicate: scrape once per credentialsRef (pick first account as representative)
+  const seen = new Set<string>();
+  const uniqueAccounts: Account[] = [];
   for (const account of activeAccounts) {
+    if (!seen.has(account.credentialsRef)) {
+      seen.add(account.credentialsRef);
+      uniqueAccounts.push(account);
+    }
+  }
+
+  const results: ScrapeResult[] = [];
+  for (const account of uniqueAccounts) {
     const result = await scrapeAccount(account);
     results.push(result);
   }
