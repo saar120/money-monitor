@@ -38,3 +38,21 @@ if (needsBackfill.length > 0) {
       .run();
   }
 }
+
+// One-time backfill: set manualLogin for Isracard/Amex accounts after migration 0004.
+// Uses a pragma to track whether this backfill has already run.
+const backfillKey = 'backfill_manual_login_done';
+const backfillDone = sqlite.pragma(`user_version`) as number;
+// We use a dedicated flag table instead of user_version (which may be used by drizzle)
+sqlite.exec(`CREATE TABLE IF NOT EXISTS _backfill_flags (key TEXT PRIMARY KEY, done INTEGER NOT NULL DEFAULT 1)`);
+const flag = db.all(sql`SELECT 1 FROM _backfill_flags WHERE key = ${backfillKey}`);
+if (flag.length === 0) {
+  const MANUAL_LOGIN_COMPANY_IDS = ['isracard', 'amex'];
+  for (const companyId of MANUAL_LOGIN_COMPANY_IDS) {
+    db.update(schema.accounts)
+      .set({ manualLogin: true, showBrowser: true })
+      .where(sql`${schema.accounts.companyId} = ${companyId} AND ${schema.accounts.manualLogin} = 0`)
+      .run();
+  }
+  sqlite.exec(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES ('${backfillKey}')`);
+}

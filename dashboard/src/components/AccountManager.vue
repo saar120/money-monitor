@@ -43,7 +43,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, RefreshCw, Power } from 'lucide-vue-next';
+
+const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
 const accounts = ref<Account[]>([]);
 const loading = ref(false);
@@ -190,6 +193,16 @@ async function handleToggleActive(account: Account) {
   fetchAccounts();
 }
 
+async function handleToggleManualLogin(account: Account, value: boolean) {
+  await updateAccount(account.id, { manualLogin: value });
+  fetchAccounts();
+}
+
+async function handleToggleShowBrowser(account: Account, value: boolean) {
+  await updateAccount(account.id, { showBrowser: value });
+  fetchAccounts();
+}
+
 async function handleDelete(account: Account) {
   await deleteAccount(account.id, true);
   fetchAccounts();
@@ -302,6 +315,16 @@ onUnmounted(() => {
                   </span>
                   <span v-else>Never scraped</span>
                 </p>
+                <div class="flex items-center gap-4 mt-2">
+                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch :model-value="account.manualLogin" @update:model-value="handleToggleManualLogin(account, $event)" />
+                    Manual login
+                  </label>
+                  <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="handleToggleShowBrowser(account, $event)" />
+                    Show browser
+                  </label>
+                </div>
               </div>
 
               <div class="flex items-center gap-2 flex-shrink-0">

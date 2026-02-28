@@ -15,6 +15,8 @@ export const createAccountSchema = z.object({
 export const updateAccountSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
   isActive: z.boolean().optional(),
+  manualLogin: z.boolean().optional(),
+  showBrowser: z.boolean().optional(),
   credentials: z.record(z.string(), z.string()).optional(),
 });
 
