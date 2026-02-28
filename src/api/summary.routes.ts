@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { eq, and, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
-import { summaryQuerySchema } from './validation.js';
+import { summaryQuerySchema, accountTypeCondition } from './validation.js';
 
 export async function summaryRoutes(app: FastifyInstance) {
 
@@ -14,9 +14,16 @@ export async function summaryRoutes(app: FastifyInstance) {
         details: parsed.error.flatten().fieldErrors,
       });
     }
-    const { accountId, startDate, endDate, groupBy } = parsed.data;
+    const { accountId, accountType, startDate, endDate, groupBy } = parsed.data;
 
     const conditions = [];
+
+    if (accountType) {
+      const cond = accountTypeCondition(accountType);
+      if (!cond) return reply.send({ groupBy, summary: [] });
+      conditions.push(cond);
+    }
+
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));

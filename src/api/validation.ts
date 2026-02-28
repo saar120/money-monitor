@@ -18,10 +18,13 @@ export const updateAccountSchema = z.object({
   credentials: z.record(z.string(), z.string()).optional(),
 });
 
+const accountTypeEnum = z.enum(['bank', 'credit_card']);
+
 // ─── Transactions Query ───
 
 export const transactionQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
+  accountType: accountTypeEnum.optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   category: z.string().optional(),
@@ -43,6 +46,7 @@ export const ignoreTransactionSchema = z.object({
 
 export const summaryQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
+  accountType: accountTypeEnum.optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   groupBy: z.enum(['category', 'month', 'account']).default('category'),
@@ -71,6 +75,21 @@ export const recategorizeSchema = z.object({
 /** Escape SQL LIKE wildcard characters (%, _) in user input */
 export function escapeLike(input: string): string {
   return input.replace(/[%_]/g, '\\$&');
+}
+
+import { eq, inArray } from 'drizzle-orm';
+import type { SQL } from 'drizzle-orm';
+import { db } from '../db/connection.js';
+import { accounts, transactions } from '../db/schema.js';
+
+/** Returns a WHERE condition filtering transactions by account type, or null if no accounts match. */
+export function accountTypeCondition(accountType: string): SQL | null {
+  const ids = db.select({ id: accounts.id })
+    .from(accounts)
+    .where(eq(accounts.accountType, accountType))
+    .all()
+    .map(a => a.id);
+  return ids.length > 0 ? inArray(transactions.accountId, ids) : null;
 }
 
 // ─── OTP ───

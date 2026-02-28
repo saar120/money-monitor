@@ -2,7 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
-import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike } from './validation.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike, accountTypeCondition } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
@@ -14,13 +14,20 @@ export async function transactionsRoutes(app: FastifyInstance) {
         details: parsed.error.flatten().fieldErrors,
       });
     }
+    const { accountType, ...rest } = parsed.data;
     const {
       accountId, startDate, endDate, category, status,
       minAmount, maxAmount, search,
       offset, limit, sortBy, sortOrder,
-    } = parsed.data;
+    } = rest;
 
     const conditions = [];
+
+    if (accountType) {
+      const cond = accountTypeCondition(accountType);
+      if (!cond) return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
+      conditions.push(cond);
+    }
 
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
     if (startDate) conditions.push(gte(transactions.date, startDate));

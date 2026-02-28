@@ -2,6 +2,14 @@ import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
 import { buildFinancialAdvisorPrompt } from './prompts.js';
 import { buildFinancialMcpServer } from './tools.js';
+import { parseMeta } from '../shared/types.js';
+import type { Transaction } from '../shared/types.js';
+
+function formatTransactionForPrompt(t: Transaction): string {
+  const meta = parseMeta(t.meta);
+  const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
+  return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${bankCat}`;
+}
 
 export interface ChatMessage {
   role: 'user' | 'assistant';
@@ -78,9 +86,7 @@ export async function batchCategorize(
   const validIds = new Set(uncategorized.map(t => t.id));
   const validCategories = new Set(categoryNames);
 
-  const txnList = uncategorized.map(t =>
-    `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
-  ).join('\n');
+  const txnList = uncategorized.map(formatTransactionForPrompt).join('\n');
 
   const categoryList = categoryNames.join(', ');
 
@@ -144,9 +150,7 @@ export async function recategorize(
   const validIds = new Set(toProcess.map(t => t.id));
   const validCategories = new Set(categoryNames);
 
-  const txnList = toProcess.map(t =>
-    `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}`
-  ).join('\n');
+  const txnList = toProcess.map(formatTransactionForPrompt).join('\n');
 
   const categoryList = categoryNames.join(', ');
 

@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
-import { getTransactions, getAccounts, ignoreTransaction, getCategories, updateTransactionCategory, type Transaction, type TransactionFilters, type Category } from '../api/client';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { getTransactions, getAccounts, ignoreTransaction, getCategories, updateTransactionCategory, type Transaction, type TransactionFilters, type Category, type Account } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -26,7 +26,13 @@ import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-vue-next';
 const transactions = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
-const accounts = ref<Array<{ id: number; displayName: string }>>([]);
+const allAccounts = ref<Account[]>([]);
+const accountTypeFilter = ref<string>('');
+
+const filteredAccounts = computed(() => {
+  if (!accountTypeFilter.value) return allAccounts.value;
+  return allAccounts.value.filter(a => a.accountType === accountTypeFilter.value);
+});
 
 const filters = ref<TransactionFilters>({
   offset: 0,
@@ -53,6 +59,7 @@ async function fetchTransactions() {
       ...filters.value,
       search: search.value || undefined,
       accountId: selectedAccount.value !== 'all' ? Number(selectedAccount.value) : undefined,
+      accountType: accountTypeFilter.value ? accountTypeFilter.value as 'bank' | 'credit_card' : undefined,
       startDate: startDate.value || undefined,
       endDate: endDate.value || undefined,
       category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
@@ -146,7 +153,7 @@ async function toggleIgnore() {
 
 onMounted(async () => {
   const [accountData, catData] = await Promise.all([getAccounts(), getCategories()]);
-  accounts.value = accountData.accounts;
+  allAccounts.value = accountData.accounts;
   availableCategories.value = catData.categories;
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
@@ -173,6 +180,17 @@ onUnmounted(() => {
             @keyup.enter="applyFilters"
           />
 
+          <Select v-model="accountTypeFilter" @update:model-value="() => { selectedAccount = 'all'; applyFilters(); }">
+            <SelectTrigger class="w-40">
+              <SelectValue placeholder="All Types" />
+            </SelectTrigger>
+            <SelectContent>
+              <SelectItem value="">All Types</SelectItem>
+              <SelectItem value="bank">Banks</SelectItem>
+              <SelectItem value="credit_card">Credit Cards</SelectItem>
+            </SelectContent>
+          </Select>
+
           <Select v-model="selectedAccount" @update:model-value="applyFilters">
             <SelectTrigger class="w-44">
               <SelectValue placeholder="All Accounts" />
@@ -180,7 +198,7 @@ onUnmounted(() => {
             <SelectContent>
               <SelectItem value="all">All Accounts</SelectItem>
               <SelectItem
-                v-for="acc in accounts"
+                v-for="acc in filteredAccounts"
                 :key="acc.id"
                 :value="String(acc.id)"
               >
