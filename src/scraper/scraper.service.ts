@@ -5,7 +5,8 @@ import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
-import type { Account, ScraperTransaction, NewTransaction } from '../shared/types.js';
+import type { Account, ScraperTransaction, NewTransaction, CompanyId } from '../shared/types.js';
+import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
@@ -16,6 +17,9 @@ function computeHash(accountId: number, txn: ScraperTransaction): string {
 }
 
 function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransaction {
+  const meta: Record<string, string> = {};
+  if (txn.category) meta.bankCategory = txn.category;
+
   return {
     accountId,
     identifier: txn.identifier != null ? Number(txn.identifier) : null,
@@ -30,6 +34,7 @@ function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransact
     status: txn.status,
     installmentNumber: txn.installments?.number ?? null,
     installmentTotal: txn.installments?.total ?? null,
+    meta: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
     hash: computeHash(accountId, txn),
   };
 }
@@ -72,6 +77,8 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
   startDate.setMonth(startDate.getMonth() - config.SCRAPE_START_DATE_MONTHS_BACK);
 
   try {
+    const accountType = getAccountType(account.companyId as CompanyId);
+
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
@@ -80,6 +87,7 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
       args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
+      ...(accountType === 'credit_card' ? { futureMonthsToScrape: 1 } : {}),
     });
 
     const otpCodeRetriever = async () => {
@@ -125,6 +133,13 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
       if (scraperAccount.accountNumber && !account.accountNumber) {
         db.update(accounts)
           .set({ accountNumber: scraperAccount.accountNumber })
+          .where(eq(accounts.id, account.id))
+          .run();
+      }
+
+      if (scraperAccount.balance != null) {
+        db.update(accounts)
+          .set({ balance: scraperAccount.balance })
           .where(eq(accounts.id, account.id))
           .run();
       }
