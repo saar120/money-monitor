@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { LayoutDashboard, Receipt, Building2, Bot, Tag } from 'lucide-vue-next';
+import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity } from 'lucide-vue-next';
 import { Separator } from '@/components/ui/separator';
 
 const route = useRoute();
@@ -18,6 +18,7 @@ const navItems = [
   { path: '/accounts', label: 'Accounts', icon: Building2 },
   { path: '/chat', label: 'AI Chat', icon: Bot },
   { path: '/categories', label: 'Categories', icon: Tag },
+  { path: '/scraping', label: 'Scraping', icon: Activity },
 ];
 </script>
 

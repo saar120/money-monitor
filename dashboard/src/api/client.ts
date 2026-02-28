@@ -159,11 +159,11 @@ export function getSummary(params: SummaryFilters = {}) {
 // ─── Scraping ───
 
 export function triggerScrape(accountId: number) {
-  return request<{ success: boolean; transactionsFound: number; transactionsNew: number }>(`/scrape/${accountId}`, { method: 'POST' });
+  return request<{ sessionId: number }>(`/scrape/${accountId}`, { method: 'POST' });
 }
 
 export function triggerScrapeAll() {
-  return request<{ results: Array<{ success: boolean; accountId: number }> }>('/scrape/all', { method: 'POST' });
+  return request<{ sessionId: number }>('/scrape/all', { method: 'POST' });
 }
 
 export function createScrapeEventSource(): EventSource {
@@ -191,6 +191,50 @@ export function getScrapeLogs(params: { accountId?: number; limit?: number } = {
     if (value !== undefined) query.set(key, String(value));
   });
   return request<{ logs: Array<Record<string, unknown>> }>(`/scrape/logs?${query}`);
+}
+
+// ─── Scrape Sessions ───
+
+export interface ScrapeLogEntry {
+  id: number;
+  accountId: number;
+  sessionId: number | null;
+  status: string;
+  errorType: string | null;
+  errorMessage: string | null;
+  transactionsFound: number;
+  transactionsNew: number | null;
+  durationMs: number | null;
+  startedAt: string;
+  completedAt: string | null;
+  accountName: string;
+  companyId: string;
+}
+
+export interface ScrapeSession {
+  id: number;
+  trigger: string;
+  status: string;
+  accountIds: string; // JSON array
+  startedAt: string;
+  completedAt: string | null;
+  logs: ScrapeLogEntry[];
+}
+
+export function getScrapeSessions(params: { limit?: number; offset?: number } = {}) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) query.set(key, String(value));
+  });
+  return request<{ sessions: ScrapeSession[]; activeSessions: ScrapeSession[] }>(`/scrape/sessions?${query}`);
+}
+
+export function getScrapeSession(id: number) {
+  return request<{ session: ScrapeSession }>(`/scrape/sessions/${id}`);
+}
+
+export function cancelScrapeSession(sessionId: number) {
+  return request<{ success: boolean }>(`/scrape/cancel/${sessionId}`, { method: 'POST' });
 }
 
 // ─── Categories ───

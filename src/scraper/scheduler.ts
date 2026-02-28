@@ -1,6 +1,6 @@
 import cron, { type ScheduledTask } from 'node-cron';
 import { config } from '../config.js';
-import { scrapeAllAccounts } from './scraper.service.js';
+import { hasActiveSessions, getUniqueActiveAccounts, runScrapeSession } from './session-manager.js';
 
 let scheduledTask: ScheduledTask | null = null;
 
@@ -22,17 +22,16 @@ export function startScheduler(): void {
 
   scheduledTask = cron.schedule(cronExpression, async () => {
     console.log(`[Scheduler] Triggered at ${new Date().toISOString()}`);
-    try {
-      const results = await scrapeAllAccounts();
-      const successes = results.filter(r => r.success).length;
-      const failures = results.filter(r => !r.success).length;
-      console.log(`[Scheduler] Completed: ${successes} succeeded, ${failures} failed`);
-    } catch (err) {
-      console.error('[Scheduler] Unhandled error during scheduled scrape:', err);
+
+    if (hasActiveSessions()) {
+      console.log('[Scheduler] Skipping — a scrape is already in progress');
+      return;
     }
-  }, {
-    timezone,
-  });
+
+    const uniqueAccounts = getUniqueActiveAccounts();
+    const { session } = runScrapeSession('scheduled', uniqueAccounts);
+    console.log(`[Scheduler] Started session ${session.id}`);
+  }, { timezone });
 }
 
 export function stopScheduler(): void {

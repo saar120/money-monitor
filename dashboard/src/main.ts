@@ -11,6 +11,7 @@ const router = createRouter({
     { path: '/accounts', component: () => import('./components/AccountManager.vue') },
     { path: '/chat', component: () => import('./components/AiChat.vue') },
     { path: '/categories', component: () => import('./components/CategoryManager.vue') },
+    { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
   ],
 });
 
