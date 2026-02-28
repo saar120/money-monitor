@@ -63,7 +63,7 @@ interface LiveSession {
   sessionId: number;
   trigger: string;
   accountIds: number[];
-  accounts: Map<number, LiveAccountStatus>;
+  accounts: Record<number, LiveAccountStatus>;
   startedAt: number; // Date.now() timestamp
 }
 
@@ -156,6 +156,24 @@ async function loadData() {
     ]);
     accounts.value = accountsRes.accounts;
     sessions.value = sessionsRes.sessions;
+
+    // If there's an active session running, hydrate the live banner
+    const active = sessionsRes.activeSessions[0];
+    if (!liveSession.value && active) {
+      const parsedIds: number[] = JSON.parse(active.accountIds);
+      const accountsMap: Record<number, LiveAccountStatus> = {};
+      for (const id of parsedIds) {
+        accountsMap[id] = { accountId: id, status: 'scraping' };
+      }
+      liveSession.value = {
+        sessionId: active.id,
+        trigger: active.trigger,
+        accountIds: parsedIds,
+        accounts: accountsMap,
+        startedAt: Date.now(),
+      };
+      startElapsedTimer();
+    }
   } finally {
     loading.value = false;
   }
@@ -237,13 +255,15 @@ function connectSse() {
 
     switch (data.type) {
       case 'session-started': {
+        const accountsMap: Record<number, LiveAccountStatus> = {};
+        for (const id of data.accountIds) {
+          accountsMap[id] = { accountId: id, status: 'queued' };
+        }
         liveSession.value = {
           sessionId: data.sessionId,
           trigger: data.trigger,
           accountIds: data.accountIds,
-          accounts: new Map(
-            data.accountIds.map((id: number) => [id, { accountId: id, status: 'queued' as const }])
-          ),
+          accounts: accountsMap,
           startedAt: Date.now(),
         };
         startElapsedTimer();
@@ -251,40 +271,36 @@ function connectSse() {
       }
 
       case 'account-scrape-started': {
-        if (liveSession.value?.accounts) {
-          liveSession.value.accounts.set(data.accountId, {
+        if (liveSession.value) {
+          liveSession.value.accounts[data.accountId] = {
             accountId: data.accountId,
             status: 'scraping',
-          });
-          // Trigger reactivity
-          liveSession.value = { ...liveSession.value };
+          };
         }
         break;
       }
 
       case 'account-scrape-done': {
-        if (liveSession.value?.accounts) {
-          liveSession.value.accounts.set(data.accountId, {
+        if (liveSession.value) {
+          liveSession.value.accounts[data.accountId] = {
             accountId: data.accountId,
             status: 'done',
             transactionsFound: data.transactionsFound,
             transactionsNew: data.transactionsNew,
             durationMs: data.durationMs,
-          });
-          liveSession.value = { ...liveSession.value };
+          };
         }
         break;
       }
 
       case 'account-scrape-error': {
-        if (liveSession.value?.accounts) {
-          liveSession.value.accounts.set(data.accountId, {
+        if (liveSession.value) {
+          liveSession.value.accounts[data.accountId] = {
             accountId: data.accountId,
             status: 'error',
             error: data.error,
             durationMs: data.durationMs,
-          });
-          liveSession.value = { ...liveSession.value };
+          };
         }
         break;
       }
@@ -393,8 +409,8 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
       <CardContent>
         <div class="space-y-2">
           <div
-            v-for="[accountId, accountStatus] in liveSession.accounts"
-            :key="accountId"
+            v-for="accountStatus in liveSession.accounts"
+            :key="accountStatus.accountId"
             class="flex items-center gap-3 text-sm"
           >
             <!-- Status icon -->
@@ -416,7 +432,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
             />
 
             <!-- Account name -->
-            <span class="w-40 truncate font-medium">{{ getAccountName(accountId) }}</span>
+            <span class="w-40 truncate font-medium">{{ getAccountName(accountStatus.accountId) }}</span>
 
             <!-- Status text -->
             <span class="text-muted-foreground">
