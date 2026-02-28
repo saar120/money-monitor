@@ -38,13 +38,25 @@ export const transactions = sqliteTable('transactions', {
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
 
+export const scrapeSessions = sqliteTable('scrape_sessions', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  trigger: text('trigger').notNull(), // 'manual' | 'scheduled' | 'single'
+  status: text('status').notNull().default('running'), // 'running' | 'completed' | 'cancelled' | 'error'
+  accountIds: text('account_ids').notNull(), // JSON array of target account IDs
+  startedAt: text('started_at').notNull().default(sql`(datetime('now'))`),
+  completedAt: text('completed_at'),
+});
+
 export const scrapeLogs = sqliteTable('scrape_logs', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   accountId: integer('account_id').notNull().references(() => accounts.id),
+  sessionId: integer('session_id').references(() => scrapeSessions.id),
   status: text('status').notNull(),
   errorType: text('error_type'),
   errorMessage: text('error_message'),
   transactionsFound: integer('transactions_found').default(0),
+  transactionsNew: integer('transactions_new').default(0),
+  durationMs: integer('duration_ms'),
   startedAt: text('started_at').notNull().default(sql`(datetime('now'))`),
   completedAt: text('completed_at'),
 });
