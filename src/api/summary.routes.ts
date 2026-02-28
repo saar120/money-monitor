@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
 import { summaryQuerySchema } from './validation.js';
@@ -14,9 +14,23 @@ export async function summaryRoutes(app: FastifyInstance) {
         details: parsed.error.flatten().fieldErrors,
       });
     }
-    const { accountId, startDate, endDate, groupBy } = parsed.data;
+    const { accountId, accountType, startDate, endDate, groupBy } = parsed.data;
 
     const conditions = [];
+
+    if (accountType) {
+      const matchingAccounts = db.select({ id: accounts.id })
+        .from(accounts)
+        .where(eq(accounts.accountType, accountType))
+        .all();
+      const ids = matchingAccounts.map(a => a.id);
+      if (ids.length > 0) {
+        conditions.push(inArray(transactions.accountId, ids));
+      } else {
+        return reply.send({ groupBy, summary: [] });
+      }
+    }
+
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
     if (startDate) conditions.push(gte(transactions.date, startDate));
     if (endDate) conditions.push(lte(transactions.date, endDate));

@@ -22,6 +22,7 @@ export const updateAccountSchema = z.object({
 
 export const transactionQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
+  accountType: z.enum(['bank', 'credit_card']).optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   category: z.string().optional(),
@@ -43,6 +44,7 @@ export const ignoreTransactionSchema = z.object({
 
 export const summaryQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
+  accountType: z.enum(['bank', 'credit_card']).optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   groupBy: z.enum(['category', 'month', 'account']).default('category'),
