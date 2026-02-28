@@ -203,7 +203,7 @@ async function handleScrape(account: Account) {
   if (scrapingAccounts.value.has(account.id)) return;
   try {
     const result = await triggerScrape(account.id);
-    alert(`Scrape complete: ${result.transactionsFound} found, ${result.transactionsNew} new`);
+    alert(`Scrape started (session #${result.sessionId})`);
     fetchAccounts();
   } catch (err) {
     alert(`Scrape failed: ${err instanceof Error ? err.message : err}`);

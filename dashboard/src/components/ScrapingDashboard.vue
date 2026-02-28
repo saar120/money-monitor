@@ -12,7 +12,6 @@ import {
   type Account,
   type ScrapeSession,
 } from '../api/client';
-import { PROVIDERS } from '@/lib/providers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -33,7 +32,6 @@ import {
 } from '@/components/ui/dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Activity,
   Play,
   Square,
   CheckCircle2,
@@ -332,7 +330,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         <p class="text-sm text-muted-foreground">Monitor and manage bank scrapes</p>
       </div>
       <div class="flex items-center gap-2">
-        <Select @update:model-value="(v: string) => handleScrapeAccount(Number(v))">
+        <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
           <SelectTrigger class="w-[200px]">
             <SelectValue placeholder="Scrape account..." />
           </SelectTrigger>
