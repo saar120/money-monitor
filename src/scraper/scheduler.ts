@@ -1,6 +1,12 @@
 import cron, { type ScheduledTask } from 'node-cron';
+import { eq } from 'drizzle-orm';
 import { config } from '../config.js';
-import { scrapeAllAccounts } from './scraper.service.js';
+import { db } from '../db/connection.js';
+import { accounts } from '../db/schema.js';
+import { scrapeAccount } from './scraper.service.js';
+import { createSession, registerActiveSession, completeSession, hasActiveSessions } from './session-manager.js';
+import { broadcastSseEvent } from '../api/sse.js';
+import type { Account } from '../shared/types.js';
 
 let scheduledTask: ScheduledTask | null = null;
 
@@ -22,17 +28,52 @@ export function startScheduler(): void {
 
   scheduledTask = cron.schedule(cronExpression, async () => {
     console.log(`[Scheduler] Triggered at ${new Date().toISOString()}`);
-    try {
-      const results = await scrapeAllAccounts();
-      const successes = results.filter(r => r.success).length;
-      const failures = results.filter(r => !r.success).length;
-      console.log(`[Scheduler] Completed: ${successes} succeeded, ${failures} failed`);
-    } catch (err) {
-      console.error('[Scheduler] Unhandled error during scheduled scrape:', err);
+
+    if (hasActiveSessions()) {
+      console.log('[Scheduler] Skipping — a scrape is already in progress');
+      return;
     }
-  }, {
-    timezone,
-  });
+
+    const activeAccounts = db.select().from(accounts).where(eq(accounts.isActive, true)).all();
+    const seen = new Set<string>();
+    const uniqueAccounts: Account[] = [];
+    for (const account of activeAccounts) {
+      if (!seen.has(account.credentialsRef)) {
+        seen.add(account.credentialsRef);
+        uniqueAccounts.push(account);
+      }
+    }
+
+    const accountIds = uniqueAccounts.map(a => a.id);
+    const { session, abortController } = createSession('scheduled', accountIds);
+    broadcastSseEvent({ type: 'session-started', sessionId: session.id, accountIds, trigger: 'scheduled' });
+
+    const promise = (async () => {
+      let hasError = false;
+      for (const account of uniqueAccounts) {
+        if (abortController.signal.aborted) break;
+        broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId: account.id });
+        const result = await scrapeAccount(account, session.id, abortController.signal);
+        if (!result.success) hasError = true;
+        broadcastSseEvent({
+          type: result.success ? 'account-scrape-done' : 'account-scrape-error',
+          sessionId: session.id,
+          accountId: account.id,
+          transactionsFound: result.transactionsFound,
+          transactionsNew: result.transactionsNew,
+          durationMs: result.durationMs,
+          error: result.error,
+          errorType: result.errorType,
+        });
+      }
+      const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
+      completeSession(session.id, finalStatus as 'completed' | 'error');
+      broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
+      console.log(`[Scheduler] Session ${session.id} ${finalStatus}`);
+    })();
+
+    registerActiveSession(session, abortController, promise);
+  }, { timezone });
 }
 
 export function stopScheduler(): void {
