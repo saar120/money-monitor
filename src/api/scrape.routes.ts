@@ -95,19 +95,24 @@ export async function scrapeRoutes(app: FastifyInstance) {
     broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId });
 
     const promise = scrapeAccount(account, session.id, abortController.signal)
-      .then((result) => {
-        broadcastSseEvent({
-          type: result.success ? 'account-scrape-done' : 'account-scrape-error',
-          sessionId: session.id,
-          accountId,
-          transactionsFound: result.transactionsFound,
-          transactionsNew: result.transactionsNew,
-          durationMs: result.durationMs,
-          error: result.error,
-          errorType: result.errorType,
-        });
-        completeSession(session.id, result.success ? 'completed' : 'error');
-        broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: result.success ? 'completed' : 'error' });
+      .then((results) => {
+        let hasError = false;
+        for (const result of results) {
+          if (!result.success) hasError = true;
+          broadcastSseEvent({
+            type: result.success ? 'account-scrape-done' : 'account-scrape-error',
+            sessionId: session.id,
+            accountId: result.accountId,
+            transactionsFound: result.transactionsFound,
+            transactionsNew: result.transactionsNew,
+            durationMs: result.durationMs,
+            error: result.error,
+            errorType: result.errorType,
+          });
+        }
+        const finalStatus = hasError ? 'error' : 'completed';
+        completeSession(session.id, finalStatus);
+        broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
       })
       .catch(() => {
         completeSession(session.id, 'error');
@@ -145,18 +150,20 @@ export async function scrapeRoutes(app: FastifyInstance) {
       for (const account of uniqueAccounts) {
         if (abortController.signal.aborted) break;
         broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId: account.id });
-        const result = await scrapeAccount(account, session.id, abortController.signal);
-        if (!result.success) hasError = true;
-        broadcastSseEvent({
-          type: result.success ? 'account-scrape-done' : 'account-scrape-error',
-          sessionId: session.id,
-          accountId: account.id,
-          transactionsFound: result.transactionsFound,
-          transactionsNew: result.transactionsNew,
-          durationMs: result.durationMs,
-          error: result.error,
-          errorType: result.errorType,
-        });
+        const results = await scrapeAccount(account, session.id, abortController.signal);
+        for (const result of results) {
+          if (!result.success) hasError = true;
+          broadcastSseEvent({
+            type: result.success ? 'account-scrape-done' : 'account-scrape-error',
+            sessionId: session.id,
+            accountId: result.accountId,
+            transactionsFound: result.transactionsFound,
+            transactionsNew: result.transactionsNew,
+            durationMs: result.durationMs,
+            error: result.error,
+            errorType: result.errorType,
+          });
+        }
       }
       const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
       completeSession(session.id, finalStatus as 'completed' | 'error');
