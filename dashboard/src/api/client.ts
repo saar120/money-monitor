@@ -43,6 +43,8 @@ export interface Account {
   companyId: string;
   displayName: string;
   accountNumber: string | null;
+  accountType: 'bank' | 'credit_card';
+  balance: number | null;
   isActive: boolean;
   lastScrapedAt: string | null;
   createdAt: string;
@@ -96,6 +98,7 @@ export interface Pagination {
 
 export interface TransactionFilters {
   accountId?: number;
+  accountType?: 'bank' | 'credit_card';
   startDate?: string;
   endDate?: string;
   category?: string;
@@ -135,7 +138,7 @@ export interface SummaryItem {
   transactionCount: number;
 }
 
-export function getSummary(params: { groupBy?: string; accountId?: number; startDate?: string; endDate?: string } = {}) {
+export function getSummary(params: { groupBy?: string; accountId?: number; accountType?: 'bank' | 'credit_card'; startDate?: string; endDate?: string } = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) query.set(key, String(value));
