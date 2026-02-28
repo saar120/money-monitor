@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { and, gte, lte, like, desc, eq, sql, count, inArray } from 'drizzle-orm';
+import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions, accounts } from '../db/schema.js';
-import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike } from './validation.js';
+import { transactions } from '../db/schema.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike, accountTypeCondition } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
@@ -24,16 +24,9 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const conditions = [];
 
     if (accountType) {
-      const matchingAccounts = db.select({ id: accounts.id })
-        .from(accounts)
-        .where(eq(accounts.accountType, accountType))
-        .all();
-      const ids = matchingAccounts.map(a => a.id);
-      if (ids.length > 0) {
-        conditions.push(inArray(transactions.accountId, ids));
-      } else {
-        return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
-      }
+      const cond = accountTypeCondition(accountType);
+      if (!cond) return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
+      conditions.push(cond);
     }
 
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));

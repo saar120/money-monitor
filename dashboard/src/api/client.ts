@@ -138,7 +138,15 @@ export interface SummaryItem {
   transactionCount: number;
 }
 
-export function getSummary(params: { groupBy?: string; accountId?: number; accountType?: 'bank' | 'credit_card'; startDate?: string; endDate?: string } = {}) {
+export interface SummaryFilters {
+  groupBy?: string;
+  accountId?: number;
+  accountType?: 'bank' | 'credit_card';
+  startDate?: string;
+  endDate?: string;
+}
+
+export function getSummary(params: SummaryFilters = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) query.set(key, String(value));

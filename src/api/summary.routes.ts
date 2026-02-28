@@ -1,8 +1,8 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, sql, inArray } from 'drizzle-orm';
+import { eq, and, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
-import { summaryQuerySchema } from './validation.js';
+import { summaryQuerySchema, accountTypeCondition } from './validation.js';
 
 export async function summaryRoutes(app: FastifyInstance) {
 
@@ -19,16 +19,9 @@ export async function summaryRoutes(app: FastifyInstance) {
     const conditions = [];
 
     if (accountType) {
-      const matchingAccounts = db.select({ id: accounts.id })
-        .from(accounts)
-        .where(eq(accounts.accountType, accountType))
-        .all();
-      const ids = matchingAccounts.map(a => a.id);
-      if (ids.length > 0) {
-        conditions.push(inArray(transactions.accountId, ids));
-      } else {
-        return reply.send({ groupBy, summary: [] });
-      }
+      const cond = accountTypeCondition(accountType);
+      if (!cond) return reply.send({ groupBy, summary: [] });
+      conditions.push(cond);
     }
 
     if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));

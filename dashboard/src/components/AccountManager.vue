@@ -66,6 +66,11 @@ const creditCardAccounts = computed(() =>
   accounts.value.filter(a => a.accountType === 'credit_card')
 );
 
+const accountSections = computed(() => [
+  { type: 'bank' as const, label: 'Banks', accounts: bankAccounts.value },
+  { type: 'credit_card' as const, label: 'Credit Cards', accounts: creditCardAccounts.value },
+].filter(s => s.accounts.length > 0));
+
 watch(newCompanyId, () => {
   credentialValues.value = {};
   credentialFields.value = [{ key: '', value: '' }];
@@ -236,10 +241,9 @@ onUnmounted(() => {
         No accounts configured. Add one to get started.
       </p>
 
-      <!-- Banks section -->
-      <div v-if="bankAccounts.length > 0" class="space-y-3">
-        <h2 class="text-lg font-medium tracking-tight">Banks</h2>
-        <Card v-for="account in bankAccounts" :key="account.id">
+      <div v-for="section in accountSections" :key="section.type" class="space-y-3">
+        <h2 class="text-lg font-medium tracking-tight">{{ section.label }}</h2>
+        <Card v-for="account in section.accounts" :key="account.id">
           <CardContent class="pt-4">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
@@ -256,88 +260,9 @@ onUnmounted(() => {
                   {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
                   <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
                 </CardDescription>
-                <p v-if="account.balance != null" class="text-lg font-semibold mt-1">
+                <p v-if="section.type === 'bank' && account.balance != null" class="text-lg font-semibold mt-1">
                   {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
                 </p>
-                <p class="text-xs text-muted-foreground mt-1">
-                  <span v-if="account.lastScrapedAt">
-                    Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
-                  </span>
-                  <span v-else>Never scraped</span>
-                </p>
-              </div>
-
-              <div class="flex items-center gap-2 flex-shrink-0">
-                <Button
-                  variant="outline"
-                  size="sm"
-                  :disabled="scrapingAccounts.has(account.id)"
-                  @click="handleScrape(account)"
-                >
-                  <Loader2 v-if="scrapingAccounts.has(account.id)" class="h-3 w-3 mr-1 animate-spin" />
-                  <RefreshCw v-else class="h-3 w-3 mr-1" />
-                  {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
-                </Button>
-
-                <Button
-                  variant="outline"
-                  size="sm"
-                  @click="handleToggleActive(account)"
-                >
-                  <Power class="h-3 w-3 mr-1" />
-                  {{ account.isActive ? 'Disable' : 'Enable' }}
-                </Button>
-
-                <AlertDialog>
-                  <AlertDialogTrigger as-child>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 class="h-3 w-3" />
-                    </Button>
-                  </AlertDialogTrigger>
-                  <AlertDialogContent>
-                    <AlertDialogHeader>
-                      <AlertDialogTitle>Delete "{{ account.displayName }}"?</AlertDialogTitle>
-                      <AlertDialogDescription>
-                        This will permanently delete the account and all its transactions. This action cannot be undone.
-                      </AlertDialogDescription>
-                    </AlertDialogHeader>
-                    <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        @click="handleDelete(account)"
-                      >
-                        Delete
-                      </AlertDialogAction>
-                    </AlertDialogFooter>
-                  </AlertDialogContent>
-                </AlertDialog>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Credit Cards section -->
-      <div v-if="creditCardAccounts.length > 0" class="space-y-3">
-        <h2 class="text-lg font-medium tracking-tight">Credit Cards</h2>
-        <Card v-for="account in creditCardAccounts" :key="account.id">
-          <CardContent class="pt-4">
-            <div class="flex items-start justify-between gap-4">
-              <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
-                  <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
-                  <Badge
-                    :variant="account.isActive ? 'default' : 'secondary'"
-                    class="text-xs"
-                  >
-                    {{ account.isActive ? 'Active' : 'Inactive' }}
-                  </Badge>
-                </div>
-                <CardDescription class="text-sm">
-                  {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
-                  <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
-                </CardDescription>
                 <p class="text-xs text-muted-foreground mt-1">
                   <span v-if="account.lastScrapedAt">
                     Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
