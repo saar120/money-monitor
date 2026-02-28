@@ -25,6 +25,7 @@ export interface ScraperTransaction {
     total: number;
   };
   status: string;
+  category?: string;
 }
 
 export interface ScraperAccountResult {
@@ -49,3 +50,28 @@ export const COMPANY_IDS = [
 ] as const;
 
 export type CompanyId = typeof COMPANY_IDS[number];
+
+export const ACCOUNT_TYPE_MAP: Record<CompanyId, 'bank' | 'credit_card'> = {
+  hapoalim: 'bank',
+  leumi: 'bank',
+  discount: 'bank',
+  mizrahi: 'bank',
+  otsarHahayal: 'bank',
+  mercantile: 'bank',
+  massad: 'bank',
+  beinleumi: 'bank',
+  union: 'bank',
+  yahav: 'bank',
+  oneZero: 'bank',
+  isracard: 'credit_card',
+  amex: 'credit_card',
+  max: 'credit_card',
+  visaCal: 'credit_card',
+  beyahadBishvilha: 'credit_card',
+  behatsdaa: 'credit_card',
+  pagi: 'credit_card',
+};
+
+export function getAccountType(companyId: CompanyId): 'bank' | 'credit_card' {
+  return ACCOUNT_TYPE_MAP[companyId];
+}
