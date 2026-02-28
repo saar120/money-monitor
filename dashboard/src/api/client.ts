@@ -45,6 +45,8 @@ export interface Account {
   accountNumber: string | null;
   accountType: 'bank' | 'credit_card';
   balance: number | null;
+  manualLogin: boolean;
+  showBrowser: boolean;
   isActive: boolean;
   lastScrapedAt: string | null;
   createdAt: string;
@@ -58,7 +60,7 @@ export function createAccount(data: { companyId: string; displayName: string; cr
   return request<{ account: Account }>('/accounts', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAccount(id: number, data: { displayName?: string; isActive?: boolean; credentials?: Record<string, string> }) {
+export function updateAccount(id: number, data: { displayName?: string; isActive?: boolean; manualLogin?: boolean; showBrowser?: boolean; credentials?: Record<string, string> }) {
   return request<{ account: Account }>(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
@@ -177,6 +179,10 @@ export function submitOtp(accountId: number, code: string) {
     method: 'POST',
     body: JSON.stringify({ accountId, code }),
   });
+}
+
+export function confirmManualLogin(accountId: number) {
+  return request<{ success: boolean }>(`/scrape/manual-confirm/${accountId}`, { method: 'POST' });
 }
 
 export function getScrapeLogs(params: { accountId?: number; limit?: number } = {}) {

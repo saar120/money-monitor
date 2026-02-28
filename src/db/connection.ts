@@ -2,8 +2,6 @@ import Database, { type Database as BetterSqlite3Database } from 'better-sqlite3
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.js';
-import { eq, sql } from 'drizzle-orm';
-import { ACCOUNT_TYPE_MAP } from '../shared/types.js';
 import { mkdirSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
@@ -24,17 +22,6 @@ export { sqlite };
 // manages its own local database, so this never touches a shared db.
 migrate(db, { migrationsFolder: join(__dirname, 'migrations') });
 
-// Backfill accountType for existing accounts (only if any rows need it)
-const needsBackfill = db.select({ id: schema.accounts.id })
-  .from(schema.accounts)
-  .where(sql`${schema.accounts.accountType} = 'bank' AND ${schema.accounts.companyId} IN ('isracard','amex','max','visaCal','beyahadBishvilha','behatsdaa','pagi')`)
-  .all();
-
-if (needsBackfill.length > 0) {
-  for (const [companyId, accountType] of Object.entries(ACCOUNT_TYPE_MAP)) {
-    db.update(schema.accounts)
-      .set({ accountType })
-      .where(eq(schema.accounts.companyId, companyId))
-      .run();
-  }
-}
+// Run data backfills after migrations
+import { runBackfills } from './backfills.js';
+runBackfills(db, sqlite);

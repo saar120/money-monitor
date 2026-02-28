@@ -9,6 +9,8 @@ export const accounts = sqliteTable('accounts', {
   accountType: text('account_type').notNull().default('bank'),
   balance: real('balance'),
   credentialsRef: text('credentials_ref').notNull(),
+  manualLogin: integer('manual_login', { mode: 'boolean' }).notNull().default(false),
+  showBrowser: integer('show_browser', { mode: 'boolean' }).notNull().default(false),
   isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   lastScrapedAt: text('last_scraped_at'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),

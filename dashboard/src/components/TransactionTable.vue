@@ -27,10 +27,10 @@ const transactions = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const allAccounts = ref<Account[]>([]);
-const accountTypeFilter = ref<string>('');
+const accountTypeFilter = ref<string>('all');
 
 const filteredAccounts = computed(() => {
-  if (!accountTypeFilter.value) return allAccounts.value;
+  if (accountTypeFilter.value === 'all') return allAccounts.value;
   return allAccounts.value.filter(a => a.accountType === accountTypeFilter.value);
 });
 
@@ -59,7 +59,7 @@ async function fetchTransactions() {
       ...filters.value,
       search: search.value || undefined,
       accountId: selectedAccount.value !== 'all' ? Number(selectedAccount.value) : undefined,
-      accountType: accountTypeFilter.value ? accountTypeFilter.value as 'bank' | 'credit_card' : undefined,
+      accountType: accountTypeFilter.value !== 'all' ? accountTypeFilter.value as 'bank' | 'credit_card' : undefined,
       startDate: startDate.value || undefined,
       endDate: endDate.value || undefined,
       category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
@@ -185,7 +185,7 @@ onUnmounted(() => {
               <SelectValue placeholder="All Types" />
             </SelectTrigger>
             <SelectContent>
-              <SelectItem value="">All Types</SelectItem>
+              <SelectItem value="all">All Types</SelectItem>
               <SelectItem value="bank">Banks</SelectItem>
               <SelectItem value="credit_card">Credit Cards</SelectItem>
             </SelectContent>

@@ -8,6 +8,7 @@ import {
   triggerScrape,
   createScrapeEventSource,
   submitOtp,
+  confirmManualLogin,
   type Account,
 } from '../api/client';
 import { PROVIDERS } from '@/lib/providers';
@@ -42,7 +43,10 @@ import {
   AlertDialogTrigger,
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
+import { Switch } from '@/components/ui/switch';
 import { Loader2, Plus, Trash2, RefreshCw, Power } from 'lucide-vue-next';
+
+const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
 const accounts = ref<Account[]>([]);
 const loading = ref(false);
@@ -84,6 +88,11 @@ const otpMessage = ref('');
 const otpCode = ref('');
 const otpSubmitting = ref(false);
 
+// Manual login state
+const manualLoginAccountId = ref<number | null>(null);
+const manualLoginMessage = ref('');
+const manualLoginSubmitting = ref(false);
+
 function connectSse() {
   eventSource = createScrapeEventSource();
 
@@ -103,6 +112,13 @@ function connectSse() {
         }
         break;
 
+      case 'manual-action-required':
+        if (data.accountId != null) {
+          manualLoginAccountId.value = data.accountId;
+          manualLoginMessage.value = data.message ?? 'Please log in manually in the browser window.';
+        }
+        break;
+
       case 'scrape-started':
         if (data.accountId != null) {
           scrapingAccounts.value.add(data.accountId);
@@ -117,6 +133,9 @@ function connectSse() {
           scrapingAccounts.value = new Set(scrapingAccounts.value);
           if (otpAccountId.value === data.accountId) {
             otpAccountId.value = null;
+          }
+          if (manualLoginAccountId.value === data.accountId) {
+            manualLoginAccountId.value = null;
           }
           fetchAccounts();
         }
@@ -169,9 +188,10 @@ async function handleAdd() {
   fetchAccounts();
 }
 
-async function handleToggleActive(account: Account) {
-  await updateAccount(account.id, { isActive: !account.isActive });
-  fetchAccounts();
+async function patchAccount(id: number, data: Parameters<typeof updateAccount>[1]) {
+  const { account: updated } = await updateAccount(id, data);
+  const idx = accounts.value.findIndex(a => a.id === updated.id);
+  if (idx !== -1) accounts.value[idx] = updated;
 }
 
 async function handleDelete(account: Account) {
@@ -207,6 +227,23 @@ async function handleOtpSubmit() {
 function handleOtpCancel() {
   otpAccountId.value = null;
   otpCode.value = '';
+}
+
+async function handleManualLoginConfirm() {
+  if (!manualLoginAccountId.value) return;
+  manualLoginSubmitting.value = true;
+  try {
+    await confirmManualLogin(manualLoginAccountId.value);
+    manualLoginAccountId.value = null;
+  } catch (err) {
+    alert(`Confirm failed: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    manualLoginSubmitting.value = false;
+  }
+}
+
+function handleManualLoginCancel() {
+  manualLoginAccountId.value = null;
 }
 
 onMounted(() => {
@@ -269,6 +306,16 @@ onUnmounted(() => {
                   </span>
                   <span v-else>Never scraped</span>
                 </p>
+                <div class="flex items-center gap-4 mt-2">
+                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch :model-value="account.manualLogin" @update:model-value="patchAccount(account.id, { manualLogin: $event })" />
+                    Manual login
+                  </label>
+                  <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                    <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="patchAccount(account.id, { showBrowser: $event })" />
+                    Show browser
+                  </label>
+                </div>
               </div>
 
               <div class="flex items-center gap-2 flex-shrink-0">
@@ -286,7 +333,7 @@ onUnmounted(() => {
                 <Button
                   variant="outline"
                   size="sm"
-                  @click="handleToggleActive(account)"
+                  @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
                   <Power class="h-3 w-3 mr-1" />
                   {{ account.isActive ? 'Disable' : 'Enable' }}
@@ -436,6 +483,33 @@ onUnmounted(() => {
           >
             <Loader2 v-if="otpSubmitting" class="h-4 w-4 mr-2 animate-spin" />
             {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Manual Login Dialog -->
+    <Dialog :open="manualLoginAccountId !== null" @update:open="(v) => { if (!v) handleManualLoginCancel() }">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Manual Login Required</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <p class="text-sm text-muted-foreground">{{ manualLoginMessage }}</p>
+          <p class="text-sm text-muted-foreground">
+            Once you've successfully logged in, click the button below to continue scraping.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="handleManualLoginCancel">Cancel</Button>
+          <Button
+            :disabled="manualLoginSubmitting"
+            @click="handleManualLoginConfirm"
+          >
+            <Loader2 v-if="manualLoginSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ manualLoginSubmitting ? 'Confirming...' : "I've Logged In" }}
           </Button>
         </DialogFooter>
       </DialogContent>

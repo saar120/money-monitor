@@ -6,6 +6,7 @@ import { scrapeAccount, scrapeAllAccounts } from '../scraper/scraper.service.js'
 import { scrapeLogsQuerySchema, otpSubmitSchema } from './validation.js';
 import { addSseClient, removeSseClient, broadcastSseEvent } from './sse.js';
 import { submitOtp } from '../scraper/otp-bridge.js';
+import { confirmManualAction } from '../scraper/manual-action-bridge.js';
 
 const activeScrapes = new Set<number | 'all'>();
 
@@ -54,6 +55,22 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
     if (!accepted) {
       return reply.status(404).send({ error: 'No pending OTP request for this account' });
+    }
+
+    return reply.send({ success: true });
+  });
+
+  // ─── Manual login confirm ───
+
+  app.post<{ Params: { accountId: string } }>('/api/scrape/manual-confirm/:accountId', async (request, reply) => {
+    const accountId = parseInt(request.params.accountId, 10);
+    if (isNaN(accountId)) {
+      return reply.status(400).send({ error: 'Invalid account ID' });
+    }
+
+    const accepted = confirmManualAction(accountId);
+    if (!accepted) {
+      return reply.status(404).send({ error: 'No pending manual login for this account' });
     }
 
     return reply.send({ success: true });

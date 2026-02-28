@@ -5,7 +5,7 @@ import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,
   CategoryScale, LinearScale, BarElement, Title
 } from 'chart.js';
-import { getSummary, getAccounts, type Account } from '../api/client';
+import { getSummary, getAccounts } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
