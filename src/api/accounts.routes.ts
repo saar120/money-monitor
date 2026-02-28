@@ -5,6 +5,8 @@ import { accounts, transactions } from '../db/schema.js';
 import { setCredentials, deleteCredentials } from '../scraper/credential-store.js';
 import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
+import { getAccountType } from '../shared/types.js';
+import type { CompanyId } from '../shared/types.js';
 
 function stripCredentialsRef(account: Record<string, unknown>) {
   const { credentialsRef, ...safe } = account;
@@ -35,6 +37,7 @@ export async function accountsRoutes(app: FastifyInstance) {
       companyId,
       displayName,
       credentialsRef,
+      accountType: getAccountType(companyId as CompanyId),
     }).returning().get();
 
     return reply.status(201).send({ account: stripCredentialsRef(result) });
