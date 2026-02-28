@@ -5,11 +5,12 @@ import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,
   CategoryScale, LinearScale, BarElement, Title
 } from 'chart.js';
-import { getSummary } from '../api/client';
+import { getSummary, getAccounts, type Account } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
+import { PROVIDERS } from '@/lib/providers';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -18,12 +19,18 @@ const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOStrin
 const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
 const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
 
-const categorySummary = useApi(() => getSummary({ groupBy: 'category', startDate: thisMonthStart }));
-const monthlySummary = useApi(() => getSummary({ groupBy: 'month' }));
+const accountsData = useApi(() => getAccounts());
+const categorySummary = useApi(() => getSummary({ groupBy: 'category', startDate: thisMonthStart, accountType: 'credit_card' }));
+const monthlySummary = useApi(() => getSummary({ groupBy: 'month', accountType: 'credit_card' }));
 const accountSummary = useApi(() => getSummary({ groupBy: 'account', startDate: thisMonthStart }));
-const lastMonthSummary = useApi(() => getSummary({ groupBy: 'category', startDate: lastMonthStart, endDate: lastMonthEnd }));
+const lastMonthSummary = useApi(() => getSummary({ groupBy: 'category', startDate: lastMonthStart, endDate: lastMonthEnd, accountType: 'credit_card' }));
+
+const bankAccounts = computed(() =>
+  (accountsData.data.value?.accounts ?? []).filter(a => a.accountType === 'bank')
+);
 
 onMounted(() => {
+  accountsData.execute();
   categorySummary.execute();
   monthlySummary.execute();
   accountSummary.execute();
@@ -72,7 +79,33 @@ function formatCurrency(amount: number): string {
   <div class="space-y-6">
     <h1 class="text-2xl font-semibold tracking-tight">Overview</h1>
 
-    <!-- Stat Cards -->
+    <!-- Bank Balances -->
+    <div v-if="bankAccounts.length > 0" class="space-y-3">
+      <h2 class="text-lg font-semibold">Bank Balances</h2>
+      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
+        <Card v-for="account in bankAccounts" :key="account.id">
+          <CardHeader class="pb-1">
+            <CardTitle class="text-sm font-medium truncate">{{ account.displayName }}</CardTitle>
+          </CardHeader>
+          <CardContent>
+            <div v-if="account.balance != null" class="text-xl font-bold">
+              {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
+            </div>
+            <div v-else class="text-sm text-muted-foreground">No balance data</div>
+            <p class="text-xs text-muted-foreground mt-1">
+              {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
+            </p>
+          </CardContent>
+        </Card>
+      </div>
+    </div>
+    <div v-else-if="accountsData.loading.value" class="space-y-3">
+      <h2 class="text-lg font-semibold">Bank Balances</h2>
+      <Skeleton class="h-24 w-full rounded-lg" />
+    </div>
+
+    <!-- Credit Card Spending -->
+    <h2 class="text-lg font-semibold">Credit Card Spending</h2>
     <div class="grid grid-cols-3 gap-4">
       <Card>
         <CardHeader class="pb-2">
