@@ -128,25 +128,20 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
   try {
     const accountType = getAccountType(account.companyId as CompanyId);
 
-    const needsManualLogin = account.manualLogin;
-
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
       combineInstallments: false,
-      showBrowser: needsManualLogin || account.showBrowser,
+      showBrowser: account.manualLogin || account.showBrowser,
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
       args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
       ...(accountType === 'credit_card' ? { futureMonthsToScrape: 1 } : {}),
     });
 
-    // For manual login companies: override login() to open the page and wait for user
-    if (needsManualLogin) {
-      const originalLogin = (scraper as any).login.bind(scraper);
+    // For manual login: override login() to open the page and wait for user
+    if (account.manualLogin) {
       (scraper as any).login = async () => {
-        // Navigate to the login page
-        await (scraper as any).navigateTo(`https://digital.isracard.co.il/personalarea/Login`);
 
         // Ask the user to log in manually via the dashboard
         await waitForManualAction(account.id, () => {

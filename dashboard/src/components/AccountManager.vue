@@ -188,19 +188,10 @@ async function handleAdd() {
   fetchAccounts();
 }
 
-async function handleToggleActive(account: Account) {
-  await updateAccount(account.id, { isActive: !account.isActive });
-  fetchAccounts();
-}
-
-async function handleToggleManualLogin(account: Account, value: boolean) {
-  await updateAccount(account.id, { manualLogin: value });
-  fetchAccounts();
-}
-
-async function handleToggleShowBrowser(account: Account, value: boolean) {
-  await updateAccount(account.id, { showBrowser: value });
-  fetchAccounts();
+async function patchAccount(id: number, data: Parameters<typeof updateAccount>[1]) {
+  const { account: updated } = await updateAccount(id, data);
+  const idx = accounts.value.findIndex(a => a.id === updated.id);
+  if (idx !== -1) accounts.value[idx] = updated;
 }
 
 async function handleDelete(account: Account) {
@@ -317,11 +308,11 @@ onUnmounted(() => {
                 </p>
                 <div class="flex items-center gap-4 mt-2">
                   <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Switch :model-value="account.manualLogin" @update:model-value="handleToggleManualLogin(account, $event)" />
+                    <Switch :model-value="account.manualLogin" @update:model-value="patchAccount(account.id, { manualLogin: $event })" />
                     Manual login
                   </label>
                   <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
-                    <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="handleToggleShowBrowser(account, $event)" />
+                    <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="patchAccount(account.id, { showBrowser: $event })" />
                     Show browser
                   </label>
                 </div>
@@ -342,7 +333,7 @@ onUnmounted(() => {
                 <Button
                   variant="outline"
                   size="sm"
-                  @click="handleToggleActive(account)"
+                  @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
                   <Power class="h-3 w-3 mr-1" />
                   {{ account.isActive ? 'Disable' : 'Enable' }}
