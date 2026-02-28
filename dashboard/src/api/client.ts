@@ -179,6 +179,10 @@ export function submitOtp(accountId: number, code: string) {
   });
 }
 
+export function confirmManualLogin(accountId: number) {
+  return request<{ success: boolean }>(`/scrape/manual-confirm/${accountId}`, { method: 'POST' });
+}
+
 export function getScrapeLogs(params: { accountId?: number; limit?: number } = {}) {
   const query = new URLSearchParams();
   Object.entries(params).forEach(([key, value]) => {

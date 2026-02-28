@@ -8,8 +8,11 @@ import { config } from '../config.js';
 import type { Account, ScraperTransaction, NewTransaction, CompanyId } from '../shared/types.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
+import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
+
+const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
 function computeHash(accountId: number, txn: ScraperTransaction): string {
   const raw = `${accountId}:${txn.date}:${txn.chargedAmount}:${txn.description}`;
@@ -79,16 +82,38 @@ export async function scrapeAccount(account: Account): Promise<ScrapeResult> {
   try {
     const accountType = getAccountType(account.companyId as CompanyId);
 
+    const needsManualLogin = MANUAL_LOGIN_COMPANIES.has(account.companyId);
+
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
       combineInstallments: false,
-      showBrowser: config.SCRAPE_SHOW_BROWSER,
+      showBrowser: needsManualLogin ? true : config.SCRAPE_SHOW_BROWSER,
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
       args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
       ...(accountType === 'credit_card' ? { futureMonthsToScrape: 1 } : {}),
     });
+
+    // For manual login companies: override login() to open the page and wait for user
+    if (needsManualLogin) {
+      const originalLogin = (scraper as any).login.bind(scraper);
+      (scraper as any).login = async () => {
+        // Navigate to the login page
+        await (scraper as any).navigateTo(`https://digital.isracard.co.il/personalarea/Login`);
+
+        // Ask the user to log in manually via the dashboard
+        await waitForManualAction(account.id, () => {
+          broadcastSseEvent({
+            type: 'manual-action-required',
+            accountId: account.id,
+            message: `Please log in manually for ${account.displayName}. A browser window is open — complete the login there, then click "Done" here.`,
+          });
+        });
+
+        return { success: true };
+      };
+    }
 
     const otpCodeRetriever = async () => {
       return waitForOtp(account.id, () => {

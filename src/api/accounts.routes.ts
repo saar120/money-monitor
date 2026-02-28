@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { accounts, transactions } from '../db/schema.js';
+import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { setCredentials, deleteCredentials } from '../scraper/credential-store.js';
 import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
@@ -86,6 +86,8 @@ export async function accountsRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
     deleteCredentials(existing.credentialsRef);
+
+    db.delete(scrapeLogs).where(eq(scrapeLogs.accountId, id)).run();
 
     if (request.query.deleteTransactions === 'true') {
       db.delete(transactions).where(eq(transactions.accountId, id)).run();

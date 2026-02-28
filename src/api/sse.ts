@@ -3,6 +3,7 @@ import type { ServerResponse } from 'node:http';
 export type SseEventType =
   | 'connected'
   | 'otp-required'
+  | 'manual-action-required'
   | 'scrape-started'
   | 'scrape-done'
   | 'scrape-error';

@@ -8,6 +8,7 @@ import {
   triggerScrape,
   createScrapeEventSource,
   submitOtp,
+  confirmManualLogin,
   type Account,
 } from '../api/client';
 import { PROVIDERS } from '@/lib/providers';
@@ -84,6 +85,11 @@ const otpMessage = ref('');
 const otpCode = ref('');
 const otpSubmitting = ref(false);
 
+// Manual login state
+const manualLoginAccountId = ref<number | null>(null);
+const manualLoginMessage = ref('');
+const manualLoginSubmitting = ref(false);
+
 function connectSse() {
   eventSource = createScrapeEventSource();
 
@@ -103,6 +109,13 @@ function connectSse() {
         }
         break;
 
+      case 'manual-action-required':
+        if (data.accountId != null) {
+          manualLoginAccountId.value = data.accountId;
+          manualLoginMessage.value = data.message ?? 'Please log in manually in the browser window.';
+        }
+        break;
+
       case 'scrape-started':
         if (data.accountId != null) {
           scrapingAccounts.value.add(data.accountId);
@@ -117,6 +130,9 @@ function connectSse() {
           scrapingAccounts.value = new Set(scrapingAccounts.value);
           if (otpAccountId.value === data.accountId) {
             otpAccountId.value = null;
+          }
+          if (manualLoginAccountId.value === data.accountId) {
+            manualLoginAccountId.value = null;
           }
           fetchAccounts();
         }
@@ -207,6 +223,23 @@ async function handleOtpSubmit() {
 function handleOtpCancel() {
   otpAccountId.value = null;
   otpCode.value = '';
+}
+
+async function handleManualLoginConfirm() {
+  if (!manualLoginAccountId.value) return;
+  manualLoginSubmitting.value = true;
+  try {
+    await confirmManualLogin(manualLoginAccountId.value);
+    manualLoginAccountId.value = null;
+  } catch (err) {
+    alert(`Confirm failed: ${err instanceof Error ? err.message : err}`);
+  } finally {
+    manualLoginSubmitting.value = false;
+  }
+}
+
+function handleManualLoginCancel() {
+  manualLoginAccountId.value = null;
 }
 
 onMounted(() => {
@@ -436,6 +469,33 @@ onUnmounted(() => {
           >
             <Loader2 v-if="otpSubmitting" class="h-4 w-4 mr-2 animate-spin" />
             {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Manual Login Dialog -->
+    <Dialog :open="manualLoginAccountId !== null" @update:open="(v) => { if (!v) handleManualLoginCancel() }">
+      <DialogContent class="sm:max-w-sm">
+        <DialogHeader>
+          <DialogTitle>Manual Login Required</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-4 py-2">
+          <p class="text-sm text-muted-foreground">{{ manualLoginMessage }}</p>
+          <p class="text-sm text-muted-foreground">
+            Once you've successfully logged in, click the button below to continue scraping.
+          </p>
+        </div>
+
+        <DialogFooter>
+          <Button variant="outline" @click="handleManualLoginCancel">Cancel</Button>
+          <Button
+            :disabled="manualLoginSubmitting"
+            @click="handleManualLoginConfirm"
+          >
+            <Loader2 v-if="manualLoginSubmitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ manualLoginSubmitting ? 'Confirming...' : "I've Logged In" }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -1,0 +1,160 @@
+diff --git a/node_modules/israeli-bank-scrapers/lib/helpers/fetch.js b/node_modules/israeli-bank-scrapers/lib/helpers/fetch.js
+index 9252ba4..dc9dee8 100644
+--- a/node_modules/israeli-bank-scrapers/lib/helpers/fetch.js
++++ b/node_modules/israeli-bank-scrapers/lib/helpers/fetch.js
+@@ -17,6 +17,13 @@ function getJsonHeaders() {
+     'Content-Type': JSON_CONTENT_TYPE
+   };
+ }
++function assertAutomationNotBlocked(status, responseText, url) {
++  if (status === 429 || (responseText && /block automation|bot detection/i.test(responseText))) {
++    throw new Error(
++      `Automation detected and blocked by server. Status: ${status}, URL: ${url}. The site is actively blocking automated access.`,
++    );
++  }
++}
+ async function fetchGet(url, extraHeaders) {
+   let headers = getJsonHeaders();
+   if (extraHeaders) {
+@@ -56,20 +63,38 @@ async function fetchGraphql(url, query, variables = {}, extraHeaders = {}) {
+   return result.data;
+ }
+ async function fetchGetWithinPage(page, url, ignoreErrors = false) {
+-  const [result, status] = await page.evaluate(async innerUrl => {
+-    let response;
++  let result, status;
++  try {
++    [result, status] = await page.evaluate(async innerUrl => {
++      let response;
++      try {
++        response = await fetch(innerUrl, {
++          credentials: 'include'
++        });
++        if (response.status === 204) {
++          return [null, response.status];
++        }
++        return [await response.text(), response.status];
++      } catch (e) {
++        throw new Error(`fetchGetWithinPage error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${innerUrl}, status: ${response?.status}`);
++      }
++    }, url);
++  } catch (evalError) {
++    // Fallback: use page.goto() when in-page fetch fails (e.g. page scripts intercept fetch)
+     try {
+-      response = await fetch(innerUrl, {
+-        credentials: 'include'
+-      });
+-      if (response.status === 204) {
+-        return [null, response.status];
++      const resp = await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
++      status = resp.status();
++      result = await resp.text();
++    } catch (gotoError) {
++      if (!ignoreErrors) {
++        throw evalError;
+       }
+-      return [await response.text(), response.status];
+-    } catch (e) {
+-      throw new Error(`fetchGetWithinPage error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${innerUrl}, status: ${response?.status}`);
++      return null;
+     }
+-  }, url);
++  }
++  if (!ignoreErrors) {
++    assertAutomationNotBlocked(status, result, url);
++  }
+   if (result !== null) {
+     try {
+       return JSON.parse(result);
+@@ -93,17 +118,21 @@ async function fetchPostWithinPage(page, url, data, extraHeaders = {}, ignoreErr
+       }, innerExtraHeaders)
+     });
+     if (response.status === 204) {
+-      return null;
++      return [null, response.status];
+     }
+-    return response.text();
++    return [await response.text(), response.status];
+   }, url, data, extraHeaders);
++  const [resultText, status] = result;
++  if (!ignoreErrors) {
++    assertAutomationNotBlocked(status, resultText, url);
++  }
+   try {
+-    if (result !== null) {
+-      return JSON.parse(result);
++    if (resultText !== null) {
++      return JSON.parse(resultText);
+     }
+   } catch (e) {
+     if (!ignoreErrors) {
+-      throw new Error(`fetchPostWithinPage parse error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${url}, data: ${JSON.stringify(data)}, extraHeaders: ${JSON.stringify(extraHeaders)}, result: ${result}`);
++      throw new Error(`fetchPostWithinPage parse error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${url}, data: ${JSON.stringify(data)}, extraHeaders: ${JSON.stringify(extraHeaders)}, result: ${resultText}`);
+     }
+   }
+   return null;
+diff --git a/node_modules/israeli-bank-scrapers/lib/helpers/waiting.js b/node_modules/israeli-bank-scrapers/lib/helpers/waiting.js
+index 28b5239..9b0bb62 100644
+--- a/node_modules/israeli-bank-scrapers/lib/helpers/waiting.js
++++ b/node_modules/israeli-bank-scrapers/lib/helpers/waiting.js
+@@ -6,6 +6,7 @@ Object.defineProperty(exports, "__esModule", {
+ exports.TimeoutError = exports.SECOND = void 0;
+ exports.raceTimeout = raceTimeout;
+ exports.runSerial = runSerial;
++exports.randomDelay = randomDelay;
+ exports.sleep = sleep;
+ exports.waitUntil = waitUntil;
+ class TimeoutError extends Error {}
+@@ -55,4 +56,8 @@ function runSerial(actions) {
+ function sleep(ms) {
+   return new Promise(resolve => setTimeout(resolve, ms));
+ }
++function randomDelay(min = 500, max = 2000) {
++  const delay = Math.floor(Math.random() * (max - min + 1)) + min;
++  return new Promise(resolve => setTimeout(resolve, delay));
++}
+ //# sourceMappingURL=data:application/json;charset=utf-8;base64,eyJ2ZXJzaW9uIjozLCJuYW1lcyI6WyJUaW1lb3V0RXJyb3IiLCJFcnJvciIsImV4cG9ydHMiLCJTRUNPTkQiLCJ0aW1lb3V0UHJvbWlzZSIsIm1zIiwicHJvbWlzZSIsImRlc2NyaXB0aW9uIiwidGltZW91dCIsIlByb21pc2UiLCJfIiwicmVqZWN0IiwiaWQiLCJzZXRUaW1lb3V0IiwiY2xlYXJUaW1lb3V0IiwiZXJyb3IiLCJyYWNlIiwid2FpdFVudGlsIiwiYXN5bmNUZXN0IiwiaW50ZXJ2YWwiLCJyZXNvbHZlIiwid2FpdCIsInRoZW4iLCJ2YWx1ZSIsImNhdGNoIiwicmFjZVRpbWVvdXQiLCJlcnIiLCJydW5TZXJpYWwiLCJhY3Rpb25zIiwicmVkdWNlIiwibSIsImEiLCJ4IiwiQXJyYXkiLCJzbGVlcCJdLCJzb3VyY2VzIjpbIi4uLy4uL3NyYy9oZWxwZXJzL3dhaXRpbmcudHMiXSwic291cmNlc0NvbnRlbnQiOlsiaW1wb3J0IHR5cGUgeyBGYWxzeSB9IGZyb20gJ3V0aWxpdHktdHlwZXMnO1xuXG5leHBvcnQgY2xhc3MgVGltZW91dEVycm9yIGV4dGVuZHMgRXJyb3Ige31cblxuZXhwb3J0IGNvbnN0IFNFQ09ORCA9IDEwMDA7XG5cbnR5cGUgV2FpdFVudGlsUmV0dXJuPFQ+ID0gVCBleHRlbmRzIEZhbHN5ID8gbmV2ZXIgOiBQcm9taXNlPE5vbk51bGxhYmxlPFQ+PjtcblxuZnVuY3Rpb24gdGltZW91dFByb21pc2U8VD4obXM6IG51bWJlciwgcHJvbWlzZTogUHJvbWlzZTxUPiwgZGVzY3JpcHRpb246IHN0cmluZyk6IFByb21pc2U8VD4ge1xuICBjb25zdCB0aW1lb3V0ID0gbmV3IFByb21pc2UoKF8sIHJlamVjdCkgPT4ge1xuICAgIGNvbnN0IGlkID0gc2V0VGltZW91dCgoKSA9PiB7XG4gICAgICBjbGVhclRpbWVvdXQoaWQpO1xuICAgICAgY29uc3QgZXJyb3IgPSBuZXcgVGltZW91dEVycm9yKGRlc2NyaXB0aW9uKTtcbiAgICAgIHJlamVjdChlcnJvcik7XG4gICAgfSwgbXMpO1xuICB9KTtcblxuICByZXR1cm4gUHJvbWlzZS5yYWNlKFtcbiAgICBwcm9taXNlLFxuICAgIC8vIGNhc3RpbmcgdG8gYXZvaWQgdHlwZSBlcnJvci0gc2FmZSBzaW5jZSB0aGlzIHByb21pc2Ugd2lsbCBhbHdheXMgcmVqZWN0XG4gICAgdGltZW91dCBhcyBQcm9taXNlPFQ+LFxuICBdKTtcbn1cblxuLyoqXG4gKiBXYWl0IHVudGlsIGEgcHJvbWlzZSByZXNvbHZlcyB3aXRoIGEgdHJ1dGh5IHZhbHVlIG9yIHJlamVjdCBhZnRlciBhIHRpbWVvdXRcbiAqL1xuZXhwb3J0IGZ1bmN0aW9uIHdhaXRVbnRpbDxUPihcbiAgYXN5bmNUZXN0OiAoKSA9PiBQcm9taXNlPFQ+LFxuICBkZXNjcmlwdGlvbiA9ICcnLFxuICB0aW1lb3V0ID0gMTAwMDAsXG4gIGludGVydmFsID0gMTAwLFxuKTogV2FpdFVudGlsUmV0dXJuPFQ+IHtcbiAgY29uc3QgcHJvbWlzZSA9IG5ldyBQcm9taXNlPE5vbk51bGxhYmxlPFQ+PigocmVzb2x2ZSwgcmVqZWN0KSA9PiB7XG4gICAgZnVuY3Rpb24gd2FpdCgpIHtcbiAgICAgIGFzeW5jVGVzdCgpXG4gICAgICAgIC50aGVuKHZhbHVlID0+IHtcbiAgICAgICAgICBpZiAodmFsdWUpIHtcbiAgICAgICAgICAgIHJlc29sdmUodmFsdWUpO1xuICAgICAgICAgIH0gZWxzZSB7XG4gICAgICAgICAgICBzZXRUaW1lb3V0KHdhaXQsIGludGVydmFsKTtcbiAgICAgICAgICB9XG4gICAgICAgIH0pXG4gICAgICAgIC5jYXRjaCgoKSA9PiB7XG4gICAgICAgICAgcmVqZWN0KCk7XG4gICAgICAgIH0pO1xuICAgIH1cbiAgICB3YWl0KCk7XG4gIH0pO1xuICByZXR1cm4gdGltZW91dFByb21pc2UodGltZW91dCwgcHJvbWlzZSwgZGVzY3JpcHRpb24pIGFzIFdhaXRVbnRpbFJldHVybjxUPjtcbn1cblxuZXhwb3J0IGZ1bmN0aW9uIHJhY2VUaW1lb3V0KG1zOiBudW1iZXIsIHByb21pc2U6IFByb21pc2U8YW55Pikge1xuICByZXR1cm4gdGltZW91dFByb21pc2UobXMsIHByb21pc2UsICd0aW1lb3V0JykuY2F0Y2goZXJyID0+IHtcbiAgICBpZiAoIShlcnIgaW5zdGFuY2VvZiBUaW1lb3V0RXJyb3IpKSB0aHJvdyBlcnI7XG4gIH0pO1xufVxuXG5leHBvcnQgZnVuY3Rpb24gcnVuU2VyaWFsPFQ+KGFjdGlvbnM6ICgoKSA9PiBQcm9taXNlPFQ+KVtdKTogUHJvbWlzZTxUW10+IHtcbiAgcmV0dXJuIGFjdGlvbnMucmVkdWNlKChtLCBhKSA9PiBtLnRoZW4oYXN5bmMgeCA9PiBbLi4ueCwgYXdhaXQgYSgpXSksIFByb21pc2UucmVzb2x2ZTxUW10+KG5ldyBBcnJheTxUPigpKSk7XG59XG5cbmV4cG9ydCBmdW5jdGlvbiBzbGVlcChtczogbnVtYmVyKSB7XG4gIHJldHVybiBuZXcgUHJvbWlzZShyZXNvbHZlID0+IHNldFRpbWVvdXQocmVzb2x2ZSwgbXMpKTtcbn1cbiJdLCJtYXBwaW5ncyI6Ijs7Ozs7Ozs7OztBQUVPLE1BQU1BLFlBQVksU0FBU0MsS0FBSyxDQUFDO0FBQUVDLE9BQUEsQ0FBQUYsWUFBQSxHQUFBQSxZQUFBO0FBRW5DLE1BQU1HLE1BQU0sR0FBQUQsT0FBQSxDQUFBQyxNQUFBLEdBQUcsSUFBSTtBQUkxQixTQUFTQyxjQUFjQSxDQUFJQyxFQUFVLEVBQUVDLE9BQW1CLEVBQUVDLFdBQW1CLEVBQWM7RUFDM0YsTUFBTUMsT0FBTyxHQUFHLElBQUlDLE9BQU8sQ0FBQyxDQUFDQyxDQUFDLEVBQUVDLE1BQU0sS0FBSztJQUN6QyxNQUFNQyxFQUFFLEdBQUdDLFVBQVUsQ0FBQyxNQUFNO01BQzFCQyxZQUFZLENBQUNGLEVBQUUsQ0FBQztNQUNoQixNQUFNRyxLQUFLLEdBQUcsSUFBSWYsWUFBWSxDQUFDTyxXQUFXLENBQUM7TUFDM0NJLE1BQU0sQ0FBQ0ksS0FBSyxDQUFDO0lBQ2YsQ0FBQyxFQUFFVixFQUFFLENBQUM7RUFDUixDQUFDLENBQUM7RUFFRixPQUFPSSxPQUFPLENBQUNPLElBQUksQ0FBQyxDQUNsQlYsT0FBTztFQUNQO0VBQ0FFLE9BQU8sQ0FDUixDQUFDO0FBQ0o7O0FBRUE7QUFDQTtBQUNBO0FBQ08sU0FBU1MsU0FBU0EsQ0FDdkJDLFNBQTJCLEVBQzNCWCxXQUFXLEdBQUcsRUFBRSxFQUNoQkMsT0FBTyxHQUFHLEtBQUssRUFDZlcsUUFBUSxHQUFHLEdBQUcsRUFDTTtFQUNwQixNQUFNYixPQUFPLEdBQUcsSUFBSUcsT0FBTyxDQUFpQixDQUFDVyxPQUFPLEVBQUVULE1BQU0sS0FBSztJQUMvRCxTQUFTVSxJQUFJQSxDQUFBLEVBQUc7TUFDZEgsU0FBUyxDQUFDLENBQUMsQ0FDUkksSUFBSSxDQUFDQyxLQUFLLElBQUk7UUFDYixJQUFJQSxLQUFLLEVBQUU7VUFDVEgsT0FBTyxDQUFDRyxLQUFLLENBQUM7UUFDaEIsQ0FBQyxNQUFNO1VBQ0xWLFVBQVUsQ0FBQ1EsSUFBSSxFQUFFRixRQUFRLENBQUM7UUFDNUI7TUFDRixDQUFDLENBQUMsQ0FDREssS0FBSyxDQUFDLE1BQU07UUFDWGIsTUFBTSxDQUFDLENBQUM7TUFDVixDQUFDLENBQUM7SUFDTjtJQUNBVSxJQUFJLENBQUMsQ0FBQztFQUNSLENBQUMsQ0FBQztFQUNGLE9BQU9qQixjQUFjLENBQUNJLE9BQU8sRUFBRUYsT0FBTyxFQUFFQyxXQUFXLENBQUM7QUFDdEQ7QUFFTyxTQUFTa0IsV0FBV0EsQ0FBQ3BCLEVBQVUsRUFBRUMsT0FBcUIsRUFBRTtFQUM3RCxPQUFPRixjQUFjLENBQUNDLEVBQUUsRUFBRUMsT0FBTyxFQUFFLFNBQVMsQ0FBQyxDQUFDa0IsS0FBSyxDQUFDRSxHQUFHLElBQUk7SUFDekQsSUFBSSxFQUFFQSxHQUFHLFlBQVkxQixZQUFZLENBQUMsRUFBRSxNQUFNMEIsR0FBRztFQUMvQyxDQUFDLENBQUM7QUFDSjtBQUVPLFNBQVNDLFNBQVNBLENBQUlDLE9BQTZCLEVBQWdCO0VBQ3hFLE9BQU9BLE9BQU8sQ0FBQ0MsTUFBTSxDQUFDLENBQUNDLENBQUMsRUFBRUMsQ0FBQyxLQUFLRCxDQUFDLENBQUNSLElBQUksQ0FBQyxNQUFNVSxDQUFDLElBQUksQ0FBQyxHQUFHQSxDQUFDLEVBQUUsTUFBTUQsQ0FBQyxDQUFDLENBQUMsQ0FBQyxDQUFDLEVBQUV0QixPQUFPLENBQUNXLE9BQU8sQ0FBTSxJQUFJYSxLQUFLLENBQUksQ0FBQyxDQUFDLENBQUM7QUFDN0c7QUFFTyxTQUFTQyxLQUFLQSxDQUFDN0IsRUFBVSxFQUFFO0VBQ2hDLE9BQU8sSUFBSUksT0FBTyxDQUFDVyxPQUFPLElBQUlQLFVBQVUsQ0FBQ08sT0FBTyxFQUFFZixFQUFFLENBQUMsQ0FBQztBQUN4RCIsImlnbm9yZUxpc3QiOltdfQ==
+\ No newline at end of file
+diff --git a/node_modules/israeli-bank-scrapers/lib/scrapers/base-isracard-amex.js b/node_modules/israeli-bank-scrapers/lib/scrapers/base-isracard-amex.js
+index c1a1f32..f7a31be 100644
+--- a/node_modules/israeli-bank-scrapers/lib/scrapers/base-isracard-amex.js
++++ b/node_modules/israeli-bank-scrapers/lib/scrapers/base-isracard-amex.js
+@@ -19,7 +19,7 @@ var _errors = require("./errors");
+ var _browser = require("../helpers/browser");
+ function _interopRequireDefault(e) { return e && e.__esModule ? e : { default: e }; }
+ const RATE_LIMIT = {
+-  SLEEP_BETWEEN: 1000,
++  SLEEP_BETWEEN: 2500,
+   TRANSACTIONS_BATCH_SIZE: 10
+ };
+ const COUNTRY_CODE = '212';
+@@ -38,7 +38,8 @@ function getAccountsUrl(servicesUrl, monthMoment) {
+ }
+ async function fetchAccounts(page, servicesUrl, monthMoment) {
+   const dataUrl = getAccountsUrl(servicesUrl, monthMoment);
+-  debug(`fetching accounts from ${dataUrl}`);
++  debug(`fetching accounts for ${monthMoment.format('YYYY-MM')} from ${dataUrl}`);
++  await (0, _waiting.randomDelay)(RATE_LIMIT.SLEEP_BETWEEN, RATE_LIMIT.SLEEP_BETWEEN + 500);
+   const dataResult = await (0, _fetch.fetchGetWithinPage)(page, dataUrl);
+   if (dataResult && _lodash.default.get(dataResult, 'Header.Status') === '1' && dataResult.DashboardMonthBean) {
+     const {
+@@ -119,8 +120,8 @@ function convertTransactions(txns, processedDate, options) {
+ async function fetchTransactions(page, options, companyServiceOptions, startMoment, monthMoment) {
+   const accounts = await fetchAccounts(page, companyServiceOptions.servicesUrl, monthMoment);
+   const dataUrl = getTransactionsUrl(companyServiceOptions.servicesUrl, monthMoment);
+-  await (0, _waiting.sleep)(RATE_LIMIT.SLEEP_BETWEEN);
+-  debug(`fetching transactions from ${dataUrl} for month ${monthMoment.format('YYYY-MM')}`);
++  debug(`fetching transactions for ${monthMoment.format('YYYY-MM')} from ${dataUrl}`);
++  await (0, _waiting.randomDelay)(RATE_LIMIT.SLEEP_BETWEEN, RATE_LIMIT.SLEEP_BETWEEN + 500);
+   const dataResult = await (0, _fetch.fetchGetWithinPage)(page, dataUrl);
+   if (dataResult && _lodash.default.get(dataResult, 'Header.Status') === '1' && dataResult.CardsTransactionsListBean) {
+     const accountTxns = {};
+@@ -181,7 +182,7 @@ async function getExtraScrapAccount(page, options, accountMap, month) {
+     for (const txnsChunk of _lodash.default.chunk(account.txns, RATE_LIMIT.TRANSACTIONS_BATCH_SIZE)) {
+       debug(`processing chunk of ${txnsChunk.length} transactions for account ${account.accountNumber}`);
+       const updatedTxns = await Promise.all(txnsChunk.map(t => getExtraScrapTransaction(page, options, month, account.index, t)));
+-      await (0, _waiting.sleep)(RATE_LIMIT.SLEEP_BETWEEN);
++      await (0, _waiting.randomDelay)(RATE_LIMIT.SLEEP_BETWEEN, RATE_LIMIT.SLEEP_BETWEEN + 500);
+       txns.push(...updatedTxns);
+     }
+     accounts.push({
