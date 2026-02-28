@@ -2,13 +2,22 @@ import type { FastifyInstance } from 'fastify';
 import { eq, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, scrapeLogs, scrapeSessions } from '../db/schema.js';
-import { scrapeAccount } from '../scraper/scraper.service.js';
 import { scrapeLogsQuerySchema, scrapeSessionsQuerySchema, otpSubmitSchema } from './validation.js';
 import { addSseClient, removeSseClient, broadcastSseEvent } from './sse.js';
 import { submitOtp } from '../scraper/otp-bridge.js';
 import { confirmManualAction } from '../scraper/manual-action-bridge.js';
-import { createSession, registerActiveSession, completeSession, cancelSession, hasActiveSessions, getActiveSessions } from '../scraper/session-manager.js';
-import type { Account } from '../shared/types.js';
+import { cancelSession, hasActiveSessions, getActiveSessions, getUniqueActiveAccounts, runScrapeSession } from '../scraper/session-manager.js';
+import type { ScrapeLog } from '../shared/types.js';
+
+function enrichLogsWithAccountNames(logs: ScrapeLog[]) {
+  const allAccounts = db.select({ id: accounts.id, displayName: accounts.displayName, companyId: accounts.companyId })
+    .from(accounts).all();
+  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+  return logs.map(log => {
+    const account = accountMap.get(log.accountId);
+    return { ...log, accountName: account?.displayName ?? 'Unknown', companyId: account?.companyId ?? '' };
+  });
+}
 
 export async function scrapeRoutes(app: FastifyInstance) {
 
@@ -89,37 +98,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
       return reply.status(429).send({ error: 'A scrape is already in progress' });
     }
 
-    const { session, abortController } = createSession('single', [accountId]);
-
-    broadcastSseEvent({ type: 'session-started', sessionId: session.id, accountIds: [accountId], trigger: 'single' });
-    broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId });
-
-    const promise = scrapeAccount(account, session.id, abortController.signal)
-      .then((results) => {
-        let hasError = false;
-        for (const result of results) {
-          if (!result.success) hasError = true;
-          broadcastSseEvent({
-            type: result.success ? 'account-scrape-done' : 'account-scrape-error',
-            sessionId: session.id,
-            accountId: result.accountId,
-            transactionsFound: result.transactionsFound,
-            transactionsNew: result.transactionsNew,
-            durationMs: result.durationMs,
-            error: result.error,
-            errorType: result.errorType,
-          });
-        }
-        const finalStatus = hasError ? 'error' : 'completed';
-        completeSession(session.id, finalStatus);
-        broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
-      })
-      .catch(() => {
-        completeSession(session.id, 'error');
-        broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error' });
-      });
-
-    registerActiveSession(session, abortController, promise);
+    const { session } = runScrapeSession('single', [account]);
     return reply.status(202).send({ sessionId: session.id });
   });
 
@@ -130,47 +109,8 @@ export async function scrapeRoutes(app: FastifyInstance) {
       return reply.status(429).send({ error: 'A scrape is already in progress' });
     }
 
-    const activeAccounts = db.select().from(accounts).where(eq(accounts.isActive, true)).all();
-    const seen = new Set<string>();
-    const uniqueAccounts: Account[] = [];
-    for (const account of activeAccounts) {
-      if (!seen.has(account.credentialsRef)) {
-        seen.add(account.credentialsRef);
-        uniqueAccounts.push(account);
-      }
-    }
-
-    const accountIds = uniqueAccounts.map(a => a.id);
-    const { session, abortController } = createSession('manual', accountIds);
-
-    broadcastSseEvent({ type: 'session-started', sessionId: session.id, accountIds, trigger: 'manual' });
-
-    const promise = (async () => {
-      let hasError = false;
-      for (const account of uniqueAccounts) {
-        if (abortController.signal.aborted) break;
-        broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId: account.id });
-        const results = await scrapeAccount(account, session.id, abortController.signal);
-        for (const result of results) {
-          if (!result.success) hasError = true;
-          broadcastSseEvent({
-            type: result.success ? 'account-scrape-done' : 'account-scrape-error',
-            sessionId: session.id,
-            accountId: result.accountId,
-            transactionsFound: result.transactionsFound,
-            transactionsNew: result.transactionsNew,
-            durationMs: result.durationMs,
-            error: result.error,
-            errorType: result.errorType,
-          });
-        }
-      }
-      const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
-      completeSession(session.id, finalStatus as 'completed' | 'error');
-      broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
-    })();
-
-    registerActiveSession(session, abortController, promise);
+    const uniqueAccounts = getUniqueActiveAccounts();
+    const { session } = runScrapeSession('manual', uniqueAccounts);
     return reply.status(202).send({ sessionId: session.id });
   });
 
@@ -206,16 +146,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
       const logs = db.select().from(scrapeLogs)
         .where(eq(scrapeLogs.sessionId, session.id))
         .all();
-
-      const logsWithNames = logs.map(log => {
-        const account = db.select({ displayName: accounts.displayName, companyId: accounts.companyId })
-          .from(accounts)
-          .where(eq(accounts.id, log.accountId))
-          .get();
-        return { ...log, accountName: account?.displayName ?? 'Unknown', companyId: account?.companyId ?? '' };
-      });
-
-      return { ...session, logs: logsWithNames };
+      return { ...session, logs: enrichLogsWithAccountNames(logs) };
     });
 
     const activeSessionsList = getActiveSessions().map(a => ({
@@ -239,15 +170,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
       .where(eq(scrapeLogs.sessionId, id))
       .all();
 
-    const logsWithNames = logs.map(log => {
-      const account = db.select({ displayName: accounts.displayName, companyId: accounts.companyId })
-        .from(accounts)
-        .where(eq(accounts.id, log.accountId))
-        .get();
-      return { ...log, accountName: account?.displayName ?? 'Unknown', companyId: account?.companyId ?? '' };
-    });
-
-    return reply.send({ session: { ...session, logs: logsWithNames } });
+    return reply.send({ session: { ...session, logs: enrichLogsWithAccountNames(logs) } });
   });
 
   // ─── Scrape logs ───

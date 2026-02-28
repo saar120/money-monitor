@@ -312,29 +312,3 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
     }];
   }
 }
-
-export async function scrapeAllAccounts(sessionId?: number, signal?: AbortSignal): Promise<ScrapeResult[]> {
-  const activeAccounts = db
-    .select()
-    .from(accounts)
-    .where(eq(accounts.isActive, true))
-    .all();
-
-  // Deduplicate: scrape once per credentialsRef (pick first account as representative)
-  const seen = new Set<string>();
-  const uniqueAccounts: Account[] = [];
-  for (const account of activeAccounts) {
-    if (!seen.has(account.credentialsRef)) {
-      seen.add(account.credentialsRef);
-      uniqueAccounts.push(account);
-    }
-  }
-
-  const results: ScrapeResult[] = [];
-  for (const account of uniqueAccounts) {
-    if (signal?.aborted) break;
-    const accountResults = await scrapeAccount(account, sessionId, signal);
-    results.push(...accountResults);
-  }
-  return results;
-}

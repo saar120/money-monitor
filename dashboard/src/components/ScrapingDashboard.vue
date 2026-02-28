@@ -236,6 +236,7 @@ async function handleManualLoginConfirm() {
 
 // ─── SSE Connection ───
 let eventSource: EventSource | null = null;
+let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
 function startElapsedTimer() {
   stopElapsedTimer();
@@ -308,8 +309,8 @@ function connectSse() {
       case 'session-completed': {
         liveSession.value = null;
         stopElapsedTimer();
-        // Reload session history
-        loadData();
+        // Reload session history only (accounts don't change during scraping)
+        getScrapeSessions({ limit: 50 }).then(res => { sessions.value = res.sessions; });
         break;
       }
 
@@ -331,7 +332,7 @@ function connectSse() {
 
   eventSource.onerror = () => {
     eventSource?.close();
-    setTimeout(connectSse, 3000);
+    reconnectTimer = setTimeout(connectSse, 3000);
   };
 }
 
@@ -344,6 +345,7 @@ onMounted(() => {
 onUnmounted(() => {
   eventSource?.close();
   stopElapsedTimer();
+  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 });
 
 const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
