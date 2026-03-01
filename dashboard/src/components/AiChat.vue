@@ -111,7 +111,7 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="text-[10px] font-semibold opacity-60 mb-1">
               {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
             </div>
-            <div v-html="msg.content.replace(/\n/g, '<br>')" />
+            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
           </div>
 
           <!-- User avatar -->
