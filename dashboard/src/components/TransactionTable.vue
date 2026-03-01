@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-vue-next';
+import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle } from 'lucide-vue-next';
 import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
 
 const transactions = ref<Transaction[]>([]);
@@ -294,7 +294,12 @@ onUnmounted(() => {
                 <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
-                <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
+                <TableCell class="max-w-xs truncate">
+                  <span class="flex items-center gap-1.5">
+                    <AlertCircle v-if="txn.needsReview" class="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                    {{ txn.description }}
+                  </span>
+                </TableCell>
                 <TableCell
                   class="text-right font-medium tabular-nums"
                   :class="txn.chargedAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'"

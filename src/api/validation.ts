@@ -31,6 +31,7 @@ export const transactionQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   category: z.string().optional(),
   status: z.enum(['completed', 'pending']).optional(),
+  needsReview: z.coerce.boolean().optional(),
   minAmount: z.coerce.number().optional(),
   maxAmount: z.coerce.number().optional(),
   search: z.string().max(200).optional(),
@@ -127,4 +128,8 @@ export const updateCategorySchema = z.object({
 
 export const updateTransactionSchema = z.object({
   category: z.string().min(1).max(50).nullable(),
+});
+
+export const resolveReviewSchema = z.object({
+  category: z.string().min(1).max(50),
 });

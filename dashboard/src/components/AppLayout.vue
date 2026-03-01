@@ -1,8 +1,9 @@
 <script setup lang="ts">
-import { ref } from 'vue';
+import { ref, onMounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity } from 'lucide-vue-next';
+import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb } from 'lucide-vue-next';
 import { Separator } from '@/components/ui/separator';
+import { getNeedsReviewCount } from '../api/client';
 
 const route = useRoute();
 const router = useRouter();
@@ -12,8 +13,18 @@ router.afterEach(() => {
   mainEl.value?.scrollTo(0, 0);
 });
 
+const reviewCount = ref(0);
+
+onMounted(async () => {
+  try {
+    const { count } = await getNeedsReviewCount();
+    reviewCount.value = count;
+  } catch { /* ignore */ }
+});
+
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
+  { path: '/insights', label: 'Insights', icon: Lightbulb },
   { path: '/transactions', label: 'Transactions', icon: Receipt },
   { path: '/accounts', label: 'Accounts', icon: Building2 },
   { path: '/chat', label: 'AI Chat', icon: Bot },
@@ -41,6 +52,12 @@ const navItems = [
         >
           <component :is="item.icon" class="h-4 w-4 flex-shrink-0" />
           {{ item.label }}
+          <span
+            v-if="item.path === '/insights' && reviewCount > 0"
+            class="ml-auto inline-flex items-center justify-center rounded-full bg-destructive text-destructive-foreground text-xs font-medium h-5 min-w-5 px-1"
+          >
+            {{ reviewCount }}
+          </span>
         </RouterLink>
       </nav>
     </aside>

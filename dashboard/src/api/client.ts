@@ -87,6 +87,8 @@ export interface Transaction {
   installmentTotal: number | null;
   category: string | null;
   ignored: boolean;
+  needsReview: boolean;
+  reviewReason: string | null;
   hash: string;
   createdAt: string;
 }
@@ -105,6 +107,7 @@ export interface TransactionFilters {
   endDate?: string;
   category?: string;
   status?: string;
+  needsReview?: boolean;
   minAmount?: number;
   maxAmount?: number;
   search?: string;
@@ -127,6 +130,17 @@ export function ignoreTransaction(id: number, ignored: boolean) {
     method: 'PATCH',
     body: JSON.stringify({ ignored }),
   });
+}
+
+export function resolveTransaction(id: number, category: string) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/resolve`, {
+    method: 'PATCH',
+    body: JSON.stringify({ category }),
+  });
+}
+
+export function getNeedsReviewCount() {
+  return request<{ count: number }>('/transactions/needs-review/count');
 }
 
 // ─── Summary ───

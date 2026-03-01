@@ -16,14 +16,14 @@ function cleanJsonResponse(text: string): string {
   return text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
 }
 
-/** Parse the model's JSON response, validate categories, and return valid {id -> category} pairs. */
+/** Parse the model's JSON response, validate categories, and return valid results. */
 function processCategoryResults(
   text: string,
   validCategories: Set<string>,
   validIds: Set<number>,
-): Array<{ id: number; category: string }> {
+): Array<{ id: number; category: string; needsReview?: boolean; reviewReason?: string }> {
   const clean = cleanJsonResponse(text);
-  const results: Array<{ id: number; category: string }> = JSON.parse(clean);
+  const results: Array<{ id: number; category: string; needsReview?: boolean; reviewReason?: string }> = JSON.parse(clean);
   return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
 }
 
@@ -111,7 +111,12 @@ export async function batchCategorize(
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
+      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}.
+
+If you are confident in the category, set "needsReview" to false.
+If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
+
+Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
       tools: [],
       maxTurns: 1,
     },
@@ -123,9 +128,13 @@ export async function batchCategorize(
 
   let categorized = 0;
   try {
-    for (const { id, category } of processCategoryResults(text, validCategories, validIds)) {
+    for (const { id, category, needsReview, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
       db.update(transactions)
-        .set({ category })
+        .set({
+          category,
+          needsReview: needsReview === true,
+          reviewReason: needsReview === true ? (reviewReason ?? null) : null,
+        })
         .where(eq(transactions.id, id))
         .run();
       categorized++;
@@ -171,7 +180,12 @@ export async function recategorize(
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}. Respond with ONLY a JSON array of objects with "id" and "category" fields. No markdown, no explanation.`,
+      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}.
+
+If you are confident in the category, set "needsReview" to false.
+If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
+
+Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
       tools: [],
       maxTurns: 1,
     },
@@ -183,9 +197,13 @@ export async function recategorize(
 
   let categorized = 0;
   try {
-    for (const { id, category } of processCategoryResults(text, validCategories, validIds)) {
+    for (const { id, category, needsReview, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
       db.update(transactions)
-        .set({ category })
+        .set({
+          category,
+          needsReview: needsReview === true,
+          reviewReason: needsReview === true ? (reviewReason ?? null) : null,
+        })
         .where(eq(transactions.id, id))
         .run();
       categorized++;

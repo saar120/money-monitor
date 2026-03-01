@@ -34,6 +34,8 @@ export const transactions = sqliteTable('transactions', {
   category: text('category'),
   meta: text('meta'),
   ignored: integer('ignored', { mode: 'boolean' }).notNull().default(false),
+  needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false),
+  reviewReason: text('review_reason'),
   hash: text('hash').notNull().unique(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
