@@ -3,7 +3,7 @@ import { and, desc, eq, sql, count, gte, lte, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
-import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema } from './validation.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, resolveReviewSchema } from './validation.js';
 import { parseIntParam, validateBody, validateQuery, buildTransactionFilters } from './helpers.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
@@ -13,7 +13,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (!data) return;
     const {
       accountType, accountId, startDate, endDate,
-      category, status, minAmount, maxAmount, search,
+      category, status, needsReview, minAmount, maxAmount, search,
       offset, limit, sortBy, sortOrder,
     } = data;
 
@@ -21,6 +21,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (empty) return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
     if (category) conditions.push(eq(transactions.category, category));
     if (status) conditions.push(eq(transactions.status, status));
+    if (needsReview !== undefined) conditions.push(eq(transactions.needsReview, needsReview));
     if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
     if (maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, maxAmount));
     if (search) {
@@ -64,6 +65,36 @@ export async function transactionsRoutes(app: FastifyInstance) {
         hasMore: offset + limit < total,
       },
     });
+  });
+
+  app.get('/api/transactions/needs-review/count', async (_request, reply) => {
+    const [{ total }] = db
+      .select({ total: count() })
+      .from(transactions)
+      .where(eq(transactions.needsReview, true))
+      .all();
+
+    return reply.send({ count: total });
+  });
+
+  app.patch<{ Params: { id: string } }>('/api/transactions/:id/resolve', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
+
+    const data = validateBody(resolveReviewSchema, request.body, reply);
+    if (!data) return;
+
+    const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
+    if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
+
+    const [updated] = db
+      .update(transactions)
+      .set({ category: data.category, needsReview: false, reviewReason: null })
+      .where(eq(transactions.id, id))
+      .returning()
+      .all();
+
+    return reply.send({ transaction: updated });
   });
 
   app.patch<{ Params: { id: string } }>('/api/transactions/:id/ignore', async (request, reply) => {
