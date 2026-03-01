@@ -1,12 +1,17 @@
-export const CATEGORIES = [
-  'food', 'transport', 'housing', 'utilities', 'entertainment', 'health',
-  'shopping', 'education', 'subscriptions', 'income', 'transfer', 'other',
-] as const;
+export interface CategoryWithRules {
+  name: string;
+  rules: string | null;
+}
 
-export type Category = typeof CATEGORIES[number];
+/** Format category list for LLM prompt, including per-category rules when available. */
+export function formatCategoryList(cats: CategoryWithRules[]): string {
+  return cats
+    .map(c => c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)
+    .join('\n');
+}
 
-export function buildFinancialAdvisorPrompt(categoryNames: string[]): string {
-  const list = categoryNames.join(', ');
+export function buildFinancialAdvisorPrompt(cats: CategoryWithRules[]): string {
+  const list = cats.map(c => c.name).join(', ');
   return `You are a personal financial advisor with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 Your role:
