@@ -11,6 +11,22 @@ function formatTransactionForPrompt(t: Transaction): string {
   return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${bankCat}`;
 }
 
+/** Strip markdown code fences that the model may wrap around JSON. */
+function cleanJsonResponse(text: string): string {
+  return text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+}
+
+/** Parse the model's JSON response, validate categories, and return valid {id -> category} pairs. */
+function processCategoryResults(
+  text: string,
+  validCategories: Set<string>,
+  validIds: Set<number>,
+): Array<{ id: number; category: string }> {
+  const clean = cleanJsonResponse(text);
+  const results: Array<{ id: number; category: string }> = JSON.parse(clean);
+  return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
+}
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
@@ -107,11 +123,7 @@ export async function batchCategorize(
 
   let categorized = 0;
   try {
-    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-    const results: Array<{ id: number; category: string }> = JSON.parse(clean);
-    for (const { id, category } of results) {
-      if (!validIds.has(id)) continue;
-      if (!validCategories.has(category)) continue;
+    for (const { id, category } of processCategoryResults(text, validCategories, validIds)) {
       db.update(transactions)
         .set({ category })
         .where(eq(transactions.id, id))
@@ -171,11 +183,7 @@ export async function recategorize(
 
   let categorized = 0;
   try {
-    const clean = text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
-    const results: Array<{ id: number; category: string }> = JSON.parse(clean);
-    for (const { id, category } of results) {
-      if (!validIds.has(id)) continue;
-      if (!validCategories.has(category)) continue;
+    for (const { id, category } of processCategoryResults(text, validCategories, validIds)) {
       db.update(transactions)
         .set({ category })
         .where(eq(transactions.id, id))
