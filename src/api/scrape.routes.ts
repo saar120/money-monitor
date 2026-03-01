@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, desc } from 'drizzle-orm';
+import { eq, desc, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, scrapeLogs, scrapeSessions } from '../db/schema.js';
 import { scrapeLogsQuerySchema, scrapeSessionsQuerySchema, otpSubmitSchema } from './validation.js';
@@ -9,10 +9,15 @@ import { confirmManualAction } from '../scraper/manual-action-bridge.js';
 import { cancelSession, hasActiveSessions, getActiveSessions, getUniqueActiveAccounts, runScrapeSession } from '../scraper/session-manager.js';
 import type { ScrapeLog } from '../shared/types.js';
 
-function enrichLogsWithAccountNames(logs: ScrapeLog[]) {
+type AccountInfo = { id: number; displayName: string; companyId: string };
+
+function loadAccountMap() {
   const allAccounts = db.select({ id: accounts.id, displayName: accounts.displayName, companyId: accounts.companyId })
     .from(accounts).all();
-  const accountMap = new Map(allAccounts.map(a => [a.id, a]));
+  return new Map(allAccounts.map(a => [a.id, a]));
+}
+
+function enrichLogsWithAccountNames(logs: ScrapeLog[], accountMap: Map<number, AccountInfo>) {
   return logs.map(log => {
     const account = accountMap.get(log.accountId);
     return { ...log, accountName: account?.displayName ?? 'Unknown', companyId: account?.companyId ?? '' };
@@ -142,12 +147,26 @@ export async function scrapeRoutes(app: FastifyInstance) {
       .offset(offset)
       .all();
 
-    const sessionsWithLogs = sessions.map(session => {
-      const logs = db.select().from(scrapeLogs)
-        .where(eq(scrapeLogs.sessionId, session.id))
+    const accountMap = loadAccountMap();
+    const sessionIds = sessions.map(s => s.id);
+
+    const logsBySession = new Map<number, ScrapeLog[]>();
+    if (sessionIds.length > 0) {
+      const allLogs = db.select().from(scrapeLogs)
+        .where(inArray(scrapeLogs.sessionId, sessionIds))
         .all();
-      return { ...session, logs: enrichLogsWithAccountNames(logs) };
-    });
+      for (const log of allLogs) {
+        if (log.sessionId == null) continue;
+        const list = logsBySession.get(log.sessionId);
+        if (list) list.push(log);
+        else logsBySession.set(log.sessionId, [log]);
+      }
+    }
+
+    const sessionsWithLogs = sessions.map(session => ({
+      ...session,
+      logs: enrichLogsWithAccountNames(logsBySession.get(session.id) ?? [], accountMap),
+    }));
 
     const activeSessionsList = getActiveSessions().map(a => ({
       ...a.session,
@@ -170,7 +189,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
       .where(eq(scrapeLogs.sessionId, id))
       .all();
 
-    return reply.send({ session: { ...session, logs: enrichLogsWithAccountNames(logs) } });
+    return reply.send({ session: { ...session, logs: enrichLogsWithAccountNames(logs, loadAccountMap()) } });
   });
 
   // ─── Scrape logs ───
