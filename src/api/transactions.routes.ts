@@ -1,38 +1,24 @@
 import type { FastifyInstance } from 'fastify';
-import { and, gte, lte, desc, eq, sql, count, inArray } from 'drizzle-orm';
+import { and, desc, eq, sql, count, gte, lte, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
-import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, accountTypeCondition } from './validation.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema } from './validation.js';
+import { parseIntParam, validateBody, validateQuery, buildTransactionFilters } from './helpers.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
   app.get('/api/transactions', async (request, reply) => {
-    const parsed = transactionQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-    const { accountType, ...rest } = parsed.data;
+    const data = validateQuery(transactionQuerySchema, request.query, reply);
+    if (!data) return;
     const {
-      accountId, startDate, endDate, category, status,
-      minAmount, maxAmount, search,
+      accountType, accountId, startDate, endDate,
+      category, status, minAmount, maxAmount, search,
       offset, limit, sortBy, sortOrder,
-    } = rest;
+    } = data;
 
-    const conditions = [];
-
-    if (accountType) {
-      const cond = accountTypeCondition(accountType);
-      if (!cond) return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
-      conditions.push(cond);
-    }
-
-    if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
-    if (startDate) conditions.push(gte(transactions.date, startDate));
-    if (endDate) conditions.push(lte(transactions.date, endDate));
+    const { conditions, empty } = buildTransactionFilters({ accountType, accountId, startDate, endDate });
+    if (empty) return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
     if (category) conditions.push(eq(transactions.category, category));
     if (status) conditions.push(eq(transactions.status, status));
     if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
@@ -80,19 +66,12 @@ export async function transactionsRoutes(app: FastifyInstance) {
     });
   });
 
-  app.patch('/api/transactions/:id/ignore', async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return reply.status(400).send({ error: 'Invalid transaction id' });
-    }
+  app.patch<{ Params: { id: string } }>('/api/transactions/:id/ignore', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
 
-    const parsed = ignoreTransactionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
+    const data = validateBody(ignoreTransactionSchema, request.body, reply);
+    if (!data) return;
 
     const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
     if (!existing) {
@@ -101,7 +80,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
 
     const [updated] = db
       .update(transactions)
-      .set({ ignored: parsed.data.ignored })
+      .set({ ignored: data.ignored })
       .where(eq(transactions.id, id))
       .returning()
       .all();
@@ -109,23 +88,19 @@ export async function transactionsRoutes(app: FastifyInstance) {
     return reply.send({ transaction: updated });
   });
 
-  app.patch('/api/transactions/:id', async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return reply.status(400).send({ error: 'Invalid transaction id' });
-    }
+  app.patch<{ Params: { id: string } }>('/api/transactions/:id', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
 
-    const parsed = updateTransactionSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
-    }
+    const data = validateBody(updateTransactionSchema, request.body, reply);
+    if (!data) return;
 
     const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
 
     const [updated] = db
       .update(transactions)
-      .set({ category: parsed.data.category })
+      .set({ category: data.category })
       .where(eq(transactions.id, id))
       .returning()
       .all();

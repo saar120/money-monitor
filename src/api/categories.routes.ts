@@ -3,6 +3,7 @@ import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { categories } from '../db/schema.js';
 import { createCategorySchema, updateCategorySchema } from './validation.js';
+import { parseIntParam, validateBody } from './helpers.js';
 
 export async function categoriesRoutes(app: FastifyInstance) {
 
@@ -12,43 +13,35 @@ export async function categoriesRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/categories', async (request, reply) => {
-    const parsed = createCategorySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
-    }
+    const data = validateBody(createCategorySchema, request.body, reply);
+    if (!data) return;
 
-    const existing = db.select().from(categories).where(eq(categories.name, parsed.data.name)).get();
+    const existing = db.select().from(categories).where(eq(categories.name, data.name)).get();
     if (existing) {
       return reply.status(409).send({ error: 'Category name already exists' });
     }
 
-    const [created] = db.insert(categories).values(parsed.data).returning().all();
+    const [created] = db.insert(categories).values(data).returning().all();
     return reply.status(201).send({ category: created });
   });
 
-  app.patch('/api/categories/:id', async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return reply.status(400).send({ error: 'Invalid category id' });
-    }
+  app.patch<{ Params: { id: string } }>('/api/categories/:id', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'category id', reply);
+    if (id === null) return;
 
-    const parsed = updateCategorySchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({ error: 'Validation failed', details: parsed.error.flatten().fieldErrors });
-    }
+    const data = validateBody(updateCategorySchema, request.body, reply);
+    if (!data) return;
 
     const existing = db.select().from(categories).where(eq(categories.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Category not found' });
 
-    const [updated] = db.update(categories).set(parsed.data).where(eq(categories.id, id)).returning().all();
+    const [updated] = db.update(categories).set(data).where(eq(categories.id, id)).returning().all();
     return reply.send({ category: updated });
   });
 
-  app.delete('/api/categories/:id', async (request, reply) => {
-    const id = Number((request.params as { id: string }).id);
-    if (!Number.isInteger(id) || id <= 0) {
-      return reply.status(400).send({ error: 'Invalid category id' });
-    }
+  app.delete<{ Params: { id: string } }>('/api/categories/:id', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'category id', reply);
+    if (id === null) return;
 
     const existing = db.select().from(categories).where(eq(categories.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Category not found' });

@@ -1,32 +1,19 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, sql } from 'drizzle-orm';
+import { eq, and, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
-import { summaryQuerySchema, accountTypeCondition } from './validation.js';
+import { summaryQuerySchema } from './validation.js';
+import { validateQuery, buildTransactionFilters } from './helpers.js';
 
 export async function summaryRoutes(app: FastifyInstance) {
 
   app.get('/api/transactions/summary', async (request, reply) => {
-    const parsed = summaryQuerySchema.safeParse(request.query);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-    const { accountId, accountType, startDate, endDate, groupBy } = parsed.data;
+    const data = validateQuery(summaryQuerySchema, request.query, reply);
+    if (!data) return;
+    const { accountType, accountId, startDate, endDate, groupBy } = data;
 
-    const conditions = [];
-
-    if (accountType) {
-      const cond = accountTypeCondition(accountType);
-      if (!cond) return reply.send({ groupBy, summary: [] });
-      conditions.push(cond);
-    }
-
-    if (accountId !== undefined) conditions.push(eq(transactions.accountId, accountId));
-    if (startDate) conditions.push(gte(transactions.date, startDate));
-    if (endDate) conditions.push(lte(transactions.date, endDate));
+    const { conditions, empty } = buildTransactionFilters({ accountType, accountId, startDate, endDate });
+    if (empty) return reply.send({ groupBy, summary: [] });
     conditions.push(eq(transactions.ignored, false));
 
     const where = and(...conditions);
