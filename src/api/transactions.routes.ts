@@ -131,7 +131,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
 
     const [updated] = db
       .update(transactions)
-      .set({ category: data.category })
+      .set({ category: data.category, needsReview: false, reviewReason: null })
       .where(eq(transactions.id, id))
       .returning()
       .all();
