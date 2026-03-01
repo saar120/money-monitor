@@ -22,6 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronUp, ChevronDown, ChevronsUpDown } from 'lucide-vue-next';
+import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
 
 const transactions = ref<Transaction[]>([]);
 const total = ref(0);
@@ -102,14 +103,6 @@ function prevPage() {
 function applyFilters() {
   filters.value.offset = 0;
   fetchTransactions();
-}
-
-function formatDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('he-IL');
-}
-
-function formatCurrency(amount: number): string {
-  return `₪${amount.toLocaleString('he-IL', { minimumFractionDigits: 2 })}`;
 }
 
 const currentPage = () => Math.floor((filters.value.offset ?? 0) / (filters.value.limit ?? 50)) + 1;
@@ -320,7 +313,7 @@ onUnmounted(() => {
                           v-if="txn.category"
                           variant="secondary"
                           class="text-xs"
-                          :style="{ backgroundColor: (availableCategories.find(c => c.name === txn.category)?.color ?? '#94a3b8') + '33', color: availableCategories.find(c => c.name === txn.category)?.color ?? undefined }"
+                          :style="getCategoryStyle(availableCategories.find(c => c.name === txn.category)?.color)"
                         >
                           {{ availableCategories.find(c => c.name === txn.category)?.label ?? txn.category }}
                         </Badge>
@@ -337,7 +330,7 @@ onUnmounted(() => {
                         :value="cat.name"
                       >
                         <div class="flex items-center gap-2">
-                          <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: cat.color ?? '#94a3b8' }" />
+                          <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }" />
                           {{ cat.label }}
                         </div>
                       </SelectItem>
