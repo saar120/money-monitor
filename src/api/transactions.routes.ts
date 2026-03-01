@@ -1,8 +1,9 @@
 import type { FastifyInstance } from 'fastify';
-import { and, gte, lte, like, desc, eq, sql, count } from 'drizzle-orm';
+import { and, gte, lte, desc, eq, sql, count, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
-import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, escapeLike, accountTypeCondition } from './validation.js';
+import { searchTransactionIds } from '../db/queries.js';
+import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, accountTypeCondition } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
 
@@ -36,7 +37,13 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (status) conditions.push(eq(transactions.status, status));
     if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
     if (maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, maxAmount));
-    if (search) conditions.push(like(transactions.description, `%${escapeLike(search)}%`));
+    if (search) {
+      const ftsIds = searchTransactionIds(search);
+      if (ftsIds.length === 0) {
+        return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
+      }
+      conditions.push(inArray(transactions.id, ftsIds));
+    }
 
     const where = conditions.length > 0 ? and(...conditions) : undefined;
 
