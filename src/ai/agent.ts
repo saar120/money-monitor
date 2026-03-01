@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
-import { buildFinancialAdvisorPrompt, formatCategoryList } from './prompts.js';
+import { buildFinancialAdvisorPrompt, buildCategorizerPrompt } from './prompts.js';
 import { buildFinancialMcpServer } from './tools.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
@@ -81,9 +81,9 @@ export async function batchCategorize(
 ): Promise<{ categorized: number }> {
   const { eq, isNull } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
-  const { transactions, categories } = await import('../db/schema.js');
+  const { transactions } = await import('../db/schema.js');
 
-  const catRows = db.select({ name: categories.name, rules: categories.rules }).from(categories).all();
+  const catRows = await getCategoriesWithRules();
   const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
@@ -109,14 +109,7 @@ export async function batchCategorize(
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
-
-${formatCategoryList(catRows)}
-
-If you are confident in the category, set "needsReview" to false.
-If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
-
-Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
+      systemPrompt: buildCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
     },
@@ -152,9 +145,9 @@ export async function recategorize(
 ): Promise<{ categorized: number }> {
   const { eq, gte, lte, and } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
-  const { transactions, categories } = await import('../db/schema.js');
+  const { transactions } = await import('../db/schema.js');
 
-  const catRows = db.select({ name: categories.name, rules: categories.rules }).from(categories).all();
+  const catRows = await getCategoriesWithRules();
   const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
@@ -178,14 +171,7 @@ export async function recategorize(
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
-
-${formatCategoryList(catRows)}
-
-If you are confident in the category, set "needsReview" to false.
-If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
-
-Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
+      systemPrompt: buildCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
     },

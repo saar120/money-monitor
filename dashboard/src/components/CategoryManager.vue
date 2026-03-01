@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 import { getCategories, createCategory, updateCategory, deleteCategory, aiRecategorize, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -156,10 +157,10 @@ onMounted(load);
         </div>
         <div class="space-y-1 w-full mt-2">
           <label class="text-xs text-muted-foreground">Rules (LLM hint)</label>
-          <textarea
+          <Textarea
             v-model="newRules"
             placeholder="Describe what transactions belong here. Include Hebrew merchant names if relevant."
-            class="w-full rounded-md border border-input bg-background px-3 py-2 text-sm min-h-[60px] resize-y"
+            class="min-h-[60px] resize-y"
           />
         </div>
         <p class="text-xs text-muted-foreground mt-1">Name must be lowercase letters, numbers, dashes, or underscores.</p>
@@ -204,10 +205,10 @@ onMounted(load);
                         <X class="h-4 w-4" />
                       </button>
                     </div>
-                    <textarea
+                    <Textarea
                       v-model="editRules"
                       placeholder="LLM categorization rules..."
-                      class="w-full rounded-md border border-input bg-background px-2 py-1 text-xs min-h-[40px] resize-y"
+                      class="text-xs min-h-[40px] resize-y"
                     />
                   </div>
                 </template>
