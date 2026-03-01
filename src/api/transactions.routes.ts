@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { and, gte, lte, desc, eq, sql, count, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions } from '../db/schema.js';
+import { searchTransactionIds } from '../db/queries.js';
 import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, accountTypeCondition } from './validation.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
@@ -37,9 +38,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, minAmount));
     if (maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, maxAmount));
     if (search) {
-      const ftsIds = db.all<{ rowid: number }>(
-        sql`SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${search} ORDER BY rank LIMIT 1000`
-      ).map(r => r.rowid);
+      const ftsIds = searchTransactionIds(search);
       if (ftsIds.length === 0) {
         return reply.send({ transactions: [], pagination: { total: 0, offset, limit, hasMore: false } });
       }

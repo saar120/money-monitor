@@ -3,6 +3,7 @@ import { z } from 'zod';
 import { eq, and, gte, lte, sql, count, desc, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
+import { searchTransactionIds } from '../db/queries.js';
 
 export function buildFinancialMcpServer(categoryNames: string[]) {
   const categoryEnum = categoryNames.length > 0
@@ -165,9 +166,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
   if (input.min_amount != null) conditions.push(gte(transactions.chargedAmount, input.min_amount));
   if (input.max_amount != null) conditions.push(lte(transactions.chargedAmount, input.max_amount));
   if (input.search) {
-    const ftsIds = db.all<{ rowid: number }>(
-      sql`SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${input.search} ORDER BY rank LIMIT 1000`
-    ).map(r => r.rowid);
+    const ftsIds = searchTransactionIds(input.search);
     if (ftsIds.length === 0) {
       return JSON.stringify({ transactions: [], total: 0, returned: 0 });
     }
@@ -309,6 +308,8 @@ function comparePeriods(input: ComparePeriodsInput): string {
   for (const r of p2) p2Map.set(r.category, r as PeriodRow);
   const allCategories = new Set([...p1Map.keys(), ...p2Map.keys()]);
 
+  const round2 = (n: number) => Math.round(n * 100) / 100;
+
   const comparison = [...allCategories].map(category => {
     const t1 = p1Map.get(category)?.totalAmount ?? 0;
     const t2 = p2Map.get(category)?.totalAmount ?? 0;
@@ -316,7 +317,7 @@ function comparePeriods(input: ComparePeriodsInput): string {
     const c2 = p2Map.get(category)?.count ?? 0;
     const changeAmount = t2 - t1;
     const changePercent = t1 !== 0 ? (changeAmount / Math.abs(t1)) * 100 : null;
-    return { category, period1_total: t1, period1_count: c1, period2_total: t2, period2_count: c2, change_amount: changeAmount, change_percent: changePercent != null ? Math.round(changePercent * 10) / 10 : null };
+    return { category, period1_total: round2(t1), period1_count: c1, period2_total: round2(t2), period2_count: c2, change_amount: round2(changeAmount), change_percent: changePercent != null ? Math.round(changePercent * 10) / 10 : null };
   }).sort((a, b) => Math.abs(b.change_amount) - Math.abs(a.change_amount));
 
   const p1Total = p1.reduce((s, r) => s + r.totalAmount, 0);
@@ -326,10 +327,10 @@ function comparePeriods(input: ComparePeriodsInput): string {
   return JSON.stringify({
     comparison,
     summary: {
-      period1: { start: input.period1_start, end: input.period1_end, total: p1Total },
-      period2: { start: input.period2_start, end: input.period2_end, total: p2Total },
-      change_amount: overallChange,
-      change_percent: p1Total !== 0 ? Math.round(((overallChange) / Math.abs(p1Total)) * 1000) / 10 : null,
+      period1: { start: input.period1_start, end: input.period1_end, total: round2(p1Total) },
+      period2: { start: input.period2_start, end: input.period2_end, total: round2(p2Total) },
+      change_amount: round2(overallChange),
+      change_percent: p1Total !== 0 ? Math.round((overallChange / Math.abs(p1Total)) * 100 * 10) / 10 : null,
     },
   });
 }
@@ -368,7 +369,8 @@ function getSpendingTrends(input: GetSpendingTrendsInput): string {
   }
 
   const totals = rows.map(r => r.totalAmount);
-  const average = totals.reduce((s, v) => s + v, 0) / totals.length;
+  const totalSum = totals.reduce((s, v) => s + v, 0);
+  const average = totalSum / totals.length;
   const minRow = rows.reduce((m, r) => r.totalAmount < m.totalAmount ? r : m);
   const maxRow = rows.reduce((m, r) => r.totalAmount > m.totalAmount ? r : m);
 
@@ -380,7 +382,7 @@ function getSpendingTrends(input: GetSpendingTrendsInput): string {
       from: rows[i].month,
       to: r.month,
       change_amount: change,
-      change_percent: prev !== 0 ? Math.round((change / Math.abs(prev)) * 1000) / 10 : null,
+      change_percent: prev !== 0 ? Math.round((change / Math.abs(prev)) * 100 * 10) / 10 : null,
     };
   });
 
@@ -401,7 +403,7 @@ function getSpendingTrends(input: GetSpendingTrendsInput): string {
     average: Math.round(average * 100) / 100,
     min: { month: minRow.month, total: minRow.totalAmount },
     max: { month: maxRow.month, total: maxRow.totalAmount },
-    total_period: totals.reduce((s, v) => s + v, 0),
+    total_period: totalSum,
     month_over_month: mom,
   });
 }
@@ -439,7 +441,18 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
     groups.get(key)!.push({ amount: row.chargedAmount, date: row.date });
   }
 
-  const recurring: Array<Record<string, unknown>> = [];
+  interface RecurringEntry {
+    description: string;
+    occurrences: number;
+    avg_amount: number;
+    frequency: string;
+    amount_type: 'fixed' | 'variable';
+    estimated_annual_cost: number;
+    last_charge_date: string;
+    next_expected_date: string;
+  }
+
+  const recurring: RecurringEntry[] = [];
 
   for (const [desc, entries] of groups) {
     if (entries.length < minOccurrences) continue;
@@ -494,9 +507,9 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
     });
   }
 
-  recurring.sort((a, b) => (b.estimated_annual_cost as number) - (a.estimated_annual_cost as number));
+  recurring.sort((a, b) => b.estimated_annual_cost - a.estimated_annual_cost);
 
-  const totalAnnual = recurring.reduce((s, r) => s + (r.estimated_annual_cost as number), 0);
+  const totalAnnual = recurring.reduce((s, r) => s + r.estimated_annual_cost, 0);
 
   return JSON.stringify({
     recurring,

@@ -74,11 +74,6 @@ export const recategorizeSchema = z.object({
 
 // ─── Helpers ───
 
-/** Escape SQL LIKE wildcard characters (%, _) in user input */
-export function escapeLike(input: string): string {
-  return input.replace(/[%_]/g, '\\$&');
-}
-
 import { eq, inArray } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { db } from '../db/connection.js';
