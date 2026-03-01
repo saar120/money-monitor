@@ -5,6 +5,7 @@ import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { setCredentials, deleteCredentials } from '../scraper/credential-store.js';
 import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
+import { parseIntParam, validateBody } from './helpers.js';
 import { getAccountType } from '../shared/types.js';
 import type { CompanyId } from '../shared/types.js';
 import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
@@ -22,14 +23,9 @@ export async function accountsRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/accounts', async (request, reply) => {
-    const parsed = createAccountSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-    const { companyId, displayName, credentials } = parsed.data;
+    const data = validateBody(createAccountSchema, request.body, reply);
+    if (!data) return;
+    const { companyId, displayName, credentials } = data;
 
     const credentialsRef = randomUUID();
     setCredentials(credentialsRef, credentials);
@@ -48,20 +44,15 @@ export async function accountsRoutes(app: FastifyInstance) {
   });
 
   app.put<{ Params: { id: string } }>('/api/accounts/:id', async (request, reply) => {
-    const id = parseInt(request.params.id, 10);
-    if (isNaN(id)) return reply.status(400).send({ error: 'Invalid account ID' });
+    const id = parseIntParam(request.params.id, 'account ID', reply);
+    if (id === null) return;
 
     const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
-    const parsed = updateAccountSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
-    const { displayName, isActive, manualLogin, showBrowser, credentials } = parsed.data;
+    const data = validateBody(updateAccountSchema, request.body, reply);
+    if (!data) return;
+    const { displayName, isActive, manualLogin, showBrowser, credentials } = data;
 
     if (credentials && Object.keys(credentials).length > 0) {
       setCredentials(existing.credentialsRef, credentials);
@@ -85,8 +76,8 @@ export async function accountsRoutes(app: FastifyInstance) {
     Params: { id: string };
     Querystring: { deleteTransactions?: string }
   }>('/api/accounts/:id', async (request, reply) => {
-    const id = parseInt(request.params.id, 10);
-    if (isNaN(id)) return reply.status(400).send({ error: 'Invalid account ID' });
+    const id = parseIntParam(request.params.id, 'account ID', reply);
+    if (id === null) return;
 
     const existing = db.select().from(accounts).where(eq(accounts.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Account not found' });

@@ -1,20 +1,16 @@
 import type { FastifyInstance } from 'fastify';
 import { chat, batchCategorize, recategorize } from '../ai/agent.js';
 import { chatSchema, categorizeSchema, recategorizeSchema } from './validation.js';
+import { validateBody } from './helpers.js';
 
 export async function aiRoutes(app: FastifyInstance) {
 
   app.post('/api/ai/chat', async (request, reply) => {
-    const parsed = chatSchema.safeParse(request.body);
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
+    const data = validateBody(chatSchema, request.body, reply);
+    if (!data) return;
 
     try {
-      const response = await chat(parsed.data.messages);
+      const response = await chat(data.messages);
       return reply.send({ response });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'AI chat failed';
@@ -23,16 +19,11 @@ export async function aiRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/ai/categorize', async (request, reply) => {
-    const parsed = categorizeSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
+    const data = validateBody(categorizeSchema, request.body ?? {}, reply);
+    if (!data) return;
 
     try {
-      const result = await batchCategorize(parsed.data.batchSize);
+      const result = await batchCategorize(data.batchSize);
       return reply.send(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Categorization failed';
@@ -41,16 +32,11 @@ export async function aiRoutes(app: FastifyInstance) {
   });
 
   app.post('/api/ai/recategorize', async (request, reply) => {
-    const parsed = recategorizeSchema.safeParse(request.body ?? {});
-    if (!parsed.success) {
-      return reply.status(400).send({
-        error: 'Validation failed',
-        details: parsed.error.flatten().fieldErrors,
-      });
-    }
+    const data = validateBody(recategorizeSchema, request.body ?? {}, reply);
+    if (!data) return;
 
     try {
-      const result = await recategorize(parsed.data.startDate, parsed.data.endDate);
+      const result = await recategorize(data.startDate, data.endDate);
       return reply.send(result);
     } catch (err) {
       const message = err instanceof Error ? err.message : 'Recategorization failed';
