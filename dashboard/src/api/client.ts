@@ -246,6 +246,7 @@ export interface Category {
   name: string;
   label: string;
   color: string | null;
+  rules: string | null;
   createdAt: string;
 }
 
@@ -253,14 +254,14 @@ export function getCategories() {
   return request<{ categories: Category[] }>('/categories');
 }
 
-export function createCategory(data: { name: string; label: string; color?: string }) {
+export function createCategory(data: { name: string; label: string; color?: string; rules?: string }) {
   return request<{ category: Category }>('/categories', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function updateCategory(id: number, data: { label?: string; color?: string }) {
+export function updateCategory(id: number, data: { label?: string; color?: string; rules?: string | null }) {
   return request<{ category: Category }>(`/categories/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
