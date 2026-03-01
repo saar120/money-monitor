@@ -35,4 +35,15 @@ export function runBackfills(db: BetterSQLite3Database<typeof schema>, sqlite: B
     }
     sqlite.prepare(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES (?)`).run(backfillKey);
   }
+
+  // One-time backfill: populate FTS5 index from existing transactions after migration 0006.
+  const ftsBackfillKey = 'backfill_fts5_transactions_done';
+  const ftsFlag = db.all(sql`SELECT 1 FROM _backfill_flags WHERE key = ${ftsBackfillKey}`);
+  if (ftsFlag.length === 0) {
+    sqlite.exec(`
+      INSERT OR IGNORE INTO transactions_fts(rowid, description, memo)
+      SELECT id, description, COALESCE(memo, '') FROM transactions
+    `);
+    sqlite.prepare(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES (?)`).run(ftsBackfillKey);
+  }
 }

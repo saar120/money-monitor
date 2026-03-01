@@ -1,9 +1,8 @@
 import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { eq, and, gte, lte, like, sql, count, desc } from 'drizzle-orm';
+import { eq, and, gte, lte, sql, count, desc, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
-import { escapeLike } from '../api/validation.js';
 
 export function buildFinancialMcpServer(categoryNames: string[]) {
   const categoryEnum = categoryNames.length > 0
@@ -25,7 +24,7 @@ export function buildFinancialMcpServer(categoryNames: string[]) {
           status: z.enum(['completed', 'pending']).optional().describe('Transaction status'),
           min_amount: z.number().optional().describe('Minimum charged amount'),
           max_amount: z.number().optional().describe('Maximum charged amount'),
-          search: z.string().optional().describe('Search term for description (partial match)'),
+          search: z.string().optional().describe('Full-text search across description and memo (supports multiple words)'),
           limit: z.number().optional().describe('Max results to return (default 50, max 200)'),
         },
         async (args) => {
@@ -165,7 +164,15 @@ function queryTransactions(input: QueryTransactionsInput): string {
   if (input.status) conditions.push(eq(transactions.status, input.status));
   if (input.min_amount != null) conditions.push(gte(transactions.chargedAmount, input.min_amount));
   if (input.max_amount != null) conditions.push(lte(transactions.chargedAmount, input.max_amount));
-  if (input.search) conditions.push(like(transactions.description, `%${escapeLike(input.search)}%`));
+  if (input.search) {
+    const ftsIds = db.all<{ rowid: number }>(
+      sql`SELECT rowid FROM transactions_fts WHERE transactions_fts MATCH ${input.search} ORDER BY rank LIMIT 1000`
+    ).map(r => r.rowid);
+    if (ftsIds.length === 0) {
+      return JSON.stringify({ transactions: [], total: 0, returned: 0 });
+    }
+    conditions.push(inArray(transactions.id, ftsIds));
+  }
 
   const where = conditions.length > 0 ? and(...conditions) : undefined;
   const limit = Math.min(input.limit ?? 50, 200);
