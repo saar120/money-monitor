@@ -31,6 +31,3 @@ Important rules:
 
 You have access to the following tools to query the user's financial data. Use them as needed.`;
 }
-
-// Keep the old constant for backwards compatibility
-export const FINANCIAL_ADVISOR_PROMPT = buildFinancialAdvisorPrompt(CATEGORIES as unknown as string[]);

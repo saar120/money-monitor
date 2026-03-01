@@ -259,6 +259,9 @@ function getAccountBalances(): string {
 
 // ── Shared helpers ──────────────────────────────────────────────────────────────
 
+/** Round a number to 2 decimal places. */
+const round2 = (n: number): number => Math.round(n * 100) / 100;
+
 function normalizeDescription(desc: string): string {
   return desc
     .trim()
@@ -307,8 +310,6 @@ function comparePeriods(input: ComparePeriodsInput): string {
   const p2Map = new Map<string, PeriodRow>();
   for (const r of p2) p2Map.set(r.category, r as PeriodRow);
   const allCategories = new Set([...p1Map.keys(), ...p2Map.keys()]);
-
-  const round2 = (n: number) => Math.round(n * 100) / 100;
 
   const comparison = [...allCategories].map(category => {
     const t1 = p1Map.get(category)?.totalAmount ?? 0;
@@ -400,7 +401,7 @@ function getSpendingTrends(input: GetSpendingTrendsInput): string {
   return JSON.stringify({
     months: rows,
     trend,
-    average: Math.round(average * 100) / 100,
+    average: round2(average),
     min: { month: minRow.month, total: minRow.totalAmount },
     max: { month: maxRow.month, total: maxRow.totalAmount },
     total_period: totalSum,
@@ -498,10 +499,10 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
     recurring.push({
       description: desc,
       occurrences: entries.length,
-      avg_amount: Math.round(avgAmount * 100) / 100,
+      avg_amount: round2(avgAmount),
       frequency,
       amount_type: amountType,
-      estimated_annual_cost: Math.round(estimatedAnnualCost * 100) / 100,
+      estimated_annual_cost: round2(estimatedAnnualCost),
       last_charge_date: lastDate,
       next_expected_date: nextDate,
     });
@@ -513,8 +514,8 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
 
   return JSON.stringify({
     recurring,
-    total_recurring_monthly: Math.round((totalAnnual / 12) * 100) / 100,
-    total_recurring_annual: Math.round(totalAnnual * 100) / 100,
+    total_recurring_monthly: round2(totalAnnual / 12),
+    total_recurring_annual: round2(totalAnnual),
   });
 }
 
@@ -570,11 +571,11 @@ function getTopMerchants(input: GetTopMerchantsInput): string {
     const dates = entries.map(e => e.date).sort();
     return {
       merchant,
-      total_amount: Math.round(totalAmount * 100) / 100,
+      total_amount: round2(totalAmount),
       transaction_count: entries.length,
-      avg_amount: Math.round(avgAmount * 100) / 100,
-      min_amount: Math.round(Math.min(...amounts) * 100) / 100,
-      max_amount: Math.round(Math.max(...amounts) * 100) / 100,
+      avg_amount: round2(avgAmount),
+      min_amount: round2(Math.min(...amounts)),
+      max_amount: round2(Math.max(...amounts)),
       last_transaction_date: dates[dates.length - 1],
       category: topCategory,
     };
