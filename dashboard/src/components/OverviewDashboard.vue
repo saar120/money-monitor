@@ -11,6 +11,7 @@ import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { PROVIDERS } from '@/lib/providers';
+import { formatCurrency } from '@/lib/format';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
@@ -69,10 +70,6 @@ const monthlyChartData = computed(() => {
     }],
   };
 });
-
-function formatCurrency(amount: number): string {
-  return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2 })}`;
-}
 </script>
 
 <template>
@@ -89,7 +86,7 @@ function formatCurrency(amount: number): string {
           </CardHeader>
           <CardContent>
             <div v-if="account.balance != null" class="text-xl font-bold">
-              {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
+              {{ formatCurrency(account.balance) }}
             </div>
             <div v-else class="text-sm text-muted-foreground">No balance data</div>
             <p class="text-xs text-muted-foreground mt-1">

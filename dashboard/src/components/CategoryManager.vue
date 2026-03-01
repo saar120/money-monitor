@@ -9,6 +9,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
+import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
 
 const categories = ref<Category[]>([]);
 const loading = ref(false);
@@ -22,7 +23,7 @@ const editColor = ref('');
 // New category form
 const newName = ref('');
 const newLabel = ref('');
-const newColor = ref('#94a3b8');
+const newColor = ref(DEFAULT_CATEGORY_COLOR);
 const showNewForm = ref(false);
 const saving = ref(false);
 
@@ -62,7 +63,7 @@ async function load() {
 function startEdit(cat: Category) {
   editingId.value = cat.id;
   editLabel.value = cat.label;
-  editColor.value = cat.color ?? '#94a3b8';
+  editColor.value = cat.color ?? DEFAULT_CATEGORY_COLOR;
 }
 
 function cancelEdit() {
@@ -98,7 +99,7 @@ async function addCategory() {
     categories.value.push(res.category);
     newName.value = '';
     newLabel.value = '';
-    newColor.value = '#94a3b8';
+    newColor.value = DEFAULT_CATEGORY_COLOR;
     showNewForm.value = false;
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create';
@@ -169,7 +170,7 @@ onMounted(load);
               <TableCell>
                 <div
                   class="w-5 h-5 rounded-full border"
-                  :style="{ backgroundColor: cat.color ?? '#94a3b8' }"
+                  :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }"
                 />
               </TableCell>
               <TableCell class="font-mono text-sm">{{ cat.name }}</TableCell>
@@ -187,7 +188,7 @@ onMounted(load);
                   </div>
                 </template>
                 <template v-else>
-                  <Badge variant="secondary" :style="{ backgroundColor: (cat.color ?? '#94a3b8') + '33', color: cat.color ?? undefined }">
+                  <Badge variant="secondary" :style="getCategoryStyle(cat.color)">
                     {{ cat.label }}
                   </Badge>
                 </template>

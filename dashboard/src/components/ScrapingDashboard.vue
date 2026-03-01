@@ -41,6 +41,7 @@ import {
   ChevronDown,
   ChevronRight,
 } from 'lucide-vue-next';
+import { formatDateTime } from '@/lib/format';
 
 // ─── State ───
 const accounts = ref<Account[]>([]);
@@ -95,12 +96,6 @@ function formatDuration(ms: number): string {
   const minutes = Math.floor(seconds / 60);
   const remainingSec = seconds % 60;
   return `${minutes}m ${remainingSec}s`;
-}
-
-function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
-  });
 }
 
 function triggerLabel(trigger: string): string {
