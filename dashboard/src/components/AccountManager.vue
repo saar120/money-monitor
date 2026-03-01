@@ -1,16 +1,15 @@
 <script setup lang="ts">
-import { ref, computed, watch, onMounted, onUnmounted } from 'vue';
+import { ref, computed, watch, onMounted } from 'vue';
 import {
   getAccounts,
   createAccount,
   updateAccount,
   deleteAccount,
   triggerScrape,
-  createScrapeEventSource,
-  submitOtp,
-  confirmManualLogin,
   type Account,
 } from '../api/client';
+import { useOtpFlow } from '../composables/useOtpFlow';
+import { useSseConnection } from '../composables/useSseConnection';
 import { PROVIDERS } from '@/lib/providers';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -80,74 +79,58 @@ watch(newCompanyId, () => {
   credentialFields.value = [{ key: '', value: '' }];
 });
 
-// SSE & OTP state
-let eventSource: EventSource | null = null;
+// SSE & OTP/Manual login
 const scrapingAccounts = ref(new Set<number>());
-const otpAccountId = ref<number | null>(null);
-const otpMessage = ref('');
-const otpCode = ref('');
-const otpSubmitting = ref(false);
 
-// Manual login state
-const manualLoginAccountId = ref<number | null>(null);
-const manualLoginMessage = ref('');
-const manualLoginSubmitting = ref(false);
+const {
+  otpLabel: otpMessage,
+  otpCode,
+  otpSubmitting,
+  otpDialogOpen: otpOpen,
+  showOtpDialog,
+  dismissOtpDialog: handleOtpCancel,
+  handleOtpSubmit,
+  showManualLoginDialog,
+  manualLoginLabel: manualLoginMessage,
+  manualLoginSubmitting,
+  manualLoginDialogOpen: manualLoginOpen,
+  dismissManualLoginDialog: handleManualLoginCancel,
+  handleManualLoginConfirm,
+  dismissByAccountId,
+} = useOtpFlow();
 
-function connectSse() {
-  eventSource = createScrapeEventSource();
-
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data) as {
-      type: string;
-      accountId?: number;
-      message?: string;
-    };
-
-    switch (data.type) {
-      case 'otp-required':
-        if (data.accountId != null) {
-          otpAccountId.value = data.accountId;
-          otpMessage.value = data.message ?? 'Enter OTP code';
-          otpCode.value = '';
-        }
-        break;
-
-      case 'manual-action-required':
-        if (data.accountId != null) {
-          manualLoginAccountId.value = data.accountId;
-          manualLoginMessage.value = data.message ?? 'Please log in manually in the browser window.';
-        }
-        break;
-
-      case 'scrape-started':
-        if (data.accountId != null) {
-          scrapingAccounts.value.add(data.accountId);
-          scrapingAccounts.value = new Set(scrapingAccounts.value);
-        }
-        break;
-
-      case 'scrape-done':
-      case 'scrape-error':
-        if (data.accountId != null) {
-          scrapingAccounts.value.delete(data.accountId);
-          scrapingAccounts.value = new Set(scrapingAccounts.value);
-          if (otpAccountId.value === data.accountId) {
-            otpAccountId.value = null;
-          }
-          if (manualLoginAccountId.value === data.accountId) {
-            manualLoginAccountId.value = null;
-          }
-          fetchAccounts();
-        }
-        break;
-    }
-  };
-
-  eventSource.onerror = () => {
-    eventSource?.close();
-    setTimeout(connectSse, 3000);
-  };
+function onScrapeFinished(data: Record<string, unknown>) {
+  if (data.accountId != null) {
+    scrapingAccounts.value.delete(data.accountId as number);
+    scrapingAccounts.value = new Set(scrapingAccounts.value);
+    dismissByAccountId(data.accountId as number);
+    fetchAccounts();
+  }
 }
+
+const { connect: connectSse } = useSseConnection({
+  'otp-required': (data) => {
+    if (data.accountId != null) {
+      showOtpDialog(data.accountId as number, (data.message as string) ?? 'Enter OTP code');
+    }
+  },
+  'manual-action-required': (data) => {
+    if (data.accountId != null) {
+      showManualLoginDialog(
+        data.accountId as number,
+        (data.message as string) ?? 'Please log in manually in the browser window.',
+      );
+    }
+  },
+  'scrape-started': (data) => {
+    if (data.accountId != null) {
+      scrapingAccounts.value.add(data.accountId as number);
+      scrapingAccounts.value = new Set(scrapingAccounts.value);
+    }
+  },
+  'scrape-done': onScrapeFinished,
+  'scrape-error': onScrapeFinished,
+});
 
 async function fetchAccounts() {
   loading.value = true;
@@ -210,49 +193,9 @@ async function handleScrape(account: Account) {
   }
 }
 
-async function handleOtpSubmit() {
-  if (!otpAccountId.value || !otpCode.value.trim()) return;
-  otpSubmitting.value = true;
-  try {
-    await submitOtp(otpAccountId.value, otpCode.value.trim());
-    otpAccountId.value = null;
-    otpCode.value = '';
-  } catch (err) {
-    alert(`OTP submit failed: ${err instanceof Error ? err.message : err}`);
-  } finally {
-    otpSubmitting.value = false;
-  }
-}
-
-function handleOtpCancel() {
-  otpAccountId.value = null;
-  otpCode.value = '';
-}
-
-async function handleManualLoginConfirm() {
-  if (!manualLoginAccountId.value) return;
-  manualLoginSubmitting.value = true;
-  try {
-    await confirmManualLogin(manualLoginAccountId.value);
-    manualLoginAccountId.value = null;
-  } catch (err) {
-    alert(`Confirm failed: ${err instanceof Error ? err.message : err}`);
-  } finally {
-    manualLoginSubmitting.value = false;
-  }
-}
-
-function handleManualLoginCancel() {
-  manualLoginAccountId.value = null;
-}
-
 onMounted(() => {
   fetchAccounts();
   connectSse();
-});
-
-onUnmounted(() => {
-  eventSource?.close();
 });
 </script>
 
@@ -457,7 +400,7 @@ onUnmounted(() => {
     </Dialog>
 
     <!-- OTP Dialog -->
-    <Dialog :open="otpAccountId !== null" @update:open="(v) => { if (!v) handleOtpCancel() }">
+    <Dialog :open="otpOpen" @update:open="(v) => { if (!v) handleOtpCancel() }">
       <DialogContent class="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Two-Factor Authentication</DialogTitle>
@@ -489,7 +432,7 @@ onUnmounted(() => {
     </Dialog>
 
     <!-- Manual Login Dialog -->
-    <Dialog :open="manualLoginAccountId !== null" @update:open="(v) => { if (!v) handleManualLoginCancel() }">
+    <Dialog :open="manualLoginOpen" @update:open="(v) => { if (!v) handleManualLoginCancel() }">
       <DialogContent class="sm:max-w-sm">
         <DialogHeader>
           <DialogTitle>Manual Login Required</DialogTitle>
