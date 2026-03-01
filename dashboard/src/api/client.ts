@@ -185,14 +185,6 @@ export function confirmManualLogin(accountId: number) {
   return request<{ success: boolean }>(`/scrape/manual-confirm/${accountId}`, { method: 'POST' });
 }
 
-export function getScrapeLogs(params: { accountId?: number; limit?: number } = {}) {
-  const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined) query.set(key, String(value));
-  });
-  return request<{ logs: Array<Record<string, unknown>> }>(`/scrape/logs?${query}`);
-}
-
 // ─── Scrape Sessions ───
 
 export interface ScrapeLogEntry {
@@ -227,10 +219,6 @@ export function getScrapeSessions(params: { limit?: number; offset?: number } = 
     if (value !== undefined) query.set(key, String(value));
   });
   return request<{ sessions: ScrapeSession[]; activeSessions: ScrapeSession[] }>(`/scrape/sessions?${query}`);
-}
-
-export function getScrapeSession(id: number) {
-  return request<{ session: ScrapeSession }>(`/scrape/sessions/${id}`);
 }
 
 export function cancelScrapeSession(sessionId: number) {
