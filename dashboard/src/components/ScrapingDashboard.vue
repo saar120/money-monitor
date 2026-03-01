@@ -6,12 +6,11 @@ import {
   triggerScrape,
   triggerScrapeAll,
   cancelScrapeSession,
-  createScrapeEventSource,
-  submitOtp,
-  confirmManualLogin,
   type Account,
   type ScrapeSession,
 } from '../api/client';
+import { useOtpFlow } from '../composables/useOtpFlow';
+import { useSseConnection } from '../composables/useSseConnection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Badge } from '@/components/ui/badge';
@@ -72,16 +71,19 @@ const elapsedSeconds = ref(0);
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
 
 // ─── OTP/Manual login dialogs ───
-const otpDialog = ref(false);
-const otpAccountId = ref<number | null>(null);
-const otpAccountName = ref('');
-const otpCode = ref('');
-const otpSubmitting = ref(false);
-
-const manualLoginDialog = ref(false);
-const manualLoginAccountId = ref<number | null>(null);
-const manualLoginAccountName = ref('');
-const manualLoginSubmitting = ref(false);
+const {
+  otpLabel: otpAccountName,
+  otpCode,
+  otpSubmitting,
+  otpDialogOpen: otpDialog,
+  showOtpDialog,
+  handleOtpSubmit,
+  manualLoginLabel: manualLoginAccountName,
+  manualLoginSubmitting,
+  manualLoginDialogOpen: manualLoginDialog,
+  showManualLoginDialog,
+  handleManualLoginConfirm,
+} = useOtpFlow();
 
 // ─── Helpers ───
 function getAccountName(id: number): string {
@@ -211,33 +213,7 @@ async function handleCancel() {
   }
 }
 
-async function handleOtpSubmit() {
-  if (!otpAccountId.value || !otpCode.value) return;
-  otpSubmitting.value = true;
-  try {
-    await submitOtp(otpAccountId.value, otpCode.value);
-    otpDialog.value = false;
-    otpCode.value = '';
-  } finally {
-    otpSubmitting.value = false;
-  }
-}
-
-async function handleManualLoginConfirm() {
-  if (!manualLoginAccountId.value) return;
-  manualLoginSubmitting.value = true;
-  try {
-    await confirmManualLogin(manualLoginAccountId.value);
-    manualLoginDialog.value = false;
-  } finally {
-    manualLoginSubmitting.value = false;
-  }
-}
-
 // ─── SSE Connection ───
-let eventSource: EventSource | null = null;
-let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
 function startElapsedTimer() {
   stopElapsedTimer();
   elapsedSeconds.value = 0;
@@ -248,93 +224,63 @@ function stopElapsedTimer() {
   if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
 }
 
-function connectSse() {
-  eventSource = createScrapeEventSource();
-
-  eventSource.onmessage = (event) => {
-    const data = JSON.parse(event.data);
-
-    switch (data.type) {
-      case 'session-started': {
-        const accountsMap: Record<number, LiveAccountStatus> = {};
-        for (const id of data.accountIds) {
-          accountsMap[id] = { accountId: id, status: 'queued' };
-        }
-        liveSession.value = {
-          sessionId: data.sessionId,
-          trigger: data.trigger,
-          accountIds: data.accountIds,
-          accounts: accountsMap,
-          startedAt: Date.now(),
-        };
-        startElapsedTimer();
-        break;
-      }
-
-      case 'account-scrape-started': {
-        if (liveSession.value) {
-          liveSession.value.accounts[data.accountId] = {
-            accountId: data.accountId,
-            status: 'scraping',
-          };
-        }
-        break;
-      }
-
-      case 'account-scrape-done': {
-        if (liveSession.value) {
-          liveSession.value.accounts[data.accountId] = {
-            accountId: data.accountId,
-            status: 'done',
-            transactionsFound: data.transactionsFound,
-            transactionsNew: data.transactionsNew,
-            durationMs: data.durationMs,
-          };
-        }
-        break;
-      }
-
-      case 'account-scrape-error': {
-        if (liveSession.value) {
-          liveSession.value.accounts[data.accountId] = {
-            accountId: data.accountId,
-            status: 'error',
-            error: data.error,
-            durationMs: data.durationMs,
-          };
-        }
-        break;
-      }
-
-      case 'session-completed': {
-        liveSession.value = null;
-        stopElapsedTimer();
-        // Reload session history only (accounts don't change during scraping)
-        getScrapeSessions({ limit: 50 }).then(res => { sessions.value = res.sessions; });
-        break;
-      }
-
-      case 'otp-required': {
-        otpAccountId.value = data.accountId;
-        otpAccountName.value = getAccountName(data.accountId);
-        otpDialog.value = true;
-        break;
-      }
-
-      case 'manual-action-required': {
-        manualLoginAccountId.value = data.accountId;
-        manualLoginAccountName.value = getAccountName(data.accountId);
-        manualLoginDialog.value = true;
-        break;
-      }
+const { connect: connectSse } = useSseConnection({
+  'session-started': (data) => {
+    const accountsMap: Record<number, LiveAccountStatus> = {};
+    for (const id of data.accountIds as number[]) {
+      accountsMap[id] = { accountId: id, status: 'queued' };
     }
-  };
-
-  eventSource.onerror = () => {
-    eventSource?.close();
-    reconnectTimer = setTimeout(connectSse, 3000);
-  };
-}
+    liveSession.value = {
+      sessionId: data.sessionId as number,
+      trigger: data.trigger as string,
+      accountIds: data.accountIds as number[],
+      accounts: accountsMap,
+      startedAt: Date.now(),
+    };
+    startElapsedTimer();
+  },
+  'account-scrape-started': (data) => {
+    if (liveSession.value) {
+      liveSession.value.accounts[data.accountId as number] = {
+        accountId: data.accountId as number,
+        status: 'scraping',
+      };
+    }
+  },
+  'account-scrape-done': (data) => {
+    if (liveSession.value) {
+      liveSession.value.accounts[data.accountId as number] = {
+        accountId: data.accountId as number,
+        status: 'done',
+        transactionsFound: data.transactionsFound as number | undefined,
+        transactionsNew: data.transactionsNew as number | undefined,
+        durationMs: data.durationMs as number | undefined,
+      };
+    }
+  },
+  'account-scrape-error': (data) => {
+    if (liveSession.value) {
+      liveSession.value.accounts[data.accountId as number] = {
+        accountId: data.accountId as number,
+        status: 'error',
+        error: data.error as string | undefined,
+        durationMs: data.durationMs as number | undefined,
+      };
+    }
+  },
+  'session-completed': () => {
+    liveSession.value = null;
+    stopElapsedTimer();
+    // Reload session history only (accounts don't change during scraping)
+    getScrapeSessions({ limit: 50 }).then(res => { sessions.value = res.sessions; });
+  },
+  'otp-required': (data) => {
+    showOtpDialog(data.accountId as number, getAccountName(data.accountId as number));
+  },
+  'manual-action-required': (data) => {
+    showManualLoginDialog(data.accountId as number, getAccountName(data.accountId as number));
+  },
+});
 
 // ─── Lifecycle ───
 onMounted(() => {
@@ -343,9 +289,7 @@ onMounted(() => {
 });
 
 onUnmounted(() => {
-  eventSource?.close();
   stopElapsedTimer();
-  if (reconnectTimer) { clearTimeout(reconnectTimer); reconnectTimer = null; }
 });
 
 const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
