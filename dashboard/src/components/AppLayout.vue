@@ -135,9 +135,7 @@ const navItems = [
 
     <!-- Main content -->
     <main ref="mainEl" class="flex-1 overflow-y-auto p-8 min-w-0 scroll-smooth">
-      <div class="animate-fade-in-up">
-        <slot />
-      </div>
+      <slot />
     </main>
   </div>
 </template>

@@ -56,6 +56,7 @@ const categoryMap = computed(() => {
   return map;
 });
 const updatingCategoryFor = ref<number | null>(null);
+const editingCategoryFor = ref<number | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
@@ -312,10 +313,13 @@ onUnmounted(() => {
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
                 <TableCell @click.stop>
+                  <!-- Inline Select only for the row being edited -->
                   <Select
+                    v-if="editingCategoryFor === txn.id"
                     :model-value="txn.category ?? ''"
                     :disabled="updatingCategoryFor === txn.id"
-                    @update:model-value="(val) => updateCategory(txn, val === '__none__' || val == null ? null : String(val))"
+                    :default-open="true"
+                    @update:model-value="(val) => { editingCategoryFor = null; updateCategory(txn, val === '__none__' || val == null ? null : String(val)); }"
                   >
                     <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
                       <SelectValue>
@@ -330,7 +334,7 @@ onUnmounted(() => {
                         <span v-else class="text-muted-foreground">—</span>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent @close-auto-focus="editingCategoryFor = null">
                       <SelectItem value="__none__">
                         <span class="text-muted-foreground">None</span>
                       </SelectItem>
@@ -346,6 +350,23 @@ onUnmounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <!-- Lightweight clickable display for all other rows -->
+                  <button
+                    v-else
+                    class="h-7 text-xs w-36 flex items-center px-1 rounded-md hover:bg-accent transition-colors"
+                    :class="updatingCategoryFor === txn.id ? 'opacity-50 pointer-events-none' : ''"
+                    @click="editingCategoryFor = txn.id"
+                  >
+                    <Badge
+                      v-if="txn.category"
+                      variant="secondary"
+                      class="text-xs"
+                      :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
+                    >
+                      {{ categoryMap.get(txn.category)?.label ?? txn.category }}
+                    </Badge>
+                    <span v-else class="text-muted-foreground">—</span>
+                  </button>
                 </TableCell>
                 <TableCell>
                   <Badge
