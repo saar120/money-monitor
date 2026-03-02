@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { getTransactions, getCategories, resolveTransaction, type Transaction, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -27,6 +27,13 @@ const items = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const categories = ref<Category[]>([]);
+const categoryMap = computed(() => {
+  const map = new Map<string, Category>();
+  for (const cat of categories.value) {
+    map.set(cat.name, cat);
+  }
+  return map;
+});
 const resolvingId = ref<number | null>(null);
 const offset = ref(0);
 const limit = 50;
@@ -137,9 +144,9 @@ onMounted(async () => {
                     v-if="txn.category"
                     variant="secondary"
                     class="text-xs"
-                    :style="getCategoryStyle(categories.find(c => c.name === txn.category)?.color)"
+                    :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                   >
-                    {{ categories.find(c => c.name === txn.category)?.label ?? txn.category }}
+                    {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                   </Badge>
                   <span v-else class="text-muted-foreground">—</span>
                 </TableCell>

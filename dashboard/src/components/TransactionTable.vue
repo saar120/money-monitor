@@ -48,6 +48,13 @@ const endDate = ref('');
 const selectedCategory = ref('all');
 
 const availableCategories = ref<Category[]>([]);
+const categoryMap = computed(() => {
+  const map = new Map<string, Category>();
+  for (const cat of availableCategories.value) {
+    map.set(cat.name, cat);
+  }
+  return map;
+});
 const updatingCategoryFor = ref<number | null>(null);
 
 // Context menu state
@@ -316,9 +323,9 @@ onUnmounted(() => {
                           v-if="txn.category"
                           variant="secondary"
                           class="text-xs"
-                          :style="getCategoryStyle(availableCategories.find(c => c.name === txn.category)?.color)"
+                          :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                         >
-                          {{ availableCategories.find(c => c.name === txn.category)?.label ?? txn.category }}
+                          {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                         </Badge>
                         <span v-else class="text-muted-foreground">—</span>
                       </SelectValue>
