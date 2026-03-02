@@ -291,11 +291,11 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight">Scraping</h1>
+        <h1 class="text-2xl font-semibold tracking-tight heading-font">Scraping</h1>
         <p class="text-sm text-muted-foreground">Monitor and manage bank scrapes</p>
       </div>
       <div class="flex items-center gap-2">
@@ -325,11 +325,11 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
     </div>
 
     <!-- Active Session Banner -->
-    <Card v-if="liveSession" class="border-blue-500/50 bg-blue-500/5">
+    <Card v-if="liveSession" class="border-primary/30 bg-primary/5">
       <CardHeader class="pb-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
-            <Loader2 class="h-5 w-5 animate-spin text-blue-500" />
+            <Loader2 class="h-5 w-5 animate-spin text-primary" />
             <CardTitle class="text-base">
               Active Scrape
               <Badge variant="secondary" class="ml-2">{{ triggerLabel(liveSession.trigger) }}</Badge>
@@ -357,15 +357,15 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
             <!-- Status icon -->
             <Loader2
               v-if="accountStatus.status === 'scraping'"
-              class="h-4 w-4 animate-spin text-blue-500 flex-shrink-0"
+              class="h-4 w-4 animate-spin text-primary flex-shrink-0"
             />
             <CheckCircle2
               v-else-if="accountStatus.status === 'done'"
-              class="h-4 w-4 text-green-500 flex-shrink-0"
+              class="h-4 w-4 text-success flex-shrink-0"
             />
             <XCircle
               v-else-if="accountStatus.status === 'error'"
-              class="h-4 w-4 text-red-500 flex-shrink-0"
+              class="h-4 w-4 text-destructive flex-shrink-0"
             />
             <div
               v-else
@@ -385,7 +385,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
                 <template v-if="accountStatus.durationMs"> &mdash; {{ formatDuration(accountStatus.durationMs) }}</template>
               </template>
               <template v-else-if="accountStatus.status === 'error'">
-                <span class="text-red-500">{{ accountStatus.error ?? 'Failed' }}</span>
+                <span class="text-destructive">{{ accountStatus.error ?? 'Failed' }}</span>
                 <template v-if="accountStatus.durationMs"> &mdash; {{ formatDuration(accountStatus.durationMs) }}</template>
               </template>
             </span>
@@ -440,7 +440,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           <!-- Expanded per-account logs -->
           <div
             v-if="expandedSessions.has(session.id) && session.logs.length > 0"
-            class="border-t px-4 py-2 bg-muted/30"
+            class="border-t px-4 py-2 bg-surface-2"
           >
             <div
               v-for="log in session.logs"
@@ -449,17 +449,17 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
             >
               <CheckCircle2
                 v-if="log.status === 'success'"
-                class="h-4 w-4 text-green-500 flex-shrink-0"
+                class="h-4 w-4 text-success flex-shrink-0"
               />
               <XCircle
                 v-else
-                class="h-4 w-4 text-red-500 flex-shrink-0"
+                class="h-4 w-4 text-destructive flex-shrink-0"
               />
               <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
               <span v-if="log.status === 'success'" class="text-muted-foreground">
                 {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
               </span>
-              <span v-else class="text-red-500 truncate">
+              <span v-else class="text-destructive truncate">
                 {{ log.errorMessage ?? log.errorType ?? 'Error' }}
               </span>
               <span v-if="log.durationMs" class="text-muted-foreground ml-auto">

@@ -45,16 +45,48 @@ const lastMonthTotal = computed(() =>
   lastMonthSummary.data.value?.summary.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0
 );
 
+const chartColors = ['#8b5cf6', '#06b6d4', '#a78bfa', '#34d399', '#f59e0b',
+                     '#ec4899', '#14b8a6', '#f97316', '#6366f1', '#84cc16'];
+
+const chartOptions = {
+  plugins: {
+    legend: {
+      labels: {
+        color: '#71717a',
+        font: { family: 'Geist' },
+      },
+    },
+    tooltip: {
+      backgroundColor: '#18181c',
+      borderColor: 'rgba(139,92,246,0.2)',
+      borderWidth: 1,
+      titleColor: '#f0f0f3',
+      bodyColor: '#f0f0f3',
+    },
+  },
+  scales: {
+    x: {
+      ticks: { color: '#71717a' },
+      grid: { color: 'rgba(255,255,255,0.03)' },
+    },
+    y: {
+      ticks: { color: '#71717a' },
+      grid: { color: 'rgba(255,255,255,0.03)' },
+    },
+  },
+};
+
+const doughnutOptions = {
+  plugins: chartOptions.plugins,
+};
+
 const categoryChartData = computed(() => {
   const items = categorySummary.data.value?.summary ?? [];
-  const colors = ['#FF6384', '#36A2EB', '#FFCE56', '#4BC0C0', '#9966FF',
-                  '#FF9F40', '#C9CBCF', '#7BC8A4', '#E7E9ED', '#F7464A',
-                  '#46BFBD', '#FDB45C'];
   return {
     labels: items.map(s => s.category ?? 'uncategorized'),
     datasets: [{
       data: items.map(s => Math.abs(s.totalAmount)),
-      backgroundColor: colors.slice(0, items.length),
+      backgroundColor: chartColors.slice(0, items.length),
     }],
   };
 });
@@ -66,15 +98,16 @@ const monthlyChartData = computed(() => {
     datasets: [{
       label: 'Monthly Spending (ILS)',
       data: items.map(s => Math.abs(s.totalAmount)),
-      backgroundColor: '#36A2EB',
+      backgroundColor: '#8b5cf6',
+      borderRadius: 6,
     }],
   };
 });
 </script>
 
 <template>
-  <div class="space-y-6">
-    <h1 class="text-2xl font-semibold tracking-tight">Overview</h1>
+  <div class="space-y-6 animate-fade-in-up">
+    <h1 class="text-2xl font-semibold tracking-tight heading-font">Overview</h1>
 
     <!-- Bank Balances -->
     <div v-if="bankAccounts.length > 0" class="space-y-3">
@@ -139,7 +172,7 @@ const monthlyChartData = computed(() => {
           <template v-else>
             <div
               class="text-2xl font-bold"
-              :class="thisMonthTotal > lastMonthTotal ? 'text-destructive' : 'text-green-500'"
+              :class="thisMonthTotal > lastMonthTotal ? 'text-destructive' : 'text-success'"
             >
               {{ formatCurrency(Math.abs(thisMonthTotal - lastMonthTotal)) }}
             </div>
@@ -152,7 +185,7 @@ const monthlyChartData = computed(() => {
             </Badge>
             <Badge
               v-else
-              class="mt-2 bg-green-100 text-green-700 dark:bg-green-900/30 dark:text-green-400"
+              class="mt-2 bg-success/10 text-success"
             >
               ↓ Less than last month
             </Badge>
@@ -168,7 +201,7 @@ const monthlyChartData = computed(() => {
           <CardTitle class="text-base">Spending by Category</CardTitle>
         </CardHeader>
         <CardContent>
-          <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" />
+          <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" :options="doughnutOptions" />
           <Skeleton v-else-if="categorySummary.loading.value" class="h-48 w-full rounded-md" />
           <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
         </CardContent>
@@ -179,7 +212,7 @@ const monthlyChartData = computed(() => {
           <CardTitle class="text-base">Monthly Trend</CardTitle>
         </CardHeader>
         <CardContent>
-          <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" />
+          <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" :options="chartOptions" />
           <Skeleton v-else-if="monthlySummary.loading.value" class="h-48 w-full rounded-md" />
           <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
         </CardContent>
