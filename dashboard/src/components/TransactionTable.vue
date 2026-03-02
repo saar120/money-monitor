@@ -152,17 +152,22 @@ async function toggleIgnore() {
   }
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeContextMenu();
+}
+
 onMounted(async () => {
   const [accountData, catData] = await Promise.all([getAccounts(), getCategories()]);
   allAccounts.value = accountData.accounts;
   availableCategories.value = catData.categories;
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+  document.addEventListener('keydown', handleKeydown);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu);
+  document.removeEventListener('keydown', handleKeydown);
 });
 </script>
 

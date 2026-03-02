@@ -102,7 +102,6 @@ const {
 function onScrapeFinished(data: Record<string, unknown>) {
   if (data.accountId != null) {
     scrapingAccounts.value.delete(data.accountId as number);
-    scrapingAccounts.value = new Set(scrapingAccounts.value);
     dismissByAccountId(data.accountId as number);
     fetchAccounts();
   }
@@ -125,7 +124,6 @@ const { connect: connectSse } = useSseConnection({
   'scrape-started': (data) => {
     if (data.accountId != null) {
       scrapingAccounts.value.add(data.accountId as number);
-      scrapingAccounts.value = new Set(scrapingAccounts.value);
     }
   },
   'scrape-done': onScrapeFinished,
