@@ -1,12 +1,28 @@
-export const CATEGORIES = [
-  'food', 'transport', 'housing', 'utilities', 'entertainment', 'health',
-  'shopping', 'education', 'subscriptions', 'income', 'transfer', 'other',
-] as const;
+export interface CategoryWithRules {
+  name: string;
+  rules: string | null;
+}
 
-export type Category = typeof CATEGORIES[number];
+/** Format category list for LLM prompt, including per-category rules when available. */
+export function formatCategoryList(cats: CategoryWithRules[]): string {
+  return cats
+    .map(c => c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)
+    .join('\n');
+}
 
-export function buildFinancialAdvisorPrompt(categoryNames: string[]): string {
-  const list = categoryNames.join(', ');
+export function buildCategorizerPrompt(cats: CategoryWithRules[]): string {
+  return `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
+
+${formatCategoryList(cats)}
+
+If you are confident in the category, set "needsReview" to false.
+If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
+
+Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`;
+}
+
+export function buildFinancialAdvisorPrompt(cats: CategoryWithRules[]): string {
+  const list = cats.map(c => c.name).join(', ');
   return `You are a personal financial advisor with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 Your role:

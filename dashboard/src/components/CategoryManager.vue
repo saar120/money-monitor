@@ -3,6 +3,7 @@ import { ref, onMounted } from 'vue';
 import { getCategories, createCategory, updateCategory, deleteCategory, aiRecategorize, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
+import { Textarea } from '@/components/ui/textarea';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
@@ -19,11 +20,13 @@ const error = ref('');
 const editingId = ref<number | null>(null);
 const editLabel = ref('');
 const editColor = ref('');
+const editRules = ref('');
 
 // New category form
 const newName = ref('');
 const newLabel = ref('');
 const newColor = ref(DEFAULT_CATEGORY_COLOR);
+const newRules = ref('');
 const showNewForm = ref(false);
 const saving = ref(false);
 
@@ -64,6 +67,7 @@ function startEdit(cat: Category) {
   editingId.value = cat.id;
   editLabel.value = cat.label;
   editColor.value = cat.color ?? DEFAULT_CATEGORY_COLOR;
+  editRules.value = cat.rules ?? '';
 }
 
 function cancelEdit() {
@@ -72,7 +76,11 @@ function cancelEdit() {
 
 async function saveEdit(cat: Category) {
   try {
-    const res = await updateCategory(cat.id, { label: editLabel.value, color: editColor.value });
+    const res = await updateCategory(cat.id, {
+      label: editLabel.value,
+      color: editColor.value,
+      rules: editRules.value || null,
+    });
     const idx = categories.value.findIndex(c => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
     editingId.value = null;
@@ -95,11 +103,12 @@ async function addCategory() {
   if (!newName.value || !newLabel.value) return;
   saving.value = true;
   try {
-    const res = await createCategory({ name: newName.value, label: newLabel.value, color: newColor.value });
+    const res = await createCategory({ name: newName.value, label: newLabel.value, color: newColor.value, rules: newRules.value || undefined });
     categories.value.push(res.category);
     newName.value = '';
     newLabel.value = '';
     newColor.value = DEFAULT_CATEGORY_COLOR;
+    newRules.value = '';
     showNewForm.value = false;
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create';
@@ -146,6 +155,14 @@ onMounted(load);
           </Button>
           <Button size="sm" variant="ghost" @click="showNewForm = false">Cancel</Button>
         </div>
+        <div class="space-y-1 w-full mt-2">
+          <label class="text-xs text-muted-foreground">Rules (LLM hint)</label>
+          <Textarea
+            v-model="newRules"
+            placeholder="Describe what transactions belong here. Include Hebrew merchant names if relevant."
+            class="min-h-[60px] resize-y"
+          />
+        </div>
         <p class="text-xs text-muted-foreground mt-1">Name must be lowercase letters, numbers, dashes, or underscores.</p>
       </CardContent>
     </Card>
@@ -159,12 +176,13 @@ onMounted(load);
               <TableHead class="w-8">Color</TableHead>
               <TableHead>Name</TableHead>
               <TableHead>Label</TableHead>
+              <TableHead>Rules</TableHead>
               <TableHead class="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
           <TableBody>
             <TableRow v-if="loading">
-              <TableCell colspan="4" class="text-center text-muted-foreground py-8">Loading...</TableCell>
+              <TableCell colspan="5" class="text-center text-muted-foreground py-8">Loading...</TableCell>
             </TableRow>
             <TableRow v-for="cat in categories" :key="cat.id">
               <TableCell>
@@ -176,15 +194,22 @@ onMounted(load);
               <TableCell class="font-mono text-sm">{{ cat.name }}</TableCell>
               <TableCell>
                 <template v-if="editingId === cat.id">
-                  <div class="flex gap-2 items-center">
-                    <Input v-model="editLabel" class="w-32 h-7 text-sm" />
-                    <input type="color" v-model="editColor" class="h-7 w-10 rounded border cursor-pointer" />
-                    <button @click="saveEdit(cat)" class="text-green-600 hover:text-green-700">
-                      <Check class="h-4 w-4" />
-                    </button>
-                    <button @click="cancelEdit" class="text-muted-foreground hover:text-foreground">
-                      <X class="h-4 w-4" />
-                    </button>
+                  <div class="space-y-2">
+                    <div class="flex gap-2 items-center">
+                      <Input v-model="editLabel" class="w-32 h-7 text-sm" />
+                      <input type="color" v-model="editColor" class="h-7 w-10 rounded border cursor-pointer" />
+                      <button @click="saveEdit(cat)" class="text-green-600 hover:text-green-700">
+                        <Check class="h-4 w-4" />
+                      </button>
+                      <button @click="cancelEdit" class="text-muted-foreground hover:text-foreground">
+                        <X class="h-4 w-4" />
+                      </button>
+                    </div>
+                    <Textarea
+                      v-model="editRules"
+                      placeholder="LLM categorization rules..."
+                      class="text-xs min-h-[40px] resize-y"
+                    />
                   </div>
                 </template>
                 <template v-else>
@@ -192,6 +217,9 @@ onMounted(load);
                     {{ cat.label }}
                   </Badge>
                 </template>
+              </TableCell>
+              <TableCell class="text-xs text-muted-foreground max-w-[200px] truncate" :title="cat.rules ?? ''">
+                {{ cat.rules ?? '—' }}
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">

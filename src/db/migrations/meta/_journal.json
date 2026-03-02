@@ -57,6 +57,13 @@
       "when": 1772400000001,
       "tag": "0007_ordinary_katie_power",
       "breakpoints": true
+    },
+    {
+      "idx": 8,
+      "version": "6",
+      "when": 1772390208361,
+      "tag": "0008_puzzling_yellowjacket",
+      "breakpoints": true
     }
   ]
 }

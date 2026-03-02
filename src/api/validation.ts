@@ -117,11 +117,13 @@ export const createCategorySchema = z.object({
   name: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/, 'Name must be lowercase alphanumeric, dashes, or underscores'),
   label: z.string().min(1).max(100),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  rules: z.string().max(500).optional(),
 });
 
 export const updateCategorySchema = z.object({
   label: z.string().min(1).max(100).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  rules: z.string().max(500).nullable().optional(),
 });
 
 // ─── Transaction Update ───
