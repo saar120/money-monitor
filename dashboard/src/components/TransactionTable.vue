@@ -159,12 +159,11 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Transactions</h1>
+  <div class="space-y-4 animate-fade-in-up">
+    <h1 class="text-2xl font-semibold tracking-tight heading-font">Transactions</h1>
 
     <!-- Filters -->
-    <Card>
-      <CardContent class="pt-4">
+    <div>
         <div class="flex flex-wrap gap-2">
           <Input
             v-model="search"
@@ -227,8 +226,7 @@ onUnmounted(() => {
 
           <Button @click="applyFilters" variant="default" size="sm">Filter</Button>
         </div>
-      </CardContent>
-    </Card>
+    </div>
 
     <!-- Table -->
     <Card>
@@ -302,7 +300,7 @@ onUnmounted(() => {
                 </TableCell>
                 <TableCell
                   class="text-right font-medium tabular-nums"
-                  :class="txn.chargedAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'"
+                  :class="txn.chargedAmount >= 0 ? 'text-success' : 'text-destructive'"
                 >
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
@@ -346,7 +344,7 @@ onUnmounted(() => {
                   <Badge
                     :variant="txn.status === 'completed' ? 'default' : 'secondary'"
                     class="text-xs"
-                    :class="txn.status === 'pending' ? 'bg-yellow-100 text-yellow-700 dark:bg-yellow-900/30 dark:text-yellow-400' : ''"
+                    :class="txn.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : ''"
                   >
                     {{ txn.status }}
                   </Badge>
@@ -391,7 +389,7 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 min-w-[140px] rounded-md border bg-popover text-popover-foreground shadow-md py-1"
+        class="fixed z-50 min-w-[140px] rounded-md border bg-surface-2 text-foreground border-border backdrop-blur-md shadow-md py-1"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
         @click.stop
       >

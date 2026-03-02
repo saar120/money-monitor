@@ -80,8 +80,8 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Insights</h1>
+  <div class="space-y-4 animate-fade-in-up">
+    <h1 class="text-2xl font-semibold tracking-tight heading-font">Insights</h1>
 
     <Card>
       <CardHeader class="pb-2">
@@ -128,7 +128,7 @@ onMounted(async () => {
                 <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
                 <TableCell
                   class="text-right font-medium tabular-nums"
-                  :class="txn.chargedAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'"
+                  :class="txn.chargedAmount >= 0 ? 'text-success' : 'text-destructive'"
                 >
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
@@ -178,7 +178,7 @@ onMounted(async () => {
                       title="Confirm current category"
                       @click="resolve(txn, txn.category!)"
                     >
-                      <Check class="h-4 w-4 text-green-600" />
+                      <Check class="h-4 w-4 text-success" />
                     </Button>
                   </div>
                 </TableCell>

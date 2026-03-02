@@ -121,9 +121,9 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="space-y-4">
+  <div class="space-y-4 animate-fade-in-up">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold tracking-tight">Categories</h1>
+      <h1 class="text-2xl font-semibold tracking-tight heading-font">Categories</h1>
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" /> Add category
       </Button>
@@ -148,7 +148,7 @@ onMounted(load);
           </div>
           <div class="space-y-1">
             <label class="text-xs text-muted-foreground">Color</label>
-            <input type="color" v-model="newColor" class="h-9 w-14 rounded border cursor-pointer" />
+            <input type="color" v-model="newColor" class="h-9 w-14 rounded-lg overflow-hidden border cursor-pointer" />
           </div>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
             {{ saving ? 'Saving...' : 'Save' }}
@@ -197,8 +197,8 @@ onMounted(load);
                   <div class="space-y-2">
                     <div class="flex gap-2 items-center">
                       <Input v-model="editLabel" class="w-32 h-7 text-sm" />
-                      <input type="color" v-model="editColor" class="h-7 w-10 rounded border cursor-pointer" />
-                      <button @click="saveEdit(cat)" class="text-green-600 hover:text-green-700">
+                      <input type="color" v-model="editColor" class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer" />
+                      <button @click="saveEdit(cat)" class="text-success hover:text-success/80">
                         <Check class="h-4 w-4" />
                       </button>
                       <button @click="cancelEdit" class="text-muted-foreground hover:text-foreground">
@@ -259,7 +259,7 @@ onMounted(load);
             {{ recatLoading ? 'Running...' : 'Re-categorize All' }}
           </Button>
         </div>
-        <p v-if="recatResult" class="text-sm text-green-600 mt-2">{{ recatResult }}</p>
+        <p v-if="recatResult" class="text-sm text-success mt-2">{{ recatResult }}</p>
         <p v-if="recatError" class="text-sm text-destructive mt-2">{{ recatError }}</p>
       </CardContent>
     </Card>
