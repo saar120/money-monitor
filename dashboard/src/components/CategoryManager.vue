@@ -10,6 +10,7 @@ import {
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
+import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
 
 const categories = ref<Category[]>([]);
@@ -181,9 +182,15 @@ onMounted(load);
             </TableRow>
           </TableHeader>
           <TableBody>
-            <TableRow v-if="loading">
-              <TableCell colspan="5" class="text-center text-muted-foreground py-8">Loading...</TableCell>
-            </TableRow>
+            <template v-if="loading">
+              <TableRow v-for="i in 5" :key="i">
+                <TableCell><Skeleton class="h-5 w-5 rounded-full" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-24" /></TableCell>
+                <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                <TableCell><Skeleton class="h-4 w-40" /></TableCell>
+                <TableCell class="text-right"><Skeleton class="h-4 w-14 ml-auto" /></TableCell>
+              </TableRow>
+            </template>
             <TableRow v-for="cat in categories" :key="cat.id">
               <TableCell>
                 <div
