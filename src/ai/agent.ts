@@ -1,9 +1,9 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
-import { buildFinancialAdvisorPrompt } from './prompts.js';
-import { buildFinancialMcpServer } from './tools.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
+import { runOrchestrator, getLastConsultedAgents } from './agents/orchestrator.js';
+import type { AgentType, AgentResult } from './agents/types.js';
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -39,10 +39,8 @@ async function getCategoryNames(): Promise<string[]> {
   return rows.map(r => r.name);
 }
 
-export async function chat(conversationHistory: ChatMessage[]): Promise<string> {
+export async function chat(conversationHistory: ChatMessage[]): Promise<AgentResult> {
   const categoryNames = await getCategoryNames();
-  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames);
-  const server = buildFinancialMcpServer(categoryNames);
 
   const historyLines = conversationHistory.slice(0, -1).map(m =>
     `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
@@ -52,28 +50,12 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<string> 
     ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
     : lastMsg.content;
 
-  for await (const msg of query({
-    prompt,
-    options: {
-      model: config.ANTHROPIC_MODEL,
-      systemPrompt,
-      mcpServers: { 'financial-tools': server },
-      tools: [],
-      allowedTools: ['mcp__financial-tools__*'],
-      maxTurns: 10,
-    },
-  })) {
-    if (msg.type === 'result') {
-      if (msg.subtype === 'success') return msg.result;
-      if (msg.subtype === 'error_max_turns') {
-        return 'I reached the maximum number of analysis steps. Please try a more specific question.';
-      }
-      throw new Error(`Agent error (${msg.subtype})`);
-    }
-  }
-
-  return 'No response generated.';
+  return runOrchestrator(prompt, categoryNames);
 }
+
+/** Returns which agents were consulted in the last chat call. */
+export { getLastConsultedAgents };
+export type { AgentType, AgentResult };
 
 export async function batchCategorize(
   batchSize: number = 50,

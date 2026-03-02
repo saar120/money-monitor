@@ -10,8 +10,8 @@ export async function aiRoutes(app: FastifyInstance) {
     if (!data) return;
 
     try {
-      const response = await chat(data.messages);
-      return reply.send({ response });
+      const result = await chat(data.messages);
+      return reply.send({ response: result.response, agent: result.agent });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'AI chat failed';
       return reply.status(500).send({ error: message });
