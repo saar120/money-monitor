@@ -112,13 +112,16 @@ onMounted(async () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-if="loading">
-                <TableCell colspan="6" class="py-8">
-                  <div class="space-y-2">
-                    <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <template v-if="loading">
+                <TableRow v-for="i in 5" :key="i">
+                  <TableCell><Skeleton class="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-48" /></TableCell>
+                  <TableCell class="text-right"><Skeleton class="h-4 w-16 ml-auto" /></TableCell>
+                  <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton class="h-7 w-36" /></TableCell>
+                </TableRow>
+              </template>
               <TableRow v-else-if="items.length === 0">
                 <TableCell colspan="6" class="text-center text-muted-foreground py-12">
                   All clear! No transactions need review.
