@@ -9,6 +9,7 @@ import {
   Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
+import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
@@ -118,6 +119,16 @@ async function addCategory() {
   }
 }
 
+async function toggleIgnored(cat: Category) {
+  try {
+    const res = await updateCategory(cat.id, { ignoredFromStats: !cat.ignoredFromStats });
+    const idx = categories.value.findIndex(c => c.id === cat.id);
+    if (idx !== -1) categories.value[idx] = res.category;
+  } catch {
+    error.value = 'Failed to update';
+  }
+}
+
 onMounted(load);
 </script>
 
@@ -178,6 +189,7 @@ onMounted(load);
               <TableHead>Name</TableHead>
               <TableHead>Label</TableHead>
               <TableHead>Rules</TableHead>
+              <TableHead>Ignored</TableHead>
               <TableHead class="text-right">Actions</TableHead>
             </TableRow>
           </TableHeader>
@@ -191,7 +203,7 @@ onMounted(load);
                 <TableCell class="text-right"><Skeleton class="h-4 w-14 ml-auto" /></TableCell>
               </TableRow>
             </template>
-            <TableRow v-for="cat in categories" :key="cat.id">
+            <TableRow v-for="cat in categories" :key="cat.id" :class="{ 'opacity-50': cat.ignoredFromStats }">
               <TableCell>
                 <div
                   class="w-5 h-5 rounded-full border"
@@ -227,6 +239,13 @@ onMounted(load);
               </TableCell>
               <TableCell class="text-xs text-muted-foreground max-w-[200px] truncate" :title="cat.rules ?? ''">
                 {{ cat.rules ?? '—' }}
+              </TableCell>
+              <TableCell>
+                <Switch
+                  :checked="cat.ignoredFromStats"
+                  @update:checked="toggleIgnored(cat)"
+                  class="scale-75"
+                />
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">

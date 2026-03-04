@@ -2,7 +2,7 @@ import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
 import { eq, and, gte, lte, sql, count, desc, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions, accounts } from '../db/schema.js';
+import { transactions, accounts, categories } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 
 // ── Individual tool builders ────────────────────────────────────────────────────
@@ -55,13 +55,20 @@ export function buildCategorizeTransactionTool(categoryNames: string[]) {
 
   return tool(
     'categorize_transaction',
-    'Assign a category to a specific transaction by its ID.',
+    'Assign a category to a specific transaction by its ID. You must provide a confidence score (0-1).',
     {
       transaction_id: z.number().describe('The transaction ID'),
       category: categoryEnum.describe('The category to assign'),
+      confidence: z.number().min(0).max(1).describe('Confidence level 0.0-1.0 for this categorization'),
+      review_reason: z.string().optional().describe('Reason if confidence is low (<0.8)'),
     },
     async (args) => {
-      const result = categorizeTransaction({ transaction_id: args.transaction_id, category: String(args.category) });
+      const result = categorizeTransaction({
+        transaction_id: args.transaction_id,
+        category: String(args.category),
+        confidence: args.confidence,
+        review_reason: args.review_reason,
+      });
       return { content: [{ type: 'text' as const, text: result }] };
     },
   );
@@ -181,6 +188,8 @@ interface GetSpendingSummaryInput {
 interface CategorizeTransactionInput {
   transaction_id: number;
   category: string;
+  confidence?: number;
+  review_reason?: string;
 }
 
 function queryTransactions(input: QueryTransactionsInput): string {
@@ -215,7 +224,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
 }
 
 function getSpendingSummary(input: GetSpendingSummaryInput): string {
-  const conditions = [];
+  const conditions = [eq(transactions.ignored, false)];
   if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
   if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
@@ -261,8 +270,22 @@ function categorizeTransaction(input: CategorizeTransactionInput): string {
   const existing = db.select().from(transactions).where(eq(transactions.id, input.transaction_id)).get();
   if (!existing) return JSON.stringify({ error: 'Transaction not found' });
 
+  // Check if category is ignored
+  const cat = db.select({ ignoredFromStats: categories.ignoredFromStats })
+    .from(categories)
+    .where(eq(categories.name, input.category))
+    .get();
+
+  const needsReview = input.confidence !== undefined && input.confidence < 0.8;
+
   db.update(transactions)
-    .set({ category: input.category })
+    .set({
+      category: input.category,
+      confidence: input.confidence ?? null,
+      needsReview,
+      reviewReason: needsReview ? (input.review_reason ?? 'Low confidence categorization') : null,
+      ignored: cat?.ignoredFromStats ?? false,
+    })
     .where(eq(transactions.id, input.transaction_id))
     .run();
 

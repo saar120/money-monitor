@@ -36,6 +36,7 @@ export const transactions = sqliteTable('transactions', {
   ignored: integer('ignored', { mode: 'boolean' }).notNull().default(false),
   needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false),
   reviewReason: text('review_reason'),
+  confidence: real('confidence'),
   hash: text('hash').notNull().unique(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });
@@ -69,5 +70,6 @@ export const categories = sqliteTable('categories', {
   label: text('label').notNull(),
   color: text('color'),
   rules: text('rules'),
+  ignoredFromStats: integer('ignored_from_stats', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });

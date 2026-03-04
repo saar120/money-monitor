@@ -9,7 +9,7 @@ import { runCategorizer } from './categorizer.js';
 import { runSubscriptionTracker } from './subscription-tracker.js';
 import type { AgentType, AgentResult } from './types.js';
 
-function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: AgentType[]) {
+function buildOrchestratorMcpServer(categoryNames: string[], ignoredCategoryNames: string[], consultedAgents: AgentType[]) {
   return createSdkMcpServer({
     name: 'orchestrator-tools',
     version: '1.0.0',
@@ -22,7 +22,7 @@ function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: Ag
         },
         async (args) => {
           consultedAgents.push('spending_analyst');
-          const result = await runSpendingAnalyst(args.question, categoryNames);
+          const result = await runSpendingAnalyst(args.question, categoryNames, ignoredCategoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
       ),
@@ -34,7 +34,7 @@ function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: Ag
         },
         async (args) => {
           consultedAgents.push('budget_advisor');
-          const result = await runBudgetAdvisor(args.question, categoryNames);
+          const result = await runBudgetAdvisor(args.question, categoryNames, ignoredCategoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
       ),
@@ -46,7 +46,7 @@ function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: Ag
         },
         async (args) => {
           consultedAgents.push('categorizer');
-          const result = await runCategorizer(args.question, categoryNames);
+          const result = await runCategorizer(args.question, categoryNames, ignoredCategoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
       ),
@@ -69,11 +69,12 @@ function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: Ag
 export async function runOrchestrator(
   prompt: string,
   categoryNames: string[],
+  ignoredCategoryNames: string[] = [],
 ): Promise<AgentResult> {
   const consultedAgents: AgentType[] = [];
 
   const systemPrompt = buildOrchestratorPrompt();
-  const server = buildOrchestratorMcpServer(categoryNames, consultedAgents);
+  const server = buildOrchestratorMcpServer(categoryNames, ignoredCategoryNames, consultedAgents);
 
   for await (const msg of query({
     prompt,

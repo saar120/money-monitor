@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { categories } from '../db/schema.js';
+import { categories, transactions } from '../db/schema.js';
 import { createCategorySchema, updateCategorySchema } from './validation.js';
 import { parseIntParam, validateBody } from './helpers.js';
 
@@ -36,6 +36,15 @@ export async function categoriesRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Category not found' });
 
     const [updated] = db.update(categories).set(data).where(eq(categories.id, id)).returning().all();
+
+    // Cascade ignoredFromStats to transactions
+    if (data.ignoredFromStats !== undefined) {
+      db.update(transactions)
+        .set({ ignored: data.ignoredFromStats })
+        .where(eq(transactions.category, existing.name))
+        .run();
+    }
+
     return reply.send({ category: updated });
   });
 

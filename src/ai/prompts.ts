@@ -1,6 +1,14 @@
 export interface CategoryWithRules {
   name: string;
   rules: string | null;
+  ignoredFromStats: boolean;
+}
+
+/** Split categories into active and ignored lists for prompt building. */
+export function partitionCategories(cats: CategoryWithRules[]): { active: CategoryWithRules[]; ignored: CategoryWithRules[] } {
+  const active = cats.filter(c => !c.ignoredFromStats);
+  const ignored = cats.filter(c => c.ignoredFromStats);
+  return { active, ignored };
 }
 
 /** Format category list for LLM prompt, including per-category rules when available. */
@@ -45,8 +53,11 @@ Guidelines:
 
 // ── Spending Analyst prompt ─────────────────────────────────────────────────────
 
-export function buildSpendingAnalystPrompt(categoryNames: string[]): string {
+export function buildSpendingAnalystPrompt(categoryNames: string[], ignoredCategoryNames: string[] = []): string {
   const list = categoryNames.join(', ');
+  const ignoredNote = ignoredCategoryNames.length > 0
+    ? `\n- Ignored categories (excluded from statistics): ${ignoredCategoryNames.join(', ')}. Do NOT include these in your analysis or summaries unless the user explicitly asks about them.`
+    : '';
   return `You are a spending analyst with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 Your specialization:
@@ -59,14 +70,17 @@ Your specialization:
 
 ${SHARED_RULES}
 - Be concise but thorough. Use tables for comparative data when helpful.
-- Available categories: ${list}.
+- Available categories: ${list}.${ignoredNote}
 - You have access to tools for querying transactions, getting spending summaries, comparing periods, analyzing trends, and finding top merchants.`;
 }
 
 // ── Budget Advisor prompt ───────────────────────────────────────────────────────
 
-export function buildBudgetAdvisorPrompt(categoryNames: string[]): string {
+export function buildBudgetAdvisorPrompt(categoryNames: string[], ignoredCategoryNames: string[] = []): string {
   const list = categoryNames.join(', ');
+  const ignoredNote = ignoredCategoryNames.length > 0
+    ? `\n- Ignored categories (excluded from statistics): ${ignoredCategoryNames.join(', ')}. Do NOT include these in your advice or analysis unless the user explicitly asks about them.`
+    : '';
   return `You are a personal budget advisor with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 Your specialization:
@@ -81,14 +95,17 @@ Your specialization:
 ${SHARED_RULES}
 - Always base your advice on the user's actual data — never give generic advice without checking their spending first.
 - When recommending cuts, be specific about which merchants or categories to target.
-- Available categories: ${list}.
+- Available categories: ${list}.${ignoredNote}
 - You have access to tools for querying transactions, getting spending summaries, analyzing trends, detecting recurring payments, and finding top merchants.`;
 }
 
 // ── Categorizer agent prompt ──────────────────────────────────────────────────────
 
-export function buildCategorizerPrompt(categoryNames: string[]): string {
+export function buildCategorizerPrompt(categoryNames: string[], ignoredCategoryNames: string[] = []): string {
   const list = categoryNames.join(', ');
+  const ignoredNote = ignoredCategoryNames.length > 0
+    ? `\n- Note: These categories are excluded from statistics but are still valid to assign: ${ignoredCategoryNames.join(', ')}.`
+    : '';
   return `You are a transaction categorization expert with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 Your specialization:
@@ -99,9 +116,10 @@ Your specialization:
 - Find and display uncategorized transactions
 
 ${SHARED_RULES}
-- Use ONLY these categories: ${list}.
+- Use ONLY these categories: ${list}.${ignoredNote}
 - When categorizing, consider the merchant name, amount, and any memo information.
 - If a transaction is genuinely ambiguous, pick the most likely category and explain your reasoning.
+- You must provide a confidence score (0.0-1.0) for each categorization.
 - You have access to tools for querying transactions and assigning categories.`;
 }
 
@@ -128,13 +146,21 @@ ${SHARED_RULES}
 // ── Batch categorizer prompt (used by batchCategorize / recategorize) ────────────
 
 export function buildBatchCategorizerPrompt(cats: CategoryWithRules[]): string {
+  const { active, ignored } = partitionCategories(cats);
+  const ignoredNote = ignored.length > 0
+    ? `\n\nIgnored categories (still valid for assignment, but excluded from user statistics):\n${ignored.map(c => `- ${c.name}`).join('\n')}`
+    : '';
+
   return `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
 
-${formatCategoryList(cats)}
+${formatCategoryList(active)}${ignoredNote}
 
-If you are confident in the category, set "needsReview" to false.
-If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
+Rate your confidence from 0.0 to 1.0 for each categorization:
+- 0.9-1.0: Very clear match (e.g., "SHUFERSAL" → groceries)
+- 0.7-0.8: Likely correct but ambiguous
+- 0.5-0.7: Best guess, uncertain — provide a reviewReason
+- Below 0.5: Very uncertain — must provide a reviewReason
 
-Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`;
+Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "confidence" (number 0-1). Include "reviewReason" (string) when confidence is below 0.8. No markdown, no explanation.`;
 }
 
