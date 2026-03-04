@@ -155,6 +155,12 @@ export interface SummaryItem {
   transactionCount: number;
 }
 
+export interface CashflowItem {
+  month: string;
+  income: number;
+  expense: number;
+}
+
 export interface SummaryFilters {
   groupBy?: string;
   accountId?: number;
@@ -169,6 +175,14 @@ export function getSummary(params: SummaryFilters = {}) {
     if (value !== undefined) query.set(key, String(value));
   });
   return request<{ groupBy: string; summary: SummaryItem[] }>(`/transactions/summary?${query}`);
+}
+
+export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {}) {
+  const query = new URLSearchParams({ groupBy: 'cashflow' });
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) query.set(key, String(value));
+  });
+  return request<{ groupBy: 'cashflow'; summary: CashflowItem[] }>(`/transactions/summary?${query}`);
 }
 
 // ─── Scraping ───
