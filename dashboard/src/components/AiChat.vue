@@ -1,26 +1,10 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { aiChat, type ChatMessage, type AgentType } from '../api/client';
+import { aiChat, type ChatMessage } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { SendHorizontal, Bot, User } from 'lucide-vue-next';
-
-const AGENT_LABELS: Record<AgentType, string> = {
-  orchestrator: 'AI Advisor',
-  spending_analyst: 'Spending Analyst',
-  budget_advisor: 'Budget Advisor',
-  categorizer: 'Categorizer',
-  subscription_tracker: 'Subscription Tracker',
-};
-
-const AGENT_COLORS: Record<AgentType, string> = {
-  orchestrator: 'bg-primary/10 text-primary',
-  spending_analyst: 'bg-blue-500/10 text-blue-600 dark:text-blue-400',
-  budget_advisor: 'bg-green-500/10 text-green-600 dark:text-green-400',
-  categorizer: 'bg-amber-500/10 text-amber-600 dark:text-amber-400',
-  subscription_tracker: 'bg-purple-500/10 text-purple-600 dark:text-purple-400',
-};
 
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
@@ -53,7 +37,7 @@ async function sendMessage(text?: string) {
 
   try {
     const result = await aiChat(messages.value);
-    messages.value.push({ role: 'assistant', content: result.response, agent: result.agent });
+    messages.value.push({ role: 'assistant', content: result.response });
   } catch (err) {
     messages.value.push({
       role: 'assistant',
@@ -63,16 +47,6 @@ async function sendMessage(text?: string) {
     loading.value = false;
     await scrollToBottom();
   }
-}
-
-function getAgentLabel(msg: ChatMessage): string {
-  if (msg.role === 'user') return 'You';
-  return 'AI Advisor';
-}
-
-function getAgentBadgeClass(msg: ChatMessage): string {
-  if (!msg.agent || msg.agent === 'orchestrator') return '';
-  return AGENT_COLORS[msg.agent];
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -100,7 +74,7 @@ function handleKeydown(e: KeyboardEvent) {
             Ask me anything about your finances
           </p>
           <p class="text-muted-foreground text-xs mb-4 max-w-sm">
-            Your question is routed to a specialist agent for the best answer
+            I can analyze spending, track subscriptions, categorize transactions, and give budget advice
           </p>
           <div class="flex flex-wrap gap-2 justify-center max-w-lg">
             <Button
@@ -139,14 +113,7 @@ function handleKeydown(e: KeyboardEvent) {
           >
             <div class="flex items-center gap-1.5 mb-1">
               <span class="text-[10px] font-semibold opacity-60">
-                {{ getAgentLabel(msg) }}
-              </span>
-              <span
-                v-if="msg.agent && msg.agent !== 'orchestrator' && msg.role === 'assistant'"
-                class="text-[9px] font-medium px-1.5 py-0.5 rounded-full"
-                :class="getAgentBadgeClass(msg)"
-              >
-                {{ AGENT_LABELS[msg.agent] }}
+                {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
               </span>
             </div>
             <div class="whitespace-pre-wrap">{{ msg.content }}</div>

@@ -1,11 +1,20 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
-import { buildBatchCategorizerPrompt, partitionCategories } from './prompts.js';
+import { buildBatchCategorizerPrompt, buildFinancialAdvisorPrompt, partitionCategories } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
-import { runOrchestrator } from './agents/orchestrator.js';
-import type { AgentType, AgentResult } from './agents/types.js';
+import {
+  buildQueryTransactionsTool,
+  buildGetSpendingSummaryTool,
+  buildGetAccountBalancesTool,
+  buildComparePeriodsTool,
+  buildGetSpendingTrendsTool,
+  buildDetectRecurringTransactionsTool,
+  buildGetTopMerchantsTool,
+  buildCategorizeTransactionTool,
+  buildMcpServerFromTools,
+} from './tools.js';
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -29,10 +38,35 @@ function processCategoryResults(
   return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
 }
 
+// ── Chat types ──────────────────────────────────────────────────────────────────
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
 }
+
+export type ChatEvent =
+  | { type: 'status'; text: string }
+  | { type: 'result'; text: string };
+
+// ── Tool status mapping ─────────────────────────────────────────────────────────
+
+const TOOL_STATUS: Record<string, string> = {
+  query_transactions: 'Searching transactions...',
+  get_spending_summary: 'Analyzing spending...',
+  get_account_balances: 'Checking account balances...',
+  compare_periods: 'Comparing periods...',
+  get_spending_trends: 'Analyzing trends...',
+  detect_recurring_transactions: 'Detecting recurring charges...',
+  get_top_merchants: 'Finding top merchants...',
+  categorize_transaction: 'Categorizing transaction...',
+};
+
+function describeToolCall(toolName: string): string {
+  return TOOL_STATUS[toolName.replace('mcp__financial-tools__', '')] ?? 'Processing...';
+}
+
+// ── Chat ────────────────────────────────────────────────────────────────────────
 
 async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
   const { db } = await import('../db/connection.js');
@@ -44,7 +78,7 @@ async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
   }).from(categories).all();
 }
 
-export async function chat(conversationHistory: ChatMessage[]): Promise<AgentResult> {
+export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<ChatEvent> {
   const cats = await getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map(c => c.name);
@@ -58,10 +92,42 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<AgentRes
     ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
     : lastMsg.content;
 
-  return runOrchestrator(prompt, categoryNames, ignoredCategoryNames);
+  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames);
+  const server = buildMcpServerFromTools('financial-tools', [
+    buildQueryTransactionsTool(),
+    buildGetSpendingSummaryTool(),
+    buildGetAccountBalancesTool(),
+    buildComparePeriodsTool(),
+    buildGetSpendingTrendsTool(),
+    buildDetectRecurringTransactionsTool(),
+    buildGetTopMerchantsTool(),
+    buildCategorizeTransactionTool(categoryNames),
+  ]);
+
+  for await (const msg of query({
+    prompt,
+    options: {
+      model: config.ANTHROPIC_MODEL,
+      systemPrompt,
+      mcpServers: { 'financial-tools': server },
+      tools: [],
+      allowedTools: ['mcp__financial-tools__*'],
+      maxTurns: 8,
+    },
+  })) {
+    if (msg.type === 'tool_call') {
+      yield { type: 'status', text: describeToolCall(msg.tool_name) };
+    }
+    if (msg.type === 'result' && msg.subtype === 'success') {
+      yield { type: 'result', text: msg.result };
+    }
+    if (msg.type === 'result' && msg.subtype === 'error_max_turns') {
+      yield { type: 'result', text: 'I reached the maximum number of steps. Please try a more specific question.' };
+    }
+  }
 }
 
-export type { AgentType, AgentResult };
+// ── Batch categorization ────────────────────────────────────────────────────────
 
 /** Shared LLM call + result persistence for batch categorization. */
 async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: number }> {
