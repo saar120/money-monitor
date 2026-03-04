@@ -288,8 +288,52 @@ export interface ChatMessage {
   content: string;
 }
 
-export function aiChat(messages: ChatMessage[]) {
-  return request<{ response: string }>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+export interface ChatStreamEvent {
+  type: 'status' | 'result' | 'error';
+  text: string;
+}
+
+export async function* aiChatStream(
+  messages: ChatMessage[],
+): AsyncGenerator<ChatStreamEvent> {
+  const token = getApiToken();
+  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
+  if (token) headers['Authorization'] = `Bearer ${token}`;
+
+  const res = await fetch(`${BASE_URL}/ai/chat`, {
+    method: 'POST',
+    headers,
+    body: JSON.stringify({ messages }),
+  });
+
+  if (!res.ok || !res.body) {
+    const error = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((error as { error: string }).error || res.statusText);
+  }
+
+  const reader = res.body.getReader();
+  const decoder = new TextDecoder();
+  let buffer = '';
+
+  while (true) {
+    const { done, value } = await reader.read();
+    if (done) break;
+
+    buffer += decoder.decode(value, { stream: true });
+    const lines = buffer.split('\n');
+    buffer = lines.pop() ?? '';
+
+    let currentEvent = '';
+    for (const line of lines) {
+      if (line.startsWith('event: ')) {
+        currentEvent = line.slice(7);
+      } else if (line.startsWith('data: ') && currentEvent) {
+        const data = JSON.parse(line.slice(6)) as { text: string };
+        yield { type: currentEvent as ChatStreamEvent['type'], text: data.text };
+        currentEvent = '';
+      }
+    }
+  }
 }
 
 export function aiCategorize(batchSize = 50) {

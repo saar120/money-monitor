@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, nextTick } from 'vue';
-import { aiChat, type ChatMessage } from '../api/client';
+import { aiChatStream, type ChatMessage } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
@@ -9,6 +9,7 @@ import { SendHorizontal, Bot, User } from 'lucide-vue-next';
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
 const loading = ref(false);
+const status = ref('');
 const chatContainer = ref<HTMLElement | null>(null);
 
 const suggestions = [
@@ -33,11 +34,21 @@ async function sendMessage(text?: string) {
   messages.value.push({ role: 'user', content: messageText });
   input.value = '';
   loading.value = true;
+  status.value = '';
   await scrollToBottom();
 
   try {
-    const result = await aiChat(messages.value);
-    messages.value.push({ role: 'assistant', content: result.response });
+    let response = '';
+    for await (const event of aiChatStream(messages.value)) {
+      if (event.type === 'status') {
+        status.value = event.text;
+      } else if (event.type === 'result') {
+        response = event.text;
+      } else if (event.type === 'error') {
+        throw new Error(event.text);
+      }
+    }
+    messages.value.push({ role: 'assistant', content: response });
   } catch (err) {
     messages.value.push({
       role: 'assistant',
@@ -45,6 +56,7 @@ async function sendMessage(text?: string) {
     });
   } finally {
     loading.value = false;
+    status.value = '';
     await scrollToBottom();
   }
 }
@@ -128,16 +140,19 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
         </div>
 
-        <!-- Typing indicator -->
+        <!-- Typing indicator with status -->
         <div v-if="loading" class="flex gap-3 justify-start">
           <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
             <Bot class="h-4 w-4 text-primary" />
           </div>
           <div class="bg-muted rounded-2xl rounded-bl-sm px-4 py-3">
-            <div class="flex gap-1 items-center h-4">
-              <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
-              <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
-              <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+            <div class="flex items-center gap-2">
+              <div class="flex gap-1 items-center h-4">
+                <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.3s]" />
+                <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce [animation-delay:-0.15s]" />
+                <span class="w-1.5 h-1.5 rounded-full bg-primary/60 animate-bounce" />
+              </div>
+              <span v-if="status" class="text-xs text-muted-foreground">{{ status }}</span>
             </div>
           </div>
         </div>

@@ -9,17 +9,22 @@ export async function aiRoutes(app: FastifyInstance) {
     const data = validateBody(chatSchema, request.body, reply);
     if (!data) return;
 
+    reply.hijack();
+    reply.raw.writeHead(200, {
+      'Content-Type': 'text/event-stream',
+      'Cache-Control': 'no-cache',
+      'Connection': 'keep-alive',
+    });
+
     try {
-      let response = '';
       for await (const event of chat(data.messages)) {
-        if (event.type === 'result') {
-          response = event.text;
-        }
+        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
       }
-      return reply.send({ response });
     } catch (err) {
       const message = err instanceof Error ? err.message : 'AI chat failed';
-      return reply.status(500).send({ error: message });
+      reply.raw.write(`event: error\ndata: ${JSON.stringify({ text: message })}\n\n`);
+    } finally {
+      reply.raw.end();
     }
   });
 
