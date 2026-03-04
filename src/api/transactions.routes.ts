@@ -1,7 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { and, desc, eq, sql, count, gte, lte, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions } from '../db/schema.js';
+import { transactions, categories } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, resolveReviewSchema } from './validation.js';
 import { parseIntParam, validateBody, validateQuery, buildTransactionFilters } from './helpers.js';
@@ -87,9 +87,14 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
 
+    const cat = data.category
+      ? db.select({ ignoredFromStats: categories.ignoredFromStats })
+          .from(categories).where(eq(categories.name, data.category)).get()
+      : null;
+
     const [updated] = db
       .update(transactions)
-      .set({ category: data.category, needsReview: false, reviewReason: null })
+      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: cat?.ignoredFromStats ?? false })
       .where(eq(transactions.id, id))
       .returning()
       .all();
@@ -129,9 +134,14 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
     if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
 
+    const cat = data.category
+      ? db.select({ ignoredFromStats: categories.ignoredFromStats })
+          .from(categories).where(eq(categories.name, data.category)).get()
+      : null;
+
     const [updated] = db
       .update(transactions)
-      .set({ category: data.category, needsReview: false, reviewReason: null })
+      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: cat?.ignoredFromStats ?? false })
       .where(eq(transactions.id, id))
       .returning()
       .all();
