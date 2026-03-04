@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const accounts = sqliteTable('accounts', {
@@ -39,7 +39,11 @@ export const transactions = sqliteTable('transactions', {
   confidence: real('confidence'),
   hash: text('hash').notNull().unique(),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
-});
+}, (table) => [
+  index('idx_transactions_category').on(table.category),
+  index('idx_transactions_ignored').on(table.ignored),
+  index('idx_transactions_status').on(table.status),
+]);
 
 export const scrapeSessions = sqliteTable('scrape_sessions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
