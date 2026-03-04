@@ -242,8 +242,8 @@ onMounted(load);
               </TableCell>
               <TableCell>
                 <Switch
-                  :checked="cat.ignoredFromStats"
-                  @update:checked="toggleIgnored(cat)"
+                  :model-value="cat.ignoredFromStats"
+                  @update:model-value="toggleIgnored(cat)"
                   class="scale-75"
                 />
               </TableCell>
