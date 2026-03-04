@@ -6,6 +6,13 @@ import { searchTransactionIds } from '../db/queries.js';
 import { transactionQuerySchema, ignoreTransactionSchema, updateTransactionSchema, resolveReviewSchema } from './validation.js';
 import { parseIntParam, validateBody, validateQuery, buildTransactionFilters } from './helpers.js';
 
+function isCategoryIgnored(categoryName: string | null): boolean {
+  if (!categoryName) return false;
+  const cat = db.select({ ignoredFromStats: categories.ignoredFromStats })
+    .from(categories).where(eq(categories.name, categoryName)).get();
+  return cat?.ignoredFromStats ?? false;
+}
+
 export async function transactionsRoutes(app: FastifyInstance) {
 
   app.get('/api/transactions', async (request, reply) => {
@@ -84,21 +91,14 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const data = validateBody(resolveReviewSchema, request.body, reply);
     if (!data) return;
 
-    const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
-    if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
-
-    const cat = data.category
-      ? db.select({ ignoredFromStats: categories.ignoredFromStats })
-          .from(categories).where(eq(categories.name, data.category)).get()
-      : null;
-
     const [updated] = db
       .update(transactions)
-      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: cat?.ignoredFromStats ?? false })
+      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(data.category) })
       .where(eq(transactions.id, id))
       .returning()
       .all();
 
+    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
     return reply.send({ transaction: updated });
   });
 
@@ -109,11 +109,6 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const data = validateBody(ignoreTransactionSchema, request.body, reply);
     if (!data) return;
 
-    const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
-    if (!existing) {
-      return reply.status(404).send({ error: 'Transaction not found' });
-    }
-
     const [updated] = db
       .update(transactions)
       .set({ ignored: data.ignored })
@@ -121,6 +116,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
       .returning()
       .all();
 
+    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
     return reply.send({ transaction: updated });
   });
 
@@ -131,21 +127,14 @@ export async function transactionsRoutes(app: FastifyInstance) {
     const data = validateBody(updateTransactionSchema, request.body, reply);
     if (!data) return;
 
-    const existing = db.select().from(transactions).where(eq(transactions.id, id)).get();
-    if (!existing) return reply.status(404).send({ error: 'Transaction not found' });
-
-    const cat = data.category
-      ? db.select({ ignoredFromStats: categories.ignoredFromStats })
-          .from(categories).where(eq(categories.name, data.category)).get()
-      : null;
-
     const [updated] = db
       .update(transactions)
-      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: cat?.ignoredFromStats ?? false })
+      .set({ category: data.category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(data.category) })
       .where(eq(transactions.id, id))
       .returning()
       .all();
 
+    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
     return reply.send({ transaction: updated });
   });
 }
