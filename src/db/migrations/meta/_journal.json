@@ -61,8 +61,15 @@
     {
       "idx": 8,
       "version": "6",
-      "when": 1772390208361,
+      "when": 1772400000002,
       "tag": "0008_puzzling_yellowjacket",
+      "breakpoints": true
+    },
+    {
+      "idx": 9,
+      "version": "6",
+      "when": 1772611200000,
+      "tag": "0009_add_transaction_indexes",
       "breakpoints": true
     }
   ]

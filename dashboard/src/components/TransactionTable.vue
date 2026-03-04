@@ -22,7 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle } from 'lucide-vue-next';
-import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
 
 const transactions = ref<Transaction[]>([]);
 const total = ref(0);
@@ -48,7 +48,9 @@ const endDate = ref('');
 const selectedCategory = ref('all');
 
 const availableCategories = ref<Category[]>([]);
+const categoryMap = computed(() => buildCategoryMap(availableCategories.value));
 const updatingCategoryFor = ref<number | null>(null);
+const editingCategoryFor = ref<number | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
@@ -144,17 +146,22 @@ async function toggleIgnore() {
   }
 }
 
+function handleKeydown(e: KeyboardEvent) {
+  if (e.key === 'Escape') closeContextMenu();
+}
+
 onMounted(async () => {
   const [accountData, catData] = await Promise.all([getAccounts(), getCategories()]);
   allAccounts.value = accountData.accounts;
   availableCategories.value = catData.categories;
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
-  document.addEventListener('keydown', (e) => { if (e.key === 'Escape') closeContextMenu(); });
+  document.addEventListener('keydown', handleKeydown);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu);
+  document.removeEventListener('keydown', handleKeydown);
 });
 </script>
 
@@ -269,13 +276,16 @@ onUnmounted(() => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-if="loading">
-                <TableCell colspan="6" class="py-8">
-                  <div class="space-y-2">
-                    <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <template v-if="loading">
+                <TableRow v-for="i in 8" :key="i">
+                  <TableCell><Skeleton class="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-48" /></TableCell>
+                  <TableCell class="text-right"><Skeleton class="h-4 w-16 ml-auto" /></TableCell>
+                  <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton class="h-5 w-16 rounded-full" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-12" /></TableCell>
+                </TableRow>
+              </template>
               <TableRow v-else-if="transactions.length === 0">
                 <TableCell colspan="6" class="text-center text-muted-foreground py-12">
                   No transactions found
@@ -305,10 +315,13 @@ onUnmounted(() => {
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
                 <TableCell @click.stop>
+                  <!-- Inline Select only for the row being edited -->
                   <Select
+                    v-if="editingCategoryFor === txn.id"
                     :model-value="txn.category ?? ''"
                     :disabled="updatingCategoryFor === txn.id"
-                    @update:model-value="(val) => updateCategory(txn, val === '__none__' || val == null ? null : String(val))"
+                    :default-open="true"
+                    @update:model-value="(val) => { editingCategoryFor = null; updateCategory(txn, val === '__none__' || val == null ? null : String(val)); }"
                   >
                     <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
                       <SelectValue>
@@ -316,14 +329,14 @@ onUnmounted(() => {
                           v-if="txn.category"
                           variant="secondary"
                           class="text-xs"
-                          :style="getCategoryStyle(availableCategories.find(c => c.name === txn.category)?.color)"
+                          :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                         >
-                          {{ availableCategories.find(c => c.name === txn.category)?.label ?? txn.category }}
+                          {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                         </Badge>
                         <span v-else class="text-muted-foreground">—</span>
                       </SelectValue>
                     </SelectTrigger>
-                    <SelectContent>
+                    <SelectContent @close-auto-focus="editingCategoryFor = null">
                       <SelectItem value="__none__">
                         <span class="text-muted-foreground">None</span>
                       </SelectItem>
@@ -339,6 +352,23 @@ onUnmounted(() => {
                       </SelectItem>
                     </SelectContent>
                   </Select>
+                  <!-- Lightweight clickable display for all other rows -->
+                  <button
+                    v-else
+                    class="h-7 text-xs w-36 flex items-center px-1 rounded-md hover:bg-accent transition-colors"
+                    :class="updatingCategoryFor === txn.id ? 'opacity-50 pointer-events-none' : ''"
+                    @click="editingCategoryFor = txn.id"
+                  >
+                    <Badge
+                      v-if="txn.category"
+                      variant="secondary"
+                      class="text-xs"
+                      :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
+                    >
+                      {{ categoryMap.get(txn.category)?.label ?? txn.category }}
+                    </Badge>
+                    <span v-else class="text-muted-foreground">—</span>
+                  </button>
                 </TableCell>
                 <TableCell>
                   <Badge

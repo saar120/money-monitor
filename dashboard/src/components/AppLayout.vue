@@ -1,6 +1,7 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { onClickOutside } from '@vueuse/core';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
 
@@ -8,9 +9,23 @@ const route = useRoute();
 const router = useRouter();
 const mainEl = ref<HTMLElement | null>(null);
 const sidebarExpanded = ref(false);
+const sidebarEl = ref<HTMLElement | null>(null);
 
-router.afterEach(() => {
+function toggleSidebar() {
+  sidebarExpanded.value = !sidebarExpanded.value;
+}
+
+onClickOutside(sidebarEl, () => {
+  if (sidebarExpanded.value) sidebarExpanded.value = false;
+});
+
+const removeAfterEach = router.afterEach(() => {
   mainEl.value?.scrollTo(0, 0);
+  sidebarExpanded.value = false;
+});
+
+onUnmounted(() => {
+  removeAfterEach();
 });
 
 const reviewCount = ref(0);
@@ -37,13 +52,12 @@ const navItems = [
   <div class="flex h-screen bg-background text-foreground">
     <!-- Sidebar -->
     <aside
-      class="flex-shrink-0 flex flex-col border-r border-border backdrop-blur-xl bg-surface-2/80 transition-all duration-300 ease-out overflow-hidden z-20"
+      ref="sidebarEl"
+      class="flex-shrink-0 flex flex-col border-r border-border backdrop-blur-xl bg-surface-2/80 transition-[width] duration-300 ease-out overflow-hidden z-20"
       :style="{ width: sidebarExpanded ? '240px' : '64px' }"
-      @mouseenter="sidebarExpanded = true"
-      @mouseleave="sidebarExpanded = false"
     >
-      <!-- Logo -->
-      <div class="flex items-center h-16 px-4 flex-shrink-0">
+      <!-- Logo (click to toggle) -->
+      <div class="flex items-center h-16 px-4 flex-shrink-0 cursor-pointer" @click.stop="toggleSidebar">
         <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
           <Wallet class="h-4 w-4 text-primary" />
         </div>
@@ -116,9 +130,7 @@ const navItems = [
 
     <!-- Main content -->
     <main ref="mainEl" class="flex-1 overflow-y-auto p-8 min-w-0 scroll-smooth">
-      <div class="animate-fade-in-up">
-        <slot />
-      </div>
+      <slot />
     </main>
   </div>
 </template>

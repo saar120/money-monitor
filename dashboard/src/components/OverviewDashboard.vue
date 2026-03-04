@@ -220,7 +220,13 @@ const monthlyChartData = computed(() => {
     </div>
 
     <!-- Per Account -->
-    <div v-if="accountSummary.data.value">
+    <div v-if="accountSummary.loading.value" class="space-y-3">
+      <h2 class="text-lg font-semibold">Per Account (This Month)</h2>
+      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
+        <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
+      </div>
+    </div>
+    <div v-else-if="accountSummary.data.value">
       <h2 class="text-lg font-semibold mb-3">Per Account (This Month)</h2>
       <p v-if="accountSummary.data.value.summary.length === 0" class="text-muted-foreground text-sm">
         No account data yet
