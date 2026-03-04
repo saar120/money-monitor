@@ -30,6 +30,12 @@ const loading = ref(false);
 const allAccounts = ref<Account[]>([]);
 const accountTypeFilter = ref<string>('all');
 
+const accountMap = computed(() => {
+  const map = new Map<number, string>();
+  for (const acc of allAccounts.value) map.set(acc.id, acc.displayName);
+  return map;
+});
+
 const filteredAccounts = computed(() => {
   if (accountTypeFilter.value === 'all') return allAccounts.value;
   return allAccounts.value.filter(a => a.accountType === accountTypeFilter.value);
@@ -379,7 +385,7 @@ onUnmounted(() => {
                     {{ txn.status }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-sm text-muted-foreground">{{ txn.accountId }}</TableCell>
+                <TableCell class="text-sm text-muted-foreground">{{ accountMap.get(txn.accountId) ?? txn.accountId }}</TableCell>
               </TableRow>
             </TableBody>
           </Table>

@@ -43,13 +43,15 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Trash2, RefreshCw, Power } from 'lucide-vue-next';
+import { Loader2, Plus, Trash2, RefreshCw, Power, Pencil, Check, X } from 'lucide-vue-next';
 
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
 const accounts = ref<Account[]>([]);
 const loading = ref(false);
 const showAddDialog = ref(false);
+const editingNameId = ref<number | null>(null);
+const editNameValue = ref('');
 
 const newCompanyId = ref('');
 const newDisplayName = ref('');
@@ -175,6 +177,30 @@ async function patchAccount(id: number, data: Parameters<typeof updateAccount>[1
   if (idx !== -1) accounts.value[idx] = updated;
 }
 
+function startEditName(account: Account) {
+  editingNameId.value = account.id;
+  editNameValue.value = account.displayName;
+}
+
+function cancelEditName() {
+  editingNameId.value = null;
+  editNameValue.value = '';
+}
+
+async function saveEditName(account: Account) {
+  const trimmed = editNameValue.value.trim();
+  if (!trimmed || trimmed === account.displayName) {
+    cancelEditName();
+    return;
+  }
+  try {
+    await patchAccount(account.id, { displayName: trimmed });
+  } catch (err) {
+    console.error('Failed to rename account:', err);
+  }
+  cancelEditName();
+}
+
 async function handleDelete(account: Account) {
   await deleteAccount(account.id, true);
   fetchAccounts();
@@ -226,7 +252,31 @@ onMounted(() => {
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
                 <div class="flex items-center gap-2 mb-1">
-                  <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
+                  <template v-if="editingNameId === account.id">
+                    <div class="flex items-center gap-1.5">
+                      <Input
+                        v-model="editNameValue"
+                        class="h-7 text-sm w-48"
+                        @keyup.enter="saveEditName(account)"
+                        @keyup.escape="cancelEditName"
+                      />
+                      <button @click="saveEditName(account)" class="text-success hover:text-success/80">
+                        <Check class="h-4 w-4" />
+                      </button>
+                      <button @click="cancelEditName" class="text-muted-foreground hover:text-foreground">
+                        <X class="h-4 w-4" />
+                      </button>
+                    </div>
+                  </template>
+                  <div v-else class="flex items-center gap-1.5 group">
+                    <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
+                    <button
+                      @click="startEditName(account)"
+                      class="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent text-muted-foreground hover:text-foreground transition-opacity"
+                    >
+                      <Pencil class="h-3.5 w-3.5" />
+                    </button>
+                  </div>
                   <Badge
                     :variant="account.isActive ? 'default' : 'secondary'"
                     :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
