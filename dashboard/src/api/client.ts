@@ -281,13 +281,21 @@ export function updateTransactionCategory(id: number, category: string | null) {
 
 // ─── AI ───
 
+export type AgentType =
+  | 'orchestrator'
+  | 'spending_analyst'
+  | 'budget_advisor'
+  | 'categorizer'
+  | 'subscription_tracker';
+
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  agent?: AgentType;
 }
 
 export function aiChat(messages: ChatMessage[]) {
-  return request<{ response: string }>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) });
+  return request<{ response: string; agent: AgentType }>('/ai/chat', { method: 'POST', body: JSON.stringify({ messages }) });
 }
 
 export function aiCategorize(batchSize = 50) {

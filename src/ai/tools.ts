@@ -5,128 +5,155 @@ import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 
-export function buildFinancialMcpServer(categoryNames: string[]) {
+// ── Individual tool builders ────────────────────────────────────────────────────
+
+export function buildQueryTransactionsTool() {
+  return tool(
+    'query_transactions',
+    'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
+    {
+      account_id: z.number().optional().describe('Filter by account ID'),
+      start_date: z.string().optional().describe('Start date (ISO string, e.g. "2026-01-01")'),
+      end_date: z.string().optional().describe('End date (ISO string, e.g. "2026-01-31")'),
+      category: z.string().optional().describe('Filter by category'),
+      status: z.enum(['completed', 'pending']).optional().describe('Transaction status'),
+      min_amount: z.number().optional().describe('Minimum charged amount'),
+      max_amount: z.number().optional().describe('Maximum charged amount'),
+      search: z.string().optional().describe('Full-text search across description and memo (supports multiple words)'),
+      limit: z.number().optional().describe('Max results to return (default 50, max 200)'),
+    },
+    async (args) => {
+      const result = queryTransactions(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildGetSpendingSummaryTool() {
+  return tool(
+    'get_spending_summary',
+    'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
+    {
+      group_by: z.enum(['category', 'month', 'account']).optional().describe(
+        'How to group the results (default: category)',
+      ),
+      account_id: z.number().optional().describe('Filter by account ID'),
+      start_date: z.string().optional().describe('Start date (ISO string)'),
+      end_date: z.string().optional().describe('End date (ISO string)'),
+    },
+    async (args) => {
+      const result = getSpendingSummary(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildCategorizeTransactionTool(categoryNames: string[]) {
   const categoryEnum = categoryNames.length > 0
     ? z.enum(categoryNames as [string, ...string[]])
     : z.string();
 
+  return tool(
+    'categorize_transaction',
+    'Assign a category to a specific transaction by its ID.',
+    {
+      transaction_id: z.number().describe('The transaction ID'),
+      category: categoryEnum.describe('The category to assign'),
+    },
+    async (args) => {
+      const result = categorizeTransaction({ transaction_id: args.transaction_id, category: String(args.category) });
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildGetAccountBalancesTool() {
+  return tool(
+    'get_account_balances',
+    'Get a list of all configured accounts with their latest scrape info and transaction counts.',
+    {},
+    async () => {
+      const result = getAccountBalances();
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildComparePeriodsTool() {
+  return tool(
+    'compare_periods',
+    'Compare spending between two time periods. Returns a side-by-side breakdown by category showing totals, transaction counts, and percentage change. Use this when the user asks to compare months, weeks, or any two date ranges.',
+    {
+      period1_start: z.string().describe('Start date of first period (ISO string, e.g. "2026-01-01")'),
+      period1_end: z.string().describe('End date of first period (ISO string, e.g. "2026-01-31")'),
+      period2_start: z.string().describe('Start date of second period (ISO string, e.g. "2026-02-01")'),
+      period2_end: z.string().describe('End date of second period (ISO string, e.g. "2026-02-28")'),
+      account_id: z.number().optional().describe('Filter by account ID'),
+    },
+    async (args) => {
+      const result = comparePeriods(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildGetSpendingTrendsTool() {
+  return tool(
+    'get_spending_trends',
+    'Analyze spending trends over time. Returns monthly totals with trend direction (increasing/decreasing/stable), average, and month-over-month changes. Use this when the user asks about spending trends, whether costs are rising, or wants to see patterns over time.',
+    {
+      months: z.number().optional().describe('Number of months to analyze (default 6, max 24)'),
+      category: z.string().optional().describe('Filter to a specific category (omit for overall spending)'),
+      account_id: z.number().optional().describe('Filter by account ID'),
+    },
+    async (args) => {
+      const result = getSpendingTrends(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildDetectRecurringTransactionsTool() {
+  return tool(
+    'detect_recurring_transactions',
+    'Detect recurring transactions such as subscriptions, memberships, and regular bills. Analyzes transaction history to find charges that repeat at regular intervals. Returns merchant name, amount, frequency, estimated annual cost, and last charge date.',
+    {
+      months_back: z.number().optional().describe('How many months of history to analyze (default 6, max 12)'),
+      min_occurrences: z.number().optional().describe('Minimum times a charge must appear to be considered recurring (default 2)'),
+    },
+    async (args) => {
+      const result = detectRecurringTransactions(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildGetTopMerchantsTool() {
+  return tool(
+    'get_top_merchants',
+    'Get top merchants/payees ranked by total spending, transaction frequency, or average transaction amount. Use this when the user asks where they spend the most, their most frequent charges, or top spending destinations.',
+    {
+      start_date: z.string().optional().describe('Start date (ISO string)'),
+      end_date: z.string().optional().describe('End date (ISO string)'),
+      sort_by: z.enum(['total', 'count', 'average']).optional().describe('Sort by total spending (default), transaction count, or average amount'),
+      limit: z.number().optional().describe('Number of top merchants to return (default 15, max 50)'),
+      category: z.string().optional().describe('Filter to a specific category'),
+      account_id: z.number().optional().describe('Filter by account ID'),
+    },
+    async (args) => {
+      const result = getTopMerchants(args);
+      return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+// ── MCP server builder from tool selection ──────────────────────────────────────
+
+export function buildMcpServerFromTools(name: string, tools: Parameters<typeof createSdkMcpServer>[0]['tools']) {
   return createSdkMcpServer({
-    name: 'financial-tools',
+    name,
     version: '1.0.0',
-    tools: [
-      tool(
-        'query_transactions',
-        'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
-        {
-          account_id: z.number().optional().describe('Filter by account ID'),
-          start_date: z.string().optional().describe('Start date (ISO string, e.g. "2026-01-01")'),
-          end_date: z.string().optional().describe('End date (ISO string, e.g. "2026-01-31")'),
-          category: z.string().optional().describe('Filter by category'),
-          status: z.enum(['completed', 'pending']).optional().describe('Transaction status'),
-          min_amount: z.number().optional().describe('Minimum charged amount'),
-          max_amount: z.number().optional().describe('Maximum charged amount'),
-          search: z.string().optional().describe('Full-text search across description and memo (supports multiple words)'),
-          limit: z.number().optional().describe('Max results to return (default 50, max 200)'),
-        },
-        async (args) => {
-          const result = queryTransactions(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'get_spending_summary',
-        'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
-        {
-          group_by: z.enum(['category', 'month', 'account']).optional().describe(
-            'How to group the results (default: category)',
-          ),
-          account_id: z.number().optional().describe('Filter by account ID'),
-          start_date: z.string().optional().describe('Start date (ISO string)'),
-          end_date: z.string().optional().describe('End date (ISO string)'),
-        },
-        async (args) => {
-          const result = getSpendingSummary(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'categorize_transaction',
-        'Assign a category to a specific transaction by its ID.',
-        {
-          transaction_id: z.number().describe('The transaction ID'),
-          category: categoryEnum.describe('The category to assign'),
-        },
-        async (args) => {
-          const result = categorizeTransaction({ transaction_id: args.transaction_id, category: String(args.category) });
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'get_account_balances',
-        'Get a list of all configured accounts with their latest scrape info and transaction counts.',
-        {},
-        async () => {
-          const result = getAccountBalances();
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'compare_periods',
-        'Compare spending between two time periods. Returns a side-by-side breakdown by category showing totals, transaction counts, and percentage change. Use this when the user asks to compare months, weeks, or any two date ranges.',
-        {
-          period1_start: z.string().describe('Start date of first period (ISO string, e.g. "2026-01-01")'),
-          period1_end: z.string().describe('End date of first period (ISO string, e.g. "2026-01-31")'),
-          period2_start: z.string().describe('Start date of second period (ISO string, e.g. "2026-02-01")'),
-          period2_end: z.string().describe('End date of second period (ISO string, e.g. "2026-02-28")'),
-          account_id: z.number().optional().describe('Filter by account ID'),
-        },
-        async (args) => {
-          const result = comparePeriods(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'get_spending_trends',
-        'Analyze spending trends over time. Returns monthly totals with trend direction (increasing/decreasing/stable), average, and month-over-month changes. Use this when the user asks about spending trends, whether costs are rising, or wants to see patterns over time.',
-        {
-          months: z.number().optional().describe('Number of months to analyze (default 6, max 24)'),
-          category: z.string().optional().describe('Filter to a specific category (omit for overall spending)'),
-          account_id: z.number().optional().describe('Filter by account ID'),
-        },
-        async (args) => {
-          const result = getSpendingTrends(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'detect_recurring_transactions',
-        'Detect recurring transactions such as subscriptions, memberships, and regular bills. Analyzes transaction history to find charges that repeat at regular intervals. Returns merchant name, amount, frequency, estimated annual cost, and last charge date.',
-        {
-          months_back: z.number().optional().describe('How many months of history to analyze (default 6, max 12)'),
-          min_occurrences: z.number().optional().describe('Minimum times a charge must appear to be considered recurring (default 2)'),
-        },
-        async (args) => {
-          const result = detectRecurringTransactions(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-      tool(
-        'get_top_merchants',
-        'Get top merchants/payees ranked by total spending, transaction frequency, or average transaction amount. Use this when the user asks where they spend the most, their most frequent charges, or top spending destinations.',
-        {
-          start_date: z.string().optional().describe('Start date (ISO string)'),
-          end_date: z.string().optional().describe('End date (ISO string)'),
-          sort_by: z.enum(['total', 'count', 'average']).optional().describe('Sort by total spending (default), transaction count, or average amount'),
-          limit: z.number().optional().describe('Number of top merchants to return (default 15, max 50)'),
-          category: z.string().optional().describe('Filter to a specific category'),
-          account_id: z.number().optional().describe('Filter by account ID'),
-        },
-        async (args) => {
-          const result = getTopMerchants(args);
-          return { content: [{ type: 'text' as const, text: result }] };
-        },
-      ),
-    ],
+    tools,
   });
 }
 
