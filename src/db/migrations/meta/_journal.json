@@ -71,6 +71,13 @@
       "when": 1772611200000,
       "tag": "0009_add_transaction_indexes",
       "breakpoints": true
+    },
+    {
+      "idx": 10,
+      "version": "6",
+      "when": 1772620367647,
+      "tag": "0010_happy_logan",
+      "breakpoints": true
     }
   ]
 }

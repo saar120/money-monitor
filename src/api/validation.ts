@@ -124,6 +124,7 @@ export const updateCategorySchema = z.object({
   label: z.string().min(1).max(100).optional(),
   color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
   rules: z.string().max(500).nullable().optional(),
+  ignoredFromStats: z.boolean().optional(),
 });
 
 // ─── Transaction Update ───

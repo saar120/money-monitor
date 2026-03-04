@@ -101,6 +101,7 @@ onMounted(async () => {
                 <TableHead class="text-right">Amount</TableHead>
                 <TableHead>Current Category</TableHead>
                 <TableHead>Reason</TableHead>
+                <TableHead>Confidence</TableHead>
                 <TableHead>Actions</TableHead>
               </TableRow>
             </TableHeader>
@@ -116,7 +117,7 @@ onMounted(async () => {
                 </TableRow>
               </template>
               <TableRow v-else-if="items.length === 0">
-                <TableCell colspan="6" class="text-center text-muted-foreground py-12">
+                <TableCell colspan="7" class="text-center text-muted-foreground py-12">
                   All clear! No transactions need review.
                 </TableCell>
               </TableRow>
@@ -148,6 +149,21 @@ onMounted(async () => {
                 </TableCell>
                 <TableCell class="max-w-xs text-sm text-muted-foreground">
                   {{ txn.reviewReason }}
+                </TableCell>
+                <TableCell class="text-center">
+                  <Badge
+                    v-if="txn.confidence != null"
+                    :variant="txn.confidence >= 0.8 ? 'default' : 'secondary'"
+                    :class="[
+                      'text-xs tabular-nums',
+                      txn.confidence < 0.5 ? 'bg-destructive/15 text-destructive' :
+                      txn.confidence < 0.8 ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400' :
+                      'bg-success/15 text-success'
+                    ]"
+                  >
+                    {{ Math.round(txn.confidence * 100) }}%
+                  </Badge>
+                  <span v-else class="text-muted-foreground">—</span>
                 </TableCell>
                 <TableCell @click.stop>
                   <div class="flex items-center gap-2">

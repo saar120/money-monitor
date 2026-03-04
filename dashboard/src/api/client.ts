@@ -89,6 +89,7 @@ export interface Transaction {
   ignored: boolean;
   needsReview: boolean;
   reviewReason: string | null;
+  confidence: number | null;
   hash: string;
   createdAt: string;
 }
@@ -247,6 +248,7 @@ export interface Category {
   label: string;
   color: string | null;
   rules: string | null;
+  ignoredFromStats: boolean;
   createdAt: string;
 }
 
@@ -261,7 +263,7 @@ export function createCategory(data: { name: string; label: string; color?: stri
   });
 }
 
-export function updateCategory(id: number, data: { label?: string; color?: string; rules?: string | null }) {
+export function updateCategory(id: number, data: { label?: string; color?: string; rules?: string | null; ignoredFromStats?: boolean }) {
   return request<{ category: Category }>(`/categories/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),

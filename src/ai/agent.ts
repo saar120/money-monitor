@@ -1,6 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
-import { buildBatchCategorizerPrompt } from './prompts.js';
+import { buildBatchCategorizerPrompt, partitionCategories } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
@@ -23,9 +23,9 @@ function processCategoryResults(
   text: string,
   validCategories: Set<string>,
   validIds: Set<number>,
-): Array<{ id: number; category: string; needsReview?: boolean; reviewReason?: string }> {
+): Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> {
   const clean = cleanJsonResponse(text);
-  const results: Array<{ id: number; category: string; needsReview?: boolean; reviewReason?: string }> = JSON.parse(clean);
+  const results: Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> = JSON.parse(clean);
   return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
 }
 
@@ -37,12 +37,18 @@ export interface ChatMessage {
 async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
   const { db } = await import('../db/connection.js');
   const { categories } = await import('../db/schema.js');
-  return db.select({ name: categories.name, rules: categories.rules }).from(categories).all();
+  return db.select({
+    name: categories.name,
+    rules: categories.rules,
+    ignoredFromStats: categories.ignoredFromStats,
+  }).from(categories).all();
 }
 
 export async function chat(conversationHistory: ChatMessage[]): Promise<AgentResult> {
   const cats = await getCategoriesWithRules();
+  const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map(c => c.name);
+  const ignoredCategoryNames = ignored.map(c => c.name);
 
   const historyLines = conversationHistory.slice(0, -1).map(m =>
     `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
@@ -52,7 +58,7 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<AgentRes
     ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
     : lastMsg.content;
 
-  return runOrchestrator(prompt, categoryNames);
+  return runOrchestrator(prompt, categoryNames, ignoredCategoryNames);
 }
 
 export type { AgentType, AgentResult };
@@ -68,6 +74,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   const catRows = await getCategoriesWithRules();
   const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
+  const ignoredCategories = new Set(catRows.filter(r => r.ignoredFromStats).map(r => r.name));
 
   const validIds = new Set(txns.map(t => t.id));
   const validCategories = new Set(categoryNames);
@@ -90,12 +97,15 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
 
   let categorized = 0;
   try {
-    for (const { id, category, needsReview, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
+    for (const { id, category, confidence, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
+      const needsReview = confidence !== undefined && confidence < 0.8;
       db.update(transactions)
         .set({
           category,
-          needsReview: needsReview === true,
-          reviewReason: needsReview === true ? (reviewReason ?? null) : null,
+          confidence: confidence ?? null,
+          needsReview,
+          reviewReason: needsReview ? (reviewReason ?? 'Low confidence categorization') : null,
+          ignored: ignoredCategories.has(category),
         })
         .where(eq(transactions.id, id))
         .run();
