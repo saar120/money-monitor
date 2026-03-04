@@ -52,7 +52,7 @@ export const summaryQuerySchema = z.object({
   accountType: accountTypeEnum.optional(),
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  groupBy: z.enum(['category', 'month', 'account']).default('category'),
+  groupBy: z.enum(['category', 'month', 'account', 'cashflow']).default('category'),
 });
 
 // ─── AI ───

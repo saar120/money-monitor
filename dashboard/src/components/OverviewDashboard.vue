@@ -5,7 +5,7 @@ import {
   Chart as ChartJS, ArcElement, Tooltip, Legend,
   CategoryScale, LinearScale, BarElement, Title
 } from 'chart.js';
-import { getSummary, getAccounts } from '../api/client';
+import { getSummary, getCashflowSummary, getAccounts } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -25,6 +25,7 @@ const categorySummary = useApi(() => getSummary({ groupBy: 'category', startDate
 const monthlySummary = useApi(() => getSummary({ groupBy: 'month', accountType: 'credit_card' }));
 const accountSummary = useApi(() => getSummary({ groupBy: 'account', startDate: thisMonthStart }));
 const lastMonthSummary = useApi(() => getSummary({ groupBy: 'category', startDate: lastMonthStart, endDate: lastMonthEnd, accountType: 'credit_card' }));
+const cashflowSummary = useApi(() => getCashflowSummary());
 
 const bankAccounts = computed(() =>
   (accountsData.data.value?.accounts ?? []).filter(a => a.accountType === 'bank')
@@ -36,6 +37,7 @@ onMounted(() => {
   monthlySummary.execute();
   accountSummary.execute();
   lastMonthSummary.execute();
+  cashflowSummary.execute();
 });
 
 const thisMonthTotal = computed(() =>
@@ -101,6 +103,27 @@ const monthlyChartData = computed(() => {
       backgroundColor: '#8b5cf6',
       borderRadius: 6,
     }],
+  };
+});
+
+const cashflowChartData = computed(() => {
+  const items = (cashflowSummary.data.value?.summary ?? []).slice(0, 12).reverse();
+  return {
+    labels: items.map(s => s.month),
+    datasets: [
+      {
+        label: 'Income (ILS)',
+        data: items.map(s => s.income),
+        backgroundColor: '#22c55e',
+        borderRadius: 6,
+      },
+      {
+        label: 'Expenses (ILS)',
+        data: items.map(s => s.expense),
+        backgroundColor: '#f43f5e',
+        borderRadius: 6,
+      },
+    ],
   };
 });
 </script>
@@ -218,6 +241,18 @@ const monthlyChartData = computed(() => {
         </CardContent>
       </Card>
     </div>
+
+    <!-- Cashflow -->
+    <Card>
+      <CardHeader>
+        <CardTitle class="text-base">Cashflow</CardTitle>
+      </CardHeader>
+      <CardContent>
+        <Bar v-if="cashflowSummary.data.value" :data="cashflowChartData" :options="chartOptions" />
+        <Skeleton v-else-if="cashflowSummary.loading.value" class="h-48 w-full rounded-md" />
+        <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
+      </CardContent>
+    </Card>
 
     <!-- Per Account -->
     <div v-if="accountSummary.loading.value" class="space-y-3">

@@ -18,6 +18,22 @@ export async function summaryRoutes(app: FastifyInstance) {
 
     const where = and(...conditions);
 
+    if (groupBy === 'cashflow') {
+      const rows = db
+        .select({
+          month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+          income: sql<number>`SUM(CASE WHEN ${transactions.chargedAmount} > 0 THEN ${transactions.chargedAmount} ELSE 0 END)`.as('income'),
+          expense: sql<number>`SUM(CASE WHEN ${transactions.chargedAmount} < 0 THEN ABS(${transactions.chargedAmount}) ELSE 0 END)`.as('expense'),
+        })
+        .from(transactions)
+        .where(where)
+        .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+        .orderBy(sql`month desc`)
+        .all();
+
+      return reply.send({ groupBy: 'cashflow', summary: rows });
+    }
+
     if (groupBy === 'month') {
       const rows = db
         .select({
