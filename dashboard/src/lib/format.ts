@@ -23,3 +23,12 @@ export function getCategoryStyle(color: string | null | undefined): { background
   const c = color ?? DEFAULT_CATEGORY_COLOR;
   return { backgroundColor: c + '33', color: color ?? undefined };
 }
+
+/** Build a name→Category lookup map from a category array. */
+export function buildCategoryMap<T extends { name: string }>(categories: T[]): Map<string, T> {
+  const map = new Map<string, T>();
+  for (const cat of categories) {
+    map.set(cat.name, cat);
+  }
+  return map;
+}

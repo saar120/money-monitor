@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
+import { onClickOutside } from '@vueuse/core';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
 
@@ -14,23 +15,17 @@ function toggleSidebar() {
   sidebarExpanded.value = !sidebarExpanded.value;
 }
 
-function handleClickOutside(event: MouseEvent) {
-  if (sidebarExpanded.value && sidebarEl.value && !sidebarEl.value.contains(event.target as Node)) {
-    sidebarExpanded.value = false;
-  }
-}
+onClickOutside(sidebarEl, () => {
+  if (sidebarExpanded.value) sidebarExpanded.value = false;
+});
 
-onMounted(() => {
-  document.addEventListener('click', handleClickOutside);
+const removeAfterEach = router.afterEach(() => {
+  mainEl.value?.scrollTo(0, 0);
+  sidebarExpanded.value = false;
 });
 
 onUnmounted(() => {
-  document.removeEventListener('click', handleClickOutside);
-});
-
-router.afterEach(() => {
-  mainEl.value?.scrollTo(0, 0);
-  sidebarExpanded.value = false;
+  removeAfterEach();
 });
 
 const reviewCount = ref(0);
@@ -62,7 +57,7 @@ const navItems = [
       :style="{ width: sidebarExpanded ? '240px' : '64px' }"
     >
       <!-- Logo (click to toggle) -->
-      <div class="flex items-center h-16 px-4 flex-shrink-0 cursor-pointer" @click="toggleSidebar">
+      <div class="flex items-center h-16 px-4 flex-shrink-0 cursor-pointer" @click.stop="toggleSidebar">
         <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
           <Wallet class="h-4 w-4 text-primary" />
         </div>

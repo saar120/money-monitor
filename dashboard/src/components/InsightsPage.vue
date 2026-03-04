@@ -21,19 +21,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check } from 'lucide-vue-next';
-import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
 
 const items = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const categories = ref<Category[]>([]);
-const categoryMap = computed(() => {
-  const map = new Map<string, Category>();
-  for (const cat of categories.value) {
-    map.set(cat.name, cat);
-  }
-  return map;
-});
+const categoryMap = computed(() => buildCategoryMap(categories.value));
 const resolvingId = ref<number | null>(null);
 const offset = ref(0);
 const limit = 50;
@@ -80,9 +74,8 @@ const currentPage = () => Math.floor(offset.value / limit) + 1;
 const totalPages = () => Math.ceil(total.value / limit);
 
 onMounted(async () => {
-  const catData = await getCategories();
+  const [catData] = await Promise.all([getCategories(), fetchItems()]);
   categories.value = catData.categories;
-  fetchItems();
 });
 </script>
 

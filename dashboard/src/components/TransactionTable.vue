@@ -22,7 +22,7 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle } from 'lucide-vue-next';
-import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
 
 const transactions = ref<Transaction[]>([]);
 const total = ref(0);
@@ -48,13 +48,7 @@ const endDate = ref('');
 const selectedCategory = ref('all');
 
 const availableCategories = ref<Category[]>([]);
-const categoryMap = computed(() => {
-  const map = new Map<string, Category>();
-  for (const cat of availableCategories.value) {
-    map.set(cat.name, cat);
-  }
-  return map;
-});
+const categoryMap = computed(() => buildCategoryMap(availableCategories.value));
 const updatingCategoryFor = ref<number | null>(null);
 const editingCategoryFor = ref<number | null>(null);
 
