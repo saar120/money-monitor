@@ -1,5 +1,8 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
+import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config } from '../config.js';
+import { db } from '../db/connection.js';
+import { transactions, categories } from '../db/schema.js';
 import { buildBatchCategorizerPrompt, buildFinancialAdvisorPrompt, partitionCategories } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
@@ -47,9 +50,12 @@ export interface ChatMessage {
 
 export type ChatEvent =
   | { type: 'status'; text: string }
-  | { type: 'result'; text: string };
+  | { type: 'result'; text: string }
+  | { type: 'error'; text: string };
 
 // ── Tool status mapping ─────────────────────────────────────────────────────────
+
+const MCP_SERVER_NAME = 'financial-tools';
 
 const TOOL_STATUS: Record<string, string> = {
   query_transactions: 'Searching transactions...',
@@ -63,14 +69,12 @@ const TOOL_STATUS: Record<string, string> = {
 };
 
 function describeToolCall(toolName: string): string {
-  return TOOL_STATUS[toolName.replace('mcp__financial-tools__', '')] ?? 'Processing...';
+  return TOOL_STATUS[toolName.replace(`mcp__${MCP_SERVER_NAME}__`, '')] ?? 'Processing...';
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────────
 
-async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
-  const { db } = await import('../db/connection.js');
-  const { categories } = await import('../db/schema.js');
+function getCategoriesWithRules(): CategoryWithRules[] {
   return db.select({
     name: categories.name,
     rules: categories.rules,
@@ -79,7 +83,7 @@ async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
 }
 
 export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<ChatEvent> {
-  const cats = await getCategoriesWithRules();
+  const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map(c => c.name);
   const ignoredCategoryNames = ignored.map(c => c.name);
@@ -93,7 +97,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     : lastMsg.content;
 
   const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames);
-  const server = buildMcpServerFromTools('financial-tools', [
+  const server = buildMcpServerFromTools(MCP_SERVER_NAME, [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
     buildGetAccountBalancesTool(),
@@ -109,9 +113,9 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     options: {
       model: config.ANTHROPIC_MODEL,
       systemPrompt,
-      mcpServers: { 'financial-tools': server },
+      mcpServers: { [MCP_SERVER_NAME]: server },
       tools: [],
-      allowedTools: ['mcp__financial-tools__*'],
+      allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
     },
   })) {
@@ -133,11 +137,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
 async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: number }> {
   if (txns.length === 0) return { categorized: 0 };
 
-  const { eq } = await import('drizzle-orm');
-  const { db } = await import('../db/connection.js');
-  const { transactions } = await import('../db/schema.js');
-
-  const catRows = await getCategoriesWithRules();
+  const catRows = getCategoriesWithRules();
   const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
   const ignoredCategories = new Set(catRows.filter(r => r.ignoredFromStats).map(r => r.name));
@@ -188,15 +188,10 @@ export async function batchCategorize(
   batchSize: number = 50,
   ids?: number[],
 ): Promise<{ categorized: number }> {
-  const { isNull } = await import('drizzle-orm');
-  const { db } = await import('../db/connection.js');
-  const { transactions } = await import('../db/schema.js');
-
   const uncategorized = ids && ids.length > 0
     ? db.select().from(transactions)
-        .where(isNull(transactions.category))
+        .where(and(isNull(transactions.category), inArray(transactions.id, ids)))
         .all()
-        .filter(t => ids.includes(t.id))
     : db.select().from(transactions)
         .where(isNull(transactions.category))
         .limit(batchSize)
@@ -209,10 +204,6 @@ export async function recategorize(
   startDate?: string,
   endDate?: string,
 ): Promise<{ categorized: number }> {
-  const { gte, lte, and } = await import('drizzle-orm');
-  const { db } = await import('../db/connection.js');
-  const { transactions } = await import('../db/schema.js');
-
   const conditions = [];
   if (startDate) conditions.push(gte(transactions.date, startDate));
   if (endDate) conditions.push(lte(transactions.date, endDate));

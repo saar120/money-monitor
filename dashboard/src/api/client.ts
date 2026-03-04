@@ -315,24 +315,28 @@ export async function* aiChatStream(
   const decoder = new TextDecoder();
   let buffer = '';
 
-  while (true) {
-    const { done, value } = await reader.read();
-    if (done) break;
+  try {
+    while (true) {
+      const { done, value } = await reader.read();
+      if (done) break;
 
-    buffer += decoder.decode(value, { stream: true });
-    const lines = buffer.split('\n');
-    buffer = lines.pop() ?? '';
+      buffer += decoder.decode(value, { stream: true });
+      const lines = buffer.split('\n');
+      buffer = lines.pop() ?? '';
 
-    let currentEvent = '';
-    for (const line of lines) {
-      if (line.startsWith('event: ')) {
-        currentEvent = line.slice(7);
-      } else if (line.startsWith('data: ') && currentEvent) {
-        const data = JSON.parse(line.slice(6)) as { text: string };
-        yield { type: currentEvent as ChatStreamEvent['type'], text: data.text };
-        currentEvent = '';
+      let currentEvent = '';
+      for (const line of lines) {
+        if (line.startsWith('event: ')) {
+          currentEvent = line.slice(7);
+        } else if (line.startsWith('data: ') && currentEvent) {
+          const data = JSON.parse(line.slice(6)) as { text: string };
+          yield { type: currentEvent as ChatStreamEvent['type'], text: data.text };
+          currentEvent = '';
+        }
       }
     }
+  } finally {
+    reader.cancel();
   }
 }
 
