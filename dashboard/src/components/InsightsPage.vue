@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { getTransactions, getCategories, resolveTransaction, type Transaction, type Category } from '../api/client';
 import { Button } from '@/components/ui/button';
 import {
@@ -21,12 +21,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check } from 'lucide-vue-next';
-import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
 
 const items = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const categories = ref<Category[]>([]);
+const categoryMap = computed(() => buildCategoryMap(categories.value));
 const resolvingId = ref<number | null>(null);
 const offset = ref(0);
 const limit = 50;
@@ -73,15 +74,14 @@ const currentPage = () => Math.floor(offset.value / limit) + 1;
 const totalPages = () => Math.ceil(total.value / limit);
 
 onMounted(async () => {
-  const catData = await getCategories();
+  const [catData] = await Promise.all([getCategories(), fetchItems()]);
   categories.value = catData.categories;
-  fetchItems();
 });
 </script>
 
 <template>
-  <div class="space-y-4">
-    <h1 class="text-2xl font-semibold tracking-tight">Insights</h1>
+  <div class="space-y-4 animate-fade-in-up">
+    <h1 class="text-2xl font-semibold tracking-tight heading-font">Insights</h1>
 
     <Card>
       <CardHeader class="pb-2">
@@ -105,13 +105,16 @@ onMounted(async () => {
               </TableRow>
             </TableHeader>
             <TableBody>
-              <TableRow v-if="loading">
-                <TableCell colspan="6" class="py-8">
-                  <div class="space-y-2">
-                    <Skeleton v-for="i in 5" :key="i" class="h-8 w-full" />
-                  </div>
-                </TableCell>
-              </TableRow>
+              <template v-if="loading">
+                <TableRow v-for="i in 5" :key="i">
+                  <TableCell><Skeleton class="h-4 w-20" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-48" /></TableCell>
+                  <TableCell class="text-right"><Skeleton class="h-4 w-16 ml-auto" /></TableCell>
+                  <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton class="h-4 w-32" /></TableCell>
+                  <TableCell><Skeleton class="h-7 w-36" /></TableCell>
+                </TableRow>
+              </template>
               <TableRow v-else-if="items.length === 0">
                 <TableCell colspan="6" class="text-center text-muted-foreground py-12">
                   All clear! No transactions need review.
@@ -128,7 +131,7 @@ onMounted(async () => {
                 <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
                 <TableCell
                   class="text-right font-medium tabular-nums"
-                  :class="txn.chargedAmount >= 0 ? 'text-green-600 dark:text-green-400' : 'text-destructive'"
+                  :class="txn.chargedAmount >= 0 ? 'text-success' : 'text-destructive'"
                 >
                   {{ formatCurrency(txn.chargedAmount) }}
                 </TableCell>
@@ -137,9 +140,9 @@ onMounted(async () => {
                     v-if="txn.category"
                     variant="secondary"
                     class="text-xs"
-                    :style="getCategoryStyle(categories.find(c => c.name === txn.category)?.color)"
+                    :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                   >
-                    {{ categories.find(c => c.name === txn.category)?.label ?? txn.category }}
+                    {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                   </Badge>
                   <span v-else class="text-muted-foreground">—</span>
                 </TableCell>
@@ -178,7 +181,7 @@ onMounted(async () => {
                       title="Confirm current category"
                       @click="resolve(txn, txn.category!)"
                     >
-                      <Check class="h-4 w-4 text-green-600" />
+                      <Check class="h-4 w-4 text-success" />
                     </Button>
                   </div>
                 </TableCell>

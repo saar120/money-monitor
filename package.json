@@ -6,6 +6,7 @@
   "type": "module",
   "scripts": {
     "dev": "tsx watch src/index.ts",
+    "dev:all": "npm run dev & npm run dashboard:dev & wait",
     "build": "tsc && cd dashboard && npm run build",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",

@@ -68,5 +68,6 @@ export const categories = sqliteTable('categories', {
   name: text('name').notNull().unique(),
   label: text('label').notNull(),
   color: text('color'),
+  rules: text('rules'),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });

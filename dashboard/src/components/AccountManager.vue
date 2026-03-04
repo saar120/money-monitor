@@ -102,7 +102,6 @@ const {
 function onScrapeFinished(data: Record<string, unknown>) {
   if (data.accountId != null) {
     scrapingAccounts.value.delete(data.accountId as number);
-    scrapingAccounts.value = new Set(scrapingAccounts.value);
     dismissByAccountId(data.accountId as number);
     fetchAccounts();
   }
@@ -125,7 +124,6 @@ const { connect: connectSse } = useSseConnection({
   'scrape-started': (data) => {
     if (data.accountId != null) {
       scrapingAccounts.value.add(data.accountId as number);
-      scrapingAccounts.value = new Set(scrapingAccounts.value);
     }
   },
   'scrape-done': onScrapeFinished,
@@ -200,10 +198,10 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6">
+  <div class="space-y-6 animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold tracking-tight">Accounts</h1>
+      <h1 class="text-2xl font-semibold tracking-tight heading-font">Accounts</h1>
       <Button @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-2" />
         Add Account
@@ -222,7 +220,7 @@ onMounted(() => {
       </p>
 
       <div v-for="section in accountSections" :key="section.type" class="space-y-3">
-        <h2 class="text-lg font-medium tracking-tight">{{ section.label }}</h2>
+        <h2 class="text-lg font-medium tracking-tight heading-font">{{ section.label }}</h2>
         <Card v-for="account in section.accounts" :key="account.id">
           <CardContent class="pt-4">
             <div class="flex items-start justify-between gap-4">
@@ -231,6 +229,7 @@ onMounted(() => {
                   <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
                   <Badge
                     :variant="account.isActive ? 'default' : 'secondary'"
+                    :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
                     class="text-xs"
                   >
                     {{ account.isActive ? 'Active' : 'Inactive' }}
@@ -240,7 +239,7 @@ onMounted(() => {
                   {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
                   <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
                 </CardDescription>
-                <p v-if="section.type === 'bank' && account.balance != null" class="text-lg font-semibold mt-1">
+                <p v-if="section.type === 'bank' && account.balance != null" class="text-lg font-semibold mt-1 tabular-nums">
                   {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
                 </p>
                 <p class="text-xs text-muted-foreground mt-1">
@@ -349,7 +348,7 @@ onMounted(() => {
             <!-- OTP note banner (e.g. OneZero) -->
             <div
               v-if="selectedProvider?.otpNote"
-              class="rounded-md border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-700 dark:border-blue-800 dark:bg-blue-950 dark:text-blue-300"
+              class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary"
             >
               {{ selectedProvider.otpNote }}
             </div>

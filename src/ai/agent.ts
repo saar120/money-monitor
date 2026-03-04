@@ -1,5 +1,6 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
+import { buildBatchCategorizerPrompt } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
 import { runOrchestrator, getLastConsultedAgents } from './agents/orchestrator.js';
@@ -32,15 +33,15 @@ export interface ChatMessage {
   content: string;
 }
 
-async function getCategoryNames(): Promise<string[]> {
+async function getCategoriesWithRules(): Promise<{ name: string; rules: string | null }[]> {
   const { db } = await import('../db/connection.js');
   const { categories } = await import('../db/schema.js');
-  const rows = db.select({ name: categories.name }).from(categories).all();
-  return rows.map(r => r.name);
+  return db.select({ name: categories.name, rules: categories.rules }).from(categories).all();
 }
 
 export async function chat(conversationHistory: ChatMessage[]): Promise<AgentResult> {
-  const categoryNames = await getCategoryNames();
+  const cats = await getCategoriesWithRules();
+  const categoryNames = cats.map(c => c.name);
 
   const historyLines = conversationHistory.slice(0, -1).map(m =>
     `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
@@ -63,10 +64,10 @@ export async function batchCategorize(
 ): Promise<{ categorized: number }> {
   const { eq, isNull } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
-  const { transactions, categories } = await import('../db/schema.js');
+  const { transactions } = await import('../db/schema.js');
 
-  const categoryRows = db.select({ name: categories.name }).from(categories).all();
-  const categoryNames = categoryRows.map(r => r.name);
+  const catRows = await getCategoriesWithRules();
+  const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
   const uncategorized = ids && ids.length > 0
@@ -86,19 +87,12 @@ export async function batchCategorize(
 
   const txnList = uncategorized.map(formatTransactionForPrompt).join('\n');
 
-  const categoryList = categoryNames.join(', ');
-
   let text = '';
   for await (const msg of query({
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}.
-
-If you are confident in the category, set "needsReview" to false.
-If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
-
-Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
+      systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
     },
@@ -134,10 +128,10 @@ export async function recategorize(
 ): Promise<{ categorized: number }> {
   const { eq, gte, lte, and } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
-  const { transactions, categories } = await import('../db/schema.js');
+  const { transactions } = await import('../db/schema.js');
 
-  const categoryRows = db.select({ name: categories.name }).from(categories).all();
-  const categoryNames = categoryRows.map(r => r.name);
+  const catRows = await getCategoriesWithRules();
+  const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
   const conditions = [];
@@ -155,19 +149,12 @@ export async function recategorize(
 
   const txnList = toProcess.map(formatTransactionForPrompt).join('\n');
 
-  const categoryList = categoryNames.join(', ');
-
   let text = '';
   for await (const msg of query({
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
-      systemPrompt: `You are a transaction categorizer. Assign each transaction one of these categories: ${categoryList}.
-
-If you are confident in the category, set "needsReview" to false.
-If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
-
-Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`,
+      systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
     },

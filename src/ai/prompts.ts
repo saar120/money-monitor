@@ -1,9 +1,14 @@
-export const CATEGORIES = [
-  'food', 'transport', 'housing', 'utilities', 'entertainment', 'health',
-  'shopping', 'education', 'subscriptions', 'income', 'transfer', 'other',
-] as const;
+export interface CategoryWithRules {
+  name: string;
+  rules: string | null;
+}
 
-export type Category = typeof CATEGORIES[number];
+/** Format category list for LLM prompt, including per-category rules when available. */
+export function formatCategoryList(cats: CategoryWithRules[]): string {
+  return cats
+    .map(c => c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)
+    .join('\n');
+}
 
 // ── Shared rules for all agents ─────────────────────────────────────────────────
 
@@ -80,7 +85,7 @@ ${SHARED_RULES}
 - You have access to tools for querying transactions, getting spending summaries, analyzing trends, detecting recurring payments, and finding top merchants.`;
 }
 
-// ── Categorizer prompt ──────────────────────────────────────────────────────────
+// ── Categorizer agent prompt ──────────────────────────────────────────────────────
 
 export function buildCategorizerPrompt(categoryNames: string[]): string {
   const list = categoryNames.join(', ');
@@ -118,6 +123,19 @@ ${SHARED_RULES}
 - Always calculate and show the total monthly and annual recurring costs.
 - Flag any recurring charges that seem unusually high or that have changed in amount.
 - You have access to tools for detecting recurring transactions, querying transactions, and checking account balances.`;
+}
+
+// ── Batch categorizer prompt (used by batchCategorize / recategorize) ────────────
+
+export function buildBatchCategorizerPrompt(cats: CategoryWithRules[]): string {
+  return `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
+
+${formatCategoryList(cats)}
+
+If you are confident in the category, set "needsReview" to false.
+If the transaction is ambiguous — the description is vague, multiple categories could apply, the amount seems unusual for the category, or the description contradicts the bank-category — set "needsReview" to true and provide a short "reviewReason" explaining why.
+
+Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`;
 }
 
 // ── Legacy: full financial advisor prompt (backward compatible) ──────────────────
