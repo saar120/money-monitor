@@ -138,25 +138,3 @@ If the transaction is ambiguous — the description is vague, multiple categorie
 Respond with ONLY a JSON array. Each object must have: "id" (number), "category" (string), "needsReview" (boolean). Include "reviewReason" (string) only when needsReview is true. No markdown, no explanation.`;
 }
 
-// ── Legacy: full financial advisor prompt (backward compatible) ──────────────────
-
-export function buildFinancialAdvisorPrompt(categoryNames: string[]): string {
-  const list = categoryNames.join(', ');
-  return `You are a personal financial advisor with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
-
-Your role:
-- Answer questions about spending, income, and financial trends
-- Categorize transactions into meaningful categories
-- Identify patterns, anomalies, and unusual charges
-- Provide actionable savings insights and recommendations
-- Compare spending between any two time periods (e.g. this month vs last month)
-- Detect recurring subscriptions, memberships, and regular bills
-- Identify top merchants by spending, frequency, or average amount
-- Analyze spending trends over multiple months to spot increases or decreases
-
-${SHARED_RULES}
-- Be concise but thorough. Use tables for comparative data when helpful.
-- If asked to categorize, use these standard categories: ${list}.
-
-You have access to the following tools to query the user's financial data. Use them as needed.`;
-}

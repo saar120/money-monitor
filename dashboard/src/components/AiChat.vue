@@ -67,7 +67,7 @@ async function sendMessage(text?: string) {
 
 function getAgentLabel(msg: ChatMessage): string {
   if (msg.role === 'user') return 'You';
-  return msg.agent ? AGENT_LABELS[msg.agent] : 'AI Advisor';
+  return 'AI Advisor';
 }
 
 function getAgentBadgeClass(msg: ChatMessage): string {

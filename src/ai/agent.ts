@@ -1,9 +1,10 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { config } from '../config.js';
 import { buildBatchCategorizerPrompt } from './prompts.js';
+import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
-import { runOrchestrator, getLastConsultedAgents } from './agents/orchestrator.js';
+import { runOrchestrator } from './agents/orchestrator.js';
 import type { AgentType, AgentResult } from './agents/types.js';
 
 function formatTransactionForPrompt(t: Transaction): string {
@@ -33,7 +34,7 @@ export interface ChatMessage {
   content: string;
 }
 
-async function getCategoriesWithRules(): Promise<{ name: string; rules: string | null }[]> {
+async function getCategoriesWithRules(): Promise<CategoryWithRules[]> {
   const { db } = await import('../db/connection.js');
   const { categories } = await import('../db/schema.js');
   return db.select({ name: categories.name, rules: categories.rules }).from(categories).all();
@@ -54,15 +55,13 @@ export async function chat(conversationHistory: ChatMessage[]): Promise<AgentRes
   return runOrchestrator(prompt, categoryNames);
 }
 
-/** Returns which agents were consulted in the last chat call. */
-export { getLastConsultedAgents };
 export type { AgentType, AgentResult };
 
-export async function batchCategorize(
-  batchSize: number = 50,
-  ids?: number[],
-): Promise<{ categorized: number }> {
-  const { eq, isNull } = await import('drizzle-orm');
+/** Shared LLM call + result persistence for batch categorization. */
+async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: number }> {
+  if (txns.length === 0) return { categorized: 0 };
+
+  const { eq } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
   const { transactions } = await import('../db/schema.js');
 
@@ -70,22 +69,9 @@ export async function batchCategorize(
   const categoryNames = catRows.map(r => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
 
-  const uncategorized = ids && ids.length > 0
-    ? db.select().from(transactions)
-        .where(isNull(transactions.category))
-        .all()
-        .filter(t => ids.includes(t.id))
-    : db.select().from(transactions)
-        .where(isNull(transactions.category))
-        .limit(batchSize)
-        .all();
-
-  if (uncategorized.length === 0) return { categorized: 0 };
-
-  const validIds = new Set(uncategorized.map(t => t.id));
+  const validIds = new Set(txns.map(t => t.id));
   const validCategories = new Set(categoryNames);
-
-  const txnList = uncategorized.map(formatTransactionForPrompt).join('\n');
+  const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
   let text = '';
   for await (const msg of query({
@@ -122,17 +108,34 @@ export async function batchCategorize(
   return { categorized };
 }
 
+export async function batchCategorize(
+  batchSize: number = 50,
+  ids?: number[],
+): Promise<{ categorized: number }> {
+  const { isNull } = await import('drizzle-orm');
+  const { db } = await import('../db/connection.js');
+  const { transactions } = await import('../db/schema.js');
+
+  const uncategorized = ids && ids.length > 0
+    ? db.select().from(transactions)
+        .where(isNull(transactions.category))
+        .all()
+        .filter(t => ids.includes(t.id))
+    : db.select().from(transactions)
+        .where(isNull(transactions.category))
+        .limit(batchSize)
+        .all();
+
+  return categorizeBatch(uncategorized);
+}
+
 export async function recategorize(
   startDate?: string,
   endDate?: string,
 ): Promise<{ categorized: number }> {
-  const { eq, gte, lte, and } = await import('drizzle-orm');
+  const { gte, lte, and } = await import('drizzle-orm');
   const { db } = await import('../db/connection.js');
   const { transactions } = await import('../db/schema.js');
-
-  const catRows = await getCategoriesWithRules();
-  const categoryNames = catRows.map(r => r.name);
-  if (categoryNames.length === 0) return { categorized: 0 };
 
   const conditions = [];
   if (startDate) conditions.push(gte(transactions.date, startDate));
@@ -142,44 +145,5 @@ export async function recategorize(
     ? db.select().from(transactions).where(and(...conditions)).all()
     : db.select().from(transactions).all();
 
-  if (toProcess.length === 0) return { categorized: 0 };
-
-  const validIds = new Set(toProcess.map(t => t.id));
-  const validCategories = new Set(categoryNames);
-
-  const txnList = toProcess.map(formatTransactionForPrompt).join('\n');
-
-  let text = '';
-  for await (const msg of query({
-    prompt: `Categorize these transactions:\n${txnList}`,
-    options: {
-      model: config.ANTHROPIC_MODEL,
-      systemPrompt: buildBatchCategorizerPrompt(catRows),
-      tools: [],
-      maxTurns: 1,
-    },
-  })) {
-    if (msg.type === 'result' && msg.subtype === 'success') {
-      text = msg.result;
-    }
-  }
-
-  let categorized = 0;
-  try {
-    for (const { id, category, needsReview, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
-      db.update(transactions)
-        .set({
-          category,
-          needsReview: needsReview === true,
-          reviewReason: needsReview === true ? (reviewReason ?? null) : null,
-        })
-        .where(eq(transactions.id, id))
-        .run();
-      categorized++;
-    }
-  } catch {
-    // malformed model response — return 0
-  }
-
-  return { categorized };
+  return categorizeBatch(toProcess);
 }

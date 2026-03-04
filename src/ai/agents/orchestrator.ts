@@ -9,14 +9,7 @@ import { runCategorizer } from './categorizer.js';
 import { runSubscriptionTracker } from './subscription-tracker.js';
 import type { AgentType, AgentResult } from './types.js';
 
-/** Tracks which specialist agents were consulted during a query. */
-let lastConsultedAgents: AgentType[] = [];
-
-export function getLastConsultedAgents(): AgentType[] {
-  return lastConsultedAgents;
-}
-
-function buildOrchestratorMcpServer(categoryNames: string[]) {
+function buildOrchestratorMcpServer(categoryNames: string[], consultedAgents: AgentType[]) {
   return createSdkMcpServer({
     name: 'orchestrator-tools',
     version: '1.0.0',
@@ -28,7 +21,7 @@ function buildOrchestratorMcpServer(categoryNames: string[]) {
           question: z.string().describe('The full user question to pass to the spending analyst'),
         },
         async (args) => {
-          lastConsultedAgents.push('spending_analyst');
+          consultedAgents.push('spending_analyst');
           const result = await runSpendingAnalyst(args.question, categoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
@@ -40,7 +33,7 @@ function buildOrchestratorMcpServer(categoryNames: string[]) {
           question: z.string().describe('The full user question to pass to the budget advisor'),
         },
         async (args) => {
-          lastConsultedAgents.push('budget_advisor');
+          consultedAgents.push('budget_advisor');
           const result = await runBudgetAdvisor(args.question, categoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
@@ -52,7 +45,7 @@ function buildOrchestratorMcpServer(categoryNames: string[]) {
           question: z.string().describe('The full user question or instruction to pass to the categorizer'),
         },
         async (args) => {
-          lastConsultedAgents.push('categorizer');
+          consultedAgents.push('categorizer');
           const result = await runCategorizer(args.question, categoryNames);
           return { content: [{ type: 'text' as const, text: result }] };
         },
@@ -64,7 +57,7 @@ function buildOrchestratorMcpServer(categoryNames: string[]) {
           question: z.string().describe('The full user question to pass to the subscription tracker'),
         },
         async (args) => {
-          lastConsultedAgents.push('subscription_tracker');
+          consultedAgents.push('subscription_tracker');
           const result = await runSubscriptionTracker(args.question);
           return { content: [{ type: 'text' as const, text: result }] };
         },
@@ -77,10 +70,10 @@ export async function runOrchestrator(
   prompt: string,
   categoryNames: string[],
 ): Promise<AgentResult> {
-  lastConsultedAgents = [];
+  const consultedAgents: AgentType[] = [];
 
   const systemPrompt = buildOrchestratorPrompt();
-  const server = buildOrchestratorMcpServer(categoryNames);
+  const server = buildOrchestratorMcpServer(categoryNames, consultedAgents);
 
   for await (const msg of query({
     prompt,
@@ -95,7 +88,7 @@ export async function runOrchestrator(
   })) {
     if (msg.type === 'result') {
       if (msg.subtype === 'success') {
-        const primaryAgent = lastConsultedAgents[0] ?? 'orchestrator';
+        const primaryAgent = consultedAgents[0] ?? 'orchestrator';
         return { response: msg.result, agent: primaryAgent };
       }
       if (msg.subtype === 'error_max_turns') {

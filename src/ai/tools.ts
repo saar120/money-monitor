@@ -5,18 +5,6 @@ import { db } from '../db/connection.js';
 import { transactions, accounts } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 
-// ── Tool name type for composing agent-specific MCP servers ─────────────────────
-
-export type ToolName =
-  | 'query_transactions'
-  | 'get_spending_summary'
-  | 'categorize_transaction'
-  | 'get_account_balances'
-  | 'compare_periods'
-  | 'get_spending_trends'
-  | 'detect_recurring_transactions'
-  | 'get_top_merchants';
-
 // ── Individual tool builders ────────────────────────────────────────────────────
 
 export function buildQueryTransactionsTool() {
@@ -167,20 +155,6 @@ export function buildMcpServerFromTools(name: string, tools: Parameters<typeof c
     version: '1.0.0',
     tools,
   });
-}
-
-/** Build the full MCP server with all tools (backward compatible). */
-export function buildFinancialMcpServer(categoryNames: string[]) {
-  return buildMcpServerFromTools('financial-tools', [
-    buildQueryTransactionsTool(),
-    buildGetSpendingSummaryTool(),
-    buildCategorizeTransactionTool(categoryNames),
-    buildGetAccountBalancesTool(),
-    buildComparePeriodsTool(),
-    buildGetSpendingTrendsTool(),
-    buildDetectRecurringTransactionsTool(),
-    buildGetTopMerchantsTool(),
-  ]);
 }
 
 // ── Private query functions (unchanged Drizzle ORM logic) ──────────────────────
