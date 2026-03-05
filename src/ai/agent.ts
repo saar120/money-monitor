@@ -22,7 +22,8 @@ import {
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
   const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
-  return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${bankCat}`;
+  const memo = t.memo ? ` | memo: ${t.memo}` : '';
+  return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${memo}${bankCat}`;
 }
 
 /** Strip markdown code fences that the model may wrap around JSON. */
