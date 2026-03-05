@@ -6,6 +6,7 @@ import { accounts, transactions, scrapeLogs } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
+import { toIsraelDateStr } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
@@ -26,8 +27,8 @@ function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransact
   return {
     accountId,
     identifier: txn.identifier != null ? Number(txn.identifier) : null,
-    date: txn.date,
-    processedDate: txn.processedDate,
+    date: toIsraelDateStr(txn.date),
+    processedDate: toIsraelDateStr(txn.processedDate),
     originalAmount: txn.originalAmount,
     originalCurrency: txn.originalCurrency,
     chargedAmount: txn.chargedAmount,

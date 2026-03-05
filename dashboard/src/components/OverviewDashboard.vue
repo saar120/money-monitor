@@ -15,10 +15,13 @@ import { formatCurrency } from '@/lib/format';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
 
-const now = new Date();
-const thisMonthStart = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split('T')[0];
-const lastMonthStart = new Date(now.getFullYear(), now.getMonth() - 1, 1).toISOString().split('T')[0];
-const lastMonthEnd = new Date(now.getFullYear(), now.getMonth(), 0).toISOString().split('T')[0];
+function israelDate(d: Date): string {
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+}
+const [y, m] = israelDate(new Date()).split('-').map(Number);
+const thisMonthStart = `${y}-${String(m).padStart(2, '0')}-01`;
+const lastMonthStart = israelDate(new Date(y, m - 2, 1));
+const lastMonthEnd = israelDate(new Date(y, m - 1, 0));
 
 const accountsData = useApi(() => getAccounts());
 const categorySummary = useApi(() => getSummary({ groupBy: 'category', startDate: thisMonthStart, accountType: 'credit_card' }));

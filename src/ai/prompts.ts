@@ -1,3 +1,5 @@
+import { todayInIsrael } from '../shared/dates.js';
+
 export interface CategoryWithRules {
   name: string;
   rules: string | null;
@@ -20,13 +22,16 @@ export function formatCategoryList(cats: CategoryWithRules[]): string {
 
 // ── Shared rules for all agents ─────────────────────────────────────────────────
 
-const SHARED_RULES = `Important rules:
+function sharedRules(): string {
+  return `Important rules:
 - ALWAYS use your tools to query real data before making claims. Never guess amounts or dates.
 - All monetary amounts are in ILS (Israeli New Shekel) unless otherwise stated.
 - When showing amounts, format as ₪X,XXX.XX
-- When the user asks about "this month", use the current calendar month.
-- When the user asks about "last month", use the previous calendar month.
-- Dates in the database are ISO strings (e.g. "2026-02-24T00:00:00.000Z").`;
+- Today's date (Israel timezone) is ${todayInIsrael()}.
+- When the user asks about "this month", use the current calendar month in Israel timezone.
+- When the user asks about "last month", use the previous calendar month in Israel timezone.
+- Dates in the database are date-only strings in Israel timezone (e.g. "2026-02-24").`;
+}
 
 // ── Financial Advisor prompt (combined) ─────────────────────────────────────────
 
@@ -47,7 +52,7 @@ You have expertise in all areas of personal finance:
 
 **Subscription Tracking** — Detect recurring charges: subscriptions, memberships, bills, and regular payments. Calculate monthly and annual costs. Identify payment frequency. Present recurring charges in clear table format with totals.
 
-${SHARED_RULES}
+${sharedRules()}
 - Available categories: ${list}.${ignoredNote}
 - When categorizing, consider the merchant name, amount, and any memo information.
 - If a transaction is genuinely ambiguous, pick the most likely category and explain your reasoning.

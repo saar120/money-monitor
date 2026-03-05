@@ -4,6 +4,7 @@ import { eq, and, gte, lte, sql, count, desc, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts, categories } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
+import { monthsAgoStart, toIsraelDateStr } from '../shared/dates.js';
 
 // ── Individual tool builders ────────────────────────────────────────────────────
 
@@ -166,7 +167,7 @@ export function buildMcpServerFromTools(name: string, tools: Parameters<typeof c
 
 // ── Private query functions (unchanged Drizzle ORM logic) ──────────────────────
 
-interface QueryTransactionsInput {
+export interface QueryTransactionsInput {
   account_id?: number;
   start_date?: string;
   end_date?: string;
@@ -178,21 +179,21 @@ interface QueryTransactionsInput {
   limit?: number;
 }
 
-interface GetSpendingSummaryInput {
+export interface GetSpendingSummaryInput {
   group_by?: 'category' | 'month' | 'account';
   account_id?: number;
   start_date?: string;
   end_date?: string;
 }
 
-interface CategorizeTransactionInput {
+export interface CategorizeTransactionInput {
   transaction_id: number;
   category: string;
   confidence?: number;
   review_reason?: string;
 }
 
-function queryTransactions(input: QueryTransactionsInput): string {
+export function queryTransactions(input: QueryTransactionsInput): string {
   const conditions = [];
   if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
@@ -223,7 +224,7 @@ function queryTransactions(input: QueryTransactionsInput): string {
   return JSON.stringify({ transactions: rows, total, returned: rows.length });
 }
 
-function getSpendingSummary(input: GetSpendingSummaryInput): string {
+export function getSpendingSummary(input: GetSpendingSummaryInput): string {
   const conditions = [eq(transactions.ignored, false)];
   if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
   if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
@@ -266,7 +267,7 @@ function getSpendingSummary(input: GetSpendingSummaryInput): string {
   return JSON.stringify({ groupBy, summary: rows });
 }
 
-function categorizeTransaction(input: CategorizeTransactionInput): string {
+export function categorizeTransaction(input: CategorizeTransactionInput): string {
   const existing = db.select().from(transactions).where(eq(transactions.id, input.transaction_id)).get();
   if (!existing) return JSON.stringify({ error: 'Transaction not found' });
 
@@ -292,7 +293,7 @@ function categorizeTransaction(input: CategorizeTransactionInput): string {
   return JSON.stringify({ success: true, transactionId: input.transaction_id, category: input.category });
 }
 
-function getAccountBalances(): string {
+export function getAccountBalances(): string {
   const rows = db.select({
     id: accounts.id,
     companyId: accounts.companyId,
@@ -324,7 +325,7 @@ function normalizeDescription(desc: string): string {
 
 // ── New tool query functions ────────────────────────────────────────────────────
 
-interface ComparePeriodsInput {
+export interface ComparePeriodsInput {
   period1_start: string;
   period1_end: string;
   period2_start: string;
@@ -332,7 +333,7 @@ interface ComparePeriodsInput {
   account_id?: number;
 }
 
-function comparePeriods(input: ComparePeriodsInput): string {
+export function comparePeriods(input: ComparePeriodsInput): string {
   function queryPeriod(start: string, end: string) {
     const conditions = [
       gte(transactions.date, start),
@@ -386,17 +387,15 @@ function comparePeriods(input: ComparePeriodsInput): string {
   });
 }
 
-interface GetSpendingTrendsInput {
+export interface GetSpendingTrendsInput {
   months?: number;
   category?: string;
   account_id?: number;
 }
 
-function getSpendingTrends(input: GetSpendingTrendsInput): string {
+export function getSpendingTrends(input: GetSpendingTrendsInput): string {
   const months = Math.min(input.months ?? 6, 24);
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth() - months, 1);
-  const startStr = startDate.toISOString().slice(0, 10);
+  const startStr = monthsAgoStart(months);
 
   const conditions = [
     gte(transactions.date, startStr),
@@ -459,17 +458,15 @@ function getSpendingTrends(input: GetSpendingTrendsInput): string {
   });
 }
 
-interface DetectRecurringInput {
+export interface DetectRecurringInput {
   months_back?: number;
   min_occurrences?: number;
 }
 
-function detectRecurringTransactions(input: DetectRecurringInput): string {
+export function detectRecurringTransactions(input: DetectRecurringInput): string {
   const monthsBack = Math.min(input.months_back ?? 6, 12);
   const minOccurrences = input.min_occurrences ?? 2;
-  const now = new Date();
-  const startDate = new Date(now.getFullYear(), now.getMonth() - monthsBack, 1);
-  const startStr = startDate.toISOString().slice(0, 10);
+  const startStr = monthsAgoStart(monthsBack);
 
   const rows = db.select({
     description: transactions.description,
@@ -543,8 +540,9 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
 
     const estimatedAnnualCost = avgInterval > 0 ? avgAmount * (365 / avgInterval) : avgAmount * 12;
     const lastDate = entries[entries.length - 1].date;
-    const nextDate = new Date(new Date(lastDate).getTime() + avgInterval * 24 * 60 * 60 * 1000)
-      .toISOString().slice(0, 10);
+    const nextDate = toIsraelDateStr(
+      new Date(new Date(lastDate).getTime() + avgInterval * 24 * 60 * 60 * 1000).toISOString()
+    );
 
     recurring.push({
       description: desc,
@@ -569,7 +567,7 @@ function detectRecurringTransactions(input: DetectRecurringInput): string {
   });
 }
 
-interface GetTopMerchantsInput {
+export interface GetTopMerchantsInput {
   start_date?: string;
   end_date?: string;
   sort_by?: 'total' | 'count' | 'average';
@@ -578,7 +576,7 @@ interface GetTopMerchantsInput {
   account_id?: number;
 }
 
-function getTopMerchants(input: GetTopMerchantsInput): string {
+export function getTopMerchants(input: GetTopMerchantsInput): string {
   const conditions = [
     eq(transactions.ignored, false),
     eq(transactions.status, 'completed'),
