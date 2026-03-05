@@ -25,7 +25,6 @@ import { readMemory } from './memory.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const LOCAL_CLAUDE_DIR = join(__dirname, '..', '..', 'data', '.claude');
-const sdkEnv = { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR };
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -129,7 +128,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
-      env: sdkEnv,
+      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
     },
   })) {
     if (msg.type === 'tool_call') {
@@ -167,7 +166,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
       systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
-      env: sdkEnv,
+      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
     },
   })) {
     if (msg.type === 'result' && msg.subtype === 'success') {

@@ -1,10 +1,11 @@
 import { randomUUID } from 'node:crypto';
-import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
+import { mkdirSync, readFileSync, appendFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const SESSIONS_DIR = join(__dirname, '..', '..', 'data', 'chat', 'sessions');
+const DEFAULT_TITLE = 'New chat';
 
 export interface SessionMeta {
   type: 'meta';
@@ -34,9 +35,7 @@ export interface SessionSummary {
 }
 
 function ensureDir() {
-  if (!existsSync(SESSIONS_DIR)) {
-    mkdirSync(SESSIONS_DIR, { recursive: true });
-  }
+  mkdirSync(SESSIONS_DIR, { recursive: true });
 }
 
 function sessionPath(id: string): string {
@@ -61,15 +60,18 @@ export function createSession(): SessionMeta {
   ensureDir();
   const id = randomUUID();
   const now = new Date().toISOString();
-  const meta: SessionMeta = { type: 'meta', id, title: 'New chat', createdAt: now, updatedAt: now };
+  const meta: SessionMeta = { type: 'meta', id, title: DEFAULT_TITLE, createdAt: now, updatedAt: now };
   appendLine(sessionPath(id), meta);
   return meta;
 }
 
 export function getSession(id: string): Session | null {
-  const path = sessionPath(id);
-  if (!existsSync(path)) return null;
-  const lines = readLines(path);
+  let lines: string[];
+  try {
+    lines = readLines(sessionPath(id));
+  } catch {
+    return null;
+  }
   if (lines.length === 0) return null;
 
   const meta = JSON.parse(lines[0]) as SessionMeta;
@@ -97,26 +99,30 @@ export function listSessions(): SessionSummary[] {
 }
 
 export function deleteSession(id: string): boolean {
-  const path = sessionPath(id);
-  if (!existsSync(path)) return false;
-  unlinkSync(path);
-  return true;
+  try {
+    unlinkSync(sessionPath(id));
+    return true;
+  } catch {
+    return false;
+  }
 }
 
 export function appendMessage(id: string, role: 'user' | 'assistant', content: string): SessionMessage | null {
   const path = sessionPath(id);
-  if (!existsSync(path)) return null;
-
   const msg: SessionMessage = { type: 'message', role, content, timestamp: new Date().toISOString() };
-  appendLine(path, msg);
 
-  // Single read: parse meta and update in one pass
-  const lines = readLines(path);
+  let lines: string[];
+  try {
+    appendLine(path, msg);
+    lines = readLines(path);
+  } catch {
+    return null;
+  }
+
   const meta = JSON.parse(lines[0]) as SessionMeta;
   meta.updatedAt = msg.timestamp;
 
-  // Auto-title on first user message only (skip if already titled)
-  if (role === 'user' && meta.title === 'New chat') {
+  if (role === 'user' && meta.title === DEFAULT_TITLE) {
     meta.title = content.length > 60 ? content.slice(0, 57) + '...' : content;
   }
 

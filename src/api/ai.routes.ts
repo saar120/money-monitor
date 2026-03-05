@@ -24,15 +24,15 @@ export async function aiRoutes(app: FastifyInstance) {
     return { session: meta };
   });
 
-  app.get('/api/ai/sessions/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  app.get<{ Params: { id: string } }>('/api/ai/sessions/:id', async (request, reply) => {
+    const { id } = request.params;
     const session = getSession(id);
     if (!session) return reply.status(404).send({ error: 'Session not found' });
     return { session };
   });
 
-  app.delete('/api/ai/sessions/:id', async (request, reply) => {
-    const { id } = request.params as { id: string };
+  app.delete<{ Params: { id: string } }>('/api/ai/sessions/:id', async (request, reply) => {
+    const { id } = request.params;
     const deleted = deleteSession(id);
     if (!deleted) return reply.status(404).send({ error: 'Session not found' });
     return { deleted: true };
