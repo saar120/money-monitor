@@ -4,6 +4,7 @@ import { eq, sql } from 'drizzle-orm';
 import * as schema from './schema.js';
 import { ACCOUNT_TYPE_MAP } from '../shared/types.js';
 import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
+import { toIsraelDateStr } from '../shared/dates.js';
 
 export function runBackfills(db: BetterSQLite3Database<typeof schema>, sqlite: BetterSqlite3Database) {
   // Backfill accountType for existing accounts (only if any rows need it)
@@ -126,5 +127,27 @@ export function runBackfills(db: BetterSQLite3Database<typeof schema>, sqlite: B
 
       sqlite.prepare(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES (?)`).run(catBackfillKey);
     })();
+  }
+
+  // One-time backfill: convert ISO datetime strings to date-only YYYY-MM-DD in Israel timezone.
+  // Fixes timezone bug where "2026-11-30T22:00:00.000Z" (= Dec 1 Israel) was grouped into November.
+  const dateNormKey = 'backfill_date_normalize_israel';
+  const dateNormFlag = db.all(sql`SELECT 1 FROM _backfill_flags WHERE key = ${dateNormKey}`);
+  if (dateNormFlag.length === 0) {
+    const rows = sqlite.prepare(
+      `SELECT id, date, processed_date FROM transactions WHERE date LIKE '%T%'`
+    ).all() as Array<{ id: number; date: string; processed_date: string }>;
+
+    if (rows.length > 0) {
+      const stmt = sqlite.prepare(`UPDATE transactions SET date = ?, processed_date = ? WHERE id = ?`);
+      const batchUpdate = sqlite.transaction((batch: typeof rows) => {
+        for (const row of batch) {
+          stmt.run(toIsraelDateStr(row.date), toIsraelDateStr(row.processed_date), row.id);
+        }
+      });
+      batchUpdate(rows);
+    }
+
+    sqlite.prepare(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES (?)`).run(dateNormKey);
   }
 }
