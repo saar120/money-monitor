@@ -150,4 +150,5 @@ export function runBackfills(db: BetterSQLite3Database<typeof schema>, sqlite: B
 
     sqlite.prepare(`INSERT OR IGNORE INTO _backfill_flags (key) VALUES (?)`).run(dateNormKey);
   }
+
 }

@@ -13,6 +13,8 @@ const router = createRouter({
     { path: '/chat', component: () => import('./components/AiChat.vue') },
     { path: '/categories', component: () => import('./components/CategoryManager.vue') },
     { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
+    { path: '/net-worth', component: () => import('./components/NetWorthPage.vue') },
+    { path: '/net-worth/assets/:id', component: () => import('./components/AssetDetailPage.vue') },
   ],
 });
 

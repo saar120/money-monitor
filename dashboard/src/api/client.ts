@@ -33,6 +33,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
     const error = await res.json().catch(() => ({ error: res.statusText }));
     throw new Error((error as { error: string }).error || res.statusText);
   }
+  if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
 }
 
@@ -391,6 +392,244 @@ export async function* aiChatStream(
     reader.cancel();
   }
 }
+
+// ─── Assets ───
+
+export interface Holding {
+  id: number;
+  name: string;
+  type: string;
+  currency: string;
+  quantity: number;
+  costBasis: number;
+  lastPrice: number | null;
+  lastPriceDate: string | null;
+  currentValue: number;
+  currentValueIls: number;
+  gainLoss: number | null;
+  gainLossPercent: number | null;
+  stale: boolean;
+  notes: string | null;
+}
+
+export interface Asset {
+  id: number;
+  name: string;
+  type: string;
+  institution: string | null;
+  liquidity: string;
+  linkedAccountId: number | null;
+  linkedAccountName: string | null;
+  isActive: boolean;
+  notes: string | null;
+  holdings: Holding[];
+  totalValueIls: number;
+}
+
+export interface AssetSnapshot {
+  date: string;
+  totalValueIls: number;
+}
+
+export function getAssets(includeInactive = false) {
+  const params = includeInactive ? '?includeInactive=true' : '';
+  return request<Asset[]>(`/assets${params}`);
+}
+
+export function getAsset(id: number) {
+  return request<Asset>(`/assets/${id}`);
+}
+
+export function createAsset(data: { name: string; type: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
+  return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateAsset(id: number, data: { name?: string; type?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
+  return request<Asset>(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteAsset(id: number) {
+  return request<void>(`/assets/${id}`, { method: 'DELETE' });
+}
+
+export function createHolding(assetId: number, data: { name: string; type: string; currency: string; quantity: number; costBasis?: number; lastPrice?: number; notes?: string }) {
+  return request<Holding>(`/assets/${assetId}/holdings`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateHolding(id: number, data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null }) {
+  return request<Holding>(`/holdings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteHolding(id: number) {
+  return request<void>(`/holdings/${id}`, { method: 'DELETE' });
+}
+
+export function getAssetSnapshots(id: number, startDate?: string, endDate?: string) {
+  const params = new URLSearchParams();
+  if (startDate) params.set('startDate', startDate);
+  if (endDate) params.set('endDate', endDate);
+  const qs = params.toString();
+  return request<{ snapshots: AssetSnapshot[] }>(`/assets/${id}/snapshots${qs ? `?${qs}` : ''}`);
+}
+
+// ─── Movements ───
+
+export interface Movement {
+  id: number;
+  assetId: number;
+  holdingId: number | null;
+  holdingName: string | null;
+  date: string;
+  type: string;
+  quantity: number;
+  currency: string;
+  pricePerUnit: number | null;
+  sourceAmount: number | null;
+  sourceCurrency: string | null;
+  notes: string | null;
+  createdAt: string;
+}
+
+export interface MovementFilters {
+  holdingId?: number;
+  type?: string;
+  startDate?: string;
+  endDate?: string;
+  offset?: number;
+  limit?: number;
+}
+
+export function getMovements(assetId: number, filters: MovementFilters = {}) {
+  const params = new URLSearchParams();
+  Object.entries(filters).forEach(([key, value]) => {
+    if (value !== undefined) params.set(key, String(value));
+  });
+  const qs = params.toString();
+  return request<{ movements: Movement[]; total: number }>(`/assets/${assetId}/movements${qs ? `?${qs}` : ''}`);
+}
+
+export function createMovement(assetId: number, data: {
+  holdingId?: number;
+  date: string;
+  type: string;
+  quantity: number;
+  currency: string;
+  pricePerUnit?: number;
+  sourceAmount?: number;
+  sourceCurrency?: string;
+  notes?: string;
+}) {
+  return request<Movement>(`/assets/${assetId}/movements`, { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function deleteMovement(id: number) {
+  return request<void>(`/movements/${id}`, { method: 'DELETE' });
+}
+
+// ─── Liabilities ───
+
+export interface Liability {
+  id: number;
+  name: string;
+  type: string;
+  currency: string;
+  originalAmount: number;
+  currentBalance: number;
+  interestRate: number | null;
+  startDate: string | null;
+  notes: string | null;
+  isActive: boolean;
+  currentBalanceIls: number;
+}
+
+export function getLiabilities(includeInactive = false) {
+  const params = includeInactive ? '?includeInactive=true' : '';
+  return request<Liability[]>(`/liabilities${params}`);
+}
+
+export function createLiability(data: { name: string; type: string; currency?: string; originalAmount: number; currentBalance: number; interestRate?: number; startDate?: string; notes?: string }) {
+  return request<Liability>('/liabilities', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateLiability(id: number, data: { name?: string; type?: string; currency?: string; originalAmount?: number; currentBalance?: number; interestRate?: number | null; startDate?: string | null; notes?: string | null }) {
+  return request<Liability>(`/liabilities/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function deleteLiability(id: number) {
+  return request<void>(`/liabilities/${id}`, { method: 'DELETE' });
+}
+
+// ─── Net Worth ───
+
+export interface NetWorthBank {
+  id: number;
+  name: string;
+  balance: number;
+  balanceIls: number;
+}
+
+export interface NetWorthAssetHolding {
+  name: string;
+  currency: string;
+  valueIls: number;
+}
+
+export interface NetWorthAsset {
+  id: number;
+  name: string;
+  type: string;
+  liquidity: string;
+  totalValueIls: number;
+  holdings: NetWorthAssetHolding[];
+}
+
+export interface NetWorthLiability {
+  id: number;
+  name: string;
+  currentBalanceIls: number;
+}
+
+export interface NetWorth {
+  total: number;
+  liquidTotal: number;
+  banks: NetWorthBank[];
+  banksTotal: number;
+  assets: NetWorthAsset[];
+  assetsTotal: number;
+  liabilities: NetWorthLiability[];
+  liabilitiesTotal: number;
+  exchangeRates: Record<string, number>;
+  calculatedAt: string;
+}
+
+export interface NetWorthHistoryPoint {
+  date: string;
+  total: number;
+  banks: number;
+  assets: number;
+  liabilities: number;
+}
+
+export interface NetWorthHistory {
+  series: NetWorthHistoryPoint[];
+}
+
+export function getNetWorth() {
+  return request<NetWorth>('/net-worth');
+}
+
+export function getNetWorthHistory(params?: { startDate?: string; endDate?: string; granularity?: 'daily' | 'weekly' | 'monthly' }) {
+  const query = new URLSearchParams();
+  if (params) {
+    Object.entries(params).forEach(([key, value]) => {
+      if (value !== undefined) query.set(key, String(value));
+    });
+  }
+  const qs = query.toString();
+  return request<NetWorthHistory>(`/net-worth/history${qs ? `?${qs}` : ''}`);
+}
+
+// ─── AI ───
 
 export function aiCategorize(batchSize = 50) {
   return request<{ categorized: number }>('/ai/categorize', { method: 'POST', body: JSON.stringify({ batchSize }) });

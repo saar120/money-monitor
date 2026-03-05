@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onClickOutside } from '@vueuse/core';
-import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet } from 'lucide-vue-next';
+import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet, TrendingUp } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
 
 const route = useRoute();
@@ -39,6 +39,7 @@ onMounted(async () => {
 
 const navItems = [
   { path: '/', label: 'Overview', icon: LayoutDashboard },
+  { path: '/net-worth', label: 'Net Worth', icon: TrendingUp },
   { path: '/insights', label: 'Insights', icon: Lightbulb },
   { path: '/transactions', label: 'Transactions', icon: Receipt },
   { path: '/accounts', label: 'Accounts', icon: Building2 },

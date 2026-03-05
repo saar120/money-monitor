@@ -12,6 +12,10 @@ import { transactionsRoutes } from './api/transactions.routes.js';
 import { summaryRoutes } from './api/summary.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
 import { categoriesRoutes } from './api/categories.routes.js';
+import { exchangeRatesRoutes } from './api/exchange-rates.routes.js';
+import { assetsRoutes } from './api/assets.routes.js';
+import { liabilitiesRoutes } from './api/liabilities.routes.js';
+import { netWorthRoutes } from './api/net-worth.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 
 const app = Fastify({
@@ -108,6 +112,10 @@ await app.register(transactionsRoutes);
 await app.register(summaryRoutes);
 await app.register(aiRoutes);
 await app.register(categoriesRoutes);
+await app.register(exchangeRatesRoutes);
+await app.register(assetsRoutes);
+await app.register(liabilitiesRoutes);
+await app.register(netWorthRoutes);
 
 // Serve dashboard static files in production
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
