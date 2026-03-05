@@ -9,7 +9,7 @@ const emit = defineEmits<{
   (e: 'new-chat', session: SessionMeta): void;
 }>();
 
-const props = defineProps<{
+defineProps<{
   activeSessionId?: string;
 }>();
 

@@ -6,6 +6,7 @@ import {
   getChatSession,
   type SessionMeta,
   type SessionMessage,
+  type ChatMessage,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -14,12 +15,7 @@ import { SendHorizontal, Bot, User, PanelLeftClose, PanelLeft } from 'lucide-vue
 import MarkdownContent from './MarkdownContent.vue';
 import ChatSidebar from './ChatSidebar.vue';
 
-interface DisplayMessage {
-  role: 'user' | 'assistant';
-  content: string;
-}
-
-const messages = ref<DisplayMessage[]>([]);
+const messages = ref<ChatMessage[]>([]);
 const input = ref('');
 const loading = ref(false);
 const status = ref('');

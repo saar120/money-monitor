@@ -57,13 +57,6 @@ export const summaryQuerySchema = z.object({
 
 // ─── AI ───
 
-export const chatSchema = z.object({
-  messages: z.array(z.object({
-    role: z.enum(['user', 'assistant']),
-    content: z.string().min(1).max(10000),
-  })).min(1).max(100),
-});
-
 export const sessionChatSchema = z.object({
   sessionId: z.string().uuid(),
   message: z.string().min(1).max(10000),

@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, appendFileSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 
@@ -22,6 +22,6 @@ export function appendMemory(entry: string): void {
   ensureDir();
   const trimmed = entry.trim();
   if (!trimmed) return;
-  const prefix = existsSync(MEMORY_PATH) && readFileSync(MEMORY_PATH, 'utf-8').length > 0 ? '\n' : '';
+  const prefix = existsSync(MEMORY_PATH) && statSync(MEMORY_PATH).size > 0 ? '\n' : '';
   appendFileSync(MEMORY_PATH, `${prefix}- ${trimmed}\n`);
 }

@@ -51,9 +51,8 @@ function readLines(filePath: string): string[] {
   return readFileSync(filePath, 'utf-8').split('\n').filter(Boolean);
 }
 
-/** Rewrite the meta line (first line) in-place. */
-function updateMeta(filePath: string, meta: SessionMeta) {
-  const lines = readLines(filePath);
+/** Rewrite the meta line (first line) in-place. Uses pre-read lines to avoid a second file read. */
+function writeMeta(filePath: string, meta: SessionMeta, lines: string[]) {
   lines[0] = JSON.stringify(meta);
   writeFileSync(filePath, lines.join('\n') + '\n');
 }
@@ -111,22 +110,17 @@ export function appendMessage(id: string, role: 'user' | 'assistant', content: s
   const msg: SessionMessage = { type: 'message', role, content, timestamp: new Date().toISOString() };
   appendLine(path, msg);
 
-  // Update the meta updatedAt
+  // Single read: parse meta and update in one pass
   const lines = readLines(path);
   const meta = JSON.parse(lines[0]) as SessionMeta;
   meta.updatedAt = msg.timestamp;
 
-  // Auto-title: if this is the first user message, set title from content
-  if (role === 'user') {
-    const userMessages = lines.slice(1).filter(l => {
-      try { return (JSON.parse(l) as SessionMessage).role === 'user'; } catch { return false; }
-    });
-    if (userMessages.length === 1) {
-      meta.title = content.length > 60 ? content.slice(0, 57) + '...' : content;
-    }
+  // Auto-title on first user message only (skip if already titled)
+  if (role === 'user' && meta.title === 'New chat') {
+    meta.title = content.length > 60 ? content.slice(0, 57) + '...' : content;
   }
 
-  updateMeta(path, meta);
+  writeMeta(path, meta, lines);
   return msg;
 }
 
