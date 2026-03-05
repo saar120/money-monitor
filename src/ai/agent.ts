@@ -25,18 +25,7 @@ import { readMemory } from './memory.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const LOCAL_CLAUDE_DIR = join(__dirname, '..', '..', 'data', '.claude');
-
-/** Run a callback with CLAUDE_CONFIG_DIR pointed at the project-local .claude/ */
-async function* withLocalConfigDir<T>(gen: AsyncGenerator<T>): AsyncGenerator<T> {
-  const prev = process.env.CLAUDE_CONFIG_DIR;
-  process.env.CLAUDE_CONFIG_DIR = LOCAL_CLAUDE_DIR;
-  try {
-    yield* gen;
-  } finally {
-    if (prev === undefined) delete process.env.CLAUDE_CONFIG_DIR;
-    else process.env.CLAUDE_CONFIG_DIR = prev;
-  }
-}
+const sdkEnv = { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR };
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -131,7 +120,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildSaveMemoryTool(),
   ]);
 
-  for await (const msg of withLocalConfigDir(query({
+  for await (const msg of query({
     prompt,
     options: {
       model: config.ANTHROPIC_MODEL,
@@ -140,8 +129,9 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
+      env: sdkEnv,
     },
-  }))) {
+  })) {
     if (msg.type === 'tool_call') {
       yield { type: 'status', text: describeToolCall(msg.tool_name) };
     }
@@ -170,15 +160,16 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
   let text = '';
-  for await (const msg of withLocalConfigDir(query({
+  for await (const msg of query({
     prompt: `Categorize these transactions:\n${txnList}`,
     options: {
       model: config.ANTHROPIC_MODEL,
       systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
+      env: sdkEnv,
     },
-  }))) {
+  })) {
     if (msg.type === 'result' && msg.subtype === 'success') {
       text = msg.result;
     }
