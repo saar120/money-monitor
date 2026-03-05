@@ -123,6 +123,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
+      persistSession: false,
     },
   })) {
     if (msg.type === 'tool_call') {
@@ -160,6 +161,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
       systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
+      persistSession: false,
     },
   })) {
     if (msg.type === 'result' && msg.subtype === 'success') {
