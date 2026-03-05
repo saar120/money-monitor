@@ -1,5 +1,7 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
+import { join } from 'node:path';
+import { fileURLToPath } from 'node:url';
 import { config } from '../config.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
@@ -16,8 +18,13 @@ import {
   buildDetectRecurringTransactionsTool,
   buildGetTopMerchantsTool,
   buildCategorizeTransactionTool,
+  buildSaveMemoryTool,
   buildMcpServerFromTools,
 } from './tools.js';
+import { readMemory } from './memory.js';
+
+const __dirname = fileURLToPath(new URL('.', import.meta.url));
+const LOCAL_CLAUDE_DIR = join(__dirname, '..', '..', 'data', '.claude');
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -67,6 +74,7 @@ const TOOL_STATUS: Record<string, string> = {
   detect_recurring_transactions: 'Detecting recurring charges...',
   get_top_merchants: 'Finding top merchants...',
   categorize_transaction: 'Categorizing transaction...',
+  save_memory: 'Saving to memory...',
 };
 
 function describeToolCall(toolName: string): string {
@@ -97,7 +105,8 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
     : lastMsg.content;
 
-  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames);
+  const memory = readMemory();
+  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
   const server = buildMcpServerFromTools(MCP_SERVER_NAME, [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
@@ -107,6 +116,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildDetectRecurringTransactionsTool(),
     buildGetTopMerchantsTool(),
     buildCategorizeTransactionTool(categoryNames),
+    buildSaveMemoryTool(),
   ]);
 
   for await (const msg of query({
@@ -118,6 +128,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
+      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
     },
   })) {
     if (msg.type === 'tool_call') {
@@ -155,6 +166,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
       systemPrompt: buildBatchCategorizerPrompt(catRows),
       tools: [],
       maxTurns: 1,
+      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
     },
   })) {
     if (msg.type === 'result' && msg.subtype === 'success') {

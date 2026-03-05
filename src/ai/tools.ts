@@ -5,6 +5,7 @@ import { db } from '../db/connection.js';
 import { transactions, accounts, categories } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 import { monthsAgoStart, toIsraelDateStr } from '../shared/dates.js';
+import { appendMemory } from './memory.js';
 
 // ── Individual tool builders ────────────────────────────────────────────────────
 
@@ -151,6 +152,20 @@ export function buildGetTopMerchantsTool() {
     async (args) => {
       const result = getTopMerchants(args);
       return { content: [{ type: 'text' as const, text: result }] };
+    },
+  );
+}
+
+export function buildSaveMemoryTool() {
+  return tool(
+    'save_memory',
+    'Save an important fact, user preference, or pattern to your long-term memory. This persists across conversations. Use this when: (1) the user explicitly asks you to remember something, (2) you discover an important user preference or financial pattern worth remembering.',
+    {
+      entry: z.string().min(1).max(500).describe('The fact or preference to remember. Be concise and specific.'),
+    },
+    async (args) => {
+      appendMemory(args.entry);
+      return { content: [{ type: 'text' as const, text: 'Saved to memory.' }] };
     },
   );
 }

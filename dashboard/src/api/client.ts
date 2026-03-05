@@ -295,6 +295,43 @@ export function updateTransactionCategory(id: number, category: string | null) {
   });
 }
 
+// ─── Chat Sessions ───
+
+export interface SessionMeta {
+  id: string;
+  title: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SessionMessage {
+  type: 'message';
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+}
+
+export interface SessionData {
+  meta: SessionMeta;
+  messages: SessionMessage[];
+}
+
+export function getChatSessions() {
+  return request<{ sessions: SessionMeta[] }>('/ai/sessions');
+}
+
+export function createChatSession() {
+  return request<{ session: SessionMeta }>('/ai/sessions', { method: 'POST' });
+}
+
+export function getChatSession(id: string) {
+  return request<{ session: SessionData }>(`/ai/sessions/${id}`);
+}
+
+export function deleteChatSession(id: string) {
+  return request<{ deleted: boolean }>(`/ai/sessions/${id}`, { method: 'DELETE' });
+}
+
 // ─── AI ───
 
 export interface ChatMessage {
@@ -308,7 +345,8 @@ export interface ChatStreamEvent {
 }
 
 export async function* aiChatStream(
-  messages: ChatMessage[],
+  sessionId: string,
+  message: string,
 ): AsyncGenerator<ChatStreamEvent> {
   const token = getApiToken();
   const headers: Record<string, string> = { 'Content-Type': 'application/json' };
@@ -317,7 +355,7 @@ export async function* aiChatStream(
   const res = await fetch(`${BASE_URL}/ai/chat`, {
     method: 'POST',
     headers,
-    body: JSON.stringify({ messages }),
+    body: JSON.stringify({ sessionId, message }),
   });
 
   if (!res.ok || !res.body) {

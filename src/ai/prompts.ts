@@ -35,7 +35,7 @@ function sharedRules(): string {
 
 // ── Financial Advisor prompt (combined) ─────────────────────────────────────────
 
-export function buildFinancialAdvisorPrompt(categoryNames: string[], ignoredCategoryNames: string[]): string {
+export function buildFinancialAdvisorPrompt(categoryNames: string[], ignoredCategoryNames: string[], memory?: string): string {
   const list = categoryNames.join(', ');
   const ignoredNote = ignoredCategoryNames.length > 0
     ? `\n- Ignored categories (excluded from statistics): ${ignoredCategoryNames.join(', ')}. Do NOT include these in your analysis or summaries unless the user explicitly asks about them.`
@@ -56,7 +56,7 @@ ${sharedRules()}
 - Available categories: ${list}.${ignoredNote}
 - When categorizing, consider the merchant name, amount, and any memo information.
 - If a transaction is genuinely ambiguous, pick the most likely category and explain your reasoning.
-- Be concise but thorough. Use tables for comparative data when helpful.`;
+- Be concise but thorough. Use tables for comparative data when helpful.${memory?.trim() ? `\n\n## Your Memory (from previous conversations)\n${memory}\n\nUse this memory to personalize your responses. Update memory when you learn new important facts about the user.` : ''}`;
 }
 
 // ── Batch categorizer prompt (used by batchCategorize / recategorize) ────────────
