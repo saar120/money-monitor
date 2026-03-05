@@ -16,8 +16,10 @@ import {
   buildDetectRecurringTransactionsTool,
   buildGetTopMerchantsTool,
   buildCategorizeTransactionTool,
+  buildSaveMemoryTool,
   buildMcpServerFromTools,
 } from './tools.js';
+import { readMemory } from './memory.js';
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -67,6 +69,7 @@ const TOOL_STATUS: Record<string, string> = {
   detect_recurring_transactions: 'Detecting recurring charges...',
   get_top_merchants: 'Finding top merchants...',
   categorize_transaction: 'Categorizing transaction...',
+  save_memory: 'Saving to memory...',
 };
 
 function describeToolCall(toolName: string): string {
@@ -97,7 +100,8 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
     : lastMsg.content;
 
-  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames);
+  const memory = readMemory();
+  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
   const server = buildMcpServerFromTools(MCP_SERVER_NAME, [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
@@ -107,6 +111,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildDetectRecurringTransactionsTool(),
     buildGetTopMerchantsTool(),
     buildCategorizeTransactionTool(categoryNames),
+    buildSaveMemoryTool(),
   ]);
 
   for await (const msg of query({
