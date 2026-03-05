@@ -14,7 +14,9 @@
     "dashboard:dev": "cd dashboard && npm run dev",
     "dashboard:build": "cd dashboard && npm run build",
     "mcp": "tsx src/mcp-server.ts",
-    "postinstall": "npx patch-package"
+    "postinstall": "npx patch-package",
+    "backup": "bash scripts/backup.sh",
+    "restore": "bash scripts/restore.sh"
   },
   "repository": {
     "type": "git",

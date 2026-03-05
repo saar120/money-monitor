@@ -186,6 +186,40 @@ money-monitor/
 | `npm run dashboard:dev` | Start Vite dev server for the dashboard |
 | `npm run db:generate` | Generate Drizzle migration from schema changes |
 | `npm run db:studio` | Open Drizzle Studio (interactive DB browser) |
+| `npm run backup` | Back up database, credentials, and `.env` to a timestamped archive |
+| `npm run restore` | Restore from the latest backup (or specify an archive path) |
+
+## Backup & Restore
+
+All your data lives in three files. The backup script bundles them into a single `.tar.gz` archive:
+
+| File | Contents |
+|------|----------|
+| `data/money-monitor.db` | Transactions, accounts, categories, scrape logs |
+| `data/credentials.enc` | Encrypted bank login credentials |
+| `.env` | Master key, API tokens, and configuration |
+
+### Create a backup
+
+```bash
+npm run backup                        # saves to ./backups/
+npm run backup -- /path/to/usb/drive  # saves to a custom directory
+```
+
+### Restore on another machine
+
+```bash
+git clone https://github.com/saar120/money-monitor.git
+cd money-monitor
+npm install && cd dashboard && npm install && cd ..
+
+# Restore from archive
+npm run restore -- /path/to/money-monitor-backup-20260305_120000.tar.gz
+
+npm run dev
+```
+
+Running `npm run restore` with no arguments restores the latest archive from `./backups/`.
 
 ## License
 
