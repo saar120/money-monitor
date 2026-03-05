@@ -64,6 +64,11 @@ export const chatSchema = z.object({
   })).min(1).max(100),
 });
 
+export const sessionChatSchema = z.object({
+  sessionId: z.string().uuid(),
+  message: z.string().min(1).max(10000),
+});
+
 export const categorizeSchema = z.object({
   batchSize: z.number().int().min(1).max(500).default(50),
 });
