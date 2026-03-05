@@ -5,6 +5,7 @@ import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
 import { Card } from '@/components/ui/card';
 import { SendHorizontal, Bot, User } from 'lucide-vue-next';
+import MarkdownContent from './MarkdownContent.vue';
 
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
@@ -128,7 +129,8 @@ function handleKeydown(e: KeyboardEvent) {
                 {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
               </span>
             </div>
-            <div class="whitespace-pre-wrap">{{ msg.content }}</div>
+            <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" />
+            <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
           </div>
 
           <!-- User avatar -->
