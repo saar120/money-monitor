@@ -13,7 +13,7 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency, formatAmount } from '@/lib/format';
+import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES,
@@ -229,7 +229,7 @@ const chartData = computed(() => {
   };
 });
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   plugins: {
     legend: { display: false },
@@ -257,7 +257,8 @@ const chartOptions = {
         color: '#71717a',
         callback(value: number | string) {
           const v = Number(value);
-          const sym = showingIls.value ? '₪' : (assetCurrency.value === 'USD' ? '$' : assetCurrency.value + ' ');
+          const cur = showingIls.value ? 'ILS' : assetCurrency.value;
+          const sym = CURRENCY_SYMBOLS[cur] ?? cur + ' ';
           if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
           if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
           return `${sym}${v}`;
@@ -266,7 +267,7 @@ const chartOptions = {
       grid: { color: 'rgba(255,255,255,0.03)' },
     },
   },
-};
+}));
 
 // ─── Holding Dialog ───
 const showHoldingDialog = ref(false);
@@ -675,11 +676,11 @@ async function confirmDeleteMovement() {
                     </template>
                   </TableCell>
                   <TableCell class="text-right tabular-nums text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</TableCell>
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatAmount(h.costBasis, showingIls ? 'ILS' : h.currency) }}</TableCell>
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
                       <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-sm tabular-nums font-medium">
-                        {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatCurrency(h.gainLoss) }}
+                        {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatAmount(h.gainLoss, showingIls ? 'ILS' : h.currency) }}
                       </span>
                       <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs block">
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%

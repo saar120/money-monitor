@@ -3,10 +3,10 @@ export const DEFAULT_CATEGORY_COLOR = '#94a3b8';
 
 /** Format a number as ILS currency with shekel sign. Uses Math.abs() so the sign is always positive. */
 export function formatCurrency(amount: number): string {
-  return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2 })}`;
+  return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
-const CURRENCY_SYMBOLS: Record<string, string> = {
+export const CURRENCY_SYMBOLS: Record<string, string> = {
   ILS: '₪',
   USD: '$',
   EUR: '€',

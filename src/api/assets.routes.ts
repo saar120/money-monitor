@@ -158,7 +158,7 @@ export async function replayMovementSnapshots(
   // Fetch holding metadata (type, currency) for value calculation
   const holdingRows = db.select().from(holdings)
     .where(eq(holdings.assetId, assetId)).all();
-  const holdingMeta = new Map(holdingRows.map(h => [h.id, { type: h.type, currency: h.currency }]));
+  const holdingMeta = new Map(holdingRows.map(h => [h.id, { name: h.name, type: h.type, currency: h.currency }]));
 
   // Running state per holding: { quantity, costBasis }
   const holdingState = new Map<number, { quantity: number; costBasis: number }>();
@@ -252,7 +252,7 @@ export async function replayMovementSnapshots(
         totalValueIls += Math.max(0, cumulativeIls);
         totalValue += nativeValue;
         holdingsSnapshotArr.push({
-          name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
+          name: meta.name,
           quantity: state.quantity,
           currency: meta.currency,
           price: null,
@@ -266,7 +266,7 @@ export async function replayMovementSnapshots(
         totalValueIls += valueIls;
         totalValue += currentValue;
         holdingsSnapshotArr.push({
-          name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
+          name: meta.name,
           quantity: state.quantity,
           currency: meta.currency,
           price: null,

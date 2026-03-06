@@ -14,7 +14,7 @@ import {
   type NetWorth, type NetWorthHistory, type Account, type Asset, type Holding, type Liability,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency, formatAmount } from '@/lib/format';
+import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES, LIABILITY_TYPE_LABELS,
@@ -981,10 +981,7 @@ const fullLiabilityMap = computed(() => {
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
-                <SelectItem value="ILS">ILS (₪)</SelectItem>
-                <SelectItem value="USD">USD ($)</SelectItem>
-                <SelectItem value="EUR">EUR (€)</SelectItem>
-                <SelectItem value="GBP">GBP (£)</SelectItem>
+                <SelectItem v-for="(symbol, code) in CURRENCY_SYMBOLS" :key="code" :value="code">{{ code }} ({{ symbol }})</SelectItem>
               </SelectContent>
             </Select>
           </div>
