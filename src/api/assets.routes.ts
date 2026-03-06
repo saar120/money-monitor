@@ -98,13 +98,15 @@ export async function generateAssetSnapshot(assetId: number): Promise<void> {
   const { rates } = await getExchangeRates();
 
   let totalValueIls = 0;
+  let totalValue = 0;
   const holdingsSnapshot = holdingRows.map(h => {
     const cryptoHasRate = h.type === 'crypto' && h.currency in rates;
     const needsPrice = h.type === 'stock' || h.type === 'etf' || (h.type === 'crypto' && !cryptoHasRate);
     const currentValue = needsPrice ? (h.lastPrice != null ? h.quantity * h.lastPrice : 0) : h.quantity;
     const valueIls = convertToIls(currentValue, h.currency, rates);
     totalValueIls += valueIls;
-    return { name: h.name, quantity: h.quantity, currency: h.currency, price: h.lastPrice, valueIls };
+    totalValue += currentValue;
+    return { name: h.name, quantity: h.quantity, currency: h.currency, price: h.lastPrice, value: currentValue, valueIls };
   });
 
   const today = todayInIsrael();
@@ -115,12 +117,14 @@ export async function generateAssetSnapshot(assetId: number): Promise<void> {
     assetId,
     date: today,
     holdingsSnapshot: holdingsJson,
+    totalValue,
     totalValueIls,
     exchangeRates: ratesJson,
   }).onConflictDoUpdate({
     target: [assetSnapshots.assetId, assetSnapshots.date],
     set: {
       holdingsSnapshot: holdingsJson,
+      totalValue,
       totalValueIls,
       exchangeRates: ratesJson,
       createdAt: new Date().toISOString(),
@@ -200,9 +204,10 @@ export async function replayMovementSnapshots(
       holdingState.set(m.holdingId, state);
     }
 
-    // Compute total ILS value at this date from running state
+    // Compute total value at this date from running state
     let totalValueIls = 0;
-    const holdingsSnapshotArr: { name: string; quantity: number; currency: string; price: number | null; valueIls: number }[] = [];
+    let totalValue = 0;
+    const holdingsSnapshotArr: { name: string; quantity: number; currency: string; price: number | null; value: number; valueIls: number }[] = [];
 
     for (const [holdingId, state] of holdingState) {
       if (state.quantity === 0) continue;
@@ -243,12 +248,15 @@ export async function replayMovementSnapshots(
             }
           }
         }
+        const nativeValue = needsPrice ? 0 : state.quantity;
         totalValueIls += Math.max(0, cumulativeIls);
+        totalValue += nativeValue;
         holdingsSnapshotArr.push({
           name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
           quantity: state.quantity,
           currency: meta.currency,
           price: null,
+          value: nativeValue,
           valueIls: Math.max(0, cumulativeIls),
         });
       } else {
@@ -256,11 +264,13 @@ export async function replayMovementSnapshots(
         const currentValue = needsPrice ? 0 : state.quantity;
         const valueIls = convertToIls(currentValue, meta.currency, rates);
         totalValueIls += valueIls;
+        totalValue += currentValue;
         holdingsSnapshotArr.push({
           name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
           quantity: state.quantity,
           currency: meta.currency,
           price: null,
+          value: currentValue,
           valueIls,
         });
       }
@@ -273,12 +283,14 @@ export async function replayMovementSnapshots(
       assetId,
       date,
       holdingsSnapshot: holdingsJson,
+      totalValue,
       totalValueIls,
       exchangeRates: ratesJson,
     }).onConflictDoUpdate({
       target: [assetSnapshots.assetId, assetSnapshots.date],
       set: {
         holdingsSnapshot: holdingsJson,
+        totalValue,
         totalValueIls,
         exchangeRates: ratesJson,
         createdAt: new Date().toISOString(),
@@ -543,6 +555,7 @@ export async function assetsRoutes(app: FastifyInstance) {
 
     const rows = db.select({
       date: assetSnapshots.date,
+      totalValue: assetSnapshots.totalValue,
       totalValueIls: assetSnapshots.totalValueIls,
     }).from(assetSnapshots)
       .where(and(

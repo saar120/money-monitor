@@ -127,6 +127,7 @@ export const assetSnapshots = sqliteTable('asset_snapshots', {
   assetId: integer('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
   date: text('date').notNull(),
   holdingsSnapshot: text('holdings_snapshot'),
+  totalValue: real('total_value'),
   totalValueIls: real('total_value_ils').notNull(),
   exchangeRates: text('exchange_rates'),
   notes: text('notes'),
