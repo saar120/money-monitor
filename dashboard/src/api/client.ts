@@ -341,7 +341,7 @@ export interface ChatMessage {
 }
 
 export interface ChatStreamEvent {
-  type: 'status' | 'result' | 'error';
+  type: 'text_delta' | 'status' | 'result' | 'error';
   text: string;
 }
 
@@ -367,6 +367,7 @@ export async function* aiChatStream(
   const reader = res.body.getReader();
   const decoder = new TextDecoder();
   let buffer = '';
+  let currentEvent = '';
 
   try {
     while (true) {
@@ -377,7 +378,6 @@ export async function* aiChatStream(
       const lines = buffer.split('\n');
       buffer = lines.pop() ?? '';
 
-      let currentEvent = '';
       for (const line of lines) {
         if (line.startsWith('event: ')) {
           currentEvent = line.slice(7);
