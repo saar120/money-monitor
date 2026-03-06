@@ -83,6 +83,7 @@ export const assets = sqliteTable('assets', {
   name: text('name').notNull().unique(),
   type: text('type').notNull(),
   institution: text('institution'),
+  currency: text('currency').notNull().default('ILS'),
   liquidity: text('liquidity').notNull().default('liquid'),
   linkedAccountId: integer('linked_account_id').references(() => accounts.id, { onDelete: 'set null' }),
   notes: text('notes'),
