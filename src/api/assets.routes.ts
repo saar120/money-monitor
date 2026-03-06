@@ -8,6 +8,7 @@ import {
   createHoldingSchema, updateHoldingSchema,
   assetsQuerySchema, snapshotsQuerySchema,
   createMovementSchema, movementQuerySchema,
+  updateAssetValueSchema, recordRentSchema,
 } from './validation.js';
 import { getExchangeRates, convertToIls } from '../services/exchange-rates.js';
 import { todayInIsrael } from '../shared/dates.js';
@@ -443,6 +444,103 @@ export async function assetsRoutes(app: FastifyInstance) {
     const { rates } = await getExchangeRates();
     const response = buildAssetResponse(updated, rates);
     return reply.send(response);
+  });
+
+  // PUT /api/assets/:id/value — simplified value update for non-brokerage assets
+  app.put<{ Params: { id: string } }>('/api/assets/:id/value', async (request, reply) => {
+    const assetId = parseIntParam(request.params.id, 'asset ID', reply);
+    if (assetId === null) return;
+
+    const data = validateBody(updateAssetValueSchema, request.body, reply);
+    if (!data) return;
+
+    const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
+    if (!assetRow) return reply.status(404).send({ error: 'Asset not found' });
+
+    const category = getAssetCategory(assetRow.type);
+    if (category === 'brokerage') {
+      return reply.status(400).send({ error: 'Use movements for brokerage assets' });
+    }
+
+    // Find the auto-created balance holding
+    const holding = db.select().from(holdings)
+      .where(and(eq(holdings.assetId, assetId), eq(holdings.type, 'balance')))
+      .get();
+
+    if (!holding) {
+      return reply.status(400).send({ error: 'No balance holding found. Re-create the asset.' });
+    }
+
+    const today = data.date ?? todayInIsrael();
+    const now = new Date().toISOString();
+
+    sqlite.transaction(() => {
+      const updateSet: Record<string, unknown> = {
+        quantity: data.currentValue,
+        updatedAt: now,
+      };
+
+      if (data.contribution && data.contribution > 0) {
+        updateSet.costBasis = holding.costBasis + data.contribution;
+
+        const movementType = category === 'real_estate' ? 'rent_income' : 'contribution';
+        db.insert(assetMovements).values({
+          assetId,
+          holdingId: holding.id,
+          date: today,
+          type: movementType,
+          quantity: data.contribution,
+          currency: holding.currency,
+          notes: data.notes,
+          createdAt: now,
+        }).run();
+      }
+
+      db.update(holdings).set(updateSet).where(eq(holdings.id, holding.id)).run();
+    })();
+
+    try { await generateAssetSnapshot(assetId); } catch (err) {
+      request.log.error(err, 'Failed to generate snapshot after value update');
+    }
+
+    const { rates } = await getExchangeRates();
+    return reply.send(buildAssetResponse(assetRow, rates));
+  });
+
+  // POST /api/assets/:id/rent — record rent income for real estate assets
+  app.post<{ Params: { id: string } }>('/api/assets/:id/rent', async (request, reply) => {
+    const assetId = parseIntParam(request.params.id, 'asset ID', reply);
+    if (assetId === null) return;
+
+    const data = validateBody(recordRentSchema, request.body, reply);
+    if (!data) return;
+
+    const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
+    if (!assetRow) return reply.status(404).send({ error: 'Asset not found' });
+
+    if (getAssetCategory(assetRow.type) !== 'real_estate') {
+      return reply.status(400).send({ error: 'Rent income only applies to real estate assets' });
+    }
+
+    const holding = db.select().from(holdings)
+      .where(and(eq(holdings.assetId, assetId), eq(holdings.type, 'balance')))
+      .get();
+
+    const today = data.date ?? todayInIsrael();
+    const now = new Date().toISOString();
+
+    db.insert(assetMovements).values({
+      assetId,
+      holdingId: holding?.id ?? null,
+      date: today,
+      type: 'rent_income',
+      quantity: data.amount,
+      currency: assetRow.currency,
+      notes: data.notes,
+      createdAt: now,
+    }).run();
+
+    return reply.send({ success: true });
   });
 
   // DELETE /api/assets/:id (soft delete)

@@ -183,6 +183,19 @@ export const snapshotsQuerySchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
+export const updateAssetValueSchema = z.object({
+  currentValue: z.number().min(0),
+  contribution: z.number().min(0).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const recordRentSchema = z.object({
+  amount: z.number().positive(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().max(500).optional(),
+});
+
 // ─── Liabilities ───
 
 export const createLiabilitySchema = z.object({
