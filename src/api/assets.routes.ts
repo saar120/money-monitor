@@ -12,7 +12,7 @@ import {
 } from './validation.js';
 import { getExchangeRates, convertToIls } from '../services/exchange-rates.js';
 import { todayInIsrael } from '../shared/dates.js';
-import { getAssetCategory } from '../shared/types.js';
+import { getAssetCategory, CATEGORY_MOVEMENT_TYPES } from '../shared/types.js';
 
 type HoldingRow = typeof holdings.$inferSelect;
 
@@ -735,11 +735,20 @@ export async function assetsRoutes(app: FastifyInstance) {
     const assetId = parseIntParam(request.params.id, 'asset ID', reply);
     if (assetId === null) return;
 
-    const asset = db.select({ id: assets.id }).from(assets).where(eq(assets.id, assetId)).get();
+    const asset = db.select().from(assets).where(eq(assets.id, assetId)).get();
     if (!asset) return reply.status(404).send({ error: 'Asset not found' });
 
     const data = validateBody(createMovementSchema, request.body, reply);
     if (!data) return;
+
+    // Gate movement types by asset category
+    const category = getAssetCategory(asset.type);
+    const allowedTypes = CATEGORY_MOVEMENT_TYPES[category];
+    if (!allowedTypes.includes(data.type)) {
+      return reply.status(400).send({
+        error: `Movement type "${data.type}" is not allowed for ${asset.type} assets. Allowed: ${allowedTypes.join(', ')}`,
+      });
+    }
 
     // Validate holdingId belongs to this asset
     let holding: typeof holdings.$inferSelect | undefined;
@@ -751,7 +760,7 @@ export async function assetsRoutes(app: FastifyInstance) {
 
     // Validate quantity sign based on type
     const { type, quantity } = data;
-    if ((type === 'deposit' || type === 'buy' || type === 'dividend') && quantity <= 0) {
+    if ((type === 'deposit' || type === 'buy' || type === 'dividend' || type === 'contribution' || type === 'rent_income') && quantity <= 0) {
       return reply.status(400).send({ error: `Quantity must be positive for ${type}` });
     }
     if ((type === 'withdrawal' || type === 'sell' || type === 'fee') && quantity >= 0) {
@@ -816,8 +825,10 @@ export async function assetsRoutes(app: FastifyInstance) {
           newCostBasis += Math.abs(data.sourceAmount ?? data.quantity);
         } else if (type === 'adjustment') {
           newQty += data.quantity;
+        } else if (type === 'contribution') {
+          newCostBasis += Math.abs(data.quantity);
         }
-        // dividend: no holding changes
+        // dividend, rent_income: no holding changes
 
         if (newQty !== holding.quantity || newCostBasis !== holding.costBasis) {
           db.update(holdings).set({
