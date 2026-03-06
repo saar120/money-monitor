@@ -17,6 +17,7 @@ import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
 import { netWorthRoutes } from './api/net-worth.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
+import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 
 const app = Fastify({
   logger: {
@@ -146,6 +147,7 @@ if (existsSync(dashboardDist)) {
 async function shutdown() {
   app.log.info('Shutting down...');
   stopScheduler();
+  stopTelegramBot();
   await app.close();
   sqlite.close();
   process.exit(0);
@@ -158,6 +160,7 @@ try {
   await app.listen({ port: config.PORT, host: config.HOST });
   app.log.info(`Server running on http://${config.HOST}:${config.PORT}`);
   startScheduler();
+  startTelegramBot();
 } catch (err) {
   app.log.error(err);
   process.exit(1);
