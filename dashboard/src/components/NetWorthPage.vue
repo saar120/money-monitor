@@ -33,7 +33,7 @@ import {
   DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialog, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -178,16 +178,37 @@ const doughnutOptions = {
 };
 
 // ─── Trend line chart ───
+const showLiquidOnly = ref(false);
+
 const trendData = computed(() => {
   const series = history.data.value?.series ?? [];
   if (series.length === 0) return null;
+  const labels = series.map(p => {
+    const d = new Date(p.date);
+    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  });
+
+  if (showLiquidOnly.value) {
+    return {
+      labels,
+      datasets: [{
+        label: 'Liquid Net Worth',
+        data: series.map(p => p.liquidTotal),
+        borderColor: '#22d3ee',
+        backgroundColor: 'rgba(34, 211, 238, 0.15)',
+        fill: true,
+        tension: 0.3,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        spanGaps: true,
+      }],
+    };
+  }
+
   return {
-    labels: series.map(p => {
-      const d = new Date(p.date);
-      return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    }),
+    labels,
     datasets: [{
-      label: 'Net Worth',
+      label: 'Total Net Worth',
       data: series.map(p => p.total),
       borderColor: '#8b5cf6',
       backgroundColor: 'rgba(139, 92, 246, 0.15)',
@@ -624,8 +645,22 @@ const fullLiabilityMap = computed(() => {
       </Card>
 
       <Card>
-        <CardHeader>
+        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle class="text-base">Net Worth Trend</CardTitle>
+          <div class="flex gap-1 text-xs">
+            <Button
+              size="sm"
+              :variant="showLiquidOnly ? 'ghost' : 'secondary'"
+              class="h-7 px-2 text-xs"
+              @click="showLiquidOnly = false"
+            >Total</Button>
+            <Button
+              size="sm"
+              :variant="showLiquidOnly ? 'secondary' : 'ghost'"
+              class="h-7 px-2 text-xs"
+              @click="showLiquidOnly = true"
+            >Liquid</Button>
+          </div>
         </CardHeader>
         <CardContent>
           <Line v-if="trendData" :data="trendData" :options="lineOptions" />
@@ -655,7 +690,7 @@ const fullLiabilityMap = computed(() => {
         >
           <!-- Asset Row (collapsed) -->
           <div
-            class="relative flex items-center gap-3 px-4 py-3 hover:bg-surface-3/50 transition-colors duration-150 cursor-pointer"
+            class="flex items-center gap-3 px-4 py-3 hover:bg-surface-3/50 transition-colors duration-150 cursor-pointer"
             @click="toggleExpand(asset.id)"
           >
             <div
@@ -664,7 +699,7 @@ const fullLiabilityMap = computed(() => {
             />
             <div class="flex-1 min-w-0">
               <p
-                class="text-sm font-medium hover:text-primary hover:underline cursor-pointer"
+                class="text-sm font-medium hover:underline cursor-pointer"
                 @click.stop="router.push(`/net-worth/assets/${asset.id}`)"
               >{{ asset.name }}</p>
               <p class="text-xs text-muted-foreground">
@@ -684,22 +719,13 @@ const fullLiabilityMap = computed(() => {
               <p class="text-xs text-muted-foreground">{{ pctOfTotal(asset.totalValueIls) }} of total</p>
             </div>
             <!-- Hover actions -->
-            <div class="absolute right-10 top-1/2 -translate-y-1/2 flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity bg-surface-3/90 rounded-md px-1.5 py-1" @click.stop>
-              <Button
-                variant="outline"
-                size="sm"
-                class="h-7 text-xs"
-                @click="startQuickUpdate(getFullAsset(asset.id)!)"
-                v-if="getFullAsset(asset.id)?.holdings?.length"
-              >
-                Update Values
-              </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditAsset(getFullAsset(asset.id)!)">
-                <Pencil class="h-3.5 w-3.5" />
-              </Button>
-              <Button variant="ghost" size="icon" class="h-7 w-7" @click="deletingAsset = { id: asset.id, name: asset.name }">
-                <Trash2 class="h-3.5 w-3.5 text-destructive" />
-              </Button>
+            <div class="flex items-center gap-0.5 invisible group-hover:visible flex-shrink-0" @click.stop>
+              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-surface-2 transition-colors" @click="openEditAsset(getFullAsset(asset.id)!)">
+                <Pencil class="h-3 w-3" />
+              </button>
+              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-surface-2 transition-colors" @click="deletingAsset = { id: asset.id, name: asset.name }">
+                <Trash2 class="h-3 w-3 text-destructive" />
+              </button>
             </div>
             <ChevronDown
               class="h-4 w-4 text-muted-foreground transition-transform duration-150 flex-shrink-0"
@@ -808,9 +834,14 @@ const fullLiabilityMap = computed(() => {
                       </Button>
                     </div>
                   </div>
-                  <Button variant="outline" size="sm" class="h-6 text-xs mt-1" @click.stop="openAddHolding(asset.id)">
-                    <Plus class="h-3 w-3 mr-1" /> Add Holding
-                  </Button>
+                  <div class="flex gap-1.5 mt-1">
+                    <Button variant="outline" size="sm" class="h-6 text-xs" @click.stop="openAddHolding(asset.id)">
+                      <Plus class="h-3 w-3 mr-1" /> Add Holding
+                    </Button>
+                    <Button variant="outline" size="sm" class="h-6 text-xs" @click.stop="startQuickUpdate(getFullAsset(asset.id)!)">
+                      Update Values
+                    </Button>
+                  </div>
                 </div>
               </template>
             </div>
@@ -1122,12 +1153,12 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingAsset = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction
+          <Button
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             @click="handleDeleteAsset"
           >
             Hide Asset
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1144,12 +1175,12 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingHolding = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction
+          <Button
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             @click="handleDeleteHolding"
           >
             Delete Holding
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1165,12 +1196,12 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingLiability = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction
+          <Button
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             @click="handleDeleteLiability"
           >
             Hide Liability
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

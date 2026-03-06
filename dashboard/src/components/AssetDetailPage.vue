@@ -31,7 +31,7 @@ import {
   DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialog, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -102,9 +102,13 @@ const currentValue = computed(() =>
 const totalInvested = computed(() => {
   const mvs = movements.value;
   if (mvs.length === 0) return null;
-  return mvs
+  const invested = mvs
     .filter(m => m.type === 'deposit' || m.type === 'buy')
     .reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
+  const fees = mvs
+    .filter(m => m.type === 'fee')
+    .reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? m.quantity), 0);
+  return invested + fees;
 });
 
 const totalReturn = computed(() => {
@@ -356,6 +360,7 @@ const quantityLabel = computed(() => {
   const t = movementForm.value.type;
   if (t === 'buy' || t === 'deposit' || t === 'dividend') return 'Quantity (positive)';
   if (t === 'sell' || t === 'withdrawal') return 'Quantity (how much to remove)';
+  if (t === 'fee') return 'Fee amount';
   return 'Quantity (+/-)';
 });
 
@@ -381,7 +386,7 @@ async function saveMovement() {
   movementSaving.value = true;
   movementError.value = null;
   try {
-    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal';
+    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal' || movementForm.value.type === 'fee';
     const quantity = isNegativeType ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
     await createMovement(assetId.value, {
       holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
@@ -799,10 +804,14 @@ async function confirmDeleteMovement() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="holdingToDelete = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction :disabled="deletingHolding" @click="confirmDeleteHolding">
+          <Button
+            :disabled="deletingHolding"
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            @click="confirmDeleteHolding"
+          >
             <Loader2 v-if="deletingHolding" class="h-4 w-4 mr-1 animate-spin" />
             Delete
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -888,10 +897,14 @@ async function confirmDeleteMovement() {
         <p v-if="deleteMovementError" class="text-sm text-destructive px-6">{{ deleteMovementError }}</p>
         <AlertDialogFooter>
           <AlertDialogCancel @click="movementToDelete = null; deleteMovementError = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction :disabled="deletingMovement" @click="confirmDeleteMovement">
+          <Button
+            :disabled="deletingMovement"
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            @click="confirmDeleteMovement"
+          >
             <Loader2 v-if="deletingMovement" class="h-4 w-4 mr-1 animate-spin" />
             Delete
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

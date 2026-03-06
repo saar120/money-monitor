@@ -10,7 +10,8 @@ import { todayInIsrael } from '../shared/dates.js';
 type HoldingRow = typeof holdings.$inferSelect;
 
 function computeHoldingValueIls(h: HoldingRow, rates: Record<string, number>): number {
-  const needsPrice = h.type === 'stock' || h.type === 'etf' || h.type === 'crypto';
+  const cryptoHasRate = h.type === 'crypto' && h.currency in rates;
+  const needsPrice = h.type === 'stock' || h.type === 'etf' || (h.type === 'crypto' && !cryptoHasRate);
   let currentValue: number;
   if (needsPrice) {
     currentValue = h.lastPrice != null ? h.quantity * h.lastPrice : 0;
@@ -180,18 +181,16 @@ export async function netWorthRoutes(app: FastifyInstance) {
       .where(and(eq(accounts.accountType, 'bank'), eq(accounts.isActive, true)))
       .all();
 
-    const activeAssets = db.select({ id: assets.id })
+    const activeAssets = db.select({ id: assets.id, liquidity: assets.liquidity })
       .from(assets)
       .where(eq(assets.isActive, true))
       .all();
 
-    // Liabilities total (current balance, no history)
+    const lockedAssetIds = new Set(activeAssets.filter(a => a.liquidity === 'locked').map(a => a.id));
+
+    // Liabilities (use startDate to only count from when they began)
     const liabilityRows = db.select().from(liabilities).where(eq(liabilities.isActive, true)).all();
-    // Use current exchange rates for liability conversion
     const { rates } = await getExchangeRates();
-    const liabilitiesTotal = liabilityRows.reduce(
-      (sum, l) => sum + convertToIls(l.currentBalance, l.currency, rates), 0,
-    );
 
     // Pre-fetch all balance history and snapshots in the date range (avoid N+1 queries)
     const lastDate = datePoints[datePoints.length - 1];
@@ -212,7 +211,6 @@ export async function netWorthRoutes(app: FastifyInstance) {
       totalValueIls: assetSnapshots.totalValueIls,
     })
       .from(assetSnapshots)
-      .where(lte(assetSnapshots.date, lastDate))
       .orderBy(assetSnapshots.assetId, assetSnapshots.date)
       .all();
 
@@ -231,7 +229,7 @@ export async function netWorthRoutes(app: FastifyInstance) {
       arr.push({ date: row.date, totalValueIls: row.totalValueIls });
     }
 
-    const series: { date: string; total: number; banks: number; assets: number; liabilities: number }[] = [];
+    const series: { date: string; total: number; liquidTotal: number; banks: number; assets: number; liabilities: number }[] = [];
 
     for (const date of datePoints) {
       let banksValue = 0;
@@ -244,22 +242,35 @@ export async function netWorthRoutes(app: FastifyInstance) {
       }
 
       let assetsValue = 0;
+      let liquidAssetsValue = 0;
       for (const asset of activeAssets) {
         const entries = snapshotByAsset.get(asset.id);
-        if (entries) {
+        if (entries && entries.length > 0) {
           const entry = entries.findLast(e => e.date <= date);
-          if (entry) assetsValue += entry.totalValueIls;
+          const val = (entry ?? entries[0]).totalValueIls;
+          assetsValue += val;
+          if (!lockedAssetIds.has(asset.id)) {
+            liquidAssetsValue += val;
+          }
         }
       }
 
-      const total = banksValue + assetsValue - liabilitiesTotal;
+      let liabilitiesValue = 0;
+      for (const l of liabilityRows) {
+        if (l.startDate && l.startDate > date) continue;
+        liabilitiesValue += convertToIls(l.currentBalance, l.currency, rates);
+      }
+
+      const total = banksValue + assetsValue - liabilitiesValue;
+      const liquidTotal = banksValue + liquidAssetsValue - liabilitiesValue;
 
       series.push({
         date,
         total,
+        liquidTotal,
         banks: banksValue,
         assets: assetsValue,
-        liabilities: liabilitiesTotal,
+        liabilities: liabilitiesValue,
       });
     }
 

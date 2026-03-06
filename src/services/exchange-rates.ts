@@ -5,9 +5,12 @@ export interface ExchangeRateResult {
 }
 
 const CACHE_TTL_MS = 60 * 60 * 1000; // 1 hour
+const RETRY_COOLDOWN_MS = 60 * 1000; // 1 min cooldown after a failed fetch
 
 let cachedRates: Record<string, number> | null = null;
 let lastFetched: Date | null = null;
+let lastFailedAt = 0;
+let inflightFetch: Promise<ExchangeRateResult> | null = null;
 
 async function fetchFiatRates(): Promise<Record<string, number>> {
   const res = await fetch(
@@ -52,37 +55,56 @@ export async function getExchangeRates(): Promise<ExchangeRateResult> {
     };
   }
 
-  try {
-    const [fiatRates, btcIls] = await Promise.all([
-      fetchFiatRates(),
-      fetchBtcRate(),
-    ]);
-
-    const rates: Record<string, number> = {
-      ILS: 1,
-      ...fiatRates,
-      BTC: btcIls,
-    };
-
-    cachedRates = rates;
-    lastFetched = new Date();
-
+  // If we recently failed and have stale cache, return it instead of hammering the API
+  if (cachedRates && lastFetched && Date.now() - lastFailedAt < RETRY_COOLDOWN_MS) {
     return {
-      rates: { ...rates },
-      stale: false,
+      rates: { ...cachedRates },
+      stale: true,
       fetchedAt: lastFetched.toISOString(),
     };
-  } catch (err) {
-    if (cachedRates && lastFetched) {
-      console.error('Exchange rate fetch failed, returning stale cache:', err);
+  }
+
+  // Deduplicate concurrent requests — share one in-flight fetch
+  if (inflightFetch) return inflightFetch;
+
+  inflightFetch = (async () => {
+    try {
+      const [fiatRates, btcIls] = await Promise.all([
+        fetchFiatRates(),
+        fetchBtcRate(),
+      ]);
+
+      const rates: Record<string, number> = {
+        ILS: 1,
+        ...fiatRates,
+        BTC: btcIls,
+      };
+
+      cachedRates = rates;
+      lastFetched = new Date();
+
       return {
-        rates: { ...cachedRates },
-        stale: true,
+        rates: { ...rates },
+        stale: false,
         fetchedAt: lastFetched.toISOString(),
       };
+    } catch (err) {
+      lastFailedAt = Date.now();
+      if (cachedRates && lastFetched) {
+        console.error('Exchange rate fetch failed, returning stale cache:', err);
+        return {
+          rates: { ...cachedRates },
+          stale: true,
+          fetchedAt: lastFetched.toISOString(),
+        };
+      }
+      throw err;
+    } finally {
+      inflightFetch = null;
     }
-    throw err;
-  }
+  })();
+
+  return inflightFetch;
 }
 
 export function convertToIls(
@@ -94,7 +116,8 @@ export function convertToIls(
 
   const rate = rates[currency];
   if (rate === undefined) {
-    throw new Error(`Exchange rate not available for currency "${currency}"`);
+    console.warn(`Exchange rate not available for currency "${currency}", treating as 0`);
+    return 0;
   }
 
   return amount * rate;

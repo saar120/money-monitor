@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, desc, count } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, asc, count } from 'drizzle-orm';
 import { db, sqlite } from '../db/connection.js';
 import { assets, holdings, accounts, assetSnapshots, assetMovements } from '../db/schema.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
@@ -15,8 +15,11 @@ import { todayInIsrael } from '../shared/dates.js';
 type HoldingRow = typeof holdings.$inferSelect;
 
 function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
-  const needsPrice = h.type === 'stock' || h.type === 'etf' || h.type === 'crypto';
   const isCrypto = h.type === 'crypto';
+  // Crypto holdings with an exchange rate (e.g. BTC) use quantity directly like cash;
+  // the exchange rate service handles BTC→ILS conversion.
+  const cryptoHasRate = isCrypto && h.currency in rates;
+  const needsPrice = (h.type === 'stock' || h.type === 'etf' || (isCrypto && !cryptoHasRate));
 
   let currentValue: number;
   let stale: boolean;
@@ -95,7 +98,8 @@ export async function generateAssetSnapshot(assetId: number): Promise<void> {
 
   let totalValueIls = 0;
   const holdingsSnapshot = holdingRows.map(h => {
-    const needsPrice = h.type === 'stock' || h.type === 'etf' || h.type === 'crypto';
+    const cryptoHasRate = h.type === 'crypto' && h.currency in rates;
+    const needsPrice = h.type === 'stock' || h.type === 'etf' || (h.type === 'crypto' && !cryptoHasRate);
     const currentValue = needsPrice ? (h.lastPrice != null ? h.quantity * h.lastPrice : 0) : h.quantity;
     const valueIls = convertToIls(currentValue, h.currency, rates);
     totalValueIls += valueIls;
@@ -121,6 +125,187 @@ export async function generateAssetSnapshot(assetId: number): Promise<void> {
       createdAt: new Date().toISOString(),
     },
   }).run();
+}
+
+/**
+ * Replay all movements for an asset chronologically and generate/update
+ * a snapshot for each movement date. On delete, pass excludeMovementId
+ * so the deleted movement is skipped and its date cleaned up if empty.
+ */
+export async function replayMovementSnapshots(
+  assetId: number,
+  excludeMovementId?: number,
+): Promise<void> {
+  const { rates } = await getExchangeRates();
+
+  // Fetch all movements for this asset, sorted by date then id
+  let allMovements = db.select().from(assetMovements)
+    .where(eq(assetMovements.assetId, assetId))
+    .orderBy(asc(assetMovements.date), asc(assetMovements.id))
+    .all();
+
+  if (excludeMovementId) {
+    allMovements = allMovements.filter(m => m.id !== excludeMovementId);
+  }
+
+  if (allMovements.length === 0) return;
+
+  // Fetch holding metadata (type, currency) for value calculation
+  const holdingRows = db.select().from(holdings)
+    .where(eq(holdings.assetId, assetId)).all();
+  const holdingMeta = new Map(holdingRows.map(h => [h.id, { type: h.type, currency: h.currency }]));
+
+  // Running state per holding: { quantity, costBasis }
+  const holdingState = new Map<number, { quantity: number; costBasis: number }>();
+
+  // Group movements by date for snapshot generation
+  const movementsByDate = new Map<string, typeof allMovements>();
+  for (const m of allMovements) {
+    if (!movementsByDate.has(m.date)) movementsByDate.set(m.date, []);
+    movementsByDate.get(m.date)!.push(m);
+  }
+
+  const today = todayInIsrael();
+  const snapshotDates = new Set<string>();
+
+  for (const [date, dayMovements] of movementsByDate) {
+    // Don't overwrite today's live snapshot
+    if (date === today) continue;
+
+    // Apply each movement to running state
+    for (const m of dayMovements) {
+      if (!m.holdingId) continue;
+      const state = holdingState.get(m.holdingId) ?? { quantity: 0, costBasis: 0 };
+
+      if (m.type === 'buy') {
+        state.quantity += m.quantity;
+        state.costBasis += m.quantity * (m.pricePerUnit ?? 0);
+      } else if (m.type === 'sell' || m.type === 'withdrawal') {
+        if (state.quantity > 0) {
+          const proportion = Math.abs(m.quantity) / state.quantity;
+          state.costBasis -= state.costBasis * proportion;
+        }
+        state.quantity += m.quantity;
+      } else if (m.type === 'deposit') {
+        state.quantity += m.quantity;
+        state.costBasis += m.quantity;
+      } else if (m.type === 'fee') {
+        state.costBasis += Math.abs(m.sourceAmount ?? m.quantity);
+      } else if (m.type === 'adjustment') {
+        state.quantity += m.quantity;
+      }
+      // dividend: no holding changes
+
+      holdingState.set(m.holdingId, state);
+    }
+
+    // Compute total ILS value at this date from running state
+    let totalValueIls = 0;
+    const holdingsSnapshotArr: { name: string; quantity: number; currency: string; price: number | null; valueIls: number }[] = [];
+
+    for (const [holdingId, state] of holdingState) {
+      if (state.quantity === 0) continue;
+      const meta = holdingMeta.get(holdingId);
+      if (!meta) continue;
+
+      const cryptoHasRate = meta.type === 'crypto' && meta.currency in rates;
+      const needsPrice = meta.type === 'stock' || meta.type === 'etf' || (meta.type === 'crypto' && !cryptoHasRate);
+
+      // Try to get ILS value from sourceAmount of movements on this date for this holding
+      let ilsFromSource: number | null = null;
+      for (const m of dayMovements) {
+        if (m.holdingId === holdingId && m.sourceAmount != null && m.sourceCurrency?.toUpperCase() === 'ILS') {
+          ilsFromSource = (ilsFromSource ?? 0) + Math.abs(m.sourceAmount);
+        }
+      }
+
+      if (ilsFromSource != null) {
+        // Use cumulative ILS: previous snapshot value + this day's source amount
+        // For simplicity, compute running total from all movements up to this date
+        let cumulativeIls = 0;
+        for (const m of allMovements) {
+          if (m.date > date) break;
+          if (m.holdingId !== holdingId) continue;
+          if (m.sourceAmount != null && m.sourceCurrency?.toUpperCase() === 'ILS') {
+            if (m.type === 'sell' || m.type === 'withdrawal') {
+              cumulativeIls -= Math.abs(m.sourceAmount);
+            } else {
+              cumulativeIls += Math.abs(m.sourceAmount);
+            }
+          } else {
+            // No ILS source — use current rates as fallback for this movement
+            const currentValue = needsPrice ? m.quantity * (m.pricePerUnit ?? 0) : m.quantity;
+            if (m.type === 'sell' || m.type === 'withdrawal') {
+              cumulativeIls -= Math.abs(convertToIls(currentValue, meta.currency, rates));
+            } else if (m.type !== 'dividend' && m.type !== 'fee') {
+              cumulativeIls += Math.abs(convertToIls(currentValue, meta.currency, rates));
+            }
+          }
+        }
+        totalValueIls += Math.max(0, cumulativeIls);
+        holdingsSnapshotArr.push({
+          name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
+          quantity: state.quantity,
+          currency: meta.currency,
+          price: null,
+          valueIls: Math.max(0, cumulativeIls),
+        });
+      } else {
+        // No source amounts — fall back to current exchange rates
+        const currentValue = needsPrice ? 0 : state.quantity;
+        const valueIls = convertToIls(currentValue, meta.currency, rates);
+        totalValueIls += valueIls;
+        holdingsSnapshotArr.push({
+          name: holdingRows.find(h => h.id === holdingId)?.name ?? 'Unknown',
+          quantity: state.quantity,
+          currency: meta.currency,
+          price: null,
+          valueIls,
+        });
+      }
+    }
+
+    const holdingsJson = JSON.stringify(holdingsSnapshotArr);
+    const ratesJson = JSON.stringify(rates);
+
+    db.insert(assetSnapshots).values({
+      assetId,
+      date,
+      holdingsSnapshot: holdingsJson,
+      totalValueIls,
+      exchangeRates: ratesJson,
+    }).onConflictDoUpdate({
+      target: [assetSnapshots.assetId, assetSnapshots.date],
+      set: {
+        holdingsSnapshot: holdingsJson,
+        totalValueIls,
+        exchangeRates: ratesJson,
+        createdAt: new Date().toISOString(),
+      },
+    }).run();
+
+    snapshotDates.add(date);
+  }
+
+  // Clean up: remove snapshots on movement dates that no longer have any movements
+  // (Only relevant after a movement delete — snapshotDates tracks what we just wrote)
+  if (excludeMovementId) {
+    const activeDates = new Set(allMovements.map(m => m.date));
+    const existingSnapshots = db.select({ id: assetSnapshots.id, date: assetSnapshots.date })
+      .from(assetSnapshots)
+      .where(eq(assetSnapshots.assetId, assetId))
+      .all();
+
+    for (const snap of existingSnapshots) {
+      // Only remove snapshots on dates we didn't just write and that have no movements
+      // Keep today's snapshot and any non-movement snapshots (from holding edits etc.)
+      if (snap.date === today || activeDates.has(snap.date) || snapshotDates.has(snap.date)) continue;
+      // Only delete if the date is NOT after the last movement (those are live snapshots)
+      const lastMovementDate = allMovements.length > 0 ? allMovements[allMovements.length - 1].date : '';
+      if (snap.date > lastMovementDate) continue;
+      db.delete(assetSnapshots).where(eq(assetSnapshots.id, snap.id)).run();
+    }
+  }
 }
 
 export async function assetsRoutes(app: FastifyInstance) {
@@ -441,7 +626,7 @@ export async function assetsRoutes(app: FastifyInstance) {
     if ((type === 'deposit' || type === 'buy' || type === 'dividend') && quantity <= 0) {
       return reply.status(400).send({ error: `Quantity must be positive for ${type}` });
     }
-    if ((type === 'withdrawal' || type === 'sell') && quantity >= 0) {
+    if ((type === 'withdrawal' || type === 'sell' || type === 'fee') && quantity >= 0) {
       return reply.status(400).send({ error: `Quantity must be negative for ${type}` });
     }
 
@@ -466,7 +651,7 @@ export async function assetsRoutes(app: FastifyInstance) {
       }
     }
 
-    const needsSnapshot = type !== 'dividend' && type !== 'fee';
+    const needsSnapshot = type !== 'dividend';
 
     const created = sqlite.transaction(() => {
       // Insert movement
@@ -498,10 +683,13 @@ export async function assetsRoutes(app: FastifyInstance) {
         } else if (type === 'deposit') {
           newQty += data.quantity;
           newCostBasis += data.quantity;
+        } else if (type === 'fee') {
+          // Fees increase cost basis (they're an investment cost) but don't change quantity
+          newCostBasis += Math.abs(data.sourceAmount ?? data.quantity);
         } else if (type === 'adjustment') {
           newQty += data.quantity;
         }
-        // dividend and fee: no holding changes
+        // dividend: no holding changes
 
         if (newQty !== holding.quantity || newCostBasis !== holding.costBasis) {
           db.update(holdings).set({
@@ -518,6 +706,9 @@ export async function assetsRoutes(app: FastifyInstance) {
     if (needsSnapshot) {
       try { await generateAssetSnapshot(assetId); } catch (err) {
         request.log.error({ err, assetId }, 'Failed to generate asset snapshot');
+      }
+      try { await replayMovementSnapshots(assetId); } catch (err) {
+        request.log.error({ err, assetId }, 'Failed to replay movement snapshots');
       }
     }
 
@@ -570,6 +761,8 @@ export async function assetsRoutes(app: FastifyInstance) {
         } else if (type === 'deposit') {
           restoredQty -= quantity;
           restoredCostBasis -= quantity;
+        } else if (type === 'fee') {
+          restoredCostBasis -= Math.abs(movement.sourceAmount ?? quantity);
         } else if (type === 'adjustment') {
           restoredQty -= quantity;
         }
@@ -586,9 +779,12 @@ export async function assetsRoutes(app: FastifyInstance) {
       db.delete(assetMovements).where(eq(assetMovements.id, id)).run();
     })();
 
-    if (holding && movement.type !== 'dividend' && movement.type !== 'fee') {
+    if (holding && movement.type !== 'dividend') {
       try { await generateAssetSnapshot(movement.assetId); } catch (err) {
         request.log.error({ err, assetId: movement.assetId }, 'Failed to generate asset snapshot');
+      }
+      try { await replayMovementSnapshots(movement.assetId, id); } catch (err) {
+        request.log.error({ err, assetId: movement.assetId }, 'Failed to replay movement snapshots');
       }
     }
 

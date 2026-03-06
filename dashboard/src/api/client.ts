@@ -605,6 +605,7 @@ export interface NetWorth {
 export interface NetWorthHistoryPoint {
   date: string;
   total: number;
+  liquidTotal: number;
   banks: number;
   assets: number;
   liabilities: number;
