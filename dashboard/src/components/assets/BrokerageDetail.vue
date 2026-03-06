@@ -87,14 +87,6 @@ const assetCurrency = computed(() => asset.value?.currency ?? 'ILS');
 const isNonIls = computed(() => assetCurrency.value !== 'ILS');
 const showingIls = computed(() => displayCurrency.value === 'ILS' || !isNonIls.value);
 
-function displayValue(nativeValue: number, currency: string): string {
-  if (showingIls.value && currency !== 'ILS') {
-    const rate = exchangeRates.value[currency] ?? 1;
-    return formatAmount(nativeValue * rate, 'ILS');
-  }
-  return formatAmount(nativeValue, currency);
-}
-
 const asset = computed(() => assetApi.data.value);
 const holdings = computed(() => asset.value?.holdings ?? []);
 const movementsList = ref<Movement[]>([]);

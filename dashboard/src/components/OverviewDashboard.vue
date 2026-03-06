@@ -18,7 +18,7 @@ ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarEle
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 }
-const [y, m] = israelDate(new Date()).split('-').map(Number);
+const [y, m] = israelDate(new Date()).split('-').map(Number) as [number, number];
 const thisMonthStart = `${y}-${String(m).padStart(2, '0')}-01`;
 const lastMonthStart = israelDate(new Date(y, m - 2, 1));
 const lastMonthEnd = israelDate(new Date(y, m - 1, 0));

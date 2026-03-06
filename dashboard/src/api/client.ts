@@ -601,6 +601,7 @@ export interface NetWorthAsset {
   id: number;
   name: string;
   type: string;
+  currency: string;
   liquidity: string;
   totalValueIls: number;
   holdings: NetWorthAssetHolding[];

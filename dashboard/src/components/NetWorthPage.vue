@@ -781,7 +781,7 @@ const fullLiabilityMap = computed(() => {
                         type="number"
                         step="any"
                         class="h-7 text-xs w-24"
-                        :model-value="editedHoldings.get(h.id)?.lastPrice"
+                        :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
                         @update:model-value="(v: string | number) => {
                           const e = editedHoldings.get(h.id);
                           if (e) e.lastPrice = Number(v);

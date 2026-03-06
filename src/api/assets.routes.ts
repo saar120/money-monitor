@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, desc, asc, count } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { db, sqlite } from '../db/connection.js';
 import { assets, holdings, accounts, assetSnapshots, assetMovements } from '../db/schema.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
@@ -44,10 +44,8 @@ function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
   let gainLoss: number | null = null;
   let gainLossPercent: number | null = null;
 
-  if (!isCrypto) {
-    gainLoss = currentValue - h.costBasis;
-    gainLossPercent = h.costBasis !== 0 ? (gainLoss / h.costBasis) * 100 : null;
-  }
+  gainLoss = currentValue - h.costBasis;
+  gainLossPercent = h.costBasis !== 0 ? (gainLoss / h.costBasis) * 100 : null;
 
   return {
     id: h.id,
@@ -67,7 +65,44 @@ function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
   };
 }
 
-function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<string, number>) {
+interface MovementAggregates {
+  depositIls: number;
+  withdrawIls: number;
+  rentTotal: number;
+}
+
+/** Pre-fetch movement aggregates for a set of assets in a single query (avoids N+1). */
+function batchMovementAggregates(assetIds: number[]): Map<number, MovementAggregates> {
+  if (assetIds.length === 0) return new Map();
+  const rows = db.select({
+    assetId: assetMovements.assetId,
+    type: assetMovements.type,
+    sourceTotal: sql<number>`COALESCE(SUM(${assetMovements.sourceAmount}), 0)`,
+    qtyTotal: sql<number>`COALESCE(SUM(${assetMovements.quantity}), 0)`,
+  }).from(assetMovements)
+    .where(and(
+      inArray(assetMovements.assetId, assetIds),
+      inArray(assetMovements.type, ['deposit', 'withdrawal', 'rent_income']),
+    ))
+    .groupBy(assetMovements.assetId, assetMovements.type)
+    .all();
+
+  const map = new Map<number, MovementAggregates>();
+  for (const row of rows) {
+    const entry = map.get(row.assetId) ?? { depositIls: 0, withdrawIls: 0, rentTotal: 0 };
+    if (row.type === 'deposit') entry.depositIls = row.sourceTotal;
+    else if (row.type === 'withdrawal') entry.withdrawIls = Math.abs(row.sourceTotal);
+    else if (row.type === 'rent_income') entry.rentTotal = row.qtyTotal;
+    map.set(row.assetId, entry);
+  }
+  return map;
+}
+
+function buildAssetResponse(
+  assetRow: typeof assets.$inferSelect,
+  rates: Record<string, number>,
+  aggMap?: Map<number, MovementAggregates>,
+) {
   const holdingRows = db.select().from(holdings).where(eq(holdings.assetId, assetRow.id)).all();
   const computedHoldings = holdingRows.map(h => computeHoldingValues(h, rates));
   const totalValueIls = computedHoldings.reduce((sum, h) => sum + h.currentValueIls, 0);
@@ -82,15 +117,17 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
   // Compute account-level ILS P&L
   const category = getAssetCategory(assetRow.type);
   let totalInvestedIls: number | null = null;
+  let totalRentEarned: number | null = null;
+
+  // Use pre-fetched aggregates if available, else query for this single asset
+  const agg = aggMap?.get(assetRow.id) ?? (
+    category === 'brokerage' || category === 'real_estate'
+      ? batchMovementAggregates([assetRow.id]).get(assetRow.id) ?? { depositIls: 0, withdrawIls: 0, rentTotal: 0 }
+      : { depositIls: 0, withdrawIls: 0, rentTotal: 0 }
+  );
 
   if (category === 'brokerage') {
-    const deposits = db.select().from(assetMovements)
-      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'deposit'))).all();
-    const withdrawals = db.select().from(assetMovements)
-      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'withdrawal'))).all();
-    const depositIls = deposits.reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
-    const withdrawIls = withdrawals.reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? 0), 0);
-    totalInvestedIls = deposits.length > 0 ? depositIls - withdrawIls : null;
+    totalInvestedIls = agg.depositIls > 0 ? agg.depositIls - agg.withdrawIls : null;
   } else if (category === 'simple_value' || category === 'real_estate') {
     const balanceHolding = computedHoldings.find(h => h.type === 'balance');
     totalInvestedIls = balanceHolding?.costBasis ?? null;
@@ -98,15 +135,14 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
     totalInvestedIls = computedHoldings.reduce((sum, h) => sum + h.costBasis, 0);
   }
 
-  const totalReturnIls = totalInvestedIls != null ? totalValueIls - totalInvestedIls : null;
-
-  // Compute total rent earned for real estate
-  let totalRentEarned: number | null = null;
   if (category === 'real_estate') {
-    const rentMovements = db.select().from(assetMovements)
-      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'rent_income'))).all();
-    totalRentEarned = rentMovements.reduce((sum, m) => sum + m.quantity, 0);
+    totalRentEarned = agg.rentTotal;
   }
+
+  // Real estate P&L includes rent: (value + rent) - purchasePrice
+  const totalReturnIls = totalInvestedIls != null
+    ? totalValueIls + (totalRentEarned ?? 0) - totalInvestedIls
+    : null;
 
   return {
     id: assetRow.id,
@@ -371,7 +407,9 @@ export async function assetsRoutes(app: FastifyInstance) {
       rows = db.select().from(assets).where(eq(assets.isActive, true)).all();
     }
 
-    const result = rows.map(row => buildAssetResponse(row, rates));
+    // Batch-prefetch movement aggregates to avoid N+1 queries
+    const aggMap = batchMovementAggregates(rows.map(r => r.id));
+    const result = rows.map(row => buildAssetResponse(row, rates, aggMap));
     return reply.send(result);
   });
 
