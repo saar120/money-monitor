@@ -2,11 +2,11 @@ import { createScraper, CompanyTypes } from 'israeli-bank-scrapers';
 import { createHash } from 'node:crypto';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { accounts, transactions, scrapeLogs } from '../db/schema.js';
+import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
-import { toIsraelDateStr } from '../shared/dates.js';
+import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
@@ -224,6 +224,18 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
         db.update(accounts)
           .set({ balance: scraperAccount.balance })
           .where(eq(accounts.id, targetAccount.id))
+          .run();
+
+        db.insert(accountBalanceHistory)
+          .values({
+            accountId: targetAccount.id,
+            date: todayInIsrael(),
+            balance: scraperAccount.balance,
+          })
+          .onConflictDoUpdate({
+            target: [accountBalanceHistory.accountId, accountBalanceHistory.date],
+            set: { balance: scraperAccount.balance },
+          })
           .run();
       }
 

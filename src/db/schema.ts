@@ -1,4 +1,4 @@
-import { sqliteTable, text, integer, real, index } from 'drizzle-orm/sqlite-core';
+import { sqliteTable, text, integer, real, index, uniqueIndex } from 'drizzle-orm/sqlite-core';
 import { sql } from 'drizzle-orm';
 
 export const accounts = sqliteTable('accounts', {
@@ -75,5 +75,84 @@ export const categories = sqliteTable('categories', {
   color: text('color'),
   rules: text('rules'),
   ignoredFromStats: integer('ignored_from_stats', { mode: 'boolean' }).notNull().default(false),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const assets = sqliteTable('assets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  type: text('type').notNull(),
+  institution: text('institution'),
+  liquidity: text('liquidity').notNull().default('liquid'),
+  linkedAccountId: integer('linked_account_id').references(() => accounts.id, { onDelete: 'set null' }),
+  notes: text('notes'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const holdings = sqliteTable('holdings', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  assetId: integer('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  name: text('name').notNull(),
+  type: text('type').notNull(),
+  currency: text('currency').notNull(),
+  quantity: real('quantity').notNull().default(0),
+  costBasis: real('cost_basis').notNull().default(0),
+  lastPrice: real('last_price'),
+  lastPriceDate: text('last_price_date'),
+  notes: text('notes'),
+  updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex('idx_holdings_asset_name').on(table.assetId, table.name),
+]);
+
+export const assetMovements = sqliteTable('asset_movements', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  assetId: integer('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  holdingId: integer('holding_id').references(() => holdings.id, { onDelete: 'set null' }),
+  date: text('date').notNull(),
+  type: text('type').notNull(),
+  quantity: real('quantity').notNull(),
+  currency: text('currency').notNull(),
+  pricePerUnit: real('price_per_unit'),
+  sourceAmount: real('source_amount'),
+  sourceCurrency: text('source_currency'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+});
+
+export const assetSnapshots = sqliteTable('asset_snapshots', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  assetId: integer('asset_id').notNull().references(() => assets.id, { onDelete: 'cascade' }),
+  date: text('date').notNull(),
+  holdingsSnapshot: text('holdings_snapshot'),
+  totalValueIls: real('total_value_ils').notNull(),
+  exchangeRates: text('exchange_rates'),
+  notes: text('notes'),
+  createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+}, (table) => [
+  uniqueIndex('idx_asset_snapshots_asset_date').on(table.assetId, table.date),
+]);
+
+export const accountBalanceHistory = sqliteTable('account_balance_history', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  accountId: integer('account_id').notNull().references(() => accounts.id),
+  date: text('date').notNull(),
+  balance: real('balance').notNull(),
+}, (table) => [
+  uniqueIndex('idx_account_balance_history_account_date').on(table.accountId, table.date),
+]);
+
+export const liabilities = sqliteTable('liabilities', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull().unique(),
+  type: text('type').notNull(),
+  currency: text('currency').notNull().default('ILS'),
+  originalAmount: real('original_amount').notNull(),
+  currentBalance: real('current_balance').notNull(),
+  interestRate: real('interest_rate'),
+  startDate: text('start_date'),
+  notes: text('notes'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
   createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
 });

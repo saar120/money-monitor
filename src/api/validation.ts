@@ -1,5 +1,5 @@
 import { z } from 'zod';
-import { COMPANY_IDS } from '../shared/types.js';
+import { COMPANY_IDS, ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, LIABILITY_TYPES, MOVEMENT_TYPES } from '../shared/types.js';
 
 // ─── Accounts ───
 
@@ -133,4 +133,109 @@ export const updateTransactionSchema = z.object({
 
 export const resolveReviewSchema = z.object({
   category: z.string().min(1).max(50),
+});
+
+// ─── Assets ───
+
+export const createAssetSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(ASSET_TYPES),
+  institution: z.string().max(100).optional(),
+  liquidity: z.enum(LIQUIDITY_TYPES).default('liquid'),
+  linkedAccountId: z.number().int().positive().optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const updateAssetSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  type: z.enum(ASSET_TYPES).optional(),
+  institution: z.string().max(100).nullable().optional(),
+  liquidity: z.enum(LIQUIDITY_TYPES).optional(),
+  linkedAccountId: z.number().int().positive().nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const createHoldingSchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(HOLDING_TYPES),
+  currency: z.string().min(1).max(10),
+  quantity: z.number().min(0),
+  costBasis: z.number().min(0).default(0),
+  lastPrice: z.number().optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const updateHoldingSchema = z.object({
+  quantity: z.number().min(0).optional(),
+  costBasis: z.number().min(0).optional(),
+  lastPrice: z.number().nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const assetsQuerySchema = z.object({
+  includeInactive: z.coerce.boolean().default(false),
+});
+
+export const snapshotsQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+// ─── Liabilities ───
+
+export const createLiabilitySchema = z.object({
+  name: z.string().min(1).max(100),
+  type: z.enum(LIABILITY_TYPES),
+  currency: z.string().min(1).max(10).default('ILS'),
+  originalAmount: z.number().positive(),
+  currentBalance: z.number().min(0),
+  interestRate: z.number().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const updateLiabilitySchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  type: z.enum(LIABILITY_TYPES).optional(),
+  currency: z.string().min(1).max(10).optional(),
+  originalAmount: z.number().positive().optional(),
+  currentBalance: z.number().min(0).optional(),
+  interestRate: z.number().nullable().optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  notes: z.string().max(500).nullable().optional(),
+});
+
+export const liabilitiesQuerySchema = z.object({
+  includeInactive: z.coerce.boolean().default(false),
+});
+
+// ─── Net Worth ───
+
+export const netWorthHistoryQuerySchema = z.object({
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
+});
+
+// ─── Movements ───
+
+export const createMovementSchema = z.object({
+  holdingId: z.number().int().positive().optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/),
+  type: z.enum(MOVEMENT_TYPES),
+  quantity: z.number(),
+  currency: z.string().min(1).max(10),
+  pricePerUnit: z.number().positive().optional(),
+  sourceAmount: z.number().positive().optional(),
+  sourceCurrency: z.string().min(1).max(10).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const movementQuerySchema = z.object({
+  holdingId: z.coerce.number().int().positive().optional(),
+  type: z.enum(MOVEMENT_TYPES).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  offset: z.coerce.number().int().min(0).default(0),
+  limit: z.coerce.number().int().min(1).max(500).default(50),
 });

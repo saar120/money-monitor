@@ -43,6 +43,13 @@ export interface ScraperResult {
   errorMessage?: string;
 }
 
+// Net worth type enums
+export const ASSET_TYPES = ['brokerage', 'pension', 'keren_hishtalmut', 'crypto', 'fund', 'real_estate'] as const;
+export const LIQUIDITY_TYPES = ['liquid', 'restricted', 'locked'] as const;
+export const HOLDING_TYPES = ['stock', 'etf', 'cash', 'fund_units', 'crypto', 'balance'] as const;
+export const MOVEMENT_TYPES = ['deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'fee', 'adjustment'] as const;
+export const LIABILITY_TYPES = ['loan', 'mortgage', 'credit_line', 'other'] as const;
+
 // Supported company IDs (from israeli-bank-scrapers CompanyTypes)
 export const COMPANY_IDS = [
   'hapoalim', 'leumi', 'discount', 'mizrahi', 'otsarHahayal',
