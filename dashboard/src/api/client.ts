@@ -457,6 +457,20 @@ export function deleteAsset(id: number) {
   return request<void>(`/assets/${id}`, { method: 'DELETE' });
 }
 
+export function updateAssetValue(
+  assetId: number,
+  data: { currentValue: number; contribution?: number; date?: string; notes?: string },
+): Promise<Asset> {
+  return request<Asset>(`/assets/${assetId}/value`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function recordRentIncome(
+  assetId: number,
+  data: { amount: number; date?: string; notes?: string },
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/assets/${assetId}/rent`, { method: 'POST', body: JSON.stringify(data) });
+}
+
 export function getExchangeRates() {
   return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>('/exchange-rates');
 }
