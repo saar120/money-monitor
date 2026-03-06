@@ -11,6 +11,7 @@ import {
 } from './validation.js';
 import { getExchangeRates, convertToIls } from '../services/exchange-rates.js';
 import { todayInIsrael } from '../shared/dates.js';
+import { getAssetCategory } from '../shared/types.js';
 
 type HoldingRow = typeof holdings.$inferSelect;
 
@@ -380,6 +381,19 @@ export async function assetsRoutes(app: FastifyInstance) {
       linkedAccountId: data.linkedAccountId,
       notes: data.notes,
     }).returning().get();
+
+    // Auto-create a balance holding for non-brokerage, non-crypto types
+    const category = getAssetCategory(data.type);
+    if (category !== 'brokerage' && category !== 'crypto') {
+      db.insert(holdings).values({
+        assetId: result.id,
+        name: data.name,
+        type: 'balance',
+        currency: data.currency,
+        quantity: 0,
+        costBasis: 0,
+      }).run();
+    }
 
     const { rates } = await getExchangeRates();
     const response = buildAssetResponse(result, rates);
