@@ -425,6 +425,9 @@ export interface Asset {
   notes: string | null;
   holdings: Holding[];
   totalValueIls: number;
+  totalInvestedIls: number | null;
+  totalReturnIls: number | null;
+  totalRentEarned: number | null;
 }
 
 export interface AssetSnapshot {

@@ -79,6 +79,35 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
     linkedAccountName = acct?.displayName ?? null;
   }
 
+  // Compute account-level ILS P&L
+  const category = getAssetCategory(assetRow.type);
+  let totalInvestedIls: number | null = null;
+
+  if (category === 'brokerage') {
+    const deposits = db.select().from(assetMovements)
+      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'deposit'))).all();
+    const withdrawals = db.select().from(assetMovements)
+      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'withdrawal'))).all();
+    const depositIls = deposits.reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
+    const withdrawIls = withdrawals.reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? 0), 0);
+    totalInvestedIls = deposits.length > 0 ? depositIls - withdrawIls : null;
+  } else if (category === 'simple_value' || category === 'real_estate') {
+    const balanceHolding = computedHoldings.find(h => h.type === 'balance');
+    totalInvestedIls = balanceHolding?.costBasis ?? null;
+  } else if (category === 'crypto') {
+    totalInvestedIls = computedHoldings.reduce((sum, h) => sum + h.costBasis, 0);
+  }
+
+  const totalReturnIls = totalInvestedIls != null ? totalValueIls - totalInvestedIls : null;
+
+  // Compute total rent earned for real estate
+  let totalRentEarned: number | null = null;
+  if (category === 'real_estate') {
+    const rentMovements = db.select().from(assetMovements)
+      .where(and(eq(assetMovements.assetId, assetRow.id), eq(assetMovements.type, 'rent_income'))).all();
+    totalRentEarned = rentMovements.reduce((sum, m) => sum + m.quantity, 0);
+  }
+
   return {
     id: assetRow.id,
     name: assetRow.name,
@@ -92,6 +121,9 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
     notes: assetRow.notes,
     holdings: computedHoldings,
     totalValueIls,
+    totalInvestedIls,
+    totalReturnIls,
+    totalRentEarned,
   };
 }
 
