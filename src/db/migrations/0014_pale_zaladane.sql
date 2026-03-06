@@ -1,0 +1,1 @@
+ALTER TABLE `asset_snapshots` ADD `total_value` real;

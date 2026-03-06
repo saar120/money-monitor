@@ -9,10 +9,11 @@ import {
   getAsset, getMovements, getAssetSnapshots,
   createMovement, deleteMovement,
   createHolding, updateHolding, deleteHolding,
+  getExchangeRates,
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES,
@@ -31,7 +32,7 @@ import {
   DialogFooter, DialogClose,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogAction, AlertDialogCancel,
+  AlertDialog, AlertDialogCancel,
   AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
   AlertDialogHeader, AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
@@ -69,6 +70,35 @@ async function refreshAll() {
   await Promise.all([assetApi.execute(), movementsApi.execute(), snapshotsApi.execute()]);
 }
 
+// ─── Currency toggle ───
+const CURRENCY_PREF_KEY = 'asset_display_currency';
+const displayCurrency = ref<'native' | 'ILS'>(
+  (localStorage.getItem(CURRENCY_PREF_KEY) as 'native' | 'ILS') ?? 'native'
+);
+watch(displayCurrency, (val) => {
+  localStorage.setItem(CURRENCY_PREF_KEY, val);
+});
+const exchangeRates = ref<Record<string, number>>({});
+
+onMounted(async () => {
+  try {
+    const { rates } = await getExchangeRates();
+    exchangeRates.value = rates;
+  } catch { /* use empty rates */ }
+});
+
+const assetCurrency = computed(() => asset.value?.currency ?? 'ILS');
+const isNonIls = computed(() => assetCurrency.value !== 'ILS');
+const showingIls = computed(() => displayCurrency.value === 'ILS' || !isNonIls.value);
+
+function displayValue(nativeValue: number, currency: string): string {
+  if (showingIls.value && currency !== 'ILS') {
+    const rate = exchangeRates.value[currency] ?? 1;
+    return formatAmount(nativeValue * rate, 'ILS');
+  }
+  return formatAmount(nativeValue, currency);
+}
+
 const asset = computed(() => assetApi.data.value);
 const holdings = computed(() => asset.value?.holdings ?? []);
 const movements = ref<Movement[]>([]);
@@ -99,17 +129,49 @@ const currentValue = computed(() =>
   holdings.value.reduce((sum, h) => sum + h.currentValueIls, 0)
 );
 
+const currentValueNative = computed(() =>
+  holdings.value.reduce((sum, h) => sum + h.currentValue, 0)
+);
+
 const totalInvested = computed(() => {
   const mvs = movements.value;
   if (mvs.length === 0) return null;
-  return mvs
-    .filter(m => m.type === 'deposit' || m.type === 'buy')
-    .reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
+
+  if (showingIls.value) {
+    const invested = mvs
+      .filter(m => m.type === 'deposit' || m.type === 'buy')
+      .reduce((sum, m) => {
+        if (m.sourceCurrency === 'ILS' && m.sourceAmount) return sum + m.sourceAmount;
+        const rate = exchangeRates.value[m.currency] ?? 1;
+        const nativeAmount = m.type === 'buy' ? Math.abs(m.quantity) * (m.pricePerUnit ?? 0) : Math.abs(m.quantity);
+        return sum + nativeAmount * rate;
+      }, 0);
+    const fees = mvs
+      .filter(m => m.type === 'fee')
+      .reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? m.quantity), 0);
+    return invested + fees;
+  } else {
+    const invested = mvs
+      .filter(m => m.type === 'deposit' || m.type === 'buy')
+      .reduce((sum, m) => {
+        if (m.type === 'buy') return sum + Math.abs(m.quantity) * (m.pricePerUnit ?? 0);
+        return sum + Math.abs(m.quantity);
+      }, 0);
+    const fees = mvs
+      .filter(m => m.type === 'fee')
+      .reduce((sum, m) => sum + Math.abs(m.quantity), 0);
+    return invested + fees;
+  }
+});
+
+const displayCurrentValue = computed(() => {
+  if (showingIls.value) return currentValue.value;
+  return currentValueNative.value;
 });
 
 const totalReturn = computed(() => {
   if (totalInvested.value === null || totalInvested.value === 0) return null;
-  const amount = currentValue.value - totalInvested.value;
+  const amount = displayCurrentValue.value - totalInvested.value;
   const pct = (amount / totalInvested.value) * 100;
   return { amount, pct };
 });
@@ -154,8 +216,8 @@ const chartData = computed(() => {
       return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     }),
     datasets: [{
-      label: 'Value (ILS)',
-      data: snapshots.value.map(s => s.totalValueIls),
+      label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
+      data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
       borderColor: typeColor.value,
       backgroundColor: typeColor.value + '20',
       fill: true,
@@ -167,7 +229,7 @@ const chartData = computed(() => {
   };
 });
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   plugins: {
     legend: { display: false },
@@ -179,7 +241,8 @@ const chartOptions = {
       bodyColor: '#f0f0f3',
       callbacks: {
         label(ctx: { parsed: { y: number } }) {
-          return ` ${formatCurrency(ctx.parsed.y)}`;
+          const currency = showingIls.value ? 'ILS' : assetCurrency.value;
+          return ` ${formatAmount(ctx.parsed.y, currency)}`;
         },
       },
     },
@@ -194,15 +257,17 @@ const chartOptions = {
         color: '#71717a',
         callback(value: number | string) {
           const v = Number(value);
-          if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
-          if (v >= 1_000) return `₪${(v / 1_000).toFixed(0)}K`;
-          return `₪${v}`;
+          const cur = showingIls.value ? 'ILS' : assetCurrency.value;
+          const sym = CURRENCY_SYMBOLS[cur] ?? cur + ' ';
+          if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
+          if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
+          return `${sym}${v}`;
         },
       },
       grid: { color: 'rgba(255,255,255,0.03)' },
     },
   },
-};
+}));
 
 // ─── Holding Dialog ───
 const showHoldingDialog = ref(false);
@@ -330,10 +395,10 @@ function openAddMovement() {
     type: 'buy',
     holdingId: 'none',
     quantity: 0,
-    currency: 'ILS',
+    currency: assetCurrency.value,
     pricePerUnit: null,
     sourceAmount: null,
-    sourceCurrency: 'ILS',
+    sourceCurrency: isNonIls.value ? 'ILS' : '',
     notes: '',
   };
   movementError.value = null;
@@ -356,6 +421,7 @@ const quantityLabel = computed(() => {
   const t = movementForm.value.type;
   if (t === 'buy' || t === 'deposit' || t === 'dividend') return 'Quantity (positive)';
   if (t === 'sell' || t === 'withdrawal') return 'Quantity (how much to remove)';
+  if (t === 'fee') return 'Fee amount';
   return 'Quantity (+/-)';
 });
 
@@ -381,8 +447,15 @@ async function saveMovement() {
   movementSaving.value = true;
   movementError.value = null;
   try {
-    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal';
+    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal' || movementForm.value.type === 'fee';
     const quantity = isNegativeType ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
+
+    let sourceAmount = movementForm.value.sourceAmount ?? undefined;
+    let sourceCurrency = movementForm.value.sourceCurrency || undefined;
+    if (isNonIls.value && sourceAmount != null) {
+      sourceCurrency = 'ILS';
+    }
+
     await createMovement(assetId.value, {
       holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
       date: movementForm.value.date,
@@ -390,8 +463,8 @@ async function saveMovement() {
       quantity,
       currency: movementForm.value.currency,
       pricePerUnit: showPricePerUnit.value && movementForm.value.pricePerUnit != null ? movementForm.value.pricePerUnit : undefined,
-      sourceAmount: movementForm.value.sourceAmount ?? undefined,
-      sourceCurrency: movementForm.value.sourceCurrency || undefined,
+      sourceAmount,
+      sourceCurrency,
       notes: movementForm.value.notes || undefined,
     });
     showMovementDialog.value = false;
@@ -450,13 +523,18 @@ async function confirmDeleteMovement() {
 
     <template v-else-if="asset">
       <!-- Asset header -->
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
-        <div class="flex items-center gap-2 mt-1">
-          <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
-          <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
-          <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
+      <div class="flex items-start justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
+          <div class="flex items-center gap-2 mt-1">
+            <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
+            <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
+            <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
+          </div>
         </div>
+        <Button v-if="isNonIls" variant="outline" size="sm" @click="displayCurrency = displayCurrency === 'native' ? 'ILS' : 'native'">
+          {{ showingIls ? assetCurrency : 'ILS' }}
+        </Button>
       </div>
 
       <!-- Performance summary cards -->
@@ -466,7 +544,7 @@ async function confirmDeleteMovement() {
             <CardTitle class="text-sm font-medium text-muted-foreground">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div class="text-2xl font-bold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
           </CardContent>
         </Card>
 
@@ -475,7 +553,7 @@ async function confirmDeleteMovement() {
             <CardTitle class="text-sm font-medium text-muted-foreground">Total Invested</CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="totalInvested != null" class="text-2xl font-bold tabular-nums">{{ formatCurrency(totalInvested) }}</div>
+            <div v-if="totalInvested != null" class="text-2xl font-bold tabular-nums">{{ formatAmount(totalInvested, showingIls ? 'ILS' : assetCurrency) }}</div>
             <div v-else class="text-sm text-muted-foreground">No data</div>
           </CardContent>
         </Card>
@@ -487,7 +565,7 @@ async function confirmDeleteMovement() {
           <CardContent>
             <template v-if="totalReturn">
               <div :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-2xl font-bold tabular-nums">
-                {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatCurrency(totalReturn.amount) }}
+                {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatAmount(totalReturn.amount, showingIls ? 'ILS' : assetCurrency) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
                 <component :is="totalReturn.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" />
@@ -496,7 +574,7 @@ async function confirmDeleteMovement() {
                 </span>
               </div>
             </template>
-            <div v-else class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div v-else class="text-2xl font-bold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
           </CardContent>
         </Card>
       </div>
@@ -553,7 +631,7 @@ async function confirmDeleteMovement() {
                   <TableHead class="hidden md:table-cell">Type</TableHead>
                   <TableHead class="text-right">Quantity</TableHead>
                   <TableHead class="text-right">Price</TableHead>
-                  <TableHead class="text-right">Value (ILS)</TableHead>
+                  <TableHead class="text-right">Value</TableHead>
                   <TableHead class="text-right hidden lg:table-cell">Cost Basis</TableHead>
                   <TableHead class="text-right">P&amp;L</TableHead>
                   <TableHead class="w-[60px]"></TableHead>
@@ -597,12 +675,12 @@ async function confirmDeleteMovement() {
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</TableCell>
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatAmount(h.costBasis, showingIls ? 'ILS' : h.currency) }}</TableCell>
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
                       <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-sm tabular-nums font-medium">
-                        {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatCurrency(h.gainLoss) }}
+                        {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatAmount(h.gainLoss, showingIls ? 'ILS' : h.currency) }}
                       </span>
                       <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs block">
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
@@ -637,7 +715,7 @@ async function confirmDeleteMovement() {
                 <span v-if="h.lastPrice"> @ {{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
+                <span class="text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</span>
                 <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs">
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
@@ -799,10 +877,14 @@ async function confirmDeleteMovement() {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="holdingToDelete = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction :disabled="deletingHolding" @click="confirmDeleteHolding">
+          <Button
+            :disabled="deletingHolding"
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            @click="confirmDeleteHolding"
+          >
             <Loader2 v-if="deletingHolding" class="h-4 w-4 mr-1 animate-spin" />
             Delete
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -850,14 +932,23 @@ async function confirmDeleteMovement() {
             <label class="text-sm font-medium">Price per Unit</label>
             <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
           </div>
-          <div>
-            <label class="text-sm font-medium">Source Amount (what you paid)</label>
-            <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
-          </div>
-          <div>
-            <label class="text-sm font-medium">Source Currency</label>
-            <Input v-model="movementForm.sourceCurrency" />
-          </div>
+          <template v-if="isNonIls">
+            <div>
+              <label class="text-sm font-medium">ILS Cost Basis (optional)</label>
+              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" placeholder="What you paid in ILS" />
+              <p class="text-xs text-muted-foreground mt-1">Leave empty if unknown or paid in {{ assetCurrency }}</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <label class="text-sm font-medium">Source Amount (what you paid)</label>
+              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">Source Currency</label>
+              <Input v-model="movementForm.sourceCurrency" />
+            </div>
+          </template>
           <div>
             <label class="text-sm font-medium">Notes</label>
             <Textarea v-model="movementForm.notes" maxlength="500" />
@@ -888,10 +979,14 @@ async function confirmDeleteMovement() {
         <p v-if="deleteMovementError" class="text-sm text-destructive px-6">{{ deleteMovementError }}</p>
         <AlertDialogFooter>
           <AlertDialogCancel @click="movementToDelete = null; deleteMovementError = null">Cancel</AlertDialogCancel>
-          <AlertDialogAction :disabled="deletingMovement" @click="confirmDeleteMovement">
+          <Button
+            :disabled="deletingMovement"
+            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
+            @click="confirmDeleteMovement"
+          >
             <Loader2 v-if="deletingMovement" class="h-4 w-4 mr-1 animate-spin" />
             Delete
-          </AlertDialogAction>
+          </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>

@@ -3,7 +3,22 @@ export const DEFAULT_CATEGORY_COLOR = '#94a3b8';
 
 /** Format a number as ILS currency with shekel sign. Uses Math.abs() so the sign is always positive. */
 export function formatCurrency(amount: number): string {
-  return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2 })}`;
+  return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+export const CURRENCY_SYMBOLS: Record<string, string> = {
+  ILS: '₪',
+  USD: '$',
+  EUR: '€',
+  GBP: '£',
+};
+
+/** Format a number with the appropriate currency symbol. */
+export function formatAmount(amount: number, currency: string): string {
+  const symbol = CURRENCY_SYMBOLS[currency] ?? currency + ' ';
+  const isSymbolPrefix = currency in CURRENCY_SYMBOLS;
+  const formatted = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return isSymbolPrefix ? `${symbol}${formatted}` : `${formatted} ${symbol}`;
 }
 
 /** Format an ISO date string as a short locale date (he-IL). */

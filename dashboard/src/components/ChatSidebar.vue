@@ -86,12 +86,15 @@ defineExpose({ loadSessions });
           <div class="truncate text-sm font-medium">{{ session.title }}</div>
           <div class="text-[11px] opacity-60 mt-0.5">{{ formatDate(session.updatedAt) }}</div>
         </div>
-        <button
-          class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all flex-shrink-0"
+        <div
+          role="button"
+          tabindex="0"
+          class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all flex-shrink-0 cursor-pointer"
           @click="handleDelete(session.id, $event)"
+          @keydown.enter="handleDelete(session.id, $event)"
         >
           <Trash2 class="h-3.5 w-3.5" />
-        </button>
+        </div>
       </button>
 
       <div v-if="sessions.length === 0" class="px-3 py-6 text-center text-muted-foreground text-xs">

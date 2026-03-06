@@ -416,6 +416,7 @@ export interface Asset {
   id: number;
   name: string;
   type: string;
+  currency: string;
   institution: string | null;
   liquidity: string;
   linkedAccountId: number | null;
@@ -428,6 +429,7 @@ export interface Asset {
 
 export interface AssetSnapshot {
   date: string;
+  totalValue: number | null;
   totalValueIls: number;
 }
 
@@ -440,16 +442,20 @@ export function getAsset(id: number) {
   return request<Asset>(`/assets/${id}`);
 }
 
-export function createAsset(data: { name: string; type: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
+export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
   return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAsset(id: number, data: { name?: string; type?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
+export function updateAsset(id: number, data: { name?: string; type?: string; currency?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
   return request<Asset>(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
 export function deleteAsset(id: number) {
   return request<void>(`/assets/${id}`, { method: 'DELETE' });
+}
+
+export function getExchangeRates() {
+  return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>('/exchange-rates');
 }
 
 export function createHolding(assetId: number, data: { name: string; type: string; currency: string; quantity: number; costBasis?: number; lastPrice?: number; notes?: string }) {
@@ -605,6 +611,7 @@ export interface NetWorth {
 export interface NetWorthHistoryPoint {
   date: string;
   total: number;
+  liquidTotal: number;
   banks: number;
   assets: number;
   liabilities: number;
