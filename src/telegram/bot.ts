@@ -55,14 +55,13 @@ function resolveSession(chatId: number): string {
 
 /** Send a typing indicator at regular intervals until cancelled. */
 function startTypingLoop(chatId: number, api: Bot['api']): () => void {
-  let active = true;
+  let timer: ReturnType<typeof setTimeout> | null = null;
   const tick = () => {
-    if (!active) return;
     api.sendChatAction(chatId, 'typing').catch(() => {});
-    setTimeout(tick, 4000);
+    timer = setTimeout(tick, 4000);
   };
   tick();
-  return () => { active = false; };
+  return () => { if (timer !== null) clearTimeout(timer); };
 }
 
 export function startTelegramBot(): void {
@@ -72,6 +71,9 @@ export function startTelegramBot(): void {
   const allowedUsers = parseAllowedUsers();
 
   // ── Access control middleware ──
+  if (allowedUsers.size === 0) {
+    console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot is open to all users.');
+  }
   if (allowedUsers.size > 0) {
     bot.use(async (ctx, next) => {
       const userId = ctx.from?.id;
@@ -158,6 +160,8 @@ export function startTelegramBot(): void {
       for await (const event of chat(conversationHistory)) {
         if (event.type === 'result') {
           result = event.text;
+        } else if (event.type === 'error') {
+          throw new Error(event.text);
         }
       }
 
