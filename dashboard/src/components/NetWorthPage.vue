@@ -14,7 +14,7 @@ import {
   type NetWorth, type NetWorthHistory, type Account, type Asset, type Holding, type Liability,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatAmount } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES, LIABILITY_TYPE_LABELS,
@@ -73,6 +73,13 @@ const nwLiabilities = computed(() => nw.value?.liabilities ?? []);
 const bankAccounts = computed(() =>
   (accountsApi.data.value?.accounts ?? []).filter(a => a.accountType === 'bank')
 );
+
+function assetNativeDisplay(asset: { currency: string; totalValueIls: number }): string {
+  if (asset.currency === 'ILS') return formatAmount(asset.totalValueIls, 'ILS');
+  const rate = nw.value?.exchangeRates?.[asset.currency] ?? 1;
+  const native = asset.totalValueIls / rate;
+  return `${formatAmount(native, asset.currency)} (${formatAmount(asset.totalValueIls, 'ILS')})`;
+}
 
 // Merged liability data: net-worth summary + full detail
 interface MergedLiability {
@@ -331,12 +338,12 @@ async function saveQuickUpdate(asset: Asset) {
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const editingAsset = ref<Asset | null>(null);
-const assetForm = ref({ name: '', type: 'brokerage', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
+const assetForm = ref({ name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
 const assetSaving = ref(false);
 
 function openAddAsset() {
   editingAsset.value = null;
-  assetForm.value = { name: '', type: 'brokerage', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
+  assetForm.value = { name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
   showAssetDialog.value = true;
 }
 
@@ -345,6 +352,7 @@ function openEditAsset(asset: Asset) {
   assetForm.value = {
     name: asset.name,
     type: asset.type,
+    currency: asset.currency,
     institution: asset.institution ?? '',
     liquidity: asset.liquidity,
     linkedAccountId: asset.linkedAccountId != null ? String(asset.linkedAccountId) : 'none',
@@ -363,6 +371,7 @@ async function handleSaveAsset() {
     const data = {
       name: assetForm.value.name.trim(),
       type: assetForm.value.type,
+      currency: assetForm.value.currency,
       institution: assetForm.value.institution.trim() || undefined,
       liquidity: assetForm.value.liquidity,
       linkedAccountId: linked ?? undefined,
@@ -715,7 +724,7 @@ const fullLiabilityMap = computed(() => {
               </p>
             </div>
             <div class="text-right flex-shrink-0">
-              <p class="text-lg font-semibold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</p>
+              <p class="text-lg font-semibold tabular-nums">{{ assetNativeDisplay(asset) }}</p>
               <p class="text-xs text-muted-foreground">{{ pctOfTotal(asset.totalValueIls) }} of total</p>
             </div>
             <!-- Hover actions -->
@@ -962,6 +971,20 @@ const fullLiabilityMap = computed(() => {
                 <SelectItem v-for="(label, key) in ASSET_TYPE_LABELS" :key="key" :value="key">
                   {{ label }}
                 </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="space-y-1.5">
+            <label class="text-sm font-medium">Currency</label>
+            <Select v-model="assetForm.currency">
+              <SelectTrigger>
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="ILS">ILS (₪)</SelectItem>
+                <SelectItem value="USD">USD ($)</SelectItem>
+                <SelectItem value="EUR">EUR (€)</SelectItem>
+                <SelectItem value="GBP">GBP (£)</SelectItem>
               </SelectContent>
             </Select>
           </div>

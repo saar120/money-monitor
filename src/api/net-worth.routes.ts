@@ -90,6 +90,7 @@ export async function netWorthRoutes(app: FastifyInstance) {
       id: number;
       name: string;
       type: string;
+      currency: string;
       liquidity: string;
       totalValueIls: number;
       holdings: { name: string; currency: string; valueIls: number }[];
@@ -113,6 +114,7 @@ export async function netWorthRoutes(app: FastifyInstance) {
         id: asset.id,
         name: asset.name,
         type: asset.type,
+        currency: asset.currency,
         liquidity: asset.liquidity,
         totalValueIls: assetValueIls,
         holdings: holdingResults,

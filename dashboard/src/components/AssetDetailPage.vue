@@ -71,7 +71,13 @@ async function refreshAll() {
 }
 
 // ─── Currency toggle ───
-const displayCurrency = ref<'native' | 'ILS'>('native');
+const CURRENCY_PREF_KEY = 'asset_display_currency';
+const displayCurrency = ref<'native' | 'ILS'>(
+  (localStorage.getItem(CURRENCY_PREF_KEY) as 'native' | 'ILS') ?? 'native'
+);
+watch(displayCurrency, (val) => {
+  localStorage.setItem(CURRENCY_PREF_KEY, val);
+});
 const exchangeRates = ref<Record<string, number>>({});
 
 onMounted(async () => {
