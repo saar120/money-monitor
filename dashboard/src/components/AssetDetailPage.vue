@@ -388,10 +388,10 @@ function openAddMovement() {
     type: 'buy',
     holdingId: 'none',
     quantity: 0,
-    currency: 'ILS',
+    currency: assetCurrency.value,
     pricePerUnit: null,
     sourceAmount: null,
-    sourceCurrency: 'ILS',
+    sourceCurrency: isNonIls.value ? 'ILS' : '',
     notes: '',
   };
   movementError.value = null;
@@ -442,6 +442,13 @@ async function saveMovement() {
   try {
     const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal' || movementForm.value.type === 'fee';
     const quantity = isNegativeType ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
+
+    let sourceAmount = movementForm.value.sourceAmount ?? undefined;
+    let sourceCurrency = movementForm.value.sourceCurrency || undefined;
+    if (isNonIls.value && sourceAmount != null) {
+      sourceCurrency = 'ILS';
+    }
+
     await createMovement(assetId.value, {
       holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
       date: movementForm.value.date,
@@ -449,8 +456,8 @@ async function saveMovement() {
       quantity,
       currency: movementForm.value.currency,
       pricePerUnit: showPricePerUnit.value && movementForm.value.pricePerUnit != null ? movementForm.value.pricePerUnit : undefined,
-      sourceAmount: movementForm.value.sourceAmount ?? undefined,
-      sourceCurrency: movementForm.value.sourceCurrency || undefined,
+      sourceAmount,
+      sourceCurrency,
       notes: movementForm.value.notes || undefined,
     });
     showMovementDialog.value = false;
@@ -918,14 +925,23 @@ async function confirmDeleteMovement() {
             <label class="text-sm font-medium">Price per Unit</label>
             <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
           </div>
-          <div>
-            <label class="text-sm font-medium">Source Amount (what you paid)</label>
-            <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
-          </div>
-          <div>
-            <label class="text-sm font-medium">Source Currency</label>
-            <Input v-model="movementForm.sourceCurrency" />
-          </div>
+          <template v-if="isNonIls">
+            <div>
+              <label class="text-sm font-medium">ILS Cost Basis (optional)</label>
+              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" placeholder="What you paid in ILS" />
+              <p class="text-xs text-muted-foreground mt-1">Leave empty if unknown or paid in {{ assetCurrency }}</p>
+            </div>
+          </template>
+          <template v-else>
+            <div>
+              <label class="text-sm font-medium">Source Amount (what you paid)</label>
+              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
+            </div>
+            <div>
+              <label class="text-sm font-medium">Source Currency</label>
+              <Input v-model="movementForm.sourceCurrency" />
+            </div>
+          </template>
           <div>
             <label class="text-sm font-medium">Notes</label>
             <Textarea v-model="movementForm.notes" maxlength="500" />
