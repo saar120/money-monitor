@@ -41,6 +41,18 @@ export const LIABILITY_TYPE_LABELS: Record<string, string> = {
   other: 'Other',
 };
 
+export const MOVEMENT_TYPE_LABELS: Record<string, string> = {
+  deposit: 'Deposit',
+  withdrawal: 'Withdrawal',
+  buy: 'Buy',
+  sell: 'Sell',
+  dividend: 'Dividend',
+  fee: 'Fee',
+  adjustment: 'Adjustment',
+  contribution: 'Contribution',
+  rent_income: 'Rent Income',
+};
+
 // Liquidity badge styles
 export const LIQUIDITY_STYLES: Record<string, string> = {
   liquid: 'bg-success/10 text-success',
