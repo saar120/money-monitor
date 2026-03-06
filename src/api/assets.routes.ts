@@ -81,6 +81,7 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
     id: assetRow.id,
     name: assetRow.name,
     type: assetRow.type,
+    currency: assetRow.currency,
     institution: assetRow.institution,
     liquidity: assetRow.liquidity,
     linkedAccountId: assetRow.linkedAccountId,
@@ -361,6 +362,7 @@ export async function assetsRoutes(app: FastifyInstance) {
     const result = db.insert(assets).values({
       name: data.name,
       type: data.type,
+      currency: data.currency,
       institution: data.institution,
       liquidity: data.liquidity,
       linkedAccountId: data.linkedAccountId,
@@ -401,6 +403,7 @@ export async function assetsRoutes(app: FastifyInstance) {
     if (data.name !== undefined) updateSet.name = data.name;
     if (data.type !== undefined) updateSet.type = data.type;
     if (data.institution !== undefined) updateSet.institution = data.institution;
+    if (data.currency !== undefined) updateSet.currency = data.currency;
     if (data.liquidity !== undefined) updateSet.liquidity = data.liquidity;
     if (data.linkedAccountId !== undefined) updateSet.linkedAccountId = data.linkedAccountId;
     if (data.notes !== undefined) updateSet.notes = data.notes;

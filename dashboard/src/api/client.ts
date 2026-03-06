@@ -416,6 +416,7 @@ export interface Asset {
   id: number;
   name: string;
   type: string;
+  currency: string;
   institution: string | null;
   liquidity: string;
   linkedAccountId: number | null;
@@ -440,11 +441,11 @@ export function getAsset(id: number) {
   return request<Asset>(`/assets/${id}`);
 }
 
-export function createAsset(data: { name: string; type: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
+export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
   return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAsset(id: number, data: { name?: string; type?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
+export function updateAsset(id: number, data: { name?: string; type?: string; currency?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
   return request<Asset>(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
