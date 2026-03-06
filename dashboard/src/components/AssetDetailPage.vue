@@ -9,10 +9,11 @@ import {
   getAsset, getMovements, getAssetSnapshots,
   createMovement, deleteMovement,
   createHolding, updateHolding, deleteHolding,
+  getExchangeRates,
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatAmount } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES,
@@ -69,6 +70,29 @@ async function refreshAll() {
   await Promise.all([assetApi.execute(), movementsApi.execute(), snapshotsApi.execute()]);
 }
 
+// ─── Currency toggle ───
+const displayCurrency = ref<'native' | 'ILS'>('native');
+const exchangeRates = ref<Record<string, number>>({});
+
+onMounted(async () => {
+  try {
+    const { rates } = await getExchangeRates();
+    exchangeRates.value = rates;
+  } catch { /* use empty rates */ }
+});
+
+const assetCurrency = computed(() => asset.value?.currency ?? 'ILS');
+const isNonIls = computed(() => assetCurrency.value !== 'ILS');
+const showingIls = computed(() => displayCurrency.value === 'ILS' || !isNonIls.value);
+
+function displayValue(nativeValue: number, currency: string): string {
+  if (showingIls.value && currency !== 'ILS') {
+    const rate = exchangeRates.value[currency] ?? 1;
+    return formatAmount(nativeValue * rate, 'ILS');
+  }
+  return formatAmount(nativeValue, currency);
+}
+
 const asset = computed(() => assetApi.data.value);
 const holdings = computed(() => asset.value?.holdings ?? []);
 const movements = ref<Movement[]>([]);
@@ -99,21 +123,49 @@ const currentValue = computed(() =>
   holdings.value.reduce((sum, h) => sum + h.currentValueIls, 0)
 );
 
+const currentValueNative = computed(() =>
+  holdings.value.reduce((sum, h) => sum + h.currentValue, 0)
+);
+
 const totalInvested = computed(() => {
   const mvs = movements.value;
   if (mvs.length === 0) return null;
-  const invested = mvs
-    .filter(m => m.type === 'deposit' || m.type === 'buy')
-    .reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
-  const fees = mvs
-    .filter(m => m.type === 'fee')
-    .reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? m.quantity), 0);
-  return invested + fees;
+
+  if (showingIls.value) {
+    const invested = mvs
+      .filter(m => m.type === 'deposit' || m.type === 'buy')
+      .reduce((sum, m) => {
+        if (m.sourceCurrency === 'ILS' && m.sourceAmount) return sum + m.sourceAmount;
+        const rate = exchangeRates.value[m.currency] ?? 1;
+        const nativeAmount = m.type === 'buy' ? Math.abs(m.quantity) * (m.pricePerUnit ?? 0) : Math.abs(m.quantity);
+        return sum + nativeAmount * rate;
+      }, 0);
+    const fees = mvs
+      .filter(m => m.type === 'fee')
+      .reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? m.quantity), 0);
+    return invested + fees;
+  } else {
+    const invested = mvs
+      .filter(m => m.type === 'deposit' || m.type === 'buy')
+      .reduce((sum, m) => {
+        if (m.type === 'buy') return sum + Math.abs(m.quantity) * (m.pricePerUnit ?? 0);
+        return sum + Math.abs(m.quantity);
+      }, 0);
+    const fees = mvs
+      .filter(m => m.type === 'fee')
+      .reduce((sum, m) => sum + Math.abs(m.quantity), 0);
+    return invested + fees;
+  }
+});
+
+const displayCurrentValue = computed(() => {
+  if (showingIls.value) return currentValue.value;
+  return currentValueNative.value;
 });
 
 const totalReturn = computed(() => {
   if (totalInvested.value === null || totalInvested.value === 0) return null;
-  const amount = currentValue.value - totalInvested.value;
+  const amount = displayCurrentValue.value - totalInvested.value;
   const pct = (amount / totalInvested.value) * 100;
   return { amount, pct };
 });
@@ -158,8 +210,8 @@ const chartData = computed(() => {
       return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     }),
     datasets: [{
-      label: 'Value (ILS)',
-      data: snapshots.value.map(s => s.totalValueIls),
+      label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
+      data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
       borderColor: typeColor.value,
       backgroundColor: typeColor.value + '20',
       fill: true,
@@ -183,7 +235,8 @@ const chartOptions = {
       bodyColor: '#f0f0f3',
       callbacks: {
         label(ctx: { parsed: { y: number } }) {
-          return ` ${formatCurrency(ctx.parsed.y)}`;
+          const currency = showingIls.value ? 'ILS' : assetCurrency.value;
+          return ` ${formatAmount(ctx.parsed.y, currency)}`;
         },
       },
     },
@@ -198,9 +251,10 @@ const chartOptions = {
         color: '#71717a',
         callback(value: number | string) {
           const v = Number(value);
-          if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
-          if (v >= 1_000) return `₪${(v / 1_000).toFixed(0)}K`;
-          return `₪${v}`;
+          const sym = showingIls.value ? '₪' : (assetCurrency.value === 'USD' ? '$' : assetCurrency.value + ' ');
+          if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
+          if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
+          return `${sym}${v}`;
         },
       },
       grid: { color: 'rgba(255,255,255,0.03)' },
@@ -455,13 +509,18 @@ async function confirmDeleteMovement() {
 
     <template v-else-if="asset">
       <!-- Asset header -->
-      <div>
-        <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
-        <div class="flex items-center gap-2 mt-1">
-          <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
-          <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
-          <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
+      <div class="flex items-start justify-between">
+        <div>
+          <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
+          <div class="flex items-center gap-2 mt-1">
+            <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
+            <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
+            <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
+          </div>
         </div>
+        <Button v-if="isNonIls" variant="outline" size="sm" @click="displayCurrency = displayCurrency === 'native' ? 'ILS' : 'native'">
+          {{ showingIls ? assetCurrency : 'ILS' }}
+        </Button>
       </div>
 
       <!-- Performance summary cards -->
@@ -471,7 +530,7 @@ async function confirmDeleteMovement() {
             <CardTitle class="text-sm font-medium text-muted-foreground">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div class="text-2xl font-bold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
           </CardContent>
         </Card>
 
@@ -480,7 +539,7 @@ async function confirmDeleteMovement() {
             <CardTitle class="text-sm font-medium text-muted-foreground">Total Invested</CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="totalInvested != null" class="text-2xl font-bold tabular-nums">{{ formatCurrency(totalInvested) }}</div>
+            <div v-if="totalInvested != null" class="text-2xl font-bold tabular-nums">{{ formatAmount(totalInvested, showingIls ? 'ILS' : assetCurrency) }}</div>
             <div v-else class="text-sm text-muted-foreground">No data</div>
           </CardContent>
         </Card>
@@ -492,7 +551,7 @@ async function confirmDeleteMovement() {
           <CardContent>
             <template v-if="totalReturn">
               <div :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-2xl font-bold tabular-nums">
-                {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatCurrency(totalReturn.amount) }}
+                {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatAmount(totalReturn.amount, showingIls ? 'ILS' : assetCurrency) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
                 <component :is="totalReturn.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" />
@@ -501,7 +560,7 @@ async function confirmDeleteMovement() {
                 </span>
               </div>
             </template>
-            <div v-else class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div v-else class="text-2xl font-bold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
           </CardContent>
         </Card>
       </div>
@@ -558,7 +617,7 @@ async function confirmDeleteMovement() {
                   <TableHead class="hidden md:table-cell">Type</TableHead>
                   <TableHead class="text-right">Quantity</TableHead>
                   <TableHead class="text-right">Price</TableHead>
-                  <TableHead class="text-right">Value (ILS)</TableHead>
+                  <TableHead class="text-right">Value</TableHead>
                   <TableHead class="text-right hidden lg:table-cell">Cost Basis</TableHead>
                   <TableHead class="text-right">P&amp;L</TableHead>
                   <TableHead class="w-[60px]"></TableHead>
@@ -602,7 +661,7 @@ async function confirmDeleteMovement() {
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</TableCell>
                   <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
@@ -642,7 +701,7 @@ async function confirmDeleteMovement() {
                 <span v-if="h.lastPrice"> @ {{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
+                <span class="text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</span>
                 <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs">
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>

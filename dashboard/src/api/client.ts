@@ -429,6 +429,7 @@ export interface Asset {
 
 export interface AssetSnapshot {
   date: string;
+  totalValue: number | null;
   totalValueIls: number;
 }
 
@@ -451,6 +452,10 @@ export function updateAsset(id: number, data: { name?: string; type?: string; cu
 
 export function deleteAsset(id: number) {
   return request<void>(`/assets/${id}`, { method: 'DELETE' });
+}
+
+export function getExchangeRates() {
+  return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>('/exchange-rates');
 }
 
 export function createHolding(assetId: number, data: { name: string; type: string; currency: string; quantity: number; costBasis?: number; lastPrice?: number; notes?: string }) {
