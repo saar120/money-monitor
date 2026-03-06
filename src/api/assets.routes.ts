@@ -224,7 +224,8 @@ export async function assetsRoutes(app: FastifyInstance) {
       db.update(assets).set(updateSet).where(eq(assets.id, id)).run();
     }
 
-    const updated = db.select().from(assets).where(eq(assets.id, id)).get()!;
+    const updated = db.select().from(assets).where(eq(assets.id, id)).get();
+    if (!updated) return reply.status(404).send({ error: 'Asset not found after update' });
     const { rates } = await getExchangeRates();
     const response = buildAssetResponse(updated, rates);
     return reply.send(response);
@@ -276,7 +277,9 @@ export async function assetsRoutes(app: FastifyInstance) {
       notes: data.notes,
     }).returning().get();
 
-    await generateAssetSnapshot(assetId);
+    try { await generateAssetSnapshot(assetId); } catch (err) {
+      request.log.error({ err, assetId }, 'Failed to generate asset snapshot');
+    }
 
     const { rates } = await getExchangeRates();
     return reply.status(201).send(computeHoldingValues(result, rates));
@@ -303,9 +306,12 @@ export async function assetsRoutes(app: FastifyInstance) {
 
     db.update(holdings).set(updateSet).where(eq(holdings.id, id)).run();
 
-    await generateAssetSnapshot(holding.assetId);
+    try { await generateAssetSnapshot(holding.assetId); } catch (err) {
+      request.log.error({ err, assetId: holding.assetId }, 'Failed to generate asset snapshot');
+    }
 
-    const updated = db.select().from(holdings).where(eq(holdings.id, id)).get()!;
+    const updated = db.select().from(holdings).where(eq(holdings.id, id)).get();
+    if (!updated) return reply.status(404).send({ error: 'Holding not found after update' });
     const { rates } = await getExchangeRates();
     return reply.send(computeHoldingValues(updated, rates));
   });
@@ -321,7 +327,9 @@ export async function assetsRoutes(app: FastifyInstance) {
     const assetId = holding.assetId;
     db.delete(holdings).where(eq(holdings.id, id)).run();
 
-    await generateAssetSnapshot(assetId);
+    try { await generateAssetSnapshot(assetId); } catch (err) {
+      request.log.error({ err, assetId }, 'Failed to generate asset snapshot');
+    }
 
     return reply.status(204).send();
   });
@@ -508,7 +516,9 @@ export async function assetsRoutes(app: FastifyInstance) {
     })();
 
     if (needsSnapshot) {
-      await generateAssetSnapshot(assetId);
+      try { await generateAssetSnapshot(assetId); } catch (err) {
+        request.log.error({ err, assetId }, 'Failed to generate asset snapshot');
+      }
     }
 
     return reply.status(201).send(created);
@@ -577,7 +587,9 @@ export async function assetsRoutes(app: FastifyInstance) {
     })();
 
     if (holding && movement.type !== 'dividend' && movement.type !== 'fee') {
-      await generateAssetSnapshot(movement.assetId);
+      try { await generateAssetSnapshot(movement.assetId); } catch (err) {
+        request.log.error({ err, assetId: movement.assetId }, 'Failed to generate asset snapshot');
+      }
     }
 
     return reply.status(204).send();

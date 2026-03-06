@@ -159,15 +159,15 @@ export const createHoldingSchema = z.object({
   name: z.string().min(1).max(100),
   type: z.enum(HOLDING_TYPES),
   currency: z.string().min(1).max(10),
-  quantity: z.number(),
-  costBasis: z.number().default(0),
+  quantity: z.number().min(0),
+  costBasis: z.number().min(0).default(0),
   lastPrice: z.number().optional(),
   notes: z.string().max(500).optional(),
 });
 
 export const updateHoldingSchema = z.object({
-  quantity: z.number().optional(),
-  costBasis: z.number().optional(),
+  quantity: z.number().min(0).optional(),
+  costBasis: z.number().min(0).optional(),
   lastPrice: z.number().nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });
@@ -234,8 +234,8 @@ export const createMovementSchema = z.object({
 export const movementQuerySchema = z.object({
   holdingId: z.coerce.number().int().positive().optional(),
   type: z.enum(MOVEMENT_TYPES).optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(500).default(50),
 });

@@ -310,12 +310,12 @@ async function saveQuickUpdate(asset: Asset) {
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const editingAsset = ref<Asset | null>(null);
-const assetForm = ref({ name: '', type: '', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
+const assetForm = ref({ name: '', type: 'brokerage', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
 const assetSaving = ref(false);
 
 function openAddAsset() {
   editingAsset.value = null;
-  assetForm.value = { name: '', type: '', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
+  assetForm.value = { name: '', type: 'brokerage', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
   showAssetDialog.value = true;
 }
 
@@ -371,13 +371,13 @@ const holdingParentAsset = computed(() =>
   assetsApi.data.value?.find(a => a.id === holdingParentAssetId.value) ?? null
 );
 const editingHolding = ref<Holding | null>(null);
-const holdingForm = ref({ name: '', type: '', currency: '', quantity: 0, costBasis: 0, lastPrice: 0, notes: '' });
+const holdingForm = ref({ name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: 0, notes: '' });
 const holdingSaving = ref(false);
 
 function openAddHolding(assetId: number) {
   holdingParentAssetId.value = assetId;
   editingHolding.value = null;
-  holdingForm.value = { name: '', type: '', currency: '', quantity: 0, costBasis: 0, lastPrice: 0, notes: '' };
+  holdingForm.value = { name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: 0, notes: '' };
   showHoldingDialog.value = true;
 }
 
@@ -433,12 +433,12 @@ async function handleSaveHolding() {
 // ─── Liability Dialog ───
 const showLiabilityDialog = ref(false);
 const editingLiability = ref<Liability | null>(null);
-const liabilityForm = ref({ name: '', type: '', currency: 'ILS', originalAmount: 0, currentBalance: 0, interestRate: 0, startDate: '', notes: '' });
+const liabilityForm = ref({ name: '', type: 'loan', currency: 'ILS', originalAmount: 0, currentBalance: 0, interestRate: 0, startDate: '', notes: '' });
 const liabilitySaving = ref(false);
 
 function openAddLiability() {
   editingLiability.value = null;
-  liabilityForm.value = { name: '', type: '', currency: 'ILS', originalAmount: 0, currentBalance: 0, interestRate: 0, startDate: '', notes: '' };
+  liabilityForm.value = { name: '', type: 'loan', currency: 'ILS', originalAmount: 0, currentBalance: 0, interestRate: 0, startDate: '', notes: '' };
   showLiabilityDialog.value = true;
 }
 
@@ -499,24 +499,30 @@ async function handleDeleteAsset() {
   const target = deletingAsset.value;
   if (!target) return;
   deletingAsset.value = null;
-  await deleteAsset(target.id);
-  refreshAll();
+  try {
+    await deleteAsset(target.id);
+    refreshAll();
+  } catch { /* toast/error handling could go here */ }
 }
 
 async function handleDeleteHolding() {
   const target = deletingHolding.value;
   if (!target) return;
   deletingHolding.value = null;
-  await deleteHolding(target.id);
-  refreshAll();
+  try {
+    await deleteHolding(target.id);
+    refreshAll();
+  } catch { /* toast/error handling could go here */ }
 }
 
 async function handleDeleteLiability() {
   const target = deletingLiability.value;
   if (!target) return;
   deletingLiability.value = null;
-  await deleteLiability(target.id);
-  refreshAll();
+  try {
+    await deleteLiability(target.id);
+    refreshAll();
+  } catch { /* toast/error handling could go here */ }
 }
 
 // ─── Helpers ───
@@ -1111,7 +1117,7 @@ const fullLiabilityMap = computed(() => {
           <AlertDialogTitle>Hide "{{ deletingAsset?.name }}"?</AlertDialogTitle>
           <AlertDialogDescription>
             This will hide {{ deletingAsset?.name }} from your net worth.
-            Holdings and history will be preserved. You can re-activate it later.
+            Holdings and history will be preserved.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -1155,7 +1161,6 @@ const fullLiabilityMap = computed(() => {
           <AlertDialogTitle>Hide "{{ deletingLiability?.name }}"?</AlertDialogTitle>
           <AlertDialogDescription>
             This will hide {{ deletingLiability?.name }} from your net worth.
-            You can re-activate it later.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>

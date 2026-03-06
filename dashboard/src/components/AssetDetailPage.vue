@@ -381,11 +381,13 @@ async function saveMovement() {
   movementSaving.value = true;
   movementError.value = null;
   try {
+    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal';
+    const quantity = isNegativeType ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
     await createMovement(assetId.value, {
       holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
       date: movementForm.value.date,
       type: movementForm.value.type,
-      quantity: movementForm.value.quantity,
+      quantity,
       currency: movementForm.value.currency,
       pricePerUnit: showPricePerUnit.value && movementForm.value.pricePerUnit != null ? movementForm.value.pricePerUnit : undefined,
       sourceAmount: movementForm.value.sourceAmount ?? undefined,

@@ -20,9 +20,12 @@ async function fetchFiatRates(): Promise<Record<string, number>> {
 
   const rates: Record<string, number> = {};
   for (const entry of data.exchangeRates) {
-    if (entry.key && entry.currentExchangeRate) {
+    if (entry.key && typeof entry.currentExchangeRate === 'number' && entry.currentExchangeRate > 0) {
       rates[entry.key] = entry.currentExchangeRate;
     }
+  }
+  if (Object.keys(rates).length === 0) {
+    throw new Error('Bank of Israel API returned no valid exchange rates — response format may have changed');
   }
   return rates;
 }
@@ -32,7 +35,10 @@ async function fetchBtcRate(): Promise<number> {
     'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=ils',
   );
   if (!res.ok) throw new Error(`CoinGecko API returned ${res.status}`);
-  const data = (await res.json()) as { bitcoin: { ils: number } };
+  const data = (await res.json()) as { bitcoin?: { ils?: number } };
+  if (!data?.bitcoin?.ils || typeof data.bitcoin.ils !== 'number') {
+    throw new Error('CoinGecko API returned unexpected response format');
+  }
   return data.bitcoin.ils;
 }
 
@@ -68,7 +74,7 @@ export async function getExchangeRates(): Promise<ExchangeRateResult> {
     };
   } catch (err) {
     if (cachedRates && lastFetched) {
-      console.warn('Exchange rate fetch failed, returning stale cache:', err);
+      console.error('Exchange rate fetch failed, returning stale cache:', err);
       return {
         rates: { ...cachedRates },
         stale: true,
@@ -88,8 +94,7 @@ export function convertToIls(
 
   const rate = rates[currency];
   if (rate === undefined) {
-    console.warn(`convertToIls: unknown currency "${currency}", returning 0`);
-    return 0;
+    throw new Error(`Exchange rate not available for currency "${currency}"`);
   }
 
   return amount * rate;

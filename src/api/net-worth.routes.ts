@@ -166,6 +166,10 @@ export async function netWorthRoutes(app: FastifyInstance) {
 
     const datePoints = generateDatePoints(startDate, endDate, query.granularity);
 
+    if (datePoints.length > 1000) {
+      return reply.status(400).send({ error: 'Date range too large for selected granularity (max 1000 points)' });
+    }
+
     if (datePoints.length === 0) {
       return reply.send({ series: [] });
     }
@@ -227,21 +231,6 @@ export async function netWorthRoutes(app: FastifyInstance) {
       arr.push({ date: row.date, totalValueIls: row.totalValueIls });
     }
 
-    // Binary search: find latest entry on or before target date
-    function latestOnOrBefore<T extends { date: string }>(arr: T[], targetDate: string): T | undefined {
-      let lo = 0, hi = arr.length - 1, result: T | undefined;
-      while (lo <= hi) {
-        const mid = (lo + hi) >> 1;
-        if (arr[mid].date <= targetDate) {
-          result = arr[mid];
-          lo = mid + 1;
-        } else {
-          hi = mid - 1;
-        }
-      }
-      return result;
-    }
-
     const series: { date: string; total: number; banks: number; assets: number; liabilities: number }[] = [];
 
     for (const date of datePoints) {
@@ -249,7 +238,7 @@ export async function netWorthRoutes(app: FastifyInstance) {
       for (const bank of bankAccounts) {
         const entries = balanceByAccount.get(bank.id);
         if (entries) {
-          const entry = latestOnOrBefore(entries, date);
+          const entry = entries.findLast(e => e.date <= date);
           if (entry) banksValue += entry.balance;
         }
       }
@@ -258,7 +247,7 @@ export async function netWorthRoutes(app: FastifyInstance) {
       for (const asset of activeAssets) {
         const entries = snapshotByAsset.get(asset.id);
         if (entries) {
-          const entry = latestOnOrBefore(entries, date);
+          const entry = entries.findLast(e => e.date <= date);
           if (entry) assetsValue += entry.totalValueIls;
         }
       }

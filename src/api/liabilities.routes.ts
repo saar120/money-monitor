@@ -92,7 +92,8 @@ export async function liabilitiesRoutes(app: FastifyInstance) {
       db.update(liabilities).set(updateSet).where(eq(liabilities.id, id)).run();
     }
 
-    const updated = db.select().from(liabilities).where(eq(liabilities.id, id)).get()!;
+    const updated = db.select().from(liabilities).where(eq(liabilities.id, id)).get();
+    if (!updated) return reply.status(404).send({ error: 'Liability not found after update' });
     const { rates } = await getExchangeRates();
     return reply.send({
       ...updated,
