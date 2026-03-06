@@ -57,6 +57,7 @@ export interface ChatMessage {
 }
 
 export type ChatEvent =
+  | { type: 'text_delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'result'; text: string }
   | { type: 'error'; text: string };
@@ -128,11 +129,17 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
       maxTurns: 8,
+      includePartialMessages: true,
       env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
     },
   })) {
-    if (msg.type === 'tool_call') {
-      yield { type: 'status', text: describeToolCall(msg.tool_name) };
+    if (msg.type === 'stream_event') {
+      const event = msg.event;
+      if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
+        yield { type: 'status', text: describeToolCall(event.content_block.name) };
+      } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
+        yield { type: 'text_delta', text: event.delta.text };
+      }
     }
     if (msg.type === 'result' && msg.subtype === 'success') {
       yield { type: 'result', text: msg.result };

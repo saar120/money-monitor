@@ -341,7 +341,7 @@ export interface ChatMessage {
 }
 
 export interface ChatStreamEvent {
-  type: 'status' | 'result' | 'error';
+  type: 'text_delta' | 'status' | 'result' | 'error';
   text: string;
 }
 

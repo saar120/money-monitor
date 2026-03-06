@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, nextTick } from 'vue';
+import { ref, computed, nextTick } from 'vue';
 import {
   aiChatStream,
   createChatSession,
@@ -23,6 +23,13 @@ const chatContainer = ref<HTMLElement | null>(null);
 const activeSession = ref<SessionMeta | null>(null);
 const sidebarOpen = ref(true);
 const sidebarRef = ref<InstanceType<typeof ChatSidebar> | null>(null);
+
+// Show loading dots only when loading and no text has streamed yet
+const isWaiting = computed(() => {
+  if (!loading.value) return false;
+  const last = messages.value[messages.value.length - 1];
+  return !last || last.role !== 'assistant' || !last.content;
+});
 
 const suggestions = [
   'What are my top spending categories this month?',
@@ -76,17 +83,22 @@ async function sendMessage(text?: string) {
   await scrollToBottom();
 
   try {
-    let response = '';
+    // Add assistant message upfront so text streams into it
+    messages.value.push({ role: 'assistant', content: '' });
+    const msgIndex = messages.value.length - 1;
+
     for await (const event of aiChatStream(sessionId, messageText)) {
-      if (event.type === 'status') {
+      if (event.type === 'text_delta') {
+        messages.value[msgIndex].content += event.text;
+        await scrollToBottom();
+      } else if (event.type === 'status') {
         status.value = event.text;
       } else if (event.type === 'result') {
-        response = event.text;
+        messages.value[msgIndex].content = event.text;
       } else if (event.type === 'error') {
         throw new Error(event.text);
       }
     }
-    messages.value.push({ role: 'assistant', content: response });
     // Refresh sidebar to update title/timestamp
     sidebarRef.value?.loadSessions();
   } catch (err) {
@@ -199,8 +211,8 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
           </div>
 
-          <!-- Typing indicator with status -->
-          <div v-if="loading" class="flex gap-3 justify-start">
+          <!-- Typing indicator (before text starts streaming) -->
+          <div v-if="isWaiting" class="flex gap-3 justify-start">
             <div class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5">
               <Bot class="h-4 w-4 text-primary" />
             </div>
@@ -214,6 +226,11 @@ function handleKeydown(e: KeyboardEvent) {
                 <span v-if="status" class="text-xs text-muted-foreground">{{ status }}</span>
               </div>
             </div>
+          </div>
+
+          <!-- Tool status while text is streaming -->
+          <div v-if="loading && !isWaiting && status" class="flex justify-start pl-10">
+            <span class="text-xs text-muted-foreground italic">{{ status }}</span>
           </div>
         </div>
 
