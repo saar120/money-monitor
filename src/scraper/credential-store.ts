@@ -1,8 +1,9 @@
 import { createCipheriv, createDecipheriv, randomBytes, scryptSync } from 'node:crypto';
-import { readFileSync, writeFileSync, existsSync, mkdirSync, chmodSync } from 'node:fs';
+import { readFileSync, writeFileSync, chmodSync } from 'node:fs';
 import { config } from '../config.js';
+import { credentialsPath } from '../paths.js';
 
-const CREDENTIALS_FILE = 'data/credentials.enc';
+const CREDENTIALS_FILE = credentialsPath;
 const ALGORITHM = 'aes-256-gcm';
 
 let cachedKey: Buffer | null = null;
@@ -39,14 +40,16 @@ interface CredentialMap {
 }
 
 function loadAll(): CredentialMap {
-  mkdirSync('data', { recursive: true });
-  if (!existsSync(CREDENTIALS_FILE)) return {};
-  const raw = readFileSync(CREDENTIALS_FILE, 'utf8');
-  return JSON.parse(decrypt(raw));
+  try {
+    const raw = readFileSync(CREDENTIALS_FILE, 'utf8');
+    return JSON.parse(decrypt(raw));
+  } catch (e: any) {
+    if (e?.code === 'ENOENT') return {};
+    throw e;
+  }
 }
 
 function saveAll(credentials: CredentialMap): void {
-  mkdirSync('data', { recursive: true, mode: 0o700 });
   writeFileSync(CREDENTIALS_FILE, encrypt(JSON.stringify(credentials)), { mode: 0o600 });
   chmodSync(CREDENTIALS_FILE, 0o600);
 }

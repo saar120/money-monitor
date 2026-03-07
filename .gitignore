@@ -8,3 +8,7 @@ dashboard/node_modules/
 dashboard/dist/
 .worktrees/
 backups/
+electron/*.js
+electron/*.mjs
+electron/*.js.map
+electron/*.mjs.map

@@ -149,8 +149,8 @@ const chartOptions = {
       titleColor: '#f0f0f3',
       bodyColor: '#f0f0f3',
       callbacks: {
-        label(ctx: { parsed: { y: number } }) {
-          return ` ${formatAmount(ctx.parsed.y, 'ILS')}`;
+        label(ctx: { parsed: { y: number | null } }) {
+          return ` ${formatAmount(ctx.parsed.y ?? 0, 'ILS')}`;
         },
       },
     },

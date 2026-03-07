@@ -2,15 +2,13 @@ import Database, { type Database as BetterSqlite3Database } from 'better-sqlite3
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.js';
-import { mkdirSync, readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
+import { dbPath } from '../paths.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = join(__dirname, '..', '..');
 const migrationsFolder = join(__dirname, 'migrations');
-
-mkdirSync(join(PROJECT_ROOT, 'data'), { recursive: true });
 
 // Validate that all migration file chunks (split by --> statement-breakpoint) contain
 // only one top-level statement. Without breakpoints, better-sqlite3's prepare() throws
@@ -34,7 +32,7 @@ for (const file of sqlFiles) {
 	}
 }
 
-const sqlite: BetterSqlite3Database = new Database(join(PROJECT_ROOT, 'data', 'money-monitor.db'));
+const sqlite: BetterSqlite3Database = new Database(dbPath);
 sqlite.pragma('journal_mode = WAL');
 sqlite.pragma('foreign_keys = ON');
 

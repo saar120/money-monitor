@@ -2,8 +2,10 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { onClickOutside } from '@vueuse/core';
-import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet, TrendingUp } from 'lucide-vue-next';
+import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet, TrendingUp, Settings } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
+
+const isElectron = !!(window as any).electronAPI;
 
 const route = useRoute();
 const router = useRouter();
@@ -46,6 +48,7 @@ const navItems = [
   { path: '/chat', label: 'AI Chat', icon: Bot },
   { path: '/categories', label: 'Categories', icon: Tag },
   { path: '/scraping', label: 'Scraping', icon: Activity },
+  { path: '/settings', label: 'Settings', icon: Settings },
 ];
 </script>
 
@@ -57,8 +60,11 @@ const navItems = [
       class="flex-shrink-0 flex flex-col border-r border-border backdrop-blur-xl bg-surface-2/80 transition-[width] duration-300 ease-out overflow-hidden z-20"
       :style="{ width: sidebarExpanded ? '240px' : '64px' }"
     >
+      <!-- macOS traffic light spacing + drag region -->
+      <div v-if="isElectron" class="h-10 flex-shrink-0" style="app-region: drag" />
+
       <!-- Logo (click to toggle) -->
-      <div class="flex items-center h-16 px-4 flex-shrink-0 cursor-pointer" @click.stop="toggleSidebar">
+      <div class="flex items-center h-12 px-4 flex-shrink-0 cursor-pointer" @click.stop="toggleSidebar">
         <div class="w-8 h-8 rounded-lg bg-primary/20 flex items-center justify-center flex-shrink-0">
           <Wallet class="h-4 w-4 text-primary" />
         </div>
@@ -130,8 +136,11 @@ const navItems = [
     </aside>
 
     <!-- Main content -->
-    <main ref="mainEl" class="flex-1 overflow-y-auto p-8 min-w-0 scroll-smooth">
-      <slot />
-    </main>
+    <div class="flex-1 flex flex-col min-w-0">
+      <div v-if="isElectron" class="h-10 flex-shrink-0" style="app-region: drag" />
+      <main ref="mainEl" class="flex-1 overflow-y-auto p-8 min-w-0 scroll-smooth">
+        <slot />
+      </main>
+    </div>
   </div>
 </template>

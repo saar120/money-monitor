@@ -180,9 +180,9 @@ const chartOptions = computed(() => ({
       titleColor: '#f0f0f3',
       bodyColor: '#f0f0f3',
       callbacks: {
-        label(ctx: { parsed: { y: number } }) {
+        label(ctx: { parsed: { y: number | null } }) {
           const currency = showingIls.value ? 'ILS' : assetCurrency.value;
-          return ` ${formatAmount(ctx.parsed.y, currency)}`;
+          return ` ${formatAmount(ctx.parsed.y ?? 0, currency)}`;
         },
       },
     },

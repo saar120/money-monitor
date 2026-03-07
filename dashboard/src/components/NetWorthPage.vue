@@ -100,8 +100,8 @@ const liabilities = computed<MergedLiability[]>(() =>
 const lastMonthDelta = computed(() => {
   const series = history.data.value?.series ?? [];
   if (series.length < 2) return null;
-  const current = series[series.length - 1].total;
-  const previous = series[series.length - 2].total;
+  const current = series[series.length - 1]!.total;
+  const previous = series[series.length - 2]!.total;
   const diff = current - previous;
   const pct = previous !== 0 ? (diff / previous) * 100 : 0;
   return { diff, pct };
@@ -127,7 +127,7 @@ const allocationData = computed(() => {
     }
   }
   if (nwData.banksTotal > 0) {
-    slices.push({ label: 'Banks', value: nwData.banksTotal, color: ASSET_TYPE_COLORS.banks });
+    slices.push({ label: 'Banks', value: nwData.banksTotal, color: ASSET_TYPE_COLORS.banks ?? '#3b82f6' });
   }
   return {
     labels: slices.map(s => s.label),
@@ -240,8 +240,8 @@ const lineOptions = {
       titleColor: '#f0f0f3',
       bodyColor: '#f0f0f3',
       callbacks: {
-        label(ctx: { parsed: { y: number } }) {
-          return ` ${formatCurrency(ctx.parsed.y)}`;
+        label(ctx: { parsed: { y: number | null } }) {
+          return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
         },
       },
     },
@@ -358,6 +358,8 @@ function openEditAsset(asset: Asset) {
     liquidity: asset.liquidity,
     linkedAccountId: asset.linkedAccountId != null ? String(asset.linkedAccountId) : 'none',
     notes: asset.notes ?? '',
+    initialValue: 0,
+    initialCostBasis: 0,
   };
   showAssetDialog.value = true;
 }

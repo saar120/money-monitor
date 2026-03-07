@@ -11,7 +11,7 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
-import { formatCurrency, formatAmount } from '@/lib/format';
+import { formatCurrency } from '@/lib/format';
 import { HOLDING_TYPE_LABELS } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -34,8 +34,8 @@ import {
   Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
 } from '@/components/ui/select';
 import {
-  ArrowLeft, Plus, Trash2, TrendingUp, TrendingDown,
-  AlertCircle, Loader2, Pencil, RefreshCw,
+  Plus, Trash2, TrendingUp, TrendingDown,
+  AlertCircle, Loader2, RefreshCw,
 } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
@@ -285,8 +285,8 @@ const chartOptions = {
       titleColor: '#f0f0f3',
       bodyColor: '#f0f0f3',
       callbacks: {
-        label(ctx: { parsed: { y: number } }) {
-          return ` ${formatCurrency(ctx.parsed.y)}`;
+        label(ctx: { parsed: { y: number | null } }) {
+          return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
         },
       },
     },

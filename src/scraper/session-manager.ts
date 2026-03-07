@@ -108,9 +108,11 @@ export function runScrapeSession(
       const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
       completeSession(session.id, finalStatus);
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
-    } catch {
+    } catch (err) {
+      const errorMessage = err instanceof Error ? err.message : String(err);
+      console.error(`[Scrape] Session ${session.id} failed:`, errorMessage);
       completeSession(session.id, 'error');
-      broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error' });
+      broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error', error: errorMessage });
     }
   })();
 

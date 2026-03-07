@@ -1,5 +1,6 @@
 import { createApp } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
+import { getSettings } from './api/client';
 import App from './App.vue';
 import './style.css';
 
@@ -15,7 +16,22 @@ const router = createRouter({
     { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
     { path: '/net-worth', component: () => import('./components/NetWorthPage.vue') },
     { path: '/net-worth/assets/:id', component: () => import('./components/AssetDetailPage.vue') },
+    { path: '/setup', name: 'setup', component: () => import('./components/SetupWizard.vue') },
+    { path: '/settings', component: () => import('./components/SettingsPage.vue') },
   ],
+});
+
+// Redirect to setup wizard on first Electron launch (config.json missing)
+let setupChecked = false;
+router.beforeEach(async (to) => {
+  if (setupChecked || to.name === 'setup') return;
+  setupChecked = true;
+  try {
+    const { needsSetup } = await getSettings();
+    if (needsSetup) return '/setup';
+  } catch (err) {
+    console.warn('[Router] Settings check failed, continuing without setup redirect:', err);
+  }
 });
 
 const app = createApp(App);

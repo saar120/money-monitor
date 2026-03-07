@@ -1,9 +1,8 @@
 import { existsSync, mkdirSync, readFileSync, appendFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { chatDir } from '../paths.js';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const MEMORY_DIR = join(__dirname, '..', '..', 'data', 'chat');
+const MEMORY_DIR = chatDir;
 const MEMORY_PATH = join(MEMORY_DIR, 'MEMORY.md');
 
 function ensureDir() {

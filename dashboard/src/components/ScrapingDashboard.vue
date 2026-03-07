@@ -70,6 +70,7 @@ interface LiveSession {
 const liveSession = ref<LiveSession | null>(null);
 const elapsedSeconds = ref(0);
 let elapsedTimer: ReturnType<typeof setInterval> | null = null;
+const errorMessage = ref<string | null>(null);
 
 // ─── OTP/Manual login dialogs ───
 const {
@@ -179,10 +180,11 @@ async function loadData() {
 // ─── Actions ───
 async function handleScrapeAll() {
   triggerLoading.value = true;
+  errorMessage.value = null;
   try {
     await triggerScrapeAll();
-  } catch {
-    // SSE will update state
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to start scrape';
   } finally {
     triggerLoading.value = false;
   }
@@ -190,10 +192,11 @@ async function handleScrapeAll() {
 
 async function handleScrapeAccount(accountId: number) {
   triggerLoading.value = true;
+  errorMessage.value = null;
   try {
     await triggerScrape(accountId);
-  } catch {
-    // SSE will update state
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to start scrape';
   } finally {
     triggerLoading.value = false;
   }
@@ -203,8 +206,8 @@ async function handleCancel() {
   if (!liveSession.value) return;
   try {
     await cancelScrapeSession(liveSession.value.sessionId);
-  } catch {
-    // SSE will update state
+  } catch (err) {
+    errorMessage.value = err instanceof Error ? err.message : 'Failed to cancel session';
   }
 }
 
@@ -263,9 +266,12 @@ const { connect: connectSse } = useSseConnection({
       };
     }
   },
-  'session-completed': () => {
+  'session-completed': (data) => {
     liveSession.value = null;
     stopElapsedTimer();
+    if (data.status === 'error' && data.error) {
+      errorMessage.value = `Scrape session failed: ${data.error}`;
+    }
     // Reload session history only (accounts don't change during scraping)
     getScrapeSessions({ limit: 50 }).then(res => { sessions.value = res.sessions; });
   },
@@ -322,6 +328,16 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           Scrape All
         </Button>
       </div>
+    </div>
+
+    <!-- Error Banner -->
+    <div
+      v-if="errorMessage"
+      class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+    >
+      <XCircle class="h-4 w-4 flex-shrink-0" />
+      <span class="flex-1">{{ errorMessage }}</span>
+      <button class="text-destructive/70 hover:text-destructive" @click="errorMessage = null">&times;</button>
     </div>
 
     <!-- Active Session Banner -->
