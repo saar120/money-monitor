@@ -29,8 +29,8 @@ router.beforeEach(async (to) => {
   try {
     const { needsSetup } = await getSettings();
     if (needsSetup) return '/setup';
-  } catch {
-    // Settings endpoint unavailable — continue normally
+  } catch (err) {
+    console.warn('[Router] Settings check failed, continuing without setup redirect:', err);
   }
 });
 

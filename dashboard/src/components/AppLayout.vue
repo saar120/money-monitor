@@ -5,6 +5,8 @@ import { onClickOutside } from '@vueuse/core';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet, TrendingUp, Settings } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
 
+const isElectron = !!(window as any).electronAPI;
+
 const route = useRoute();
 const router = useRouter();
 const mainEl = ref<HTMLElement | null>(null);
@@ -59,7 +61,7 @@ const navItems = [
       :style="{ width: sidebarExpanded ? '240px' : '64px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
-      <div class="h-10 flex-shrink-0" style="app-region: drag" />
+      <div v-if="isElectron" class="h-10 flex-shrink-0" style="app-region: drag" />
 
       <!-- Logo (click to toggle) -->
       <div class="flex items-center h-12 px-4 flex-shrink-0 cursor-pointer" @click.stop="toggleSidebar">
@@ -135,7 +137,7 @@ const navItems = [
 
     <!-- Main content -->
     <div class="flex-1 flex flex-col min-w-0">
-      <div class="h-10 flex-shrink-0" style="app-region: drag" />
+      <div v-if="isElectron" class="h-10 flex-shrink-0" style="app-region: drag" />
       <main ref="mainEl" class="flex-1 overflow-y-auto p-8 min-w-0 scroll-smooth">
         <slot />
       </main>

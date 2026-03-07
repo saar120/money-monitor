@@ -230,8 +230,8 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
         .run();
       categorized++;
     }
-  } catch {
-    // If parsing fails, return 0 — the model response was malformed
+  } catch (err) {
+    console.error('[AI] Failed to process categorization results:', err instanceof Error ? err.message : err);
   }
 
   return { categorized };

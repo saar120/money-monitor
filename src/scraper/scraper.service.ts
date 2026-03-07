@@ -8,17 +8,17 @@ import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import { dataDir } from '../paths.js';
 import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
-
-// In Electron mode, store Puppeteer's Chromium download inside the data directory
-if (process.env.MONEY_MONITOR_DATA_DIR) {
-  process.env.PUPPETEER_CACHE_DIR ??= join(dataDir, 'puppeteer-cache');
-}
 import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
+
+// In Electron mode, store Puppeteer's Chromium download inside the data directory
+if (process.env.MONEY_MONITOR_DATA_DIR) {
+  process.env.PUPPETEER_CACHE_DIR ??= join(dataDir, 'puppeteer-cache');
+}
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
@@ -300,8 +300,8 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
 
     // Best-effort: categorize newly imported transactions in background
     if (newIds.length > 0) {
-      batchCategorize(newIds.length, newIds).catch(() => {
-        // Categorization failure must not break the scrape response
+      batchCategorize(newIds.length, newIds).catch((err) => {
+        console.error('[Scrape] Background categorization failed:', err instanceof Error ? err.message : err);
       });
     }
 

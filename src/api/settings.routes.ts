@@ -30,26 +30,36 @@ const SETTABLE_KEYS = [
 ] as const;
 
 function redact(value: string): string {
-  if (value.length <= 8) return '••••••••';
-  return value.slice(0, 4) + '••••' + value.slice(-4);
+  if (value.length <= 4) return '********';
+  return '****' + value.slice(-4);
 }
 
 let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
 
 async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
-  if (cachedClaudeStatus) return cachedClaudeStatus;
+  if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
   try {
     const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
     cachedClaudeStatus = { installed: true, version: stdout.trim() };
+    return cachedClaudeStatus;
   } catch {
-    cachedClaudeStatus = { installed: false };
+    return { installed: false };
   }
-  return cachedClaudeStatus;
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
 
   app.get('/api/settings', async (_request, reply) => {
+    if (!isElectronMode) {
+      return reply.send({
+        needsSetup: false,
+        isElectron: false,
+        settings: {},
+        dataDir: '',
+        claude: { installed: false },
+      });
+    }
+
     const settings: Record<string, string | number | boolean> = {};
 
     for (const key of SETTABLE_KEYS) {
@@ -90,7 +100,13 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'No valid settings provided' });
     }
 
-    saveConfigFile(updates);
+    try {
+      saveConfigFile(updates);
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      request.log.error(err, 'Failed to save config');
+      return reply.status(500).send({ error: `Failed to save settings: ${msg}` });
+    }
     return reply.send({ success: true });
   });
 }

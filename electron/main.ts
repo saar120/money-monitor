@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, Notification } from 'electron';
+import { app, BrowserWindow, dialog, Menu } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
@@ -14,7 +14,9 @@ if (process.platform === 'darwin' && !process.env.PATH?.includes('/usr/local/bin
       timeout: 5000,
     }).trim();
     process.env.PATH = shellPath;
-  } catch { /* keep default PATH */ }
+  } catch (e) {
+    console.warn('[Electron] Failed to resolve shell PATH:', e instanceof Error ? e.message : e);
+  }
 }
 
 // ── Set app name (affects userData path and menu bar) ────────────────────────
@@ -92,14 +94,7 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ── 5. Scrape notifications ─────────────────────────────────────────────────
-export function notifyScrapeComplete(message: string) {
-  if (Notification.isSupported()) {
-    new Notification({ title: 'Money Monitor', body: message }).show();
-  }
-}
-
-// ── 6. Window management ────────────────────────────────────────────────────
+// ── 5. Window management ─────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
 
 function createWindow(port: number) {
@@ -126,49 +121,64 @@ function createWindow(port: number) {
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
-  // About panel
-  app.setAboutPanelOptions({
-    applicationName: 'Money Monitor',
-    applicationVersion: app.getVersion(),
-    copyright: 'Personal Finance Tracker',
-  });
+  try {
+    // About panel
+    app.setAboutPanelOptions({
+      applicationName: 'Money Monitor',
+      applicationVersion: app.getVersion(),
+      copyright: 'Personal Finance Tracker',
+    });
 
-  buildMenu();
+    buildMenu();
 
-  // Start server import and CLI check concurrently
-  const [serverModule, hasClaude] = await Promise.all([
-    import('../dist/server.js'),
-    checkClaudeCli(),
-  ]);
+    // Start server import and CLI check concurrently
+    const [serverModule, hasClaude] = await Promise.all([
+      import('../dist/server.js'),
+      checkClaudeCli(),
+    ]);
 
-  if (!hasClaude) {
-    dialog.showErrorBox(
-      'Claude Code CLI Required',
-      'Money Monitor requires Claude Code CLI to be installed.\n\n' +
-      'Install it with: npm install -g @anthropic-ai/claude-code\n\n' +
-      'The app will continue without AI features.'
-    );
-  }
-
-  const { createServer } = serverModule;
-  const { start, shutdown } = await createServer();
-  const port = await start({ port: 0 });
-
-  console.log(`[Electron] Server started on port ${port}`);
-  console.log(`[Electron] Data directory: ${dataDir}`);
-
-  createWindow(port);
-
-  app.on('activate', () => {
-    if (BrowserWindow.getAllWindows().length === 0) {
-      createWindow(port);
+    if (!hasClaude) {
+      dialog.showErrorBox(
+        'Claude Code CLI Required',
+        'Money Monitor requires Claude Code CLI to be installed.\n\n' +
+        'Install it with: npm install -g @anthropic-ai/claude-code\n\n' +
+        'The app will continue without AI features.'
+      );
     }
-  });
 
-  app.on('will-quit', (e) => {
-    e.preventDefault();
-    shutdown().then(() => app.exit(0));
-  });
+    const { createServer } = serverModule;
+    const { start, shutdown } = await createServer();
+    const port = await start({ port: 0 });
+
+    console.log(`[Electron] Server started on port ${port}`);
+    console.log(`[Electron] Data directory: ${dataDir}`);
+
+    createWindow(port);
+
+    app.on('activate', () => {
+      if (BrowserWindow.getAllWindows().length === 0) {
+        createWindow(port);
+      }
+    });
+
+    let quitting = false;
+    app.on('will-quit', (e) => {
+      if (quitting) return;
+      quitting = true;
+      e.preventDefault();
+      shutdown()
+        .catch((err) => console.error('[Electron] Shutdown error:', err))
+        .finally(() => app.exit(0));
+    });
+  } catch (err) {
+    const message = err instanceof Error ? err.message : String(err);
+    console.error('[Electron] Fatal startup error:', err);
+    dialog.showErrorBox(
+      'Money Monitor Failed to Start',
+      `The application could not start:\n\n${message}\n\nPlease check the logs or reinstall.`
+    );
+    app.exit(1);
+  }
 });
 
 app.on('window-all-closed', () => {
