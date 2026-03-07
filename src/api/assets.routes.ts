@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { eq, and, gte, lte, desc, asc, count } from 'drizzle-orm';
+import { eq, and, gte, lte, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { db, sqlite } from '../db/connection.js';
 import { assets, holdings, accounts, assetSnapshots, assetMovements } from '../db/schema.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
@@ -8,13 +8,15 @@ import {
   createHoldingSchema, updateHoldingSchema,
   assetsQuerySchema, snapshotsQuerySchema,
   createMovementSchema, movementQuerySchema,
+  updateAssetValueSchema, recordRentSchema,
 } from './validation.js';
 import { getExchangeRates, convertToIls } from '../services/exchange-rates.js';
 import { todayInIsrael } from '../shared/dates.js';
+import { getAssetCategory, CATEGORY_MOVEMENT_TYPES } from '../shared/types.js';
 
-type HoldingRow = typeof holdings.$inferSelect;
+export type HoldingRow = typeof holdings.$inferSelect;
 
-function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
+export function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
   const isCrypto = h.type === 'crypto';
   // Crypto holdings with an exchange rate (e.g. BTC) use quantity directly like cash;
   // the exchange rate service handles BTC→ILS conversion.
@@ -42,10 +44,8 @@ function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
   let gainLoss: number | null = null;
   let gainLossPercent: number | null = null;
 
-  if (!isCrypto) {
-    gainLoss = currentValue - h.costBasis;
-    gainLossPercent = h.costBasis !== 0 ? (gainLoss / h.costBasis) * 100 : null;
-  }
+  gainLoss = currentValue - h.costBasis;
+  gainLossPercent = h.costBasis !== 0 ? (gainLoss / h.costBasis) * 100 : null;
 
   return {
     id: h.id,
@@ -65,7 +65,79 @@ function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
   };
 }
 
-function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<string, number>) {
+export interface MovementAggregates {
+  depositIls: number;
+  withdrawIls: number;
+  rentTotal: number;
+}
+
+/** Compute updated holding quantity and costBasis after applying a movement. */
+export function computeHoldingUpdate(
+  holding: { quantity: number; costBasis: number },
+  type: string,
+  quantity: number,
+  pricePerUnit?: number | null,
+  sourceAmount?: number | null,
+): { quantity: number; costBasis: number } {
+  let newQty = holding.quantity;
+  let newCostBasis = holding.costBasis;
+
+  if (type === 'buy') {
+    newQty += quantity;
+    newCostBasis += quantity * (pricePerUnit ?? 0);
+  } else if (type === 'sell' || type === 'withdrawal') {
+    if (holding.quantity > 0) {
+      const proportion = Math.abs(quantity) / holding.quantity;
+      newCostBasis -= holding.costBasis * proportion;
+    }
+    newQty += quantity;
+  } else if (type === 'deposit') {
+    newQty += quantity;
+    newCostBasis += quantity;
+  } else if (type === 'fee') {
+    newCostBasis += Math.abs(sourceAmount ?? quantity);
+  } else if (type === 'adjustment') {
+    newQty += quantity;
+  } else if (type === 'contribution') {
+    newCostBasis += Math.abs(quantity);
+  }
+  // dividend, rent_income: no holding changes
+
+  return { quantity: newQty, costBasis: newCostBasis };
+}
+
+/** Pre-fetch movement aggregates for a set of assets in a single query (avoids N+1). */
+export function batchMovementAggregates(assetIds: number[]): Map<number, MovementAggregates> {
+  if (assetIds.length === 0) return new Map();
+  const rows = db.select({
+    assetId: assetMovements.assetId,
+    type: assetMovements.type,
+    sourceTotal: sql<number>`COALESCE(SUM(COALESCE(${assetMovements.sourceAmount}, ${assetMovements.quantity})), 0)`,
+    qtyTotal: sql<number>`COALESCE(SUM(${assetMovements.quantity}), 0)`,
+  }).from(assetMovements)
+    .where(and(
+      inArray(assetMovements.assetId, assetIds),
+      inArray(assetMovements.type, ['deposit', 'withdrawal', 'rent_income']),
+    ))
+    .groupBy(assetMovements.assetId, assetMovements.type)
+    .all();
+
+  const map = new Map<number, MovementAggregates>();
+  for (const row of rows) {
+    const entry = map.get(row.assetId) ?? { depositIls: 0, withdrawIls: 0, rentTotal: 0 };
+    if (row.type === 'deposit') entry.depositIls = row.sourceTotal;
+    else if (row.type === 'withdrawal') entry.withdrawIls = Math.abs(row.sourceTotal);
+    else if (row.type === 'rent_income') entry.rentTotal = row.sourceTotal;
+    map.set(row.assetId, entry);
+  }
+  return map;
+}
+
+export function buildAssetResponse(
+  assetRow: typeof assets.$inferSelect,
+  rates: Record<string, number>,
+  aggMap?: Map<number, MovementAggregates>,
+) {
   const holdingRows = db.select().from(holdings).where(eq(holdings.assetId, assetRow.id)).all();
   const computedHoldings = holdingRows.map(h => computeHoldingValues(h, rates));
   const totalValueIls = computedHoldings.reduce((sum, h) => sum + h.currentValueIls, 0);
@@ -76,6 +148,36 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
       .from(accounts).where(eq(accounts.id, assetRow.linkedAccountId)).get();
     linkedAccountName = acct?.displayName ?? null;
   }
+
+  // Compute account-level ILS P&L
+  const category = getAssetCategory(assetRow.type);
+  let totalInvestedIls: number | null = null;
+  let totalRentEarned: number | null = null;
+
+  // Use pre-fetched aggregates if available, else query for this single asset
+  const agg = aggMap?.get(assetRow.id) ?? (
+    category === 'brokerage' || category === 'real_estate'
+      ? batchMovementAggregates([assetRow.id]).get(assetRow.id) ?? { depositIls: 0, withdrawIls: 0, rentTotal: 0 }
+      : { depositIls: 0, withdrawIls: 0, rentTotal: 0 }
+  );
+
+  if (category === 'brokerage') {
+    totalInvestedIls = agg.depositIls > 0 ? agg.depositIls - agg.withdrawIls : null;
+  } else if (category === 'simple_value' || category === 'real_estate') {
+    const balanceHolding = computedHoldings.find(h => h.type === 'balance');
+    totalInvestedIls = balanceHolding?.costBasis ?? null;
+  } else if (category === 'crypto') {
+    totalInvestedIls = computedHoldings.reduce((sum, h) => sum + h.costBasis, 0);
+  }
+
+  if (category === 'real_estate') {
+    totalRentEarned = agg.rentTotal;
+  }
+
+  // Real estate P&L includes rent: (value + rent) - purchasePrice
+  const totalReturnIls = totalInvestedIls != null
+    ? totalValueIls + (totalRentEarned ?? 0) - totalInvestedIls
+    : null;
 
   return {
     id: assetRow.id,
@@ -90,6 +192,9 @@ function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<
     notes: assetRow.notes,
     holdings: computedHoldings,
     totalValueIls,
+    totalInvestedIls,
+    totalReturnIls,
+    totalRentEarned,
   };
 }
 
@@ -182,26 +287,8 @@ export async function replayMovementSnapshots(
       if (!m.holdingId) continue;
       const state = holdingState.get(m.holdingId) ?? { quantity: 0, costBasis: 0 };
 
-      if (m.type === 'buy') {
-        state.quantity += m.quantity;
-        state.costBasis += m.quantity * (m.pricePerUnit ?? 0);
-      } else if (m.type === 'sell' || m.type === 'withdrawal') {
-        if (state.quantity > 0) {
-          const proportion = Math.abs(m.quantity) / state.quantity;
-          state.costBasis -= state.costBasis * proportion;
-        }
-        state.quantity += m.quantity;
-      } else if (m.type === 'deposit') {
-        state.quantity += m.quantity;
-        state.costBasis += m.quantity;
-      } else if (m.type === 'fee') {
-        state.costBasis += Math.abs(m.sourceAmount ?? m.quantity);
-      } else if (m.type === 'adjustment') {
-        state.quantity += m.quantity;
-      }
-      // dividend: no holding changes
-
-      holdingState.set(m.holdingId, state);
+      const updated = computeHoldingUpdate(state, m.type, m.quantity, m.pricePerUnit, m.sourceAmount);
+      holdingState.set(m.holdingId, updated);
     }
 
     // Compute total value at this date from running state
@@ -337,7 +424,9 @@ export async function assetsRoutes(app: FastifyInstance) {
       rows = db.select().from(assets).where(eq(assets.isActive, true)).all();
     }
 
-    const result = rows.map(row => buildAssetResponse(row, rates));
+    // Batch-prefetch movement aggregates to avoid N+1 queries
+    const aggMap = batchMovementAggregates(rows.map(r => r.id));
+    const result = rows.map(row => buildAssetResponse(row, rates, aggMap));
     return reply.send(result);
   });
 
@@ -380,6 +469,25 @@ export async function assetsRoutes(app: FastifyInstance) {
       linkedAccountId: data.linkedAccountId,
       notes: data.notes,
     }).returning().get();
+
+    // Auto-create a balance holding for non-brokerage, non-crypto types
+    const category = getAssetCategory(data.type);
+    if (category !== 'brokerage' && category !== 'crypto') {
+      db.insert(holdings).values({
+        assetId: result.id,
+        name: data.name,
+        type: 'balance',
+        currency: data.currency,
+        quantity: data.initialValue ?? 0,
+        costBasis: data.initialCostBasis ?? 0,
+      }).run();
+    }
+
+    if (data.initialValue && data.initialValue > 0) {
+      try { await generateAssetSnapshot(result.id); } catch (err) {
+        request.log.error(err, 'Failed to generate snapshot after asset creation');
+      }
+    }
 
     const { rates } = await getExchangeRates();
     const response = buildAssetResponse(result, rates);
@@ -429,6 +537,117 @@ export async function assetsRoutes(app: FastifyInstance) {
     const { rates } = await getExchangeRates();
     const response = buildAssetResponse(updated, rates);
     return reply.send(response);
+  });
+
+  // PUT /api/assets/:id/value — simplified value update for non-brokerage assets
+  app.put<{ Params: { id: string } }>('/api/assets/:id/value', async (request, reply) => {
+    const assetId = parseIntParam(request.params.id, 'asset ID', reply);
+    if (assetId === null) return;
+
+    const data = validateBody(updateAssetValueSchema, request.body, reply);
+    if (!data) return;
+
+    const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
+    if (!assetRow) return reply.status(404).send({ error: 'Asset not found' });
+
+    const category = getAssetCategory(assetRow.type);
+    if (category === 'brokerage') {
+      return reply.status(400).send({ error: 'Use movements for brokerage assets' });
+    }
+
+    // Find the auto-created balance holding
+    const holding = db.select().from(holdings)
+      .where(and(eq(holdings.assetId, assetId), eq(holdings.type, 'balance')))
+      .get();
+
+    if (!holding) {
+      return reply.status(400).send({ error: 'No balance holding found. Re-create the asset.' });
+    }
+
+    const today = data.date ?? todayInIsrael();
+    const now = new Date().toISOString();
+
+    sqlite.transaction(() => {
+      const updateSet: Record<string, unknown> = {
+        quantity: data.currentValue,
+        updatedAt: now,
+      };
+
+      if (data.contribution && data.contribution > 0) {
+        updateSet.costBasis = holding.costBasis + data.contribution;
+
+        db.insert(assetMovements).values({
+          assetId,
+          holdingId: holding.id,
+          date: today,
+          type: 'contribution',
+          quantity: data.contribution,
+          currency: holding.currency,
+          notes: data.notes,
+          createdAt: now,
+        }).run();
+      }
+
+      db.update(holdings).set(updateSet).where(eq(holdings.id, holding.id)).run();
+    })();
+
+    try { await generateAssetSnapshot(assetId); } catch (err) {
+      request.log.error(err, 'Failed to generate snapshot after value update');
+    }
+
+    const { rates } = await getExchangeRates();
+    const refreshedAsset = db.select().from(assets).where(eq(assets.id, assetId)).get();
+    if (!refreshedAsset) return reply.status(404).send({ error: 'Asset not found after update' });
+    return reply.send(buildAssetResponse(refreshedAsset, rates));
+  });
+
+  // POST /api/assets/:id/rent — record rent income for real estate assets
+  app.post<{ Params: { id: string } }>('/api/assets/:id/rent', async (request, reply) => {
+    const assetId = parseIntParam(request.params.id, 'asset ID', reply);
+    if (assetId === null) return;
+
+    const data = validateBody(recordRentSchema, request.body, reply);
+    if (!data) return;
+
+    const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
+    if (!assetRow) return reply.status(404).send({ error: 'Asset not found' });
+
+    if (getAssetCategory(assetRow.type) !== 'real_estate') {
+      return reply.status(400).send({ error: 'Rent income only applies to real estate assets' });
+    }
+
+    const holding = db.select().from(holdings)
+      .where(and(eq(holdings.assetId, assetId), eq(holdings.type, 'balance')))
+      .get();
+
+    if (!holding) {
+      return reply.status(400).send({ error: 'No balance holding found. Re-create the asset.' });
+    }
+
+    const today = data.date ?? todayInIsrael();
+    const now = new Date().toISOString();
+
+    const { rates } = await getExchangeRates();
+    const rentAmountIls = convertToIls(data.amount, assetRow.currency, rates);
+
+    db.insert(assetMovements).values({
+      assetId,
+      holdingId: holding.id,
+      date: today,
+      type: 'rent_income',
+      quantity: data.amount,
+      currency: assetRow.currency,
+      sourceAmount: rentAmountIls,
+      sourceCurrency: 'ILS',
+      notes: data.notes,
+      createdAt: now,
+    }).run();
+
+    try { await generateAssetSnapshot(assetId); } catch (err) {
+      request.log.error(err, 'Failed to generate snapshot after rent recording');
+    }
+
+    return reply.send({ success: true });
   });
 
   // DELETE /api/assets/:id (soft delete)
@@ -623,11 +842,20 @@ export async function assetsRoutes(app: FastifyInstance) {
     const assetId = parseIntParam(request.params.id, 'asset ID', reply);
     if (assetId === null) return;
 
-    const asset = db.select({ id: assets.id }).from(assets).where(eq(assets.id, assetId)).get();
+    const asset = db.select().from(assets).where(eq(assets.id, assetId)).get();
     if (!asset) return reply.status(404).send({ error: 'Asset not found' });
 
     const data = validateBody(createMovementSchema, request.body, reply);
     if (!data) return;
+
+    // Gate movement types by asset category
+    const category = getAssetCategory(asset.type);
+    const allowedTypes = CATEGORY_MOVEMENT_TYPES[category];
+    if (!allowedTypes.includes(data.type)) {
+      return reply.status(400).send({
+        error: `Movement type "${data.type}" is not allowed for ${asset.type} assets. Allowed: ${allowedTypes.join(', ')}`,
+      });
+    }
 
     // Validate holdingId belongs to this asset
     let holding: typeof holdings.$inferSelect | undefined;
@@ -639,7 +867,7 @@ export async function assetsRoutes(app: FastifyInstance) {
 
     // Validate quantity sign based on type
     const { type, quantity } = data;
-    if ((type === 'deposit' || type === 'buy' || type === 'dividend') && quantity <= 0) {
+    if ((type === 'deposit' || type === 'buy' || type === 'dividend' || type === 'contribution' || type === 'rent_income') && quantity <= 0) {
       return reply.status(400).send({ error: `Quantity must be positive for ${type}` });
     }
     if ((type === 'withdrawal' || type === 'sell' || type === 'fee') && quantity >= 0) {
@@ -686,31 +914,12 @@ export async function assetsRoutes(app: FastifyInstance) {
 
       // Update holding if applicable
       if (holding) {
-        let newQty = holding.quantity;
-        let newCostBasis = holding.costBasis;
+        const updated = computeHoldingUpdate(holding, type, data.quantity, data.pricePerUnit, data.sourceAmount);
 
-        if (type === 'buy') {
-          newQty += data.quantity;
-          newCostBasis += data.quantity * (data.pricePerUnit ?? 0);
-        } else if (type === 'sell' || type === 'withdrawal') {
-          const proportion = Math.abs(data.quantity) / holding.quantity;
-          newCostBasis -= holding.costBasis * proportion;
-          newQty += data.quantity;
-        } else if (type === 'deposit') {
-          newQty += data.quantity;
-          newCostBasis += data.quantity;
-        } else if (type === 'fee') {
-          // Fees increase cost basis (they're an investment cost) but don't change quantity
-          newCostBasis += Math.abs(data.sourceAmount ?? data.quantity);
-        } else if (type === 'adjustment') {
-          newQty += data.quantity;
-        }
-        // dividend: no holding changes
-
-        if (newQty !== holding.quantity || newCostBasis !== holding.costBasis) {
+        if (updated.quantity !== holding.quantity || updated.costBasis !== holding.costBasis) {
           db.update(holdings).set({
-            quantity: newQty,
-            costBasis: newCostBasis,
+            quantity: updated.quantity,
+            costBasis: updated.costBasis,
             updatedAt: new Date().toISOString(),
           }).where(eq(holdings.id, holding.id)).run();
         }

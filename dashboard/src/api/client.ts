@@ -425,6 +425,9 @@ export interface Asset {
   notes: string | null;
   holdings: Holding[];
   totalValueIls: number;
+  totalInvestedIls: number | null;
+  totalReturnIls: number | null;
+  totalRentEarned: number | null;
 }
 
 export interface AssetSnapshot {
@@ -442,7 +445,7 @@ export function getAsset(id: number) {
   return request<Asset>(`/assets/${id}`);
 }
 
-export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
+export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string; initialValue?: number; initialCostBasis?: number }) {
   return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
 }
 
@@ -452,6 +455,20 @@ export function updateAsset(id: number, data: { name?: string; type?: string; cu
 
 export function deleteAsset(id: number) {
   return request<void>(`/assets/${id}`, { method: 'DELETE' });
+}
+
+export function updateAssetValue(
+  assetId: number,
+  data: { currentValue: number; contribution?: number; date?: string; notes?: string },
+): Promise<Asset> {
+  return request<Asset>(`/assets/${assetId}/value`, { method: 'PUT', body: JSON.stringify(data) });
+}
+
+export function recordRentIncome(
+  assetId: number,
+  data: { amount: number; date?: string; notes?: string },
+): Promise<{ success: boolean }> {
+  return request<{ success: boolean }>(`/assets/${assetId}/rent`, { method: 'POST', body: JSON.stringify(data) });
 }
 
 export function getExchangeRates() {
@@ -584,6 +601,7 @@ export interface NetWorthAsset {
   id: number;
   name: string;
   type: string;
+  currency: string;
   liquidity: string;
   totalValueIls: number;
   holdings: NetWorthAssetHolding[];

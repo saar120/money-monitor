@@ -21,7 +21,7 @@ function computeHoldingValueIls(h: HoldingRow, rates: Record<string, number>): n
   return convertToIls(currentValue, h.currency, rates);
 }
 
-function generateDatePoints(startDate: string, endDate: string, granularity: string): string[] {
+export function generateDatePoints(startDate: string, endDate: string, granularity: string): string[] {
   const dates: string[] = [];
   const start = new Date(startDate + 'T00:00:00');
   const end = new Date(endDate + 'T00:00:00');

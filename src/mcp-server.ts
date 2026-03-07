@@ -23,6 +23,21 @@ const {
   categorizeTransaction,
 } = await import('./ai/tools.js');
 
+const {
+  getNetWorth,
+  getAssetDetails,
+  getLiabilities,
+  getNetWorthHistory,
+  manageAsset,
+  manageHolding,
+  recordMovement,
+  manageLiability,
+} = await import('./ai/asset-tools.js');
+
+const {
+  ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, MOVEMENT_TYPES, LIABILITY_TYPES,
+} = await import('./shared/types.js');
+
 const server = new McpServer({
   name: 'money-monitor-mcp-server',
   version: '1.0.0',
@@ -189,6 +204,163 @@ server.registerTool('categorize_transaction', {
 }, async (args) => {
   try {
     return { content: [{ type: 'text', text: categorizeTransaction(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+// ── Net Worth & Asset tools ──────────────────────────────────────────────────────
+
+server.registerTool('get_net_worth', {
+  title: 'Get Net Worth',
+  description:
+    'Get a complete net worth summary: bank balances, investment assets (with P&L), ' +
+    'liabilities, and totals (total, liquid). Use for financial overview questions.',
+  inputSchema: {},
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async () => {
+  try {
+    return { content: [{ type: 'text', text: await getNetWorth() }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('get_asset_details', {
+  title: 'Get Asset Details',
+  description:
+    'Get detailed info about a specific asset: holdings, P&L, and optionally movements and value history. ' +
+    'Search by name (fuzzy match) or ID.',
+  inputSchema: {
+    asset_id: z.number().optional().describe('Asset ID'),
+    asset_name: z.string().optional().describe('Asset name (case-insensitive fuzzy match)'),
+    include_movements: z.boolean().optional().describe('Include recent movements (default false)'),
+    include_snapshots: z.boolean().optional().describe('Include value history (default false)'),
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await getAssetDetails(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('get_liabilities', {
+  title: 'Get Liabilities',
+  description:
+    'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
+  inputSchema: {
+    include_inactive: z.boolean().optional().describe('Include deactivated liabilities (default false)'),
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await getLiabilities(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('get_net_worth_history', {
+  title: 'Get Net Worth History',
+  description:
+    'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. ' +
+    'Supports daily, weekly, or monthly granularity.',
+  inputSchema: {
+    start_date: z.string().optional().describe('Start date (ISO). Defaults to 1 year ago.'),
+    end_date: z.string().optional().describe('End date (ISO). Defaults to today.'),
+    granularity: z.enum(['daily', 'weekly', 'monthly']).optional().describe('Data point frequency (default: monthly)'),
+  },
+  annotations: { readOnlyHint: true, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await getNetWorthHistory(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('manage_asset', {
+  title: 'Manage Asset',
+  description:
+    'Create, update, or modify assets. Actions: create, update, update_value, record_rent.',
+  inputSchema: {
+    action: z.enum(['create', 'update', 'update_value', 'record_rent']).describe('Action to perform'),
+    name: z.string().optional(), type: z.enum(ASSET_TYPES).optional(), institution: z.string().optional(),
+    currency: z.string().optional(), liquidity: z.enum(LIQUIDITY_TYPES).optional(),
+    initial_value: z.number().optional(), initial_cost_basis: z.number().optional(),
+    notes: z.string().optional(), asset_id: z.number().optional(),
+    current_value: z.number().optional(), contribution: z.number().optional(),
+    date: z.string().optional(), amount: z.number().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await manageAsset(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('manage_holding', {
+  title: 'Manage Holding',
+  description:
+    'Create, update, or delete individual holdings within an asset (stocks, ETFs, crypto coins, cash).',
+  inputSchema: {
+    action: z.enum(['create', 'update', 'delete']).describe('Action to perform'),
+    asset_id: z.number().optional(), name: z.string().optional(), type: z.enum(HOLDING_TYPES).optional(),
+    currency: z.string().optional(), quantity: z.number().optional(),
+    cost_basis: z.number().optional(), last_price: z.number().optional(),
+    notes: z.string().optional(), holding_id: z.number().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await manageHolding(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('record_movement', {
+  title: 'Record Movement',
+  description:
+    'Record a financial movement (buy, sell, deposit, withdrawal, dividend) on a brokerage or crypto asset.',
+  inputSchema: {
+    asset_id: z.number().describe('Asset ID'),
+    holding_id: z.number().optional().describe('Holding ID (required for buy/sell)'),
+    type: z.enum(MOVEMENT_TYPES).describe('Movement type'),
+    quantity: z.number().describe('Amount'),
+    currency: z.string().describe('Currency code'),
+    price_per_unit: z.number().optional(), source_amount: z.number().optional(),
+    source_currency: z.string().optional(), date: z.string().describe('Date (ISO)'),
+    notes: z.string().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await recordMovement(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('manage_liability', {
+  title: 'Manage Liability',
+  description:
+    'Create, update, or deactivate liabilities (loans, mortgages, credit lines).',
+  inputSchema: {
+    action: z.enum(['create', 'update', 'deactivate']).describe('Action to perform'),
+    name: z.string().optional(), type: z.enum(LIABILITY_TYPES).optional(), currency: z.string().optional(),
+    original_amount: z.number().optional(), current_balance: z.number().optional(),
+    interest_rate: z.number().optional(), start_date: z.string().optional(),
+    notes: z.string().optional(), liability_id: z.number().optional(),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: false, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: await manageLiability(args) }] };
   } catch (e) {
     return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
   }

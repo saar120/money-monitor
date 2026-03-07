@@ -19,6 +19,7 @@ import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS, LIQUIDITY_STYLES, LIABILITY_TYPE_LABELS,
 } from '@/lib/net-worth-constants';
+import { getAssetCategory } from '@/lib/asset-categories';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -338,12 +339,12 @@ async function saveQuickUpdate(asset: Asset) {
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const editingAsset = ref<Asset | null>(null);
-const assetForm = ref({ name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
+const assetForm = ref({ name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '', initialValue: 0, initialCostBasis: 0 });
 const assetSaving = ref(false);
 
 function openAddAsset() {
   editingAsset.value = null;
-  assetForm.value = { name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
+  assetForm.value = { name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '', initialValue: 0, initialCostBasis: 0 };
   showAssetDialog.value = true;
 }
 
@@ -362,6 +363,7 @@ function openEditAsset(asset: Asset) {
 }
 
 const assetValid = computed(() => assetForm.value.name.trim() && assetForm.value.type);
+const assetCategory = computed(() => getAssetCategory(assetForm.value.type));
 
 async function handleSaveAsset() {
   if (!assetValid.value) return;
@@ -376,6 +378,10 @@ async function handleSaveAsset() {
       liquidity: assetForm.value.liquidity,
       linkedAccountId: linked ?? undefined,
       notes: assetForm.value.notes.trim() || undefined,
+      ...(assetCategory.value === 'real_estate' && !editingAsset.value ? {
+        initialValue: assetForm.value.initialValue || undefined,
+        initialCostBasis: assetForm.value.initialCostBasis || undefined,
+      } : {}),
     };
     if (editingAsset.value) {
       await updateAsset(editingAsset.value.id, {
@@ -779,7 +785,7 @@ const fullLiabilityMap = computed(() => {
                         type="number"
                         step="any"
                         class="h-7 text-xs w-24"
-                        :model-value="editedHoldings.get(h.id)?.lastPrice"
+                        :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
                         @update:model-value="(v: string | number) => {
                           const e = editedHoldings.get(h.id);
                           if (e) e.lastPrice = Number(v);
@@ -801,10 +807,15 @@ const fullLiabilityMap = computed(() => {
               <template v-else>
                 <p class="text-xs font-medium text-muted-foreground mb-2">Holdings:</p>
                 <div v-if="getFullAsset(asset.id)!.holdings.length === 0" class="text-xs text-muted-foreground py-2">
-                  No holdings yet.
-                  <Button variant="outline" size="sm" class="h-6 text-xs ml-2" @click.stop="openAddHolding(asset.id)">
-                    <Plus class="h-3 w-3 mr-1" /> Add
-                  </Button>
+                  <template v-if="getAssetCategory(asset.type) === 'crypto' || getAssetCategory(asset.type) === 'brokerage'">
+                    No holdings yet.
+                    <Button variant="outline" size="sm" class="h-6 text-xs ml-2" @click.stop="openAddHolding(asset.id)">
+                      <Plus class="h-3 w-3 mr-1" /> Add
+                    </Button>
+                  </template>
+                  <template v-else>
+                    Click to view and update value.
+                  </template>
                 </div>
                 <div v-else class="space-y-1">
                   <div
@@ -843,7 +854,7 @@ const fullLiabilityMap = computed(() => {
                       </Button>
                     </div>
                   </div>
-                  <div class="flex gap-1.5 mt-1">
+                  <div v-if="getAssetCategory(asset.type) === 'crypto' || getAssetCategory(asset.type) === 'brokerage'" class="flex gap-1.5 mt-1">
                     <Button variant="outline" size="sm" class="h-6 text-xs" @click.stop="openAddHolding(asset.id)">
                       <Plus class="h-3 w-3 mr-1" /> Add Holding
                     </Button>
@@ -974,7 +985,7 @@ const fullLiabilityMap = computed(() => {
               </SelectContent>
             </Select>
           </div>
-          <div class="space-y-1.5">
+          <div v-if="assetCategory === 'brokerage' || assetCategory === 'real_estate'" class="space-y-1.5">
             <label class="text-sm font-medium">Currency</label>
             <Select v-model="assetForm.currency">
               <SelectTrigger>
@@ -985,11 +996,21 @@ const fullLiabilityMap = computed(() => {
               </SelectContent>
             </Select>
           </div>
+          <template v-if="assetCategory === 'real_estate' && !editingAsset">
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium">Property Value ({{ assetForm.currency }})</label>
+              <Input v-model.number="assetForm.initialValue" type="number" placeholder="e.g. 500000" />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium">Purchase Price (ILS)</label>
+              <Input v-model.number="assetForm.initialCostBasis" type="number" placeholder="e.g. 2000000" />
+            </div>
+          </template>
           <div class="space-y-1.5">
             <label class="text-sm font-medium">Institution</label>
             <Input v-model="assetForm.institution" placeholder="e.g. oneZero, excelence" />
           </div>
-          <div class="space-y-1.5">
+          <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
             <label class="text-sm font-medium">Liquidity</label>
             <Select v-model="assetForm.liquidity">
               <SelectTrigger>
@@ -1002,7 +1023,7 @@ const fullLiabilityMap = computed(() => {
               </SelectContent>
             </Select>
           </div>
-          <div class="space-y-1.5">
+          <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
             <label class="text-sm font-medium">Linked Bank Account</label>
             <Select v-model="assetForm.linkedAccountId">
               <SelectTrigger>

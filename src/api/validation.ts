@@ -145,6 +145,8 @@ export const createAssetSchema = z.object({
   liquidity: z.enum(LIQUIDITY_TYPES).default('liquid'),
   linkedAccountId: z.number().int().positive().optional(),
   notes: z.string().max(500).optional(),
+  initialValue: z.number().min(0).optional(),
+  initialCostBasis: z.number().min(0).optional(),
 });
 
 export const updateAssetSchema = z.object({
@@ -181,6 +183,19 @@ export const assetsQuerySchema = z.object({
 export const snapshotsQuerySchema = z.object({
   startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+});
+
+export const updateAssetValueSchema = z.object({
+  currentValue: z.number().min(0),
+  contribution: z.number().min(0).optional(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().max(500).optional(),
+});
+
+export const recordRentSchema = z.object({
+  amount: z.number().positive(),
+  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  notes: z.string().max(500).optional(),
 });
 
 // ─── Liabilities ───

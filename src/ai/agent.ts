@@ -21,6 +21,16 @@ import {
   buildSaveMemoryTool,
   buildMcpServerFromTools,
 } from './tools.js';
+import {
+  buildGetNetWorthTool,
+  buildGetAssetDetailsTool,
+  buildGetLiabilitiesTool,
+  buildGetNetWorthHistoryTool,
+  buildManageAssetTool,
+  buildManageHoldingTool,
+  buildRecordMovementTool,
+  buildManageLiabilityTool,
+} from './asset-tools.js';
 import { readMemory } from './memory.js';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -76,6 +86,14 @@ const TOOL_STATUS: Record<string, string> = {
   get_top_merchants: 'Finding top merchants...',
   categorize_transaction: 'Categorizing transaction...',
   save_memory: 'Saving to memory...',
+  get_net_worth: 'Calculating net worth...',
+  get_asset_details: 'Looking up asset details...',
+  get_liabilities: 'Checking liabilities...',
+  get_net_worth_history: 'Loading net worth history...',
+  manage_asset: 'Updating asset...',
+  manage_holding: 'Updating holding...',
+  record_movement: 'Recording movement...',
+  manage_liability: 'Updating liability...',
 };
 
 function describeToolCall(toolName: string): string {
@@ -118,6 +136,14 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildGetTopMerchantsTool(),
     buildCategorizeTransactionTool(categoryNames),
     buildSaveMemoryTool(),
+    buildGetNetWorthTool(),
+    buildGetAssetDetailsTool(),
+    buildGetLiabilitiesTool(),
+    buildGetNetWorthHistoryTool(),
+    buildManageAssetTool(),
+    buildManageHoldingTool(),
+    buildRecordMovementTool(),
+    buildManageLiabilityTool(),
   ]);
 
   for await (const msg of query({
