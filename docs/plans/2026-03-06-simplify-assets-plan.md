@@ -42,8 +42,8 @@ export function getAssetCategory(assetType: string): AssetCategory {
   return ASSET_CATEGORY_MAP[assetType] ?? 'simple_value';
 }
 
-// Movement types allowed per category (typed to catch typos at compile time)
-export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, readonly (typeof MOVEMENT_TYPES[number])[]> = {
+// Movement types allowed per category
+export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, readonly string[]> = {
   simple_value: ['contribution'],
   real_estate: ['rent_income'],
   crypto: ['buy', 'sell'],
@@ -159,10 +159,8 @@ In `src/api/assets.routes.ts`, add a new route inside `assetsRoutes()` (before t
 ```typescript
 // Simplified value update for non-brokerage assets
 app.put('/api/assets/:id/value', async (req, reply) => {
-  const assetId = parseIntParam((req.params as { id: string }).id, 'asset ID', reply);
-  if (assetId === null) return;
-  const data = validateBody(updateAssetValueSchema, req.body, reply);
-  if (!data) return;
+  const assetId = parseIntParam(req, 'id');
+  const data = validateBody(req, updateAssetValueSchema);
 
   const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
   if (!assetRow) return reply.code(404).send({ error: 'Asset not found' });
@@ -191,15 +189,17 @@ app.put('/api/assets/:id/value', async (req, reply) => {
       updatedAt: now,
     };
 
-    // For contribution: add to costBasis (always 'contribution' type — rent uses POST /rent)
+    // For contribution: add to costBasis
     if (data.contribution && data.contribution > 0) {
       updateSet.costBasis = holding.costBasis + data.contribution;
 
+      // Record contribution movement
+      const movementType = category === 'real_estate' ? 'rent_income' : 'contribution';
       db.insert(assetMovements).values({
         assetId,
         holdingId: holding.id,
         date: today,
-        type: 'contribution',
+        type: movementType,
         quantity: data.contribution,
         currency: holding.currency,
         createdAt: now,
@@ -209,26 +209,24 @@ app.put('/api/assets/:id/value', async (req, reply) => {
     db.update(holdings).set(updateSet).where(eq(holdings.id, holding.id)).run();
   })();
 
-  // Snapshot the new value; reuse rates for the response
+  // Snapshot the new value
+  await generateAssetSnapshot(assetId);
+
   const rates = await getExchangeRates();
-  await generateAssetSnapshot(assetId, rates);
   return buildAssetResponse(assetRow, rates.rates);
 });
 ```
-
-> **Note:** `generateAssetSnapshot` should accept an optional pre-fetched `rates` param to avoid a duplicate `getExchangeRates()` call. If it doesn't accept one yet, refactor it in this task.
->
-> **Also:** Currently `PUT /value` queries holdings three times: once to find the balance holding, once inside `generateAssetSnapshot`, and once inside `buildAssetResponse`. Consider having `generateAssetSnapshot` return the computed holdings so `buildAssetResponse` can reuse them.
 
 **Step 3: Add a separate endpoint for recording rent income (real estate)**
 
 ```typescript
 app.post('/api/assets/:id/rent', async (req, reply) => {
-  const assetId = parseIntParam((req.params as { id: string }).id, 'asset ID', reply);
-  if (assetId === null) return;
-  // Schema defined in src/api/validation.ts as recordRentSchema
-  const data = validateBody(recordRentSchema, req.body, reply);
-  if (!data) return;
+  const assetId = parseIntParam(req, 'id');
+  const data = validateBody(req, z.object({
+    amount: z.number().positive(),
+    date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+    notes: z.string().max(500).optional(),
+  }));
 
   const assetRow = db.select().from(assets).where(eq(assets.id, assetId)).get();
   if (!assetRow) return reply.code(404).send({ error: 'Asset not found' });
@@ -241,16 +239,12 @@ app.post('/api/assets/:id/rent', async (req, reply) => {
     .where(and(eq(holdings.assetId, assetId), eq(holdings.type, 'balance')))
     .get();
 
-  if (!holding) {
-    return reply.code(400).send({ error: 'No balance holding found. Re-create the asset.' });
-  }
-
   const today = data.date ?? todayInIsrael();
   const now = new Date().toISOString();
 
   db.insert(assetMovements).values({
     assetId,
-    holdingId: holding.id,
+    holdingId: holding?.id ?? null,
     date: today,
     type: 'rent_income',
     quantity: data.amount,
@@ -332,138 +326,76 @@ git commit -m "feat: gate movement types by asset category"
 - Modify: `src/api/assets.routes.ts:17-66` (computeHoldingValues)
 - Modify: `src/api/assets.routes.ts:68-90` (buildAssetResponse)
 
-**Step 1: Fix computeHoldingValues — enable P&L for crypto holdings**
+**Step 1: Fix computeHoldingValues — P&L stays in native currency**
 
-The current code at line 46 has `if (!isCrypto) { gainLoss = currentValue - h.costBasis; }` which **skips P&L entirely for crypto holdings**, returning `gainLoss: null`. The design says crypto should have per-coin P&L: `quantity × current price in ILS - costBasis (ILS)`.
+The current `gainLoss = currentValue - h.costBasis` at line 46 is actually correct for native currency. The bug was only on the frontend displaying it as ILS. Since the design says per-stock P&L is native only, just keep this as-is.
 
-Fix: Remove the `isCrypto` guard so P&L is computed for all holding types:
-
-```typescript
-// Replace the isCrypto guard:
-gainLoss = currentValue - h.costBasis;
-gainLossPercent = h.costBasis > 0 ? (gainLoss / h.costBasis) * 100 : null;
-```
-
-For brokerage, `gainLoss` will be in native currency (correct per design). For crypto, `costBasis` is already ILS, and `currentValue` is also ILS (`quantity × price × ILS rate`), so the P&L is naturally in ILS.
+No backend change needed for per-stock P&L.
 
 **Step 2: Add account-level ILS P&L to buildAssetResponse**
 
 In `buildAssetResponse` (line 68), add total ILS invested computation:
 
 ```typescript
-function buildAssetResponse(
-  assetRow: typeof assets.$inferSelect,
-  rates: Record<string, number>,
-  /** Pre-fetched movement aggregates (optional, for batch use on list endpoint) */
-  movementAggregates?: Map<number, { depositIls: number; withdrawIls: number; rentTotal: number }>,
-) {
+function buildAssetResponse(assetRow: typeof assets.$inferSelect, rates: Record<string, number>) {
   const holdingRows = db.select().from(holdings).where(eq(holdings.assetId, assetRow.id)).all();
   const computedHoldings = holdingRows.map(h => computeHoldingValues(h, rates));
   const totalValueIls = computedHoldings.reduce((sum, h) => sum + h.currentValueIls, 0);
 
   // Compute total ILS deposited for brokerage assets (for account-level P&L)
   let totalInvestedIls: number | null = null;
-  let totalRentEarned: number | null = null;
   const category = getAssetCategory(assetRow.type);
-
   if (category === 'brokerage') {
-    // Use pre-fetched aggregates if available (list endpoint), else query
-    const agg = movementAggregates?.get(assetRow.id);
-    if (agg) {
-      totalInvestedIls = agg.depositIls > 0 ? agg.depositIls - agg.withdrawIls : null;
-    } else {
-      // Single-asset endpoint: one query with GROUP BY instead of N separate queries
-      const sums = db.select({
-        type: assetMovements.type,
-        total: sql<number>`COALESCE(SUM(source_amount), 0)`,
-      }).from(assetMovements)
-        .where(and(
-          eq(assetMovements.assetId, assetRow.id),
-          inArray(assetMovements.type, ['deposit', 'withdrawal']),
-        ))
-        .groupBy(assetMovements.type)
-        .all();
+    const deposits = db.select().from(assetMovements)
+      .where(and(
+        eq(assetMovements.assetId, assetRow.id),
+        eq(assetMovements.type, 'deposit'),
+      )).all();
+    const withdrawals = db.select().from(assetMovements)
+      .where(and(
+        eq(assetMovements.assetId, assetRow.id),
+        eq(assetMovements.type, 'withdrawal'),
+      )).all();
 
-      const depositIls = sums.find(s => s.type === 'deposit')?.total ?? 0;
-      const withdrawIls = sums.find(s => s.type === 'withdrawal')?.total ?? 0;
-      totalInvestedIls = depositIls > 0 ? depositIls - Math.abs(withdrawIls) : null;
-    }
+    const depositIls = deposits.reduce((sum, m) => sum + (m.sourceAmount ?? 0), 0);
+    const withdrawIls = withdrawals.reduce((sum, m) => sum + Math.abs(m.sourceAmount ?? 0), 0);
+    totalInvestedIls = deposits.length > 0 ? depositIls - withdrawIls : null;
   } else if (category === 'simple_value' || category === 'real_estate') {
+    // costBasis on the balance holding IS the total invested/purchase price (already ILS)
     const balanceHolding = computedHoldings.find(h => h.type === 'balance');
     totalInvestedIls = balanceHolding?.costBasis ?? null;
   } else if (category === 'crypto') {
+    // Sum of all coin costBases (already ILS)
     totalInvestedIls = computedHoldings.reduce((sum, h) => sum + h.costBasis, 0);
   }
-
-  // Rent income for real estate
-  if (category === 'real_estate') {
-    const agg = movementAggregates?.get(assetRow.id);
-    if (agg) {
-      totalRentEarned = agg.rentTotal;
-    } else {
-      const result = db.select({
-        total: sql<number>`COALESCE(SUM(quantity), 0)`,
-      }).from(assetMovements)
-        .where(and(
-          eq(assetMovements.assetId, assetRow.id),
-          eq(assetMovements.type, 'rent_income'),
-        ))
-        .get();
-      totalRentEarned = result?.total ?? 0;
-    }
-  }
-
-  // For real estate: P&L includes rent — totalReturnIls = (value + rent) - purchasePrice
-  const effectiveReturn = totalInvestedIls != null
-    ? totalValueIls + (totalRentEarned ?? 0) - totalInvestedIls
-    : null;
 
   // ... rest of existing code (linkedAccountName lookup, return object)
   // Add to the return object:
   // totalInvestedIls,
-  // totalReturnIls: effectiveReturn,
-  // totalRentEarned,
+  // totalReturnIls: totalInvestedIls != null ? totalValueIls - totalInvestedIls : null,
 }
 ```
 
-> **Important — avoid N+1 on the list endpoint:** In `GET /api/assets`, before `rows.map(row => buildAssetResponse(row, rates))`, pre-fetch all movement aggregates in one batch query:
->
-> ```typescript
-> // Pre-fetch movement aggregates for all assets to avoid N+1
-> const allAssetIds = rows.map(r => r.id);
-> const movementSums = db.select({
->   assetId: assetMovements.assetId,
->   type: assetMovements.type,
->   sourceTotal: sql<number>`COALESCE(SUM(source_amount), 0)`,
->   qtyTotal: sql<number>`COALESCE(SUM(quantity), 0)`,
-> }).from(assetMovements)
->   .where(and(
->     inArray(assetMovements.assetId, allAssetIds),
->     inArray(assetMovements.type, ['deposit', 'withdrawal', 'rent_income']),
->   ))
->   .groupBy(assetMovements.assetId, assetMovements.type)
->   .all();
->
-> const aggMap = new Map<number, { depositIls: number; withdrawIls: number; rentTotal: number }>();
-> for (const row of movementSums) {
->   const entry = aggMap.get(row.assetId) ?? { depositIls: 0, withdrawIls: 0, rentTotal: 0 };
->   if (row.type === 'deposit') entry.depositIls = row.sourceTotal;
->   else if (row.type === 'withdrawal') entry.withdrawIls = Math.abs(row.sourceTotal);
->   else if (row.type === 'rent_income') entry.rentTotal = row.qtyTotal;
->   aggMap.set(row.assetId, entry);
-> }
->
-> // Pass aggMap to each buildAssetResponse call
-> const assets = rows.map(row => buildAssetResponse(row, rates.rates, aggMap));
-> ```
->
-> **Also batch `linkedAccountName`:** `buildAssetResponse` does a per-asset query for linked account names. Pre-fetch all needed account names in one `inArray` query before the `.map()` call, similar to the movement aggregates batch above.
+**Step 3: Add totalRentEarned for real estate**
 
-**Step 3: Update Asset type in client.ts**
+For real estate, also compute total rent:
 
-> Note: `totalRentEarned` and the real estate P&L formula `(value + rent) - purchasePrice` are now handled inside `buildAssetResponse` (Step 2 above), so no separate step is needed.
+```typescript
+let totalRentEarned: number | null = null;
+if (category === 'real_estate') {
+  const rentMovements = db.select().from(assetMovements)
+    .where(and(
+      eq(assetMovements.assetId, assetRow.id),
+      eq(assetMovements.type, 'rent_income'),
+    )).all();
+  totalRentEarned = rentMovements.reduce((sum, m) => sum + m.quantity, 0);
+}
 
+// Return object includes: totalRentEarned
+// Real estate P&L = (currentValue + totalRentEarned) - purchasePrice
+```
 
+**Step 4: Update Asset type in client.ts**
 
 In `dashboard/src/api/client.ts`, add to the `Asset` interface:
 
@@ -473,7 +405,7 @@ totalReturnIls: number | null;
 totalRentEarned: number | null;
 ```
 
-**Step 4: Commit**
+**Step 5: Commit**
 
 ```bash
 git add src/api/assets.routes.ts dashboard/src/api/client.ts
@@ -489,19 +421,52 @@ git commit -m "feat: add account-level ILS P&L and rent tracking to asset respon
 
 **Step 1: Add API client functions**
 
-> **Already implemented.** `updateAssetValue` and `recordRentIncome` already exist in `dashboard/src/api/client.ts` (lines 460-472) using the correct `request<T>()` pattern. No changes needed — skip to Step 2.
-
-**Step 2: Re-export getAssetCategory for the frontend (single source of truth)**
-
-Create `dashboard/src/lib/asset-categories.ts` as a **re-export barrel** — do NOT duplicate the logic:
+Add after the existing asset API functions:
 
 ```typescript
-// Re-export from shared types — single source of truth
-export { getAssetCategory, CATEGORY_MOVEMENT_TYPES } from '../../../src/shared/types.js';
-export type { AssetCategory } from '../../../src/shared/types.js';
+export async function updateAssetValue(
+  assetId: number,
+  data: { currentValue: number; contribution?: number; date?: string; notes?: string },
+): Promise<Asset> {
+  return apiFetch(`/api/assets/${assetId}/value`, { method: 'PUT', body: data });
+}
+
+export async function recordRentIncome(
+  assetId: number,
+  data: { amount: number; date?: string; notes?: string },
+): Promise<{ success: boolean }> {
+  return apiFetch(`/api/assets/${assetId}/rent`, { method: 'POST', body: data });
+}
 ```
 
-> **Why a re-export?** The category map and movement type gating are defined in `src/shared/types.ts` (Task 1). Duplicating them here creates a maintenance hazard — any new asset type would need updating in two places. If the bundler can't resolve the `../../../src/shared/` path, add a Vite alias (e.g., `'@shared': resolve(__dirname, '../../src/shared')`) in `vite.config.ts` instead of copying the code.
+**Step 2: Export getAssetCategory in a shared frontend helper**
+
+Create `dashboard/src/lib/asset-categories.ts`:
+
+```typescript
+export type AssetCategory = 'simple_value' | 'real_estate' | 'crypto' | 'brokerage';
+
+const ASSET_CATEGORY_MAP: Record<string, AssetCategory> = {
+  pension: 'simple_value',
+  keren_hishtalmut: 'simple_value',
+  fund: 'simple_value',
+  real_estate: 'real_estate',
+  crypto: 'crypto',
+  brokerage: 'brokerage',
+};
+
+export function getAssetCategory(assetType: string): AssetCategory {
+  return ASSET_CATEGORY_MAP[assetType] ?? 'simple_value';
+}
+
+// Movement types the UI should show per category
+export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, string[]> = {
+  simple_value: ['contribution'],
+  real_estate: ['rent_income'],
+  crypto: ['buy', 'sell'],
+  brokerage: ['deposit', 'withdrawal', 'buy', 'sell', 'dividend'],
+};
+```
 
 **Step 3: Commit**
 
