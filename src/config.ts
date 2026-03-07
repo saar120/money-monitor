@@ -13,6 +13,8 @@ const envSchema = z.object({
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   API_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_ALLOWED_USERS: z.string().optional(),
   SCRAPE_TIMEOUT: z.coerce.number().default(120000),
   SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
 });
