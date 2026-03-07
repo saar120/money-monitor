@@ -16,7 +16,7 @@ const router = createRouter({
     { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
     { path: '/net-worth', component: () => import('./components/NetWorthPage.vue') },
     { path: '/net-worth/assets/:id', component: () => import('./components/AssetDetailPage.vue') },
-    { path: '/setup', component: () => import('./components/SetupWizard.vue') },
+    { path: '/setup', name: 'setup', component: () => import('./components/SetupWizard.vue') },
     { path: '/settings', component: () => import('./components/SettingsPage.vue') },
   ],
 });
@@ -24,7 +24,7 @@ const router = createRouter({
 // Redirect to setup wizard on first Electron launch (config.json missing)
 let setupChecked = false;
 router.beforeEach(async (to) => {
-  if (setupChecked || to.path === '/setup') return;
+  if (setupChecked || to.name === 'setup') return;
   setupChecked = true;
   try {
     const { needsSetup } = await getSettings();

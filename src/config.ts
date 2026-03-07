@@ -1,4 +1,4 @@
-import { readFileSync, writeFileSync, existsSync } from 'node:fs';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { configPath } from './paths.js';
@@ -8,7 +8,6 @@ export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
 // ── Config file helpers (Electron mode) ─────────────────────────────────────
 
 export function loadConfigFile(): Record<string, string> | null {
-  if (!existsSync(configPath)) return null;
   try {
     return JSON.parse(readFileSync(configPath, 'utf-8'));
   } catch {
@@ -25,10 +24,6 @@ export function saveConfigFile(settings: Record<string, string>): void {
     process.env[key] = String(value);
   }
   config = envSchema.parse(process.env);
-}
-
-export function configFileExists(): boolean {
-  return existsSync(configPath);
 }
 
 // ── Load config source ──────────────────────────────────────────────────────

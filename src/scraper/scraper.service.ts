@@ -7,12 +7,12 @@ import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import { dataDir } from '../paths.js';
+import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
 
 // In Electron mode, store Puppeteer's Chromium download inside the data directory
 if (process.env.MONEY_MONITOR_DATA_DIR) {
   process.env.PUPPETEER_CACHE_DIR ??= join(dataDir, 'puppeteer-cache');
 }
-import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
 import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';

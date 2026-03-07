@@ -1,7 +1,10 @@
 import type { FastifyInstance } from 'fastify';
-import { execFileSync } from 'node:child_process';
-import { config, isElectronMode, saveConfigFile, configFileExists } from '../config.js';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
+import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
+
+const execFileAsync = promisify(execFile);
 
 const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
@@ -31,16 +34,17 @@ function redact(value: string): string {
   return value.slice(0, 4) + '••••' + value.slice(-4);
 }
 
-function getClaudeStatus(): { installed: boolean; version?: string } {
+let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
+
+async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
+  if (cachedClaudeStatus) return cachedClaudeStatus;
   try {
-    const version = execFileSync('claude', ['--version'], {
-      encoding: 'utf-8',
-      timeout: 5000,
-    }).trim();
-    return { installed: true, version };
+    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
+    cachedClaudeStatus = { installed: true, version: stdout.trim() };
   } catch {
-    return { installed: false };
+    cachedClaudeStatus = { installed: false };
   }
+  return cachedClaudeStatus;
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -60,11 +64,11 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      needsSetup: isElectronMode && !configFileExists(),
+      needsSetup: isElectronMode && loadConfigFile() === null,
       isElectron: isElectronMode,
       settings,
       dataDir,
-      claude: getClaudeStatus(),
+      claude: await getClaudeStatus(),
     });
   });
 

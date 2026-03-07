@@ -73,17 +73,10 @@ async function save() {
       TELEGRAM_ALLOWED_USERS: form.value.TELEGRAM_ALLOWED_USERS,
     };
     // Only include secrets that the user actually modified
-    if (dirtySecrets.value.has('ANTHROPIC_API_KEY') && form.value.ANTHROPIC_API_KEY) {
-      updates.ANTHROPIC_API_KEY = form.value.ANTHROPIC_API_KEY;
-    }
-    if (dirtySecrets.value.has('CLAUDE_CODE_OAUTH_TOKEN') && form.value.CLAUDE_CODE_OAUTH_TOKEN) {
-      updates.CLAUDE_CODE_OAUTH_TOKEN = form.value.CLAUDE_CODE_OAUTH_TOKEN;
-    }
-    if (dirtySecrets.value.has('CREDENTIALS_MASTER_KEY') && form.value.CREDENTIALS_MASTER_KEY) {
-      updates.CREDENTIALS_MASTER_KEY = form.value.CREDENTIALS_MASTER_KEY;
-    }
-    if (dirtySecrets.value.has('TELEGRAM_BOT_TOKEN') && form.value.TELEGRAM_BOT_TOKEN) {
-      updates.TELEGRAM_BOT_TOKEN = form.value.TELEGRAM_BOT_TOKEN;
+    for (const key of ['ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CREDENTIALS_MASTER_KEY', 'TELEGRAM_BOT_TOKEN'] as const) {
+      if (dirtySecrets.value.has(key) && form.value[key]) {
+        updates[key] = form.value[key];
+      }
     }
     await updateSettings(updates);
     success.value = 'Settings saved. Some changes may require a restart.';

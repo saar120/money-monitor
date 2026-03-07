@@ -6,7 +6,7 @@ const route = useRoute();
 </script>
 
 <template>
-  <AppLayout v-if="route.path !== '/setup'">
+  <AppLayout v-if="route.name !== 'setup'">
     <router-view />
   </AppLayout>
   <router-view v-else />

@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, Notification } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -32,13 +32,10 @@ process.env.API_TOKEN = authToken;
 process.env.MM_APP_VERSION = app.getVersion();
 
 // ── 3. Check for Claude Code CLI ─────────────────────────────────────────────
-function checkClaudeCli(): boolean {
-  try {
-    execFileSync('which', ['claude'], { stdio: 'ignore' });
-    return true;
-  } catch {
-    return false;
-  }
+function checkClaudeCli(): Promise<boolean> {
+  return new Promise((resolve) => {
+    execFile('which', ['claude'], (err) => resolve(!err));
+  });
 }
 
 // ── 4. Native macOS menu ────────────────────────────────────────────────────
@@ -138,7 +135,13 @@ app.whenReady().then(async () => {
 
   buildMenu();
 
-  if (!checkClaudeCli()) {
+  // Start server import and CLI check concurrently
+  const [serverModule, hasClaude] = await Promise.all([
+    import('../dist/server.js'),
+    checkClaudeCli(),
+  ]);
+
+  if (!hasClaude) {
     dialog.showErrorBox(
       'Claude Code CLI Required',
       'Money Monitor requires Claude Code CLI to be installed.\n\n' +
@@ -147,7 +150,7 @@ app.whenReady().then(async () => {
     );
   }
 
-  const { createServer } = await import('../dist/server.js');
+  const { createServer } = serverModule;
   const { start, shutdown } = await createServer();
   const port = await start({ port: 0 });
 
