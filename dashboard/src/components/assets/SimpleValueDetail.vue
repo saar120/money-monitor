@@ -118,8 +118,8 @@ const chartOptions = {
       titleColor: '#f0f0f3',
       bodyColor: '#f0f0f3',
       callbacks: {
-        label(ctx: { parsed: { y: number } }) {
-          return ` ${formatCurrency(ctx.parsed.y)}`;
+        label(ctx: { parsed: { y: number | null } }) {
+          return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
         },
       },
     },

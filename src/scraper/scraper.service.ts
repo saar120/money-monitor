@@ -1,10 +1,17 @@
 import { createScraper, CompanyTypes } from 'israeli-bank-scrapers';
 import { createHash } from 'node:crypto';
+import { join } from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
+import { dataDir } from '../paths.js';
+
+// In Electron mode, store Puppeteer's Chromium download inside the data directory
+if (process.env.MONEY_MONITOR_DATA_DIR) {
+  process.env.PUPPETEER_CACHE_DIR ??= join(dataDir, 'puppeteer-cache');
+}
 import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
 import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
@@ -110,6 +117,7 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
   const credentials = getCredentials(account.credentialsRef);
   if (!credentials) {
     const durationMs = Date.now() - startMs;
+    console.error(`[Scrape] ${account.displayName}: No credentials found (ref: ${account.credentialsRef})`);
     const errorResult = {
       success: false,
       accountId: account.id,
@@ -183,6 +191,7 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
     const result = await scraper.scrape({ ...credentials as any, otpCodeRetriever });
 
     if (!result.success) {
+      console.error(`[Scrape] ${account.displayName} (${account.companyId}) failed: ${result.errorType} — ${result.errorMessage}`);
       const durationMs = Date.now() - startMs;
       db.insert(scrapeLogs).values({
         accountId: account.id,
@@ -257,8 +266,8 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
             accountNew++;
             newIds.push(Number(insertResult.lastInsertRowid));
           }
-        } catch {
-          // Unexpected DB error, skip this transaction
+        } catch (dbErr) {
+          console.error(`[Scrape] DB insert failed for txn "${txn.description}":`, dbErr instanceof Error ? dbErr.message : dbErr);
         }
       }
 
@@ -301,6 +310,7 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
+    console.error(`[Scrape] ${account.displayName} (${account.companyId}) exception:`, errorMessage);
     db.insert(scrapeLogs).values({
       accountId: account.id,
       sessionId: sessionId ?? null,

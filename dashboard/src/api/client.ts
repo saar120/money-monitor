@@ -2,7 +2,12 @@ const BASE_URL = '/api';
 
 const API_TOKEN_KEY = 'money_monitor_api_token';
 
+// In Electron, the auth token is provided via the preload bridge.
+// In standalone mode, fall back to localStorage.
+const electronToken = (window as any).electronAPI?.getAuthToken?.() as string | undefined;
+
 export function getApiToken(): string | null {
+  if (electronToken) return electronToken;
   return localStorage.getItem(API_TOKEN_KEY);
 }
 
@@ -664,5 +669,26 @@ export function aiRecategorize(startDate?: string, endDate?: string) {
   return request<{ categorized: number }>('/ai/recategorize', {
     method: 'POST',
     body: JSON.stringify({ startDate, endDate }),
+  });
+}
+
+// ─── Settings ───
+
+export interface SettingsResponse {
+  needsSetup: boolean;
+  isElectron: boolean;
+  settings: Record<string, string | number | boolean>;
+  dataDir: string;
+  claude: { installed: boolean; version?: string };
+}
+
+export function getSettings() {
+  return request<SettingsResponse>('/settings');
+}
+
+export function updateSettings(settings: Record<string, string | number | boolean>) {
+  return request<{ success: boolean }>('/settings', {
+    method: 'POST',
+    body: JSON.stringify(settings),
   });
 }

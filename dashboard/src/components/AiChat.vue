@@ -89,12 +89,12 @@ async function sendMessage(text?: string) {
 
     for await (const event of aiChatStream(sessionId, messageText)) {
       if (event.type === 'text_delta') {
-        messages.value[msgIndex].content += event.text;
+        messages.value[msgIndex]!.content += event.text;
         await scrollToBottom();
       } else if (event.type === 'status') {
         status.value = event.text;
       } else if (event.type === 'result') {
-        messages.value[msgIndex].content = event.text;
+        messages.value[msgIndex]!.content = event.text;
       } else if (event.type === 'error') {
         throw new Error(event.text);
       }

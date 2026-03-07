@@ -2,6 +2,7 @@
 
 @custom-variant dark (&:is(.dark *));
 
+
 /* ─── Light mode (kept as fallback but app defaults to dark) ─── */
 :root {
   --background: #ffffff;

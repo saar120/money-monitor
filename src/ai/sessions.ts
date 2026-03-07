@@ -1,10 +1,9 @@
 import { randomUUID } from 'node:crypto';
 import { mkdirSync, readFileSync, appendFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { sessionsDir } from '../paths.js';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const SESSIONS_DIR = join(__dirname, '..', '..', 'data', 'chat', 'sessions');
+const SESSIONS_DIR = sessionsDir;
 const DEFAULT_TITLE = 'New chat';
 
 export interface SessionMeta {

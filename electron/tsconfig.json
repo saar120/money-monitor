@@ -1,0 +1,11 @@
+{
+  "compilerOptions": {
+    "target": "ES2023",
+    "module": "ESNext",
+    "moduleResolution": "bundler",
+    "sourceMap": true,
+    "skipLibCheck": true,
+    "strict": true
+  },
+  "include": ["main.ts", "preload.mts"]
+}
