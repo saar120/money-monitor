@@ -311,8 +311,8 @@ async function manageAsset(input: {
     });
     if (!result.ok) return JSON.stringify({ error: result.error });
 
-    // Return the refreshed asset for consistency
     const asset = await assetService.getAsset(input.asset_id);
+    if (!asset) return JSON.stringify({ error: 'Asset not found after recording rent' });
     return JSON.stringify({ success: true, asset });
   }
 
@@ -342,8 +342,8 @@ async function manageHolding(input: {
     });
     if (!result.ok) return JSON.stringify({ error: result.error });
 
-    // Return the full asset for consistency with the old behavior
     const asset = await assetService.getAsset(input.asset_id);
+    if (!asset) return JSON.stringify({ error: 'Asset not found after creating holding' });
     return JSON.stringify(asset);
   }
 
@@ -401,6 +401,7 @@ async function recordMovement(input: {
   if (!result.ok) return JSON.stringify({ error: result.error });
 
   const asset = await assetService.getAsset(input.asset_id);
+  if (!asset) return JSON.stringify({ error: 'Asset not found after recording movement' });
   return JSON.stringify({ movement: result.movement, asset });
 }
 

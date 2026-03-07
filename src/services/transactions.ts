@@ -156,7 +156,7 @@ export function categorizeTransaction(input: {
 }) {
   const existing = db.select({ id: transactions.id }).from(transactions)
     .where(eq(transactions.id, input.transactionId)).get();
-  if (!existing) return { ok: false as const, error: 'Transaction not found' };
+  if (!existing) return { ok: false as const, error: 'Transaction not found', status: 404 };
 
   const needsReview = input.confidence !== undefined && input.confidence < 0.8;
 

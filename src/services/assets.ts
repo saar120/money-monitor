@@ -320,18 +320,19 @@ export async function getAsset(id: number) {
 }
 
 export async function findAssetByName(name: string) {
-  const exact = db.select().from(assets).where(eq(assets.name, name)).get();
+  const exact = db.select().from(assets).where(and(eq(assets.name, name), eq(assets.isActive, true))).get();
   if (exact) {
     const { rates } = await getExchangeRates();
     return { asset: buildAssetResponse(exact, rates) };
   }
-  const allAssets = db.select({ id: assets.id, name: assets.name, type: assets.type }).from(assets).all();
+  const allAssets = db.select({ id: assets.id, name: assets.name, type: assets.type }).from(assets).where(eq(assets.isActive, true)).all();
   const lower = name.toLowerCase();
   const matches = allAssets.filter(a => a.name.toLowerCase().includes(lower));
   if (matches.length === 1) {
-    const { rates } = await getExchangeRates();
     const row = db.select().from(assets).where(eq(assets.id, matches[0].id)).get();
-    return { asset: buildAssetResponse(row!, rates) };
+    if (!row) return { error: `Asset matching "${name}" was not found` };
+    const { rates } = await getExchangeRates();
+    return { asset: buildAssetResponse(row, rates) };
   }
   if (matches.length > 1) {
     return { error: `Multiple assets match "${name}"`, matches };
@@ -423,7 +424,7 @@ export async function createAsset(data: {
   }
 
   if (data.initialValue && data.initialValue > 0) {
-    try { await generateAssetSnapshot(result.id); } catch { /* logged elsewhere */ }
+    try { await generateAssetSnapshot(result.id); } catch (err) { console.error(`[assets] Snapshot error for asset ${result.id}:`, err); }
   }
 
   const { rates } = await getExchangeRates();
@@ -499,7 +500,7 @@ export async function updateAssetValue(assetId: number, data: {
     db.update(holdings).set(updateSet).where(eq(holdings.id, holding.id)).run();
   })();
 
-  try { await generateAssetSnapshot(assetId); } catch { /* logged elsewhere */ }
+  try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
 
   const { rates } = await getExchangeRates();
   const refreshed = db.select().from(assets).where(eq(assets.id, assetId)).get();
@@ -530,7 +531,7 @@ export async function recordRent(assetId: number, data: { amount: number; date?:
     notes: data.notes, createdAt: new Date().toISOString(),
   }).run();
 
-  try { await generateAssetSnapshot(assetId); } catch { /* logged elsewhere */ }
+  try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
 
   return { ok: true as const };
 }
@@ -566,7 +567,7 @@ export async function createHolding(assetId: number, data: {
     lastPrice: data.lastPrice, notes: data.notes,
   }).returning().get();
 
-  try { await generateAssetSnapshot(assetId); } catch { /* logged elsewhere */ }
+  try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
 
   const { rates } = await getExchangeRates();
   return { ok: true as const, holding: computeHoldingValues(result, rates) };
@@ -586,7 +587,7 @@ export async function updateHolding(holdingId: number, data: {
 
   db.update(holdings).set(updateSet).where(eq(holdings.id, holdingId)).run();
 
-  try { await generateAssetSnapshot(holding.assetId); } catch { /* logged elsewhere */ }
+  try { await generateAssetSnapshot(holding.assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${holding.assetId}:`, err); }
 
   const updated = db.select().from(holdings).where(eq(holdings.id, holdingId)).get();
   if (!updated) return { ok: false as const, error: 'Holding not found after update', status: 404 };
@@ -601,7 +602,7 @@ export async function deleteHolding(holdingId: number) {
   const assetId = holding.assetId;
   db.delete(holdings).where(eq(holdings.id, holdingId)).run();
 
-  try { await generateAssetSnapshot(assetId); } catch { /* logged elsewhere */ }
+  try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
 
   return { ok: true as const };
 }
@@ -673,8 +674,8 @@ export async function createMovement(assetId: number, data: {
   })();
 
   if (type !== 'dividend') {
-    try { await generateAssetSnapshot(assetId); } catch { /* logged elsewhere */ }
-    try { await replayMovementSnapshots(assetId); } catch { /* logged elsewhere */ }
+    try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
+    try { await replayMovementSnapshots(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
   }
 
   return { ok: true as const, movement: created };
@@ -734,8 +735,8 @@ export async function deleteMovement(movementId: number) {
   })();
 
   if (holding && movement.type !== 'dividend') {
-    try { await generateAssetSnapshot(movement.assetId); } catch { /* logged elsewhere */ }
-    try { await replayMovementSnapshots(movement.assetId, movementId); } catch { /* logged elsewhere */ }
+    try { await generateAssetSnapshot(movement.assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${movement.assetId}:`, err); }
+    try { await replayMovementSnapshots(movement.assetId, movementId); } catch (err) { console.error(`[assets] Snapshot error for asset ${movement.assetId}:`, err); }
   }
 
   return { ok: true as const };
