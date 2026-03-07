@@ -1,20 +1,11 @@
 import { tool } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { eq, and, gte, lte, desc } from 'drizzle-orm';
-import { db, sqlite } from '../db/connection.js';
-import { assets, holdings, liabilities, assetMovements, assetSnapshots, accounts, accountBalanceHistory } from '../db/schema.js';
-import { getExchangeRates, convertToIls } from '../services/exchange-rates.js';
-import { todayInIsrael } from '../shared/dates.js';
 import {
   ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, MOVEMENT_TYPES, LIABILITY_TYPES,
-  getAssetCategory, CATEGORY_MOVEMENT_TYPES,
 } from '../shared/types.js';
-import {
-  buildAssetResponse, batchMovementAggregates,
-  generateAssetSnapshot, replayMovementSnapshots,
-  computeHoldingUpdate,
-} from '../api/assets.routes.js';
-import { generateDatePoints } from '../api/net-worth.routes.js';
+import * as assetService from '../services/assets.js';
+import * as liabilityService from '../services/liabilities.js';
+import * as netWorthService from '../services/net-worth.js';
 
 function toolResult(text: string, isError = false) {
   return { content: [{ type: 'text' as const, text }], ...(isError ? { isError: true } : {}) };
@@ -195,53 +186,8 @@ Before calling, confirm the details with the user if there is any ambiguity.`,
 // ── Query functions ─────────────────────────────────────────────────────────────
 
 async function getNetWorth(): Promise<string> {
-  const { rates } = await getExchangeRates();
-
-  // Banks
-  const bankRows = db.select()
-    .from(accounts)
-    .where(and(eq(accounts.accountType, 'bank'), eq(accounts.isActive, true)))
-    .all();
-  const banks = bankRows.map(b => ({
-    id: b.id, name: b.displayName, balance: b.balance ?? 0, balanceIls: b.balance ?? 0,
-  }));
-  const banksTotal = banks.reduce((sum, b) => sum + b.balanceIls, 0);
-
-  // Assets
-  const assetRows = db.select().from(assets).where(eq(assets.isActive, true)).all();
-  const aggMap = batchMovementAggregates(assetRows.map(r => r.id));
-  let assetsTotal = 0;
-  let liquidAssetsTotal = 0;
-
-  const assetsResult = assetRows.map(asset => {
-    const resp = buildAssetResponse(asset, rates, aggMap);
-    assetsTotal += resp.totalValueIls;
-    if (asset.liquidity === 'liquid') liquidAssetsTotal += resp.totalValueIls;
-    return {
-      id: resp.id, name: resp.name, type: resp.type, currency: resp.currency,
-      liquidity: resp.liquidity, totalValueIls: resp.totalValueIls,
-      totalInvestedIls: resp.totalInvestedIls, totalReturnIls: resp.totalReturnIls,
-    };
-  });
-
-  // Liabilities
-  const liabilityRows = db.select().from(liabilities).where(eq(liabilities.isActive, true)).all();
-  const liabilitiesResult = liabilityRows.map(l => ({
-    id: l.id, name: l.name, type: l.type,
-    currentBalance: l.currentBalance,
-    currentBalanceIls: convertToIls(l.currentBalance, l.currency, rates),
-  }));
-  const liabilitiesTotal = liabilitiesResult.reduce((sum, l) => sum + l.currentBalanceIls, 0);
-
-  const total = banksTotal + assetsTotal - liabilitiesTotal;
-  const liquidTotal = banksTotal + liquidAssetsTotal - liabilitiesTotal;
-
-  return JSON.stringify({
-    total, liquidTotal,
-    banks, banksTotal,
-    assets: assetsResult, assetsTotal,
-    liabilities: liabilitiesResult, liabilitiesTotal,
-  });
+  const result = await netWorthService.getNetWorth();
+  return JSON.stringify(result);
 }
 
 async function getAssetDetails(input: {
@@ -250,96 +196,39 @@ async function getAssetDetails(input: {
   include_movements?: boolean;
   include_snapshots?: boolean;
 }): Promise<string> {
-  let assetRow: typeof assets.$inferSelect | undefined;
-
-  if (input.asset_id) {
-    assetRow = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-  } else if (input.asset_name) {
-    // Fuzzy name search: case-insensitive LIKE
-    const allAssets = db.select().from(assets).where(eq(assets.isActive, true)).all();
-    const needle = input.asset_name.toLowerCase();
-    assetRow = allAssets.find(a => a.name.toLowerCase() === needle)
-      ?? allAssets.find(a => a.name.toLowerCase().includes(needle));
-
-    if (!assetRow) {
-      const matches = allAssets
-        .filter(a => a.name.toLowerCase().includes(needle) || needle.includes(a.name.toLowerCase()))
-        .map(a => ({ id: a.id, name: a.name, type: a.type }));
-      if (matches.length > 0) {
-        return JSON.stringify({ error: 'Multiple matches found', matches });
-      }
-      return JSON.stringify({ error: `No asset found matching "${input.asset_name}"`, available: allAssets.map(a => ({ id: a.id, name: a.name, type: a.type })) });
-    }
-  } else {
+  if (!input.asset_id && !input.asset_name) {
     return JSON.stringify({ error: 'Provide either asset_id or asset_name' });
   }
 
-  if (!assetRow) return JSON.stringify({ error: 'Asset not found' });
+  let result: Record<string, unknown>;
+  let assetId: number;
 
-  const { rates } = await getExchangeRates();
-  const result: Record<string, unknown> = buildAssetResponse(assetRow, rates);
+  if (input.asset_name) {
+    const found = await assetService.findAssetByName(input.asset_name);
+    if ('error' in found) return JSON.stringify(found);
+    assetId = found.asset.id;
+    result = { ...found.asset };
+  } else {
+    const asset = await assetService.getAsset(input.asset_id!);
+    if (!asset) return JSON.stringify({ error: 'Asset not found' });
+    assetId = asset.id;
+    result = { ...asset };
+  }
 
   if (input.include_movements) {
-    const movements = db.select({
-      id: assetMovements.id,
-      holdingId: assetMovements.holdingId,
-      holdingName: holdings.name,
-      date: assetMovements.date,
-      type: assetMovements.type,
-      quantity: assetMovements.quantity,
-      currency: assetMovements.currency,
-      pricePerUnit: assetMovements.pricePerUnit,
-      sourceAmount: assetMovements.sourceAmount,
-      sourceCurrency: assetMovements.sourceCurrency,
-      notes: assetMovements.notes,
-    })
-      .from(assetMovements)
-      .leftJoin(holdings, eq(assetMovements.holdingId, holdings.id))
-      .where(eq(assetMovements.assetId, assetRow.id))
-      .orderBy(desc(assetMovements.date), desc(assetMovements.id))
-      .limit(50)
-      .all();
+    const { movements } = assetService.listMovements(assetId, { limit: 50 });
     result.movements = movements;
   }
 
   if (input.include_snapshots) {
-    const endDate = todayInIsrael();
-    const startDate = (() => {
-      const d = new Date();
-      d.setFullYear(d.getFullYear() - 1);
-      return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-    })();
-
-    const snapshots = db.select({
-      date: assetSnapshots.date,
-      totalValue: assetSnapshots.totalValue,
-      totalValueIls: assetSnapshots.totalValueIls,
-    }).from(assetSnapshots)
-      .where(and(
-        eq(assetSnapshots.assetId, assetRow.id),
-        gte(assetSnapshots.date, startDate),
-        lte(assetSnapshots.date, endDate),
-      ))
-      .orderBy(assetSnapshots.date)
-      .all();
-    result.snapshots = snapshots;
+    result.snapshots = assetService.getSnapshots(assetId);
   }
 
   return JSON.stringify(result);
 }
 
 async function getLiabilities(input: { include_inactive?: boolean }): Promise<string> {
-  const { rates } = await getExchangeRates();
-
-  const rows = input.include_inactive
-    ? db.select().from(liabilities).all()
-    : db.select().from(liabilities).where(eq(liabilities.isActive, true)).all();
-
-  const result = rows.map(row => ({
-    ...row,
-    currentBalanceIls: convertToIls(row.currentBalance, row.currency, rates),
-  }));
-
+  const result = await liabilityService.listLiabilities({ includeInactive: input.include_inactive });
   return JSON.stringify({ liabilities: result });
 }
 
@@ -348,105 +237,13 @@ async function getNetWorthHistory(input: {
   end_date?: string;
   granularity?: 'daily' | 'weekly' | 'monthly';
 }): Promise<string> {
-  const today = todayInIsrael();
-  const endDate = input.end_date ?? today;
-  const startDate = input.start_date ?? (() => {
-    const d = new Date();
-    d.setFullYear(d.getFullYear() - 1);
-    return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-  })();
-  const granularity = input.granularity ?? 'monthly';
-
-  const datePoints = generateDatePoints(startDate, endDate, granularity);
-  if (datePoints.length === 0 || datePoints.length > 1000) {
-    return JSON.stringify({ error: datePoints.length === 0 ? 'No date points in range' : 'Date range too large (max 1000 points)' });
-  }
-
-  const bankAccounts = db.select({ id: accounts.id })
-    .from(accounts)
-    .where(and(eq(accounts.accountType, 'bank'), eq(accounts.isActive, true)))
-    .all();
-
-  const activeAssets = db.select({ id: assets.id, liquidity: assets.liquidity })
-    .from(assets)
-    .where(eq(assets.isActive, true))
-    .all();
-  const lockedAssetIds = new Set(activeAssets.filter(a => a.liquidity === 'locked').map(a => a.id));
-
-  const liabilityRows = db.select().from(liabilities).where(eq(liabilities.isActive, true)).all();
-  const { rates } = await getExchangeRates();
-
-  const lastDate = datePoints[datePoints.length - 1];
-
-  const allBalanceHistory = db.select({
-    accountId: accountBalanceHistory.accountId,
-    date: accountBalanceHistory.date,
-    balance: accountBalanceHistory.balance,
-  })
-    .from(accountBalanceHistory)
-    .where(lte(accountBalanceHistory.date, lastDate))
-    .orderBy(accountBalanceHistory.accountId, accountBalanceHistory.date)
-    .all();
-
-  const allSnapshots = db.select({
-    assetId: assetSnapshots.assetId,
-    date: assetSnapshots.date,
-    totalValueIls: assetSnapshots.totalValueIls,
-  })
-    .from(assetSnapshots)
-    .orderBy(assetSnapshots.assetId, assetSnapshots.date)
-    .all();
-
-  const balanceByAccount = new Map<number, { date: string; balance: number }[]>();
-  for (const row of allBalanceHistory) {
-    let arr = balanceByAccount.get(row.accountId);
-    if (!arr) { arr = []; balanceByAccount.set(row.accountId, arr); }
-    arr.push({ date: row.date, balance: row.balance });
-  }
-
-  const snapshotByAsset = new Map<number, { date: string; totalValueIls: number }[]>();
-  for (const row of allSnapshots) {
-    let arr = snapshotByAsset.get(row.assetId);
-    if (!arr) { arr = []; snapshotByAsset.set(row.assetId, arr); }
-    arr.push({ date: row.date, totalValueIls: row.totalValueIls });
-  }
-
-  const series: { date: string; total: number; liquidTotal: number; banks: number; assets: number; liabilities: number }[] = [];
-
-  for (const date of datePoints) {
-    let banksValue = 0;
-    for (const bank of bankAccounts) {
-      const entries = balanceByAccount.get(bank.id);
-      if (entries) {
-        const entry = entries.findLast(e => e.date <= date);
-        if (entry) banksValue += entry.balance;
-      }
-    }
-
-    let assetsValue = 0;
-    let liquidAssetsValue = 0;
-    for (const asset of activeAssets) {
-      const entries = snapshotByAsset.get(asset.id);
-      if (entries && entries.length > 0) {
-        const entry = entries.findLast(e => e.date <= date);
-        const val = (entry ?? entries[0]).totalValueIls;
-        assetsValue += val;
-        if (!lockedAssetIds.has(asset.id)) liquidAssetsValue += val;
-      }
-    }
-
-    let liabilitiesValue = 0;
-    for (const l of liabilityRows) {
-      if (l.startDate && l.startDate > date) continue;
-      liabilitiesValue += convertToIls(l.currentBalance, l.currency, rates);
-    }
-
-    const total = banksValue + assetsValue - liabilitiesValue;
-    const liquidTotal = banksValue + liquidAssetsValue - liabilitiesValue;
-    series.push({ date, total, liquidTotal, banks: banksValue, assets: assetsValue, liabilities: liabilitiesValue });
-  }
-
-  return JSON.stringify({ series });
+  const result = await netWorthService.getNetWorthHistory({
+    startDate: input.start_date,
+    endDate: input.end_date,
+    granularity: input.granularity,
+  });
+  if ('error' in result) return JSON.stringify({ error: result.error });
+  return JSON.stringify(result);
 }
 
 // ── Write functions ─────────────────────────────────────────────────────────────
@@ -458,157 +255,65 @@ async function manageAsset(input: {
   notes?: string; asset_id?: number; current_value?: number;
   contribution?: number; date?: string; amount?: number;
 }): Promise<string> {
-  const { rates } = await getExchangeRates();
-
   if (input.action === 'create') {
     if (!input.name) return JSON.stringify({ error: 'name is required for create' });
     if (!input.type) return JSON.stringify({ error: 'type is required for create' });
 
-    const existing = db.select({ id: assets.id }).from(assets).where(eq(assets.name, input.name)).get();
-    if (existing) return JSON.stringify({ error: 'Asset name already exists' });
-
-    const result = db.insert(assets).values({
+    const result = await assetService.createAsset({
       name: input.name,
       type: input.type,
       currency: input.currency ?? 'ILS',
       institution: input.institution,
-      liquidity: (input.liquidity as 'liquid' | 'restricted' | 'locked') ?? 'liquid',
+      liquidity: input.liquidity,
       notes: input.notes,
-    }).returning().get();
-
-    const category = getAssetCategory(input.type);
-    if (category !== 'brokerage' && category !== 'crypto') {
-      db.insert(holdings).values({
-        assetId: result.id,
-        name: input.name,
-        type: 'balance',
-        currency: input.currency ?? 'ILS',
-        quantity: input.initial_value ?? 0,
-        costBasis: input.initial_cost_basis ?? 0,
-      }).run();
-    }
-
-    if (input.initial_value && input.initial_value > 0) {
-      try { await generateAssetSnapshot(result.id); } catch (err) {
-        console.error('[asset-tools] Failed to generate snapshot after asset creation:', err);
-      }
-    }
-
-    return JSON.stringify(buildAssetResponse(result, rates));
+      initialValue: input.initial_value,
+      initialCostBasis: input.initial_cost_basis,
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify(result.asset);
   }
 
   if (input.action === 'update') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for update' });
 
-    const existing = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!existing) return JSON.stringify({ error: 'Asset not found' });
-
-    if (input.name && input.name !== existing.name) {
-      const dup = db.select({ id: assets.id }).from(assets).where(eq(assets.name, input.name)).get();
-      if (dup) return JSON.stringify({ error: 'Asset name already exists' });
-    }
-
-    const updateSet: Record<string, unknown> = {};
-    if (input.name !== undefined) updateSet.name = input.name;
-    if (input.institution !== undefined) updateSet.institution = input.institution;
-    if (input.liquidity !== undefined) updateSet.liquidity = input.liquidity;
-    if (input.notes !== undefined) updateSet.notes = input.notes;
-
-    if (Object.keys(updateSet).length > 0) {
-      db.update(assets).set(updateSet).where(eq(assets.id, input.asset_id)).run();
-    }
-
-    const updated = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!updated) return JSON.stringify({ error: 'Asset not found after update' });
-    return JSON.stringify(buildAssetResponse(updated, rates));
+    const result = await assetService.updateAsset(input.asset_id, {
+      name: input.name,
+      institution: input.institution,
+      liquidity: input.liquidity,
+      notes: input.notes,
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify(result.asset);
   }
 
   if (input.action === 'update_value') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for update_value' });
     if (input.current_value === undefined) return JSON.stringify({ error: 'current_value is required for update_value' });
 
-    const assetRow = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!assetRow) return JSON.stringify({ error: 'Asset not found' });
-
-    const category = getAssetCategory(assetRow.type);
-    if (category === 'brokerage') return JSON.stringify({ error: 'Use record_movement for brokerage assets' });
-
-    const holding = db.select().from(holdings)
-      .where(and(eq(holdings.assetId, input.asset_id), eq(holdings.type, 'balance')))
-      .get();
-    if (!holding) return JSON.stringify({ error: 'No balance holding found' });
-
-    const today = input.date ?? todayInIsrael();
-    const now = new Date().toISOString();
-
-    sqlite.transaction(() => {
-      const updateSet: Record<string, unknown> = { quantity: input.current_value, updatedAt: now };
-
-      if (input.contribution && input.contribution > 0) {
-        updateSet.costBasis = holding.costBasis + input.contribution;
-        db.insert(assetMovements).values({
-          assetId: input.asset_id!,
-          holdingId: holding.id,
-          date: today,
-          type: 'contribution',
-          quantity: input.contribution,
-          currency: holding.currency,
-          notes: input.notes,
-          createdAt: now,
-        }).run();
-      }
-
-      db.update(holdings).set(updateSet).where(eq(holdings.id, holding.id)).run();
-    })();
-
-    try { await generateAssetSnapshot(input.asset_id); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after value update:', err);
-    }
-
-    const refreshed = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!refreshed) return JSON.stringify({ error: 'Asset not found after update' });
-    return JSON.stringify(buildAssetResponse(refreshed, rates));
+    const result = await assetService.updateAssetValue(input.asset_id, {
+      currentValue: input.current_value,
+      contribution: input.contribution,
+      date: input.date,
+      notes: input.notes,
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify(result.asset);
   }
 
   if (input.action === 'record_rent') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for record_rent' });
     if (!input.amount || input.amount <= 0) return JSON.stringify({ error: 'amount must be positive for record_rent' });
 
-    const assetRow = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!assetRow) return JSON.stringify({ error: 'Asset not found' });
-
-    if (getAssetCategory(assetRow.type) !== 'real_estate') {
-      return JSON.stringify({ error: 'Rent income only applies to real estate assets' });
-    }
-
-    const holding = db.select().from(holdings)
-      .where(and(eq(holdings.assetId, input.asset_id), eq(holdings.type, 'balance')))
-      .get();
-    if (!holding) return JSON.stringify({ error: 'No balance holding found' });
-
-    const today = input.date ?? todayInIsrael();
-    const rentAmountIls = convertToIls(input.amount, assetRow.currency, rates);
-
-    db.insert(assetMovements).values({
-      assetId: input.asset_id,
-      holdingId: holding.id,
-      date: today,
-      type: 'rent_income',
-      quantity: input.amount,
-      currency: assetRow.currency,
-      sourceAmount: rentAmountIls,
-      sourceCurrency: 'ILS',
+    const result = await assetService.recordRent(input.asset_id, {
+      amount: input.amount,
+      date: input.date,
       notes: input.notes,
-      createdAt: new Date().toISOString(),
-    }).run();
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
 
-    try { await generateAssetSnapshot(input.asset_id); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after rent recording:', err);
-    }
-
-    const refreshed = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!refreshed) return JSON.stringify({ error: 'Asset not found after update' });
-    return JSON.stringify({ success: true, asset: buildAssetResponse(refreshed, rates) });
+    // Return the refreshed asset for consistency
+    const asset = await assetService.getAsset(input.asset_id);
+    return JSON.stringify({ success: true, asset });
   }
 
   return JSON.stringify({ error: `Unknown action: ${input.action}` });
@@ -620,85 +325,50 @@ async function manageHolding(input: {
   quantity?: number; cost_basis?: number; last_price?: number; notes?: string;
   holding_id?: number;
 }): Promise<string> {
-  const { rates } = await getExchangeRates();
-
   if (input.action === 'create') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for create' });
     if (!input.name) return JSON.stringify({ error: 'name is required for create' });
     if (!input.type) return JSON.stringify({ error: 'type is required for create' });
     if (!input.currency) return JSON.stringify({ error: 'currency is required for create' });
 
-    const asset = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!asset) return JSON.stringify({ error: 'Asset not found' });
-
-    // Double-counting guard
-    if (asset.linkedAccountId && input.currency === 'ILS' && input.type === 'cash') {
-      return JSON.stringify({ error: 'ILS cash for this institution is already tracked via the linked bank account' });
-    }
-
-    const dup = db.select({ id: holdings.id }).from(holdings)
-      .where(and(eq(holdings.assetId, input.asset_id), eq(holdings.name, input.name))).get();
-    if (dup) return JSON.stringify({ error: 'Holding with this name already exists for this asset' });
-
-    db.insert(holdings).values({
-      assetId: input.asset_id,
+    const result = await assetService.createHolding(input.asset_id, {
       name: input.name,
-      type: input.type as typeof HOLDING_TYPES[number],
+      type: input.type,
       currency: input.currency,
       quantity: input.quantity ?? 0,
-      costBasis: input.cost_basis ?? 0,
+      costBasis: input.cost_basis,
       lastPrice: input.last_price,
       notes: input.notes,
-    }).run();
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
 
-    try { await generateAssetSnapshot(input.asset_id); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after holding creation:', err);
-    }
-
-    const refreshed = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-    if (!refreshed) return JSON.stringify({ error: 'Asset not found after update' });
-    return JSON.stringify(buildAssetResponse(refreshed, rates));
+    // Return the full asset for consistency with the old behavior
+    const asset = await assetService.getAsset(input.asset_id);
+    return JSON.stringify(asset);
   }
 
   if (input.action === 'update') {
     if (!input.holding_id) return JSON.stringify({ error: 'holding_id is required for update' });
 
-    const holding = db.select().from(holdings).where(eq(holdings.id, input.holding_id)).get();
-    if (!holding) return JSON.stringify({ error: 'Holding not found' });
+    const result = await assetService.updateHolding(input.holding_id, {
+      quantity: input.quantity,
+      costBasis: input.cost_basis,
+      lastPrice: input.last_price,
+      notes: input.notes,
+    });
+    if (!result.ok) return JSON.stringify({ error: result.error });
 
-    const updateSet: Record<string, unknown> = { updatedAt: new Date().toISOString() };
-    if (input.quantity !== undefined) updateSet.quantity = input.quantity;
-    if (input.cost_basis !== undefined) updateSet.costBasis = input.cost_basis;
-    if (input.last_price !== undefined) updateSet.lastPrice = input.last_price;
-    if (input.notes !== undefined) updateSet.notes = input.notes;
-
-    db.update(holdings).set(updateSet).where(eq(holdings.id, input.holding_id)).run();
-
-    try { await generateAssetSnapshot(holding.assetId); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after holding update:', err);
-    }
-
-    const asset = db.select().from(assets).where(eq(assets.id, holding.assetId)).get();
-    if (!asset) return JSON.stringify({ error: 'Asset not found' });
-    return JSON.stringify(buildAssetResponse(asset, rates));
+    // Return the full asset for consistency with old behavior
+    // The holding result contains the holding but old code returned full asset
+    return JSON.stringify(result.holding);
   }
 
   if (input.action === 'delete') {
     if (!input.holding_id) return JSON.stringify({ error: 'holding_id is required for delete' });
 
-    const holding = db.select().from(holdings).where(eq(holdings.id, input.holding_id)).get();
-    if (!holding) return JSON.stringify({ error: 'Holding not found' });
-
-    const assetId = holding.assetId;
-    db.delete(holdings).where(eq(holdings.id, input.holding_id)).run();
-
-    try { await generateAssetSnapshot(assetId); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after holding deletion:', err);
-    }
-
-    const asset = db.select().from(assets).where(eq(assets.id, assetId)).get();
-    if (!asset) return JSON.stringify({ error: 'Asset not found' });
-    return JSON.stringify(buildAssetResponse(asset, rates));
+    const result = await assetService.deleteHolding(input.holding_id);
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify({ success: true });
   }
 
   return JSON.stringify({ error: `Unknown action: ${input.action}` });
@@ -716,94 +386,22 @@ async function recordMovement(input: {
   date: string;
   notes?: string;
 }): Promise<string> {
-  const asset = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-  if (!asset) return JSON.stringify({ error: 'Asset not found' });
+  const result = await assetService.createMovement(input.asset_id, {
+    holdingId: input.holding_id,
+    date: input.date,
+    type: input.type,
+    quantity: input.quantity,
+    currency: input.currency,
+    pricePerUnit: input.price_per_unit,
+    sourceAmount: input.source_amount,
+    sourceCurrency: input.source_currency,
+    notes: input.notes,
+  });
 
-  // Gate movement types by asset category
-  const category = getAssetCategory(asset.type);
-  const allowedTypes = CATEGORY_MOVEMENT_TYPES[category];
-  if (!allowedTypes.includes(input.type as typeof MOVEMENT_TYPES[number])) {
-    return JSON.stringify({
-      error: `Movement type "${input.type}" is not allowed for ${asset.type} assets. Allowed: ${allowedTypes.join(', ')}`,
-    });
-  }
+  if (!result.ok) return JSON.stringify({ error: result.error });
 
-  // Validate holding
-  let holding: typeof holdings.$inferSelect | undefined;
-  if (input.holding_id) {
-    holding = db.select().from(holdings)
-      .where(and(eq(holdings.id, input.holding_id), eq(holdings.assetId, input.asset_id))).get();
-    if (!holding) return JSON.stringify({ error: 'Holding not found or does not belong to this asset' });
-  }
-
-  // Validate quantity sign
-  const { type, quantity } = input;
-  if ((type === 'deposit' || type === 'buy' || type === 'dividend' || type === 'contribution' || type === 'rent_income') && quantity <= 0) {
-    return JSON.stringify({ error: `Quantity must be positive for ${type}` });
-  }
-  if ((type === 'withdrawal' || type === 'sell' || type === 'fee') && quantity >= 0) {
-    return JSON.stringify({ error: `Quantity must be negative for ${type}` });
-  }
-
-  // Require pricePerUnit for buy/sell on stock/etf/crypto
-  if ((type === 'buy' || type === 'sell') && holding) {
-    if ((holding.type === 'stock' || holding.type === 'etf' || holding.type === 'crypto') && !input.price_per_unit) {
-      return JSON.stringify({ error: `price_per_unit is required for ${type} on ${holding.type} holdings` });
-    }
-  }
-
-  // Sell/withdraw validation
-  if ((type === 'sell' || type === 'withdrawal') && holding) {
-    if (Math.abs(quantity) > holding.quantity) {
-      return JSON.stringify({ error: `Cannot ${type} more than current holding quantity (${holding.quantity})` });
-    }
-  }
-
-  const needsSnapshot = type !== 'dividend';
-
-  const created = sqlite.transaction(() => {
-    const movement = db.insert(assetMovements).values({
-      assetId: input.asset_id,
-      holdingId: input.holding_id,
-      date: input.date,
-      type: input.type,
-      quantity: input.quantity,
-      currency: input.currency,
-      pricePerUnit: input.price_per_unit,
-      sourceAmount: input.source_amount,
-      sourceCurrency: input.source_currency,
-      notes: input.notes,
-    }).returning().get();
-
-    if (holding) {
-      const updated = computeHoldingUpdate(holding, type, quantity, input.price_per_unit, input.source_amount);
-
-      if (updated.quantity !== holding.quantity || updated.costBasis !== holding.costBasis) {
-        db.update(holdings).set({
-          quantity: updated.quantity,
-          costBasis: updated.costBasis,
-          updatedAt: new Date().toISOString(),
-        }).where(eq(holdings.id, holding.id)).run();
-      }
-    }
-
-    return movement;
-  })();
-
-  if (needsSnapshot) {
-    try { await generateAssetSnapshot(input.asset_id); } catch (err) {
-      console.error('[asset-tools] Failed to generate snapshot after movement:', err);
-    }
-    try { await replayMovementSnapshots(input.asset_id); } catch (err) {
-      console.error('[asset-tools] Failed to replay movement snapshots:', err);
-    }
-  }
-
-  const { rates } = await getExchangeRates();
-  const refreshedAsset = db.select().from(assets).where(eq(assets.id, input.asset_id)).get();
-  if (!refreshedAsset) return JSON.stringify({ error: 'Asset not found after movement' });
-
-  return JSON.stringify({ movement: created, asset: buildAssetResponse(refreshedAsset, rates) });
+  const asset = await assetService.getAsset(input.asset_id);
+  return JSON.stringify({ movement: result.movement, asset });
 }
 
 async function manageLiability(input: {
@@ -812,73 +410,44 @@ async function manageLiability(input: {
   original_amount?: number; current_balance?: number; interest_rate?: number;
   start_date?: string; notes?: string; liability_id?: number;
 }): Promise<string> {
-  const { rates } = await getExchangeRates();
-
   if (input.action === 'create') {
     if (!input.name) return JSON.stringify({ error: 'name is required for create' });
     if (!input.type) return JSON.stringify({ error: 'type is required for create' });
     if (input.original_amount === undefined) return JSON.stringify({ error: 'original_amount is required for create' });
     if (input.current_balance === undefined) return JSON.stringify({ error: 'current_balance is required for create' });
 
-    const existing = db.select({ id: liabilities.id }).from(liabilities)
-      .where(eq(liabilities.name, input.name)).get();
-    if (existing) return JSON.stringify({ error: 'Liability name already exists' });
-
-    const result = db.insert(liabilities).values({
+    const result = await liabilityService.createLiability({
       name: input.name,
-      type: input.type as typeof LIABILITY_TYPES[number],
+      type: input.type,
       currency: input.currency ?? 'ILS',
       originalAmount: input.original_amount,
       currentBalance: input.current_balance,
       interestRate: input.interest_rate,
       startDate: input.start_date,
       notes: input.notes,
-    }).returning().get();
-
-    return JSON.stringify({
-      ...result,
-      currentBalanceIls: convertToIls(result.currentBalance, result.currency, rates),
     });
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify(result.liability);
   }
 
   if (input.action === 'update') {
     if (!input.liability_id) return JSON.stringify({ error: 'liability_id is required for update' });
 
-    const existing = db.select().from(liabilities).where(eq(liabilities.id, input.liability_id)).get();
-    if (!existing) return JSON.stringify({ error: 'Liability not found' });
-
-    if (input.name && input.name !== existing.name) {
-      const dup = db.select({ id: liabilities.id }).from(liabilities)
-        .where(eq(liabilities.name, input.name)).get();
-      if (dup) return JSON.stringify({ error: 'Liability name already exists' });
-    }
-
-    const updateSet: Record<string, unknown> = {};
-    if (input.name !== undefined) updateSet.name = input.name;
-    if (input.current_balance !== undefined) updateSet.currentBalance = input.current_balance;
-    if (input.interest_rate !== undefined) updateSet.interestRate = input.interest_rate;
-    if (input.notes !== undefined) updateSet.notes = input.notes;
-
-    if (Object.keys(updateSet).length > 0) {
-      db.update(liabilities).set(updateSet).where(eq(liabilities.id, input.liability_id)).run();
-    }
-
-    const updated = db.select().from(liabilities).where(eq(liabilities.id, input.liability_id)).get();
-    if (!updated) return JSON.stringify({ error: 'Liability not found after update' });
-    return JSON.stringify({
-      ...updated,
-      currentBalanceIls: convertToIls(updated.currentBalance, updated.currency, rates),
+    const result = await liabilityService.updateLiability(input.liability_id, {
+      name: input.name,
+      currentBalance: input.current_balance,
+      interestRate: input.interest_rate,
+      notes: input.notes,
     });
+    if (!result.ok) return JSON.stringify({ error: result.error });
+    return JSON.stringify(result.liability);
   }
 
   if (input.action === 'deactivate') {
     if (!input.liability_id) return JSON.stringify({ error: 'liability_id is required for deactivate' });
 
-    const existing = db.select({ id: liabilities.id }).from(liabilities)
-      .where(eq(liabilities.id, input.liability_id)).get();
-    if (!existing) return JSON.stringify({ error: 'Liability not found' });
-
-    db.update(liabilities).set({ isActive: false }).where(eq(liabilities.id, input.liability_id)).run();
+    const result = await liabilityService.deactivateLiability(input.liability_id);
+    if (!result.ok) return JSON.stringify({ error: result.error });
     return JSON.stringify({ success: true, message: 'Liability deactivated' });
   }
 

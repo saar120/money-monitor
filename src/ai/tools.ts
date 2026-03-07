@@ -1,11 +1,11 @@
 import { tool, createSdkMcpServer } from '@anthropic-ai/claude-agent-sdk';
 import { z } from 'zod';
-import { eq, and, gte, lte, sql, count, desc, inArray } from 'drizzle-orm';
+import { sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions, accounts, categories } from '../db/schema.js';
-import { searchTransactionIds } from '../db/queries.js';
-import { monthsAgoStart, toIsraelDateStr } from '../shared/dates.js';
+import { accounts } from '../db/schema.js';
 import { appendMemory } from './memory.js';
+import { listTransactions, categorizeTransaction as categorizeTx } from '../services/transactions.js';
+import { getSpendingSummary as getSpendingSummaryService, comparePeriods as comparePeriodsService, getSpendingTrends as getSpendingTrendsService, detectRecurringTransactions as detectRecurringService, getTopMerchants as getTopMerchantsService } from '../services/summary.js';
 
 // ── Individual tool builders ────────────────────────────────────────────────────
 
@@ -180,133 +180,49 @@ export function buildMcpServerFromTools(name: string, tools: Parameters<typeof c
   });
 }
 
-// ── Private query functions (unchanged Drizzle ORM logic) ──────────────────────
+// ── Thin wrappers that delegate to service layer ────────────────────────────────
 
-export interface QueryTransactionsInput {
-  account_id?: number;
-  start_date?: string;
-  end_date?: string;
-  category?: string;
-  status?: string;
-  min_amount?: number;
-  max_amount?: number;
-  search?: string;
-  limit?: number;
-}
-
-export interface GetSpendingSummaryInput {
-  group_by?: 'category' | 'month' | 'account';
-  account_id?: number;
-  start_date?: string;
-  end_date?: string;
-}
-
-export interface CategorizeTransactionInput {
-  transaction_id: number;
-  category: string;
-  confidence?: number;
-  review_reason?: string;
-}
-
-export function queryTransactions(input: QueryTransactionsInput): string {
-  const conditions = [];
-  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
-  if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
-  if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
-  if (input.category) conditions.push(eq(transactions.category, input.category));
-  if (input.status) conditions.push(eq(transactions.status, input.status));
-  if (input.min_amount != null) conditions.push(gte(transactions.chargedAmount, input.min_amount));
-  if (input.max_amount != null) conditions.push(lte(transactions.chargedAmount, input.max_amount));
-  if (input.search) {
-    const ftsIds = searchTransactionIds(input.search);
-    if (ftsIds.length === 0) {
-      return JSON.stringify({ transactions: [], total: 0, returned: 0 });
-    }
-    conditions.push(inArray(transactions.id, ftsIds));
-  }
-
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
+export function queryTransactions(input: { account_id?: number; start_date?: string; end_date?: string; category?: string; status?: string; min_amount?: number; max_amount?: number; search?: string; limit?: number }): string {
   const limit = Math.min(input.limit ?? 50, 200);
-
-  const rows = db.select().from(transactions)
-    .where(where)
-    .orderBy(desc(transactions.date))
-    .limit(limit)
-    .all();
-
-  const [{ total }] = db.select({ total: count() }).from(transactions).where(where).all();
-
-  return JSON.stringify({ transactions: rows, total, returned: rows.length });
+  const result = listTransactions(
+    { accountId: input.account_id, startDate: input.start_date, endDate: input.end_date, category: input.category, status: input.status, minAmount: input.min_amount, maxAmount: input.max_amount, search: input.search },
+    { limit, sortBy: 'date', sortOrder: 'desc' },
+  );
+  return JSON.stringify({ transactions: result.transactions, total: result.pagination.total, returned: result.transactions.length });
 }
 
-export function getSpendingSummary(input: GetSpendingSummaryInput): string {
-  const conditions = [eq(transactions.ignored, false)];
-  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
-  if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
-  if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
-
-  const where = conditions.length > 0 ? and(...conditions) : undefined;
-  const groupBy = input.group_by ?? 'category';
-
-  if (groupBy === 'month') {
-    const rows = db.select({
-      month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
-      totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
-      count: sql<number>`COUNT(*)`.as('count'),
-    }).from(transactions).where(where)
-      .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
-      .orderBy(sql`month desc`).all();
-    return JSON.stringify({ groupBy, summary: rows });
-  }
-
-  if (groupBy === 'account') {
-    const rows = db.select({
-      accountId: transactions.accountId,
-      displayName: accounts.displayName,
-      totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
-      count: sql<number>`COUNT(*)`.as('count'),
-    }).from(transactions)
-      .innerJoin(accounts, eq(transactions.accountId, accounts.id))
-      .where(where)
-      .groupBy(transactions.accountId).all();
-    return JSON.stringify({ groupBy, summary: rows });
-  }
-
-  const rows = db.select({
-    category: sql<string>`COALESCE(${transactions.category}, 'uncategorized')`.as('category'),
-    totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
-    count: sql<number>`COUNT(*)`.as('count'),
-  }).from(transactions).where(where)
-    .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
-    .orderBy(sql`total_amount desc`).all();
-  return JSON.stringify({ groupBy, summary: rows });
+export function getSpendingSummary(input: { group_by?: 'category' | 'month' | 'account'; account_id?: number; start_date?: string; end_date?: string }): string {
+  const result = getSpendingSummaryService({ accountId: input.account_id, startDate: input.start_date, endDate: input.end_date }, input.group_by ?? 'category');
+  return JSON.stringify(result);
 }
 
-export function categorizeTransaction(input: CategorizeTransactionInput): string {
-  const existing = db.select().from(transactions).where(eq(transactions.id, input.transaction_id)).get();
-  if (!existing) return JSON.stringify({ error: 'Transaction not found' });
-
-  // Check if category is ignored
-  const cat = db.select({ ignoredFromStats: categories.ignoredFromStats })
-    .from(categories)
-    .where(eq(categories.name, input.category))
-    .get();
-
-  const needsReview = input.confidence !== undefined && input.confidence < 0.8;
-
-  db.update(transactions)
-    .set({
-      category: input.category,
-      confidence: input.confidence ?? null,
-      needsReview,
-      reviewReason: needsReview ? (input.review_reason ?? 'Low confidence categorization') : null,
-      ignored: cat?.ignoredFromStats ?? false,
-    })
-    .where(eq(transactions.id, input.transaction_id))
-    .run();
-
-  return JSON.stringify({ success: true, transactionId: input.transaction_id, category: input.category });
+export function categorizeTransaction(input: { transaction_id: number; category: string; confidence?: number; review_reason?: string }): string {
+  const result = categorizeTx({ transactionId: input.transaction_id, category: input.category, confidence: input.confidence, reviewReason: input.review_reason });
+  if (!result.ok) return JSON.stringify({ error: result.error });
+  return JSON.stringify({ success: true, transactionId: result.transactionId, category: result.category });
 }
+
+export function comparePeriods(input: { period1_start: string; period1_end: string; period2_start: string; period2_end: string; account_id?: number }): string {
+  const result = comparePeriodsService({ period1Start: input.period1_start, period1End: input.period1_end, period2Start: input.period2_start, period2End: input.period2_end, accountId: input.account_id });
+  return JSON.stringify(result);
+}
+
+export function getSpendingTrends(input: { months?: number; category?: string; account_id?: number }): string {
+  const result = getSpendingTrendsService({ months: input.months, category: input.category, accountId: input.account_id });
+  return JSON.stringify(result);
+}
+
+export function detectRecurringTransactions(input: { months_back?: number; min_occurrences?: number }): string {
+  const result = detectRecurringService({ monthsBack: input.months_back, minOccurrences: input.min_occurrences });
+  return JSON.stringify(result);
+}
+
+export function getTopMerchants(input: { start_date?: string; end_date?: string; sort_by?: 'total' | 'count' | 'average'; limit?: number; category?: string; account_id?: number }): string {
+  const result = getTopMerchantsService({ startDate: input.start_date, endDate: input.end_date, sortBy: input.sort_by, limit: input.limit, category: input.category, accountId: input.account_id });
+  return JSON.stringify(result);
+}
+
+// ── Direct DB query (only used by AI tools, not duplicated in services) ─────────
 
 export function getAccountBalances(): string {
   const rows = db.select({
@@ -321,343 +237,4 @@ export function getAccountBalances(): string {
   }).from(accounts).all();
 
   return JSON.stringify({ accounts: rows });
-}
-
-// ── Shared helpers ──────────────────────────────────────────────────────────────
-
-/** Round a number to 2 decimal places. */
-const round2 = (n: number): number => Math.round(n * 100) / 100;
-
-function normalizeDescription(desc: string): string {
-  return desc
-    .trim()
-    .replace(/\s+/g, ' ')
-    .replace(/\d{2}\/\d{2}(\/\d{2,4})?/g, '')   // date patterns like 01/02 or 01/02/26
-    .replace(/\s*\d{5,}$/g, '')                   // trailing long reference numbers
-    .replace(/\s*#\d+$/g, '')                     // trailing #123 patterns
-    .trim();
-}
-
-// ── New tool query functions ────────────────────────────────────────────────────
-
-export interface ComparePeriodsInput {
-  period1_start: string;
-  period1_end: string;
-  period2_start: string;
-  period2_end: string;
-  account_id?: number;
-}
-
-export function comparePeriods(input: ComparePeriodsInput): string {
-  function queryPeriod(start: string, end: string) {
-    const conditions = [
-      gte(transactions.date, start),
-      lte(transactions.date, end),
-      eq(transactions.ignored, false),
-    ];
-    if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
-
-    return db.select({
-      category: sql<string>`COALESCE(${transactions.category}, 'uncategorized')`.as('category'),
-      totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
-      count: sql<number>`COUNT(*)`.as('count'),
-    }).from(transactions)
-      .where(and(...conditions))
-      .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
-      .all();
-  }
-
-  const p1 = queryPeriod(input.period1_start, input.period1_end);
-  const p2 = queryPeriod(input.period2_start, input.period2_end);
-
-  interface PeriodRow { category: string; totalAmount: number; count: number }
-  const p1Map = new Map<string, PeriodRow>();
-  for (const r of p1) p1Map.set(r.category, r as PeriodRow);
-  const p2Map = new Map<string, PeriodRow>();
-  for (const r of p2) p2Map.set(r.category, r as PeriodRow);
-  const allCategories = new Set([...p1Map.keys(), ...p2Map.keys()]);
-
-  const comparison = [...allCategories].map(category => {
-    const t1 = p1Map.get(category)?.totalAmount ?? 0;
-    const t2 = p2Map.get(category)?.totalAmount ?? 0;
-    const c1 = p1Map.get(category)?.count ?? 0;
-    const c2 = p2Map.get(category)?.count ?? 0;
-    const changeAmount = t2 - t1;
-    const changePercent = t1 !== 0 ? (changeAmount / Math.abs(t1)) * 100 : null;
-    return { category, period1_total: round2(t1), period1_count: c1, period2_total: round2(t2), period2_count: c2, change_amount: round2(changeAmount), change_percent: changePercent != null ? Math.round(changePercent * 10) / 10 : null };
-  }).sort((a, b) => Math.abs(b.change_amount) - Math.abs(a.change_amount));
-
-  const p1Total = p1.reduce((s, r) => s + r.totalAmount, 0);
-  const p2Total = p2.reduce((s, r) => s + r.totalAmount, 0);
-  const overallChange = p2Total - p1Total;
-
-  return JSON.stringify({
-    comparison,
-    summary: {
-      period1: { start: input.period1_start, end: input.period1_end, total: round2(p1Total) },
-      period2: { start: input.period2_start, end: input.period2_end, total: round2(p2Total) },
-      change_amount: round2(overallChange),
-      change_percent: p1Total !== 0 ? Math.round((overallChange / Math.abs(p1Total)) * 100 * 10) / 10 : null,
-    },
-  });
-}
-
-export interface GetSpendingTrendsInput {
-  months?: number;
-  category?: string;
-  account_id?: number;
-}
-
-export function getSpendingTrends(input: GetSpendingTrendsInput): string {
-  const months = Math.min(input.months ?? 6, 24);
-  const startStr = monthsAgoStart(months);
-
-  const conditions = [
-    gte(transactions.date, startStr),
-    eq(transactions.ignored, false),
-  ];
-  if (input.category) conditions.push(eq(transactions.category, input.category));
-  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
-
-  const rows = db.select({
-    month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
-    totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
-    count: sql<number>`COUNT(*)`.as('count'),
-  }).from(transactions)
-    .where(and(...conditions))
-    .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
-    .orderBy(sql`month asc`)
-    .all();
-
-  if (rows.length === 0) {
-    return JSON.stringify({ months: [], trend: 'no_data', average: 0, total_period: 0 });
-  }
-
-  const totals = rows.map(r => r.totalAmount);
-  const totalSum = totals.reduce((s, v) => s + v, 0);
-  const average = totalSum / totals.length;
-  const minRow = rows.reduce((m, r) => r.totalAmount < m.totalAmount ? r : m);
-  const maxRow = rows.reduce((m, r) => r.totalAmount > m.totalAmount ? r : m);
-
-  // Month-over-month changes
-  const mom = rows.slice(1).map((r, i) => {
-    const prev = rows[i].totalAmount;
-    const change = r.totalAmount - prev;
-    return {
-      from: rows[i].month,
-      to: r.month,
-      change_amount: change,
-      change_percent: prev !== 0 ? Math.round((change / Math.abs(prev)) * 100 * 10) / 10 : null,
-    };
-  });
-
-  // Trend: compare first half average to second half average
-  const mid = Math.floor(totals.length / 2);
-  const firstHalf = totals.slice(0, mid);
-  const secondHalf = totals.slice(mid);
-  const firstAvg = firstHalf.length > 0 ? firstHalf.reduce((s, v) => s + v, 0) / firstHalf.length : 0;
-  const secondAvg = secondHalf.length > 0 ? secondHalf.reduce((s, v) => s + v, 0) / secondHalf.length : 0;
-  const threshold = average * 0.05;
-  let trend: 'increasing' | 'decreasing' | 'stable' = 'stable';
-  if (secondAvg - firstAvg > threshold) trend = 'increasing';
-  else if (firstAvg - secondAvg > threshold) trend = 'decreasing';
-
-  return JSON.stringify({
-    months: rows,
-    trend,
-    average: round2(average),
-    min: { month: minRow.month, total: minRow.totalAmount },
-    max: { month: maxRow.month, total: maxRow.totalAmount },
-    total_period: totalSum,
-    month_over_month: mom,
-  });
-}
-
-export interface DetectRecurringInput {
-  months_back?: number;
-  min_occurrences?: number;
-}
-
-export function detectRecurringTransactions(input: DetectRecurringInput): string {
-  const monthsBack = Math.min(input.months_back ?? 6, 12);
-  const minOccurrences = input.min_occurrences ?? 2;
-  const startStr = monthsAgoStart(monthsBack);
-
-  const rows = db.select({
-    description: transactions.description,
-    chargedAmount: transactions.chargedAmount,
-    date: transactions.date,
-  }).from(transactions)
-    .where(and(
-      gte(transactions.date, startStr),
-      eq(transactions.ignored, false),
-      eq(transactions.status, 'completed'),
-    ))
-    .orderBy(transactions.description, transactions.date)
-    .all();
-
-  // Group by normalized description
-  const groups = new Map<string, Array<{ amount: number; date: string }>>();
-  for (const row of rows) {
-    const key = normalizeDescription(row.description);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push({ amount: row.chargedAmount, date: row.date });
-  }
-
-  interface RecurringEntry {
-    description: string;
-    occurrences: number;
-    avg_amount: number;
-    frequency: string;
-    amount_type: 'fixed' | 'variable';
-    estimated_annual_cost: number;
-    last_charge_date: string;
-    next_expected_date: string;
-  }
-
-  const recurring: RecurringEntry[] = [];
-
-  for (const [desc, entries] of groups) {
-    if (entries.length < minOccurrences) continue;
-
-    entries.sort((a, b) => a.date.localeCompare(b.date));
-    const amounts = entries.map(e => e.amount);
-    const avgAmount = amounts.reduce((s, v) => s + v, 0) / amounts.length;
-
-    // Calculate intervals in days
-    const intervals: number[] = [];
-    for (let i = 1; i < entries.length; i++) {
-      const d1 = new Date(entries[i - 1].date).getTime();
-      const d2 = new Date(entries[i].date).getTime();
-      intervals.push(Math.round((d2 - d1) / (1000 * 60 * 60 * 24)));
-    }
-
-    if (intervals.length === 0) continue;
-    const avgInterval = intervals.reduce((s, v) => s + v, 0) / intervals.length;
-
-    // Skip if interval is too erratic (std dev > 50% of mean)
-    const variance = intervals.reduce((s, v) => s + (v - avgInterval) ** 2, 0) / intervals.length;
-    const stdDev = Math.sqrt(variance);
-    if (avgInterval > 0 && stdDev / avgInterval > 0.5) continue;
-
-    let frequency: string;
-    if (avgInterval <= 10) frequency = 'weekly';
-    else if (avgInterval <= 20) frequency = 'bi-weekly';
-    else if (avgInterval <= 45) frequency = 'monthly';
-    else if (avgInterval <= 100) frequency = 'quarterly';
-    else if (avgInterval <= 200) frequency = 'semi-annual';
-    else frequency = 'annual';
-
-    // Amount consistency
-    const minAmt = Math.min(...amounts);
-    const maxAmt = Math.max(...amounts);
-    const amountType = maxAmt - minAmt <= Math.abs(avgAmount) * 0.1 ? 'fixed' : 'variable';
-
-    const estimatedAnnualCost = avgInterval > 0 ? avgAmount * (365 / avgInterval) : avgAmount * 12;
-    const lastDate = entries[entries.length - 1].date;
-    const nextDate = toIsraelDateStr(
-      new Date(new Date(lastDate).getTime() + avgInterval * 24 * 60 * 60 * 1000).toISOString()
-    );
-
-    recurring.push({
-      description: desc,
-      occurrences: entries.length,
-      avg_amount: round2(avgAmount),
-      frequency,
-      amount_type: amountType,
-      estimated_annual_cost: round2(estimatedAnnualCost),
-      last_charge_date: lastDate,
-      next_expected_date: nextDate,
-    });
-  }
-
-  recurring.sort((a, b) => b.estimated_annual_cost - a.estimated_annual_cost);
-
-  const totalAnnual = recurring.reduce((s, r) => s + r.estimated_annual_cost, 0);
-
-  return JSON.stringify({
-    recurring,
-    total_recurring_monthly: round2(totalAnnual / 12),
-    total_recurring_annual: round2(totalAnnual),
-  });
-}
-
-export interface GetTopMerchantsInput {
-  start_date?: string;
-  end_date?: string;
-  sort_by?: 'total' | 'count' | 'average';
-  limit?: number;
-  category?: string;
-  account_id?: number;
-}
-
-export function getTopMerchants(input: GetTopMerchantsInput): string {
-  const conditions = [
-    eq(transactions.ignored, false),
-    eq(transactions.status, 'completed'),
-  ];
-  if (input.start_date) conditions.push(gte(transactions.date, input.start_date));
-  if (input.end_date) conditions.push(lte(transactions.date, input.end_date));
-  if (input.category) conditions.push(eq(transactions.category, input.category));
-  if (input.account_id != null) conditions.push(eq(transactions.accountId, input.account_id));
-
-  const rows = db.select({
-    description: transactions.description,
-    chargedAmount: transactions.chargedAmount,
-    date: transactions.date,
-    category: transactions.category,
-  }).from(transactions)
-    .where(and(...conditions))
-    .all();
-
-  // Group by normalized description
-  const groups = new Map<string, Array<{ amount: number; date: string; category: string | null }>>();
-  for (const row of rows) {
-    const key = normalizeDescription(row.description);
-    if (!groups.has(key)) groups.set(key, []);
-    groups.get(key)!.push({ amount: row.chargedAmount, date: row.date, category: row.category });
-  }
-
-  let merchants = [...groups.entries()].map(([merchant, entries]) => {
-    const amounts = entries.map(e => e.amount);
-    const totalAmount = amounts.reduce((s, v) => s + v, 0);
-    const avgAmount = totalAmount / amounts.length;
-
-    // Most common category
-    const catCounts = new Map<string, number>();
-    for (const e of entries) {
-      const cat = e.category ?? 'uncategorized';
-      catCounts.set(cat, (catCounts.get(cat) ?? 0) + 1);
-    }
-    const topCategory = [...catCounts.entries()].sort((a, b) => b[1] - a[1])[0]?.[0] ?? 'uncategorized';
-
-    const dates = entries.map(e => e.date).sort();
-    return {
-      merchant,
-      total_amount: round2(totalAmount),
-      transaction_count: entries.length,
-      avg_amount: round2(avgAmount),
-      min_amount: round2(Math.min(...amounts)),
-      max_amount: round2(Math.max(...amounts)),
-      last_transaction_date: dates[dates.length - 1],
-      category: topCategory,
-    };
-  });
-
-  const sortBy = input.sort_by ?? 'total';
-  if (sortBy === 'total') merchants.sort((a, b) => b.total_amount - a.total_amount);
-  else if (sortBy === 'count') merchants.sort((a, b) => b.transaction_count - a.transaction_count);
-  else merchants.sort((a, b) => b.avg_amount - a.avg_amount);
-
-  const totalFound = merchants.length;
-  const limit = Math.min(input.limit ?? 15, 50);
-  merchants = merchants.slice(0, limit);
-
-  return JSON.stringify({
-    top_merchants: merchants,
-    total_merchants_found: totalFound,
-    period: input.start_date || input.end_date
-      ? { start_date: input.start_date ?? 'all', end_date: input.end_date ?? 'all' }
-      : 'all_time',
-  });
 }

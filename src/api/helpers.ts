@@ -1,9 +1,5 @@
 import type { FastifyReply } from 'fastify';
 import type { z } from 'zod';
-import { eq, gte, lte } from 'drizzle-orm';
-import type { SQL } from 'drizzle-orm';
-import { transactions } from '../db/schema.js';
-import { accountTypeCondition } from './validation.js';
 
 // ─── Param parsing ───
 
@@ -46,6 +42,19 @@ export function validateBody<T extends z.ZodTypeAny>(
   return parsed.data;
 }
 
+// ─── Service error forwarding ───
+
+/**
+ * Forward a service-layer error result as an HTTP response.
+ * Use: `if (!result.ok) return sendServiceError(reply, result);`
+ */
+export function sendServiceError(
+  reply: FastifyReply,
+  result: { error: string; status: number },
+) {
+  return reply.status(result.status).send({ error: result.error });
+}
+
 // ─── Query validation ───
 
 /**
@@ -58,50 +67,4 @@ export function validateQuery<T extends z.ZodTypeAny>(
   reply: FastifyReply,
 ): z.infer<T> | null {
   return validateBody(schema, query, reply);
-}
-
-// ─── Transaction filter builder ───
-
-export interface TransactionFilterParams {
-  accountType?: string;
-  accountId?: number;
-  startDate?: string;
-  endDate?: string;
-}
-
-export interface TransactionFilterResult {
-  conditions: SQL[];
-  /** True if accountType was specified but had no matching accounts (empty result). */
-  empty: boolean;
-}
-
-/**
- * Build Drizzle conditions for common transaction filters
- * (accountType, accountId, startDate, endDate).
- *
- * Returns `{ conditions, empty }`. When `empty` is true the caller should
- * return an empty result set immediately.
- */
-export function buildTransactionFilters(
-  params: TransactionFilterParams,
-): TransactionFilterResult {
-  const conditions: SQL[] = [];
-
-  if (params.accountType) {
-    const cond = accountTypeCondition(params.accountType);
-    if (!cond) return { conditions: [], empty: true };
-    conditions.push(cond);
-  }
-
-  if (params.accountId !== undefined) {
-    conditions.push(eq(transactions.accountId, params.accountId));
-  }
-  if (params.startDate) {
-    conditions.push(gte(transactions.date, params.startDate));
-  }
-  if (params.endDate) {
-    conditions.push(lte(transactions.date, params.endDate));
-  }
-
-  return { conditions, empty: false };
 }

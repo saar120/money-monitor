@@ -71,23 +71,6 @@ export const recategorizeSchema = z.object({
   endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
 });
 
-// ─── Helpers ───
-
-import { eq, inArray } from 'drizzle-orm';
-import type { SQL } from 'drizzle-orm';
-import { db } from '../db/connection.js';
-import { accounts, transactions } from '../db/schema.js';
-
-/** Returns a WHERE condition filtering transactions by account type, or null if no accounts match. */
-export function accountTypeCondition(accountType: string): SQL | null {
-  const ids = db.select({ id: accounts.id })
-    .from(accounts)
-    .where(eq(accounts.accountType, accountType))
-    .all()
-    .map(a => a.id);
-  return ids.length > 0 ? inArray(transactions.accountId, ids) : null;
-}
-
 // ─── OTP ───
 
 export const otpSubmitSchema = z.object({
