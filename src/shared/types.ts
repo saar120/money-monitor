@@ -49,6 +49,15 @@ export const LIQUIDITY_TYPES = ['liquid', 'restricted', 'locked'] as const;
 export const HOLDING_TYPES = ['stock', 'etf', 'cash', 'fund_units', 'crypto', 'balance'] as const;
 export const MOVEMENT_TYPES = ['deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'fee', 'adjustment', 'contribution', 'rent_income'] as const;
 
+/** Holding types where current value = quantity × lastPrice */
+const PRICED_HOLDING_TYPES: ReadonlySet<string> = new Set(['stock', 'etf', 'fund_units']);
+
+export function holdingNeedsPrice(type: string, currency: string, rates: Record<string, number>): boolean {
+  if (PRICED_HOLDING_TYPES.has(type)) return true;
+  if (type === 'crypto' && !(currency in rates)) return true;
+  return false;
+}
+
 export type AssetCategory = 'simple_value' | 'real_estate' | 'crypto' | 'brokerage';
 
 const ASSET_CATEGORY_MAP: Record<string, AssetCategory> = {

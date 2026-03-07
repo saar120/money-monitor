@@ -3,7 +3,7 @@ import { db, sqlite } from '../db/connection.js';
 import { assets, holdings, accounts, assetSnapshots, assetMovements } from '../db/schema.js';
 import { getExchangeRates, convertToIls } from './exchange-rates.js';
 import { todayInIsrael } from '../shared/dates.js';
-import { getAssetCategory, CATEGORY_MOVEMENT_TYPES } from '../shared/types.js';
+import { getAssetCategory, CATEGORY_MOVEMENT_TYPES, holdingNeedsPrice } from '../shared/types.js';
 
 // ── Types ──
 
@@ -19,9 +19,7 @@ export interface MovementAggregates {
 // ── Pure Computation ──
 
 export function computeHoldingValues(h: HoldingRow, rates: Record<string, number>) {
-  const isCrypto = h.type === 'crypto';
-  const cryptoHasRate = isCrypto && h.currency in rates;
-  const needsPrice = (h.type === 'stock' || h.type === 'etf' || (isCrypto && !cryptoHasRate));
+  const needsPrice = holdingNeedsPrice(h.type, h.currency, rates);
 
   let currentValue: number;
   let stale: boolean;
@@ -168,8 +166,7 @@ async function generateAssetSnapshot(assetId: number): Promise<void> {
   let totalValueIls = 0;
   let totalValue = 0;
   const holdingsSnapshot = holdingRows.map(h => {
-    const cryptoHasRate = h.type === 'crypto' && h.currency in rates;
-    const needsPrice = h.type === 'stock' || h.type === 'etf' || (h.type === 'crypto' && !cryptoHasRate);
+    const needsPrice = holdingNeedsPrice(h.type, h.currency, rates);
     const currentValue = needsPrice ? (h.lastPrice != null ? h.quantity * h.lastPrice : 0) : h.quantity;
     const valueIls = convertToIls(currentValue, h.currency, rates);
     totalValueIls += valueIls;
@@ -234,8 +231,7 @@ async function replayMovementSnapshots(assetId: number, excludeMovementId?: numb
       const meta = holdingMeta.get(holdingId);
       if (!meta) continue;
 
-      const cryptoHasRate = meta.type === 'crypto' && meta.currency in rates;
-      const needsPrice = meta.type === 'stock' || meta.type === 'etf' || (meta.type === 'crypto' && !cryptoHasRate);
+      const needsPrice = holdingNeedsPrice(meta.type, meta.currency, rates);
 
       let ilsFromSource: number | null = null;
       for (const m of dayMovements) {
