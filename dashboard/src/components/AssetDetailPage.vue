@@ -53,10 +53,10 @@ const category = computed(() => asset.value ? getAssetCategory(asset.value.type)
     </div>
 
     <template v-else-if="asset">
-      <SimpleValueDetail v-if="category === 'simple_value'" :asset-id="assetId" />
-      <RealEstateDetail v-else-if="category === 'real_estate'" :asset-id="assetId" />
-      <CryptoDetail v-else-if="category === 'crypto'" :asset-id="assetId" />
-      <BrokerageDetail v-else :asset-id="assetId" />
+      <SimpleValueDetail v-if="category === 'simple_value'" :asset-id="assetId" :initial-asset="asset" />
+      <RealEstateDetail v-else-if="category === 'real_estate'" :asset-id="assetId" :initial-asset="asset" />
+      <CryptoDetail v-else-if="category === 'crypto'" :asset-id="assetId" :initial-asset="asset" />
+      <BrokerageDetail v-else :asset-id="assetId" :initial-asset="asset" />
     </template>
   </div>
 </template>

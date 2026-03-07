@@ -145,6 +145,8 @@ export const createAssetSchema = z.object({
   liquidity: z.enum(LIQUIDITY_TYPES).default('liquid'),
   linkedAccountId: z.number().int().positive().optional(),
   notes: z.string().max(500).optional(),
+  initialValue: z.number().min(0).optional(),
+  initialCostBasis: z.number().min(0).optional(),
 });
 
 export const updateAssetSchema = z.object({

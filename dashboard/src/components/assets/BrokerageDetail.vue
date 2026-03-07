@@ -8,7 +8,6 @@ import {
   getAsset, getMovements, getAssetSnapshots,
   createMovement, deleteMovement,
   createHolding, updateHolding, deleteHolding,
-  getExchangeRates,
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
@@ -45,7 +44,7 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
 
-const props = defineProps<{ assetId: number }>();
+const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
 // ─── Data fetching ───
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -57,7 +56,6 @@ const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
 );
 
 onMounted(() => {
-  assetApi.execute();
   movementsApi.execute();
   snapshotsApi.execute();
 });
@@ -74,20 +72,11 @@ const displayCurrency = ref<'native' | 'ILS'>(
 watch(displayCurrency, (val) => {
   localStorage.setItem(CURRENCY_PREF_KEY, val);
 });
-const exchangeRates = ref<Record<string, number>>({});
-
-onMounted(async () => {
-  try {
-    const { rates } = await getExchangeRates();
-    exchangeRates.value = rates;
-  } catch { /* use empty rates */ }
-});
-
 const assetCurrency = computed(() => asset.value?.currency ?? 'ILS');
 const isNonIls = computed(() => assetCurrency.value !== 'ILS');
 const showingIls = computed(() => displayCurrency.value === 'ILS' || !isNonIls.value);
 
-const asset = computed(() => assetApi.data.value);
+const asset = computed(() => assetApi.data.value ?? props.initialAsset);
 const holdings = computed(() => asset.value?.holdings ?? []);
 const movementsList = ref<Movement[]>([]);
 const movementsTotal = ref(0);

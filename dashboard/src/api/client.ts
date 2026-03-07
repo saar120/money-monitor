@@ -445,7 +445,7 @@ export function getAsset(id: number) {
   return request<Asset>(`/assets/${id}`);
 }
 
-export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string }) {
+export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string; initialValue?: number; initialCostBasis?: number }) {
   return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
 }
 

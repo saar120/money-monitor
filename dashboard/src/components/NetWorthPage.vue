@@ -339,12 +339,12 @@ async function saveQuickUpdate(asset: Asset) {
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const editingAsset = ref<Asset | null>(null);
-const assetForm = ref({ name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' });
+const assetForm = ref({ name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '', initialValue: 0, initialCostBasis: 0 });
 const assetSaving = ref(false);
 
 function openAddAsset() {
   editingAsset.value = null;
-  assetForm.value = { name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '' };
+  assetForm.value = { name: '', type: 'brokerage', currency: 'ILS', institution: '', liquidity: 'liquid', linkedAccountId: 'none', notes: '', initialValue: 0, initialCostBasis: 0 };
   showAssetDialog.value = true;
 }
 
@@ -378,6 +378,10 @@ async function handleSaveAsset() {
       liquidity: assetForm.value.liquidity,
       linkedAccountId: linked ?? undefined,
       notes: assetForm.value.notes.trim() || undefined,
+      ...(assetCategory.value === 'real_estate' && !editingAsset.value ? {
+        initialValue: assetForm.value.initialValue || undefined,
+        initialCostBasis: assetForm.value.initialCostBasis || undefined,
+      } : {}),
     };
     if (editingAsset.value) {
       await updateAsset(editingAsset.value.id, {
@@ -981,7 +985,7 @@ const fullLiabilityMap = computed(() => {
               </SelectContent>
             </Select>
           </div>
-          <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
+          <div v-if="assetCategory === 'brokerage' || assetCategory === 'real_estate'" class="space-y-1.5">
             <label class="text-sm font-medium">Currency</label>
             <Select v-model="assetForm.currency">
               <SelectTrigger>
@@ -992,6 +996,16 @@ const fullLiabilityMap = computed(() => {
               </SelectContent>
             </Select>
           </div>
+          <template v-if="assetCategory === 'real_estate' && !editingAsset">
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium">Property Value ({{ assetForm.currency }})</label>
+              <Input v-model.number="assetForm.initialValue" type="number" placeholder="e.g. 500000" />
+            </div>
+            <div class="space-y-1.5">
+              <label class="text-sm font-medium">Purchase Price (ILS)</label>
+              <Input v-model.number="assetForm.initialCostBasis" type="number" placeholder="e.g. 2000000" />
+            </div>
+          </template>
           <div class="space-y-1.5">
             <label class="text-sm font-medium">Institution</label>
             <Input v-model="assetForm.institution" placeholder="e.g. oneZero, excelence" />

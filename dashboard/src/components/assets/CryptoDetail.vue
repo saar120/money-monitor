@@ -40,7 +40,7 @@ import {
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
 
-const props = defineProps<{ assetId: number }>();
+const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
 // ── Data fetching ──
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -52,7 +52,6 @@ const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
 );
 
 onMounted(() => {
-  assetApi.execute();
   movementsApi.execute();
   snapshotsApi.execute();
 });
@@ -61,7 +60,7 @@ async function refreshAll() {
   await Promise.all([assetApi.execute(), movementsApi.execute(), snapshotsApi.execute()]);
 }
 
-const asset = computed(() => assetApi.data.value);
+const asset = computed(() => assetApi.data.value ?? props.initialAsset);
 const holdings = computed(() => asset.value?.holdings ?? []);
 const movements = computed(() => movementsApi.data.value?.movements ?? []);
 const snapshots = computed(() => snapshotsApi.data.value?.snapshots ?? []);

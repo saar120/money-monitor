@@ -83,7 +83,7 @@ The current asset system forces every asset type through a single complex pipeli
 
 **Movement types:** `deposit`, `withdrawal`, `buy`, `sell`, `dividend`
 
-Dropped from current: `fee`, `adjustment`
+Legacy types `fee` and `adjustment` are kept in the DB enum for backward compatibility with existing data, but the UI and `CATEGORY_MOVEMENT_TYPES` gating prevent creating new movements of these types.
 
 **P&L:**
 - Per-stock: native currency only (qty x price - costBasis, both in USD)
@@ -95,13 +95,13 @@ Dropped from current: `fee`, `adjustment`
 
 ### Database
 - Add `contribution` and `rent_income` to `MOVEMENT_TYPES`
-- Remove `fee` and `adjustment` from `MOVEMENT_TYPES` (migration: re-type existing ones as `deposit` adjustments or delete)
+- Keep `fee` and `adjustment` in `MOVEMENT_TYPES` for backward compat, but gate new movements via `CATEGORY_MOVEMENT_TYPES` per category
 - No new tables
 
 ### API
 - New endpoint: `PUT /api/assets/:id/value` — simplified value update for simple-value types
   - Sets holding quantity (= new value)
-  - Optionally records a contribution/rent_income movement
+  - Optionally records a `contribution` movement (rent uses dedicated `POST /api/assets/:id/rent`)
   - Creates a snapshot
 - Existing endpoints remain but are gated by asset type validation (e.g. reject `buy` movement on a pension)
 - Fix P&L computation: per-stock P&L only in native currency, ILS P&L at account level for brokerage

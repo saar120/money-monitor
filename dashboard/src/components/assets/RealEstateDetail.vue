@@ -23,7 +23,7 @@ import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
 
-const props = defineProps<{ assetId: number }>();
+const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
 // ─── Data fetching ───
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -34,12 +34,11 @@ const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
   getAssetSnapshots(props.assetId),
 );
 
-const asset = computed(() => assetApi.data.value);
+const asset = computed(() => assetApi.data.value ?? props.initialAsset);
 const movements = computed(() => movementsApi.data.value?.movements ?? []);
 const snapshots = computed(() => snapshotsApi.data.value?.snapshots ?? []);
 
 onMounted(() => {
-  assetApi.execute();
   movementsApi.execute();
   snapshotsApi.execute();
 });
@@ -49,6 +48,11 @@ async function refreshAll() {
 }
 
 // ─── Computed values ───
+const nativeCurrency = computed(() => asset.value?.currency ?? 'ILS');
+const isMultiCurrency = computed(() => nativeCurrency.value !== 'ILS');
+const balanceHolding = computed(() => asset.value?.holdings.find(h => h.type === 'balance'));
+const nativeValue = computed(() => balanceHolding.value?.currentValue ?? 0);
+
 const currentValue = computed(() => asset.value?.totalValueIls ?? 0);
 const purchasePrice = computed(() => asset.value?.totalInvestedIls ?? 0);
 const totalRent = computed(() => asset.value?.totalRentEarned ?? 0);
@@ -72,7 +76,7 @@ const updateForm = ref({ currentValue: 0 });
 const updatingSaving = ref(false);
 
 function openUpdateDialog() {
-  updateForm.value.currentValue = currentValue.value;
+  updateForm.value.currentValue = isMultiCurrency.value ? nativeValue.value : currentValue.value;
   showUpdateDialog.value = true;
 }
 
@@ -208,6 +212,9 @@ const chartOptions = {
           </CardHeader>
           <CardContent>
             <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div v-if="isMultiCurrency" class="text-sm text-muted-foreground mt-0.5">
+              {{ formatAmount(nativeValue, nativeCurrency) }}
+            </div>
           </CardContent>
         </Card>
 
@@ -294,7 +301,12 @@ const chartOptions = {
           <div v-else class="space-y-0 border border-border rounded-md divide-y divide-border">
             <div v-for="m in rentMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
               <div>
-                <div class="text-sm font-medium tabular-nums">{{ formatCurrency(Math.abs(m.quantity)) }}</div>
+                <div class="text-sm font-medium tabular-nums">
+                  {{ isMultiCurrency ? formatAmount(Math.abs(m.quantity), nativeCurrency) : formatCurrency(Math.abs(m.quantity)) }}
+                  <span v-if="isMultiCurrency && m.sourceAmount" class="text-muted-foreground text-xs ml-1">
+                    ({{ formatCurrency(Math.abs(m.sourceAmount)) }})
+                  </span>
+                </div>
                 <p v-if="m.notes" class="text-xs text-muted-foreground mt-0.5 italic">{{ m.notes }}</p>
               </div>
               <span class="text-xs text-muted-foreground">{{ formatMovementDate(m.date) }}</span>
@@ -312,7 +324,7 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Property Value (ILS)</label>
+            <label class="text-sm font-medium">Property Value ({{ nativeCurrency }})</label>
             <Input v-model.number="updateForm.currentValue" type="number" />
           </div>
         </div>
@@ -336,7 +348,7 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Amount (ILS)</label>
+            <label class="text-sm font-medium">Amount ({{ nativeCurrency }})</label>
             <Input v-model.number="rentForm.amount" type="number" />
           </div>
           <div>

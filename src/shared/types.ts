@@ -65,11 +65,11 @@ export function getAssetCategory(assetType: string): AssetCategory {
 }
 
 // Movement types allowed per category
-export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, readonly string[]> = {
+export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, readonly (typeof MOVEMENT_TYPES[number])[]> = {
   simple_value: ['contribution'],
   real_estate: ['rent_income'],
   crypto: ['buy', 'sell'],
-  brokerage: ['deposit', 'withdrawal', 'buy', 'sell', 'dividend'],
+  brokerage: ['deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'fee', 'adjustment'],
 };
 export const LIABILITY_TYPES = ['loan', 'mortgage', 'credit_line', 'other'] as const;
 
