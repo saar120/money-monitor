@@ -87,56 +87,18 @@ async function sendMessage(text?: string) {
     messages.value.push({ role: 'assistant', content: '' });
     const msgIndex = messages.value.length - 1;
 
-    // Batch text deltas to reduce reactive updates & DOM reflows.
-    // Instead of updating Vue state on every tiny SSE fragment, we
-    // accumulate text in a plain (non-reactive) buffer and flush it
-    // to the reactive message once per animation frame (~60 Hz).
-    let textBuffer = '';
-    let flushScheduled = false;
-    let scrollScheduled = false;
-
-    function flushTextBuffer() {
-      if (textBuffer) {
-        messages.value[msgIndex]!.content += textBuffer;
-        textBuffer = '';
-      }
-      flushScheduled = false;
-
-      // Coalesce scroll updates — at most once per animation frame
-      if (!scrollScheduled) {
-        scrollScheduled = true;
-        requestAnimationFrame(() => {
-          scrollToBottom();
-          scrollScheduled = false;
-        });
-      }
-    }
-
     for await (const event of aiChatStream(sessionId, messageText)) {
       if (event.type === 'text_delta') {
-        textBuffer += event.text;
-        if (!flushScheduled) {
-          flushScheduled = true;
-          requestAnimationFrame(flushTextBuffer);
-        }
+        messages.value[msgIndex]!.content += event.text;
+        await scrollToBottom();
       } else if (event.type === 'status') {
         status.value = event.text;
       } else if (event.type === 'result') {
-        // Result replaces content entirely — flush any pending buffer first
-        textBuffer = '';
-        flushScheduled = false;
         messages.value[msgIndex]!.content = event.text;
       } else if (event.type === 'error') {
         throw new Error(event.text);
       }
     }
-
-    // Final flush: ensure any remaining buffered text is applied
-    if (textBuffer) {
-      messages.value[msgIndex]!.content += textBuffer;
-      textBuffer = '';
-    }
-
     // Refresh sidebar to update title/timestamp
     sidebarRef.value?.loadSessions();
   } catch (err) {
