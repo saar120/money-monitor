@@ -47,6 +47,7 @@ export const transactions = sqliteTable('transactions', {
   index('idx_transactions_account_id').on(table.accountId),
   index('idx_transactions_date_ignored').on(table.date, table.ignored),
   index('idx_transactions_account_date').on(table.accountId, table.date),
+  index('idx_transactions_category_date').on(table.category, table.date),
 ]);
 
 export const scrapeSessions = sqliteTable('scrape_sessions', {
