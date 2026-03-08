@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
-import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, Wallet, TrendingUp, Settings } from 'lucide-vue-next';
+import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, TrendingUp, Settings } from 'lucide-vue-next';
 import { getNeedsReviewCount } from '../api/client';
 
 const isElectron = !!(window as any).electronAPI;
@@ -49,11 +49,12 @@ function isActive(path: string): boolean {
 </script>
 
 <template>
-  <div class="flex h-screen p-2 gap-2">
-    <!-- Sidebar — transparent bg, vibrancy shows through -->
+  <div class="flex h-screen" :class="{ 'p-2 gap-2': isElectron }">
+    <!-- Sidebar — transparent in Electron for vibrancy, has bg in browser -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      style="width: 208px; background: transparent;"
+      :class="{ 'bg-bg-secondary border-r border-separator': !isElectron }"
+      :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
       <div
@@ -119,8 +120,11 @@ function isActive(path: string): boolean {
       </div>
     </aside>
 
-    <!-- Main content — card floating over vibrancy -->
-    <div class="flex-1 flex flex-col min-w-0 bg-bg-primary rounded-[10px] shadow-sm border border-separator/50 overflow-hidden">
+    <!-- Main content — card floating over vibrancy in Electron -->
+    <div
+      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden"
+      :class="{ 'rounded-[10px] shadow-sm border border-separator/50': isElectron }"
+    >
       <!-- Toolbar / header area — drag region -->
       <div
         v-if="isElectron"

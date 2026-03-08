@@ -139,8 +139,7 @@
     cursor: default;
   }
   body {
-    @apply text-foreground;
-    background: transparent;
+    @apply text-foreground bg-background;
     margin: 0;
     font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
     font-size: 13px;
@@ -148,6 +147,9 @@
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
     user-select: none;
+  }
+  .electron body {
+    background: transparent;
   }
   /* Allow text selection on content areas */
   p, span, td, th, li, pre, code, h1, h2, h3, h4, h5, h6,
