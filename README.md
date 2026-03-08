@@ -27,47 +27,21 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Vue 3 Dashboard                       │
-│          (Charts, Tables, AI Chat, Account Mgmt)        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP / SSE
-┌──────────────────────▼──────────────────────────────────┐
-│                  Fastify REST API                        │
-│  /accounts  /transactions  /summary  /scrape  /ai/chat  │
-└───┬──────────┬───────────┬──────────┬───────────────────┘
-    │          │           │          │
-    ▼          ▼           ▼          ▼
-┌────────┐ ┌────────┐ ┌────────┐ ┌──────────────────────┐
-│Scraper │ │Drizzle │ │  Cron  │ │   Claude AI Agent    │
-│Service │ │Queries │ │Scheduler│ │  (MCP Tools)         │
-│        │ │        │ │        │ │                      │
-│Puppeteer│ │ SQLite │ │Daily @ │ │ query_transactions   │
-│Headless│ │  + FTS │ │ 6am IL │ │ spending_summary     │
-│Browser │ │        │ │        │ │ categorize           │
-└───┬────┘ └───┬────┘ └───┬────┘ │ detect_recurring     │
-    │          │           │      │ compare_periods      │
-    │          ▼           │      │ spending_trends      │
-    │   ┌───────────┐      │      └──────────┬───────────┘
-    │   │  SQLite   │◄─────┘               │
-    │   │  Database │◄─────────────────────┘
-    └──►│           │
-        └───────────┘
+### System Overview
 
-┌─────────────────────────────┐
-│  Encrypted Credential Store │
-│  (AES-256-GCM, file-based)  │
-└─────────────────────────────┘
-```
+![System Architecture](docs/architecture/system-architecture.png)
 
-**Scrape flow:**
-1. User adds a bank/card account with credentials (encrypted and stored)
-2. A manual trigger or scheduled cron job starts a scrape session
-3. For each account: launch headless browser → log in → scrape transactions
-4. Transactions are deduplicated (SHA-256 hash) and inserted into SQLite
-5. AI auto-categorizes new transactions in the background
-6. Dashboard updates in real-time via Server-Sent Events
+### Scraping Flow
+
+![Scraping Flow](docs/architecture/scraping-flow.png)
+
+### AI Chat Flow
+
+![AI Chat Flow](docs/architecture/ai-chat-flow.png)
+
+### Data Flow
+
+![Data Flow](docs/architecture/data-flow.png)
 
 ## Supported Institutions
 
