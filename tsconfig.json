@@ -11,7 +11,8 @@
     "sourceMap": true,
     "skipLibCheck": true,
     "resolveJsonModule": true,
-    "forceConsistentCasingInFileNames": true
+    "forceConsistentCasingInFileNames": true,
+    "types": ["vitest/globals"]
   },
   "include": ["src/**/*"],
   "exclude": ["node_modules", "dist", "dashboard"]
