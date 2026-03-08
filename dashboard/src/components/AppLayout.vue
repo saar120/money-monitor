@@ -49,17 +49,17 @@ function isActive(path: string): boolean {
 </script>
 
 <template>
-  <div class="flex h-screen">
+  <div class="flex h-screen p-2 gap-2">
     <!-- Sidebar — transparent bg, vibrancy shows through -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      style="width: 220px; background: transparent;"
+      style="width: 208px; background: transparent;"
     >
       <!-- macOS traffic light spacing + drag region -->
       <div
         v-if="isElectron"
         class="flex-shrink-0"
-        style="height: 52px; -webkit-app-region: drag;"
+        style="height: 44px; -webkit-app-region: drag;"
       />
 
       <!-- Logo area -->
@@ -119,12 +119,12 @@ function isActive(path: string): boolean {
       </div>
     </aside>
 
-    <!-- Main content -->
-    <div class="flex-1 flex flex-col min-w-0 bg-bg-primary">
+    <!-- Main content — card floating over vibrancy -->
+    <div class="flex-1 flex flex-col min-w-0 bg-bg-primary rounded-[10px] shadow-sm border border-separator/50 overflow-hidden">
       <!-- Toolbar / header area — drag region -->
       <div
         v-if="isElectron"
-        class="h-[52px] flex-shrink-0 flex items-center px-6 border-b border-separator"
+        class="h-[44px] flex-shrink-0 flex items-center px-6 border-b border-separator"
         style="-webkit-app-region: drag;"
       >
         <h2 class="text-[17px] font-semibold text-text-primary">

@@ -85,7 +85,7 @@ async function finish() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex items-center justify-center p-8">
+  <div class="min-h-screen bg-bg-secondary flex items-center justify-center p-8">
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
     <div class="w-full max-w-lg">

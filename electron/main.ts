@@ -122,7 +122,7 @@ function createWindow(port: number) {
     height: 800,
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 19 },
-    vibrancy: 'sidebar',
+    vibrancy: 'under-window',
     visualEffectState: 'followWindow',
     backgroundColor: '#00000000',
     webPreferences: {
