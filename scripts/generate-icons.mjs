@@ -1,6 +1,6 @@
 /**
- * Generate all app icon sizes from the master SVG.
- * Run: node scripts/generate-icons.mjs
+ * Generate all app icon sizes from the master PNG.
+ * Run: node scripts/generate-icons.mjs [source.png]
  */
 import sharp from 'sharp';
 import pngToIco from 'png-to-ico';
@@ -11,14 +11,15 @@ import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const ROOT = join(__dirname, '..');
-const SVG_PATH = join(ROOT, 'electron/icons/icon.svg');
 const ICONS_DIR = join(ROOT, 'electron/icons');
 const PUBLIC_DIR = join(ROOT, 'dashboard/public');
 
-const svgBuffer = readFileSync(SVG_PATH);
+// Accept source path as CLI arg, default to electron/icons/icon-master.png
+const sourcePath = process.argv[2] || join(ICONS_DIR, 'icon-master.png');
+const sourceBuffer = readFileSync(sourcePath);
 
 async function generatePng(size, outputPath) {
-  await sharp(svgBuffer, { density: 300 })
+  await sharp(sourceBuffer)
     .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
     .png()
     .toFile(outputPath);
@@ -26,7 +27,7 @@ async function generatePng(size, outputPath) {
 }
 
 async function main() {
-  console.log('Generating icons from SVG...\n');
+  console.log(`Generating icons from ${sourcePath}...\n`);
 
   // 1. Generate PNGs for electron/icons/
   const electronSizes = [16, 32, 64, 128, 256, 512, 1024];
@@ -41,15 +42,11 @@ async function main() {
   await generatePng(192, join(PUBLIC_DIR, 'icon-192.png'));
   await generatePng(512, join(PUBLIC_DIR, 'icon-512.png'));
 
-  // 3. Copy SVG to public for web favicon
-  writeFileSync(join(PUBLIC_DIR, 'icon.svg'), svgBuffer);
-  console.log(`  copied icon.svg -> ${join(PUBLIC_DIR, 'icon.svg')}`);
-
-  // 4. Generate .ico for Windows (contains 16, 32, 48, 64, 128, 256)
+  // 3. Generate .ico for Windows (contains 16, 32, 48, 64, 128, 256)
   const icoSizes = [16, 32, 48, 64, 128, 256];
   const icoBuffers = [];
   for (const size of icoSizes) {
-    const buf = await sharp(svgBuffer, { density: 300 })
+    const buf = await sharp(sourceBuffer)
       .resize(size, size, { fit: 'contain', background: { r: 0, g: 0, b: 0, alpha: 0 } })
       .png()
       .toBuffer();
@@ -59,7 +56,7 @@ async function main() {
   writeFileSync(join(ICONS_DIR, 'icon.ico'), icoBuffer);
   console.log(`  generated icon.ico`);
 
-  // 5. Generate .icns for macOS using iconutil
+  // 4. Generate .icns for macOS using iconutil
   const iconsetDir = join(ICONS_DIR, 'icon.iconset');
   if (!existsSync(iconsetDir)) mkdirSync(iconsetDir, { recursive: true });
 
