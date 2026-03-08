@@ -11,6 +11,5 @@ export default defineConfig({
       include: ['src/services/**', 'src/api/**', 'src/db/**'],
       exclude: ['src/__tests__/**'],
     },
-    pool: 'forks',
   },
 });
