@@ -90,20 +90,20 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-6">
+  <div class="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
-      <h1 class="text-2xl font-bold heading-font">Settings</h1>
+      <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
     </div>
 
-    <div v-if="loading" class="text-muted-foreground">Loading settings...</div>
+    <div v-if="loading" class="text-text-secondary">Loading settings...</div>
 
     <template v-else-if="!isElectron">
       <Card>
         <CardContent class="pt-6">
-          <p class="text-muted-foreground">
-            Settings are managed via the <code class="text-foreground">.env</code> file in standalone mode.
-            Edit <code class="text-foreground">.env</code> and restart the server to apply changes.
+          <p class="text-text-secondary">
+            Settings are managed via the <code class="text-text-primary">.env</code> file in standalone mode.
+            Edit <code class="text-text-primary">.env</code> and restart the server to apply changes.
           </p>
         </CardContent>
       </Card>
@@ -116,14 +116,14 @@ async function save() {
           <div class="flex items-center gap-3">
             <Bot class="h-5 w-5 text-primary" />
             <div>
-              <CardTitle class="text-base">AI Configuration</CardTitle>
+              <CardTitle class="text-[15px]">AI Configuration</CardTitle>
               <CardDescription>Anthropic API settings for AI features</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">API Key</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">API Key</label>
             <Input
               v-model="form.ANTHROPIC_API_KEY"
               type="password"
@@ -132,19 +132,19 @@ async function save() {
             />
           </div>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Claude Code OAuth Token</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Claude Code OAuth Token</label>
             <Input
               v-model="form.CLAUDE_CODE_OAUTH_TOKEN"
               type="password"
               :placeholder="data?.settings.CLAUDE_CODE_OAUTH_TOKEN ? String(data.settings.CLAUDE_CODE_OAUTH_TOKEN) : 'Not set'"
               @input="markDirty('CLAUDE_CODE_OAUTH_TOKEN')"
             />
-            <p class="text-xs text-muted-foreground mt-1.5">
+            <p class="text-[11px] text-text-secondary mt-1.5">
               Alternative to API Key — use the OAuth token from Claude Code CLI
             </p>
           </div>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Model</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Model</label>
             <Input v-model="form.ANTHROPIC_MODEL" placeholder="claude-sonnet-4-6" />
           </div>
         </CardContent>
@@ -156,21 +156,21 @@ async function save() {
           <div class="flex items-center gap-3">
             <Key class="h-5 w-5 text-primary" />
             <div>
-              <CardTitle class="text-base">Security</CardTitle>
+              <CardTitle class="text-[15px]">Security</CardTitle>
               <CardDescription>Encryption key for bank credentials</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Master Key</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Master Key</label>
             <Input
               v-model="form.CREDENTIALS_MASTER_KEY"
               type="password"
               :placeholder="data?.settings.CREDENTIALS_MASTER_KEY ? String(data.settings.CREDENTIALS_MASTER_KEY) : 'Not set'"
               @input="markDirty('CREDENTIALS_MASTER_KEY')"
             />
-            <p class="text-xs text-muted-foreground mt-1.5">
+            <p class="text-[11px] text-text-secondary mt-1.5">
               Changing this will make existing encrypted credentials unreadable.
             </p>
           </div>
@@ -183,7 +183,7 @@ async function save() {
           <div class="flex items-center gap-3">
             <Clock class="h-5 w-5 text-primary" />
             <div>
-              <CardTitle class="text-base">Scraping</CardTitle>
+              <CardTitle class="text-[15px]">Scraping</CardTitle>
               <CardDescription>Bank scraping schedule and behavior</CardDescription>
             </div>
           </div>
@@ -191,27 +191,27 @@ async function save() {
         <CardContent class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-sm font-medium text-foreground block mb-1.5">Cron Schedule</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Cron Schedule</label>
               <Input v-model="form.SCRAPE_CRON" placeholder="0 6 * * *" />
             </div>
             <div>
-              <label class="text-sm font-medium text-foreground block mb-1.5">Timezone</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Timezone</label>
               <Input v-model="form.SCRAPE_TIMEZONE" placeholder="Asia/Jerusalem" />
             </div>
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-sm font-medium text-foreground block mb-1.5">Months Back</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Months Back</label>
               <Input v-model="form.SCRAPE_START_DATE_MONTHS_BACK" type="number" />
             </div>
             <div>
-              <label class="text-sm font-medium text-foreground block mb-1.5">Timeout (ms)</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Timeout (ms)</label>
               <Input v-model="form.SCRAPE_TIMEOUT" type="number" />
             </div>
           </div>
           <div class="flex items-center gap-3">
             <Switch v-model="form.SCRAPE_SHOW_BROWSER" />
-            <label class="text-sm text-foreground">Show browser window during scrape</label>
+            <label class="text-[13px] text-text-primary">Show browser window during scrape</label>
           </div>
         </CardContent>
       </Card>
@@ -222,14 +222,14 @@ async function save() {
           <div class="flex items-center gap-3">
             <Send class="h-5 w-5 text-primary" />
             <div>
-              <CardTitle class="text-base">Telegram</CardTitle>
+              <CardTitle class="text-[15px]">Telegram</CardTitle>
               <CardDescription>Optional Telegram bot integration</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Bot Token</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Bot Token</label>
             <Input
               v-model="form.TELEGRAM_BOT_TOKEN"
               type="password"
@@ -238,7 +238,7 @@ async function save() {
             />
           </div>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Allowed User IDs</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Allowed User IDs</label>
             <Input v-model="form.TELEGRAM_ALLOWED_USERS" placeholder="Comma-separated user IDs" />
           </div>
         </CardContent>
@@ -250,18 +250,18 @@ async function save() {
           <div class="flex items-center gap-3">
             <FolderOpen class="h-5 w-5 text-primary" />
             <div>
-              <CardTitle class="text-base">System</CardTitle>
+              <CardTitle class="text-[15px]">System</CardTitle>
               <CardDescription>Read-only information</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-3">
           <div class="flex items-center justify-between">
-            <span class="text-sm text-muted-foreground">Data Directory</span>
-            <code class="text-xs text-foreground bg-surface-1 px-2 py-1 rounded">{{ data?.dataDir }}</code>
+            <span class="text-[13px] text-text-secondary">Data Directory</span>
+            <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{ data?.dataDir }}</code>
           </div>
           <div class="flex items-center justify-between">
-            <span class="text-sm text-muted-foreground">Claude Code CLI</span>
+            <span class="text-[13px] text-text-secondary">Claude Code CLI</span>
             <Badge :variant="data?.claude?.installed ? 'default' : 'destructive'">
               {{ data?.claude?.installed ? (data.claude.version || 'Installed') : 'Not found' }}
             </Badge>
@@ -275,11 +275,11 @@ async function save() {
           <Save class="h-4 w-4 mr-1" />
           {{ saving ? 'Saving...' : 'Save Settings' }}
         </Button>
-        <div v-if="success" class="flex items-center gap-1.5 text-sm text-green-400">
+        <div v-if="success" class="flex items-center gap-1.5 text-[13px] text-success">
           <CheckCircle class="h-4 w-4" />
           {{ success }}
         </div>
-        <div v-if="error" class="flex items-center gap-1.5 text-sm text-destructive">
+        <div v-if="error" class="flex items-center gap-1.5 text-[13px] text-destructive">
           <AlertCircle class="h-4 w-4" />
           {{ error }}
         </div>

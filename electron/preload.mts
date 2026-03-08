@@ -1,5 +1,7 @@
 import { contextBridge } from 'electron';
 
+document.documentElement.classList.add('electron');
+
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => process.env.MM_APP_VERSION ?? 'unknown',
   getAuthToken: () => process.env.API_TOKEN ?? '',

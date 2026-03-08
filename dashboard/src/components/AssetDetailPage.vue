@@ -35,7 +35,7 @@ const category = computed(() => asset.value ? getAssetCategory(asset.value.type)
 <template>
   <div class="animate-fade-in-up space-y-6">
     <button
-      class="flex items-center gap-1.5 text-sm text-muted-foreground hover:text-foreground transition-colors"
+      class="flex items-center gap-1.5 text-[13px] text-text-secondary hover:text-text-primary transition-colors"
       @click="router.push('/net-worth')"
     >
       <ArrowLeft class="h-4 w-4" />
@@ -48,7 +48,7 @@ const category = computed(() => asset.value ? getAssetCategory(asset.value.type)
     </div>
 
     <div v-else-if="error" class="text-center py-12">
-      <p class="text-destructive text-sm">{{ error }}</p>
+      <p class="text-destructive text-[13px]">{{ error }}</p>
       <Button variant="outline" size="sm" class="mt-4" @click="$router.go(0)">Retry</Button>
     </div>
 

@@ -227,7 +227,7 @@ onMounted(() => {
   <div class="space-y-6 animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold tracking-tight heading-font">Accounts</h1>
+      <h1 class="text-[22px] font-semibold text-text-primary">Accounts</h1>
       <Button @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-2" />
         Add Account
@@ -241,12 +241,12 @@ onMounted(() => {
 
     <!-- Account cards -->
     <div v-else class="space-y-6">
-      <p v-if="accounts.length === 0" class="text-muted-foreground text-sm text-center py-12">
+      <p v-if="accounts.length === 0" class="text-text-secondary text-[13px] text-center py-12">
         No accounts configured. Add one to get started.
       </p>
 
       <div v-for="section in accountSections" :key="section.type" class="space-y-3">
-        <h2 class="text-lg font-medium tracking-tight heading-font">{{ section.label }}</h2>
+        <h2 class="text-[15px] font-semibold text-text-primary">{{ section.label }}</h2>
         <Card v-for="account in section.accounts" :key="account.id">
           <CardContent class="pt-4">
             <div class="flex items-start justify-between gap-4">
@@ -256,23 +256,23 @@ onMounted(() => {
                     <div class="flex items-center gap-1.5">
                       <Input
                         v-model="editNameValue"
-                        class="h-7 text-sm w-48"
+                        class="h-7 text-[13px] w-48"
                         @keyup.enter="saveEditName(account)"
                         @keyup.escape="cancelEditName"
                       />
                       <button @click="saveEditName(account)" class="text-success hover:text-success/80">
                         <Check class="h-4 w-4" />
                       </button>
-                      <button @click="cancelEditName" class="text-muted-foreground hover:text-foreground">
+                      <button @click="cancelEditName" class="text-text-secondary hover:text-text-primary">
                         <X class="h-4 w-4" />
                       </button>
                     </div>
                   </template>
                   <div v-else class="flex items-center gap-1.5 group">
-                    <CardTitle class="text-base">{{ account.displayName }}</CardTitle>
+                    <CardTitle class="text-[15px]">{{ account.displayName }}</CardTitle>
                     <button
                       @click="startEditName(account)"
-                      class="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-accent text-muted-foreground hover:text-foreground transition-opacity"
+                      class="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-opacity"
                     >
                       <Pencil class="h-3.5 w-3.5" />
                     </button>
@@ -280,30 +280,30 @@ onMounted(() => {
                   <Badge
                     :variant="account.isActive ? 'default' : 'secondary'"
                     :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
-                    class="text-xs"
+                    class="text-[11px]"
                   >
                     {{ account.isActive ? 'Active' : 'Inactive' }}
                   </Badge>
                 </div>
-                <CardDescription class="text-sm">
+                <CardDescription class="text-[13px]">
                   {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
                   <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
                 </CardDescription>
                 <p v-if="section.type === 'bank' && account.balance != null" class="text-lg font-semibold mt-1 tabular-nums">
                   {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
                 </p>
-                <p class="text-xs text-muted-foreground mt-1">
+                <p class="text-[11px] text-text-secondary mt-1">
                   <span v-if="account.lastScrapedAt">
                     Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
                   </span>
                   <span v-else>Never scraped</span>
                 </p>
                 <div class="flex items-center gap-4 mt-2">
-                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-[11px] text-text-secondary">
                     <Switch :model-value="account.manualLogin" @update:model-value="patchAccount(account.id, { manualLogin: $event })" />
                     Manual login
                   </label>
-                  <label class="flex items-center gap-1.5 text-xs text-muted-foreground">
+                  <label class="flex items-center gap-1.5 text-[11px] text-text-secondary">
                     <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="patchAccount(account.id, { showBrowser: $event })" />
                     Show browser
                   </label>
@@ -371,7 +371,7 @@ onMounted(() => {
 
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Provider</label>
+            <label class="text-[13px] font-medium">Provider</label>
             <Select v-model="newCompanyId">
               <SelectTrigger>
                 <SelectValue placeholder="Select provider..." />
@@ -390,7 +390,7 @@ onMounted(() => {
           </div>
 
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Display Name</label>
+            <label class="text-[13px] font-medium">Display Name</label>
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
 
@@ -398,7 +398,7 @@ onMounted(() => {
             <!-- OTP note banner (e.g. OneZero) -->
             <div
               v-if="selectedProvider?.otpNote"
-              class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-sm text-primary"
+              class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-[13px] text-primary"
             >
               {{ selectedProvider.otpNote }}
             </div>
@@ -406,21 +406,21 @@ onMounted(() => {
             <!-- Known provider: render labeled fields -->
             <template v-if="selectedProvider && selectedProvider.fields.length > 0">
               <div v-for="field in selectedProvider.fields" :key="field.key" class="space-y-1">
-                <label class="text-sm font-medium">{{ field.label }}</label>
+                <label class="text-[13px] font-medium">{{ field.label }}</label>
                 <Input
                   v-model="credentialValues[field.key]"
                   :type="field.type"
                   :placeholder="field.placeholder ?? ''"
                   :autocomplete="field.type === 'password' ? 'current-password' : 'off'"
                 />
-                <p v-if="field.hint" class="text-xs text-muted-foreground">{{ field.hint }}</p>
+                <p v-if="field.hint" class="text-[11px] text-text-secondary">{{ field.hint }}</p>
               </div>
             </template>
 
             <!-- Unknown provider: generic key-value fallback -->
             <template v-else>
               <div class="space-y-1.5">
-                <label class="text-sm font-medium">Credentials</label>
+                <label class="text-[13px] font-medium">Credentials</label>
                 <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
                   <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
                   <Input v-model="field.value" type="password" placeholder="Value" />
@@ -456,7 +456,7 @@ onMounted(() => {
         </DialogHeader>
 
         <div class="space-y-4 py-2">
-          <p class="text-sm text-muted-foreground">{{ otpMessage }}</p>
+          <p class="text-[13px] text-text-secondary">{{ otpMessage }}</p>
           <Input
             v-model="otpCode"
             inputmode="numeric"
@@ -488,8 +488,8 @@ onMounted(() => {
         </DialogHeader>
 
         <div class="space-y-4 py-2">
-          <p class="text-sm text-muted-foreground">{{ manualLoginMessage }}</p>
-          <p class="text-sm text-muted-foreground">
+          <p class="text-[13px] text-text-secondary">{{ manualLoginMessage }}</p>
+          <p class="text-[13px] text-text-secondary">
             Once you've successfully logged in, click the button below to continue scraping.
           </p>
         </div>

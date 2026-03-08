@@ -135,31 +135,31 @@ onMounted(load);
 <template>
   <div class="space-y-4 animate-fade-in-up">
     <div class="flex items-center justify-between">
-      <h1 class="text-2xl font-semibold tracking-tight heading-font">Categories</h1>
+      <h1 class="text-[22px] font-semibold text-text-primary">Categories</h1>
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" /> Add category
       </Button>
     </div>
 
-    <p v-if="error" class="text-sm text-destructive">{{ error }}</p>
+    <p v-if="error" class="text-[13px] text-destructive">{{ error }}</p>
 
     <!-- New category form -->
     <Card v-if="showNewForm">
       <CardHeader class="pb-2">
-        <CardTitle class="text-sm">New Category</CardTitle>
+        <CardTitle class="text-[13px] font-medium">New Category</CardTitle>
       </CardHeader>
       <CardContent>
         <div class="flex gap-2 items-end flex-wrap">
           <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">Name (slug)</label>
+            <label class="text-[11px] text-text-secondary">Name (slug)</label>
             <Input v-model="newName" placeholder="e.g. groceries" class="w-36" />
           </div>
           <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">Label</label>
+            <label class="text-[11px] text-text-secondary">Label</label>
             <Input v-model="newLabel" placeholder="e.g. Groceries" class="w-36" />
           </div>
           <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">Color</label>
+            <label class="text-[11px] text-text-secondary">Color</label>
             <input type="color" v-model="newColor" class="h-9 w-14 rounded-lg overflow-hidden border cursor-pointer" />
           </div>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
@@ -168,14 +168,14 @@ onMounted(load);
           <Button size="sm" variant="ghost" @click="showNewForm = false">Cancel</Button>
         </div>
         <div class="space-y-1 w-full mt-2">
-          <label class="text-xs text-muted-foreground">Rules (LLM hint)</label>
+          <label class="text-[11px] text-text-secondary">Rules (LLM hint)</label>
           <Textarea
             v-model="newRules"
             placeholder="Describe what transactions belong here. Include Hebrew merchant names if relevant."
             class="min-h-[60px] resize-y"
           />
         </div>
-        <p class="text-xs text-muted-foreground mt-1">Name must be lowercase letters, numbers, dashes, or underscores.</p>
+        <p class="text-[11px] text-text-secondary mt-1">Name must be lowercase letters, numbers, dashes, or underscores.</p>
       </CardContent>
     </Card>
 
@@ -210,24 +210,24 @@ onMounted(load);
                   :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }"
                 />
               </TableCell>
-              <TableCell class="font-mono text-sm">{{ cat.name }}</TableCell>
+              <TableCell class="font-mono text-[13px]">{{ cat.name }}</TableCell>
               <TableCell>
                 <template v-if="editingId === cat.id">
                   <div class="space-y-2">
                     <div class="flex gap-2 items-center">
-                      <Input v-model="editLabel" class="w-32 h-7 text-sm" />
+                      <Input v-model="editLabel" class="w-32 h-7 text-[13px]" />
                       <input type="color" v-model="editColor" class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer" />
                       <button @click="saveEdit(cat)" class="text-success hover:text-success/80">
                         <Check class="h-4 w-4" />
                       </button>
-                      <button @click="cancelEdit" class="text-muted-foreground hover:text-foreground">
+                      <button @click="cancelEdit" class="text-text-secondary hover:text-text-primary">
                         <X class="h-4 w-4" />
                       </button>
                     </div>
                     <Textarea
                       v-model="editRules"
                       placeholder="LLM categorization rules..."
-                      class="text-xs min-h-[40px] resize-y"
+                      class="text-[11px] min-h-[40px] resize-y"
                     />
                   </div>
                 </template>
@@ -237,7 +237,7 @@ onMounted(load);
                   </Badge>
                 </template>
               </TableCell>
-              <TableCell class="text-xs text-muted-foreground max-w-[200px] truncate" :title="cat.rules ?? ''">
+              <TableCell class="text-[11px] text-text-secondary max-w-[200px] truncate" :title="cat.rules ?? ''">
                 {{ cat.rules ?? '—' }}
               </TableCell>
               <TableCell>
@@ -249,10 +249,10 @@ onMounted(load);
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">
-                  <button @click="startEdit(cat)" class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-foreground">
+                  <button @click="startEdit(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-text-primary">
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
-                  <button @click="remove(cat)" class="p-1 rounded hover:bg-accent text-muted-foreground hover:text-destructive">
+                  <button @click="remove(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-destructive">
                     <Trash2 class="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -266,27 +266,27 @@ onMounted(load);
     <!-- Re-categorize section -->
     <Card>
       <CardHeader class="pb-2">
-        <CardTitle class="text-sm">Re-categorize Transactions</CardTitle>
+        <CardTitle class="text-[13px] font-medium">Re-categorize Transactions</CardTitle>
       </CardHeader>
       <CardContent>
-        <p class="text-xs text-muted-foreground mb-3">
+        <p class="text-[11px] text-text-secondary mb-3">
           Re-run AI categorization over all transactions in a date range, overwriting existing categories. Leave dates empty to process all transactions.
         </p>
         <div class="flex gap-2 items-end flex-wrap">
           <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">Start Date</label>
+            <label class="text-[11px] text-text-secondary">Start Date</label>
             <Input v-model="recatStartDate" type="date" class="w-36" />
           </div>
           <div class="space-y-1">
-            <label class="text-xs text-muted-foreground">End Date</label>
+            <label class="text-[11px] text-text-secondary">End Date</label>
             <Input v-model="recatEndDate" type="date" class="w-36" />
           </div>
           <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
             {{ recatLoading ? 'Running...' : 'Re-categorize All' }}
           </Button>
         </div>
-        <p v-if="recatResult" class="text-sm text-success mt-2">{{ recatResult }}</p>
-        <p v-if="recatError" class="text-sm text-destructive mt-2">{{ recatError }}</p>
+        <p v-if="recatResult" class="text-[13px] text-success mt-2">{{ recatResult }}</p>
+        <p v-if="recatError" class="text-[13px] text-destructive mt-2">{{ recatError }}</p>
       </CardContent>
     </Card>
   </div>

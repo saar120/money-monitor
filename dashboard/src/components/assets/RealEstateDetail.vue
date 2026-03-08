@@ -6,6 +6,7 @@ import {
   type Asset, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
+import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import { Line } from 'vue-chartjs';
 import {
@@ -22,6 +23,8 @@ import {
 import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
+
+const { tooltip: themeTooltip, axisTicks, grid: themeGrid } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
@@ -127,10 +130,13 @@ const chartData = computed(() => {
     datasets: [{
       label: 'Value (ILS)',
       data: snapshots.value.map(s => s.totalValueIls),
-      borderColor: '#ec4899',
-      backgroundColor: '#ec489920',
+      borderColor: '#007AFF',
+      backgroundColor: 'rgba(0, 122, 255, 0.15)',
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
+      borderWidth: 2.5,
+      borderCapStyle: 'round' as const,
+      borderJoinStyle: 'round' as const,
       pointRadius: 3,
       pointHoverRadius: 5,
       spanGaps: true,
@@ -138,16 +144,12 @@ const chartData = computed(() => {
   };
 });
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#18181c',
-      borderColor: 'rgba(139,92,246,0.2)',
-      borderWidth: 1,
-      titleColor: '#f0f0f3',
-      bodyColor: '#f0f0f3',
+      ...themeTooltip.value,
       callbacks: {
         label(ctx: { parsed: { y: number | null } }) {
           return ` ${formatAmount(ctx.parsed.y ?? 0, 'ILS')}`;
@@ -157,12 +159,12 @@ const chartOptions = {
   },
   scales: {
     x: {
-      ticks: { color: '#71717a' },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      ticks: axisTicks.value,
+      grid: themeGrid.value,
     },
     y: {
       ticks: {
-        color: '#71717a',
+        ...axisTicks.value,
         callback(value: number | string) {
           const v = Number(value);
           const sym = CURRENCY_SYMBOLS['ILS'] ?? 'ILS ';
@@ -171,10 +173,10 @@ const chartOptions = {
           return `${sym}${v}`;
         },
       },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      grid: themeGrid.value,
     },
   },
-};
+}));
 </script>
 
 <template>
@@ -187,20 +189,20 @@ const chartOptions = {
 
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
-      <p class="text-destructive text-sm">{{ assetApi.error.value }}</p>
+      <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
       <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
     <template v-else-if="asset">
       <!-- Asset header -->
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
+        <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-xs font-medium bg-pink-500/10 text-pink-500">
+          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-pink-500/10 text-pink-500">
             <Home class="h-3 w-3" />
             Real Estate
           </span>
-          <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
+          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
         </div>
       </div>
 
@@ -208,11 +210,11 @@ const chartOptions = {
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Property Value</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Property Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(currentValue) }}</div>
-            <div v-if="isMultiCurrency" class="text-sm text-muted-foreground mt-0.5">
+            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div v-if="isMultiCurrency" class="text-[13px] text-text-secondary mt-0.5">
               {{ formatAmount(nativeValue, nativeCurrency) }}
             </div>
           </CardContent>
@@ -220,40 +222,40 @@ const chartOptions = {
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Purchase Price</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Purchase Price</CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="purchasePrice" class="text-2xl font-bold tabular-nums">{{ formatCurrency(purchasePrice) }}</div>
-            <div v-else class="text-sm text-muted-foreground">Not set</div>
+            <div v-if="purchasePrice" class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(purchasePrice) }}</div>
+            <div v-else class="text-[13px] text-text-secondary">Not set</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Rent Earned</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Rent Earned</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(totalRent) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(totalRent) }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Return</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="pnl">
-              <div :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-2xl font-bold tabular-nums">
+              <div :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
                 {{ pnl.amount >= 0 ? '+' : '' }}{{ formatCurrency(pnl.amount) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
                 <component :is="pnl.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-sm">
+                <span :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
                   {{ pnl.pct >= 0 ? '+' : '' }}{{ pnl.pct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-sm text-muted-foreground">No purchase price recorded</div>
+            <div v-else class="text-[13px] text-text-secondary">No purchase price recorded</div>
           </CardContent>
         </Card>
       </div>
@@ -270,7 +272,7 @@ const chartOptions = {
       <!-- Value Over Time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartData">
@@ -279,7 +281,7 @@ const chartOptions = {
           <div v-else-if="chartData">
             <Line :data="chartData" :options="chartOptions" />
           </div>
-          <div v-else class="text-sm text-muted-foreground text-center py-12">
+          <div v-else class="text-[13px] text-text-secondary text-center py-12">
             Update the property value to start building history
           </div>
         </CardContent>
@@ -288,7 +290,7 @@ const chartOptions = {
       <!-- Rent Income History -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Rent Income History</CardTitle>
+          <CardTitle class="text-[15px]">Rent Income History</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="movementsApi.loading.value && rentMovements.length === 0" class="space-y-3">
@@ -296,20 +298,20 @@ const chartOptions = {
             <Skeleton class="h-12 w-full" />
           </div>
           <div v-else-if="rentMovements.length === 0" class="text-center py-8">
-            <p class="text-muted-foreground text-sm">No rent income recorded yet</p>
+            <p class="text-text-secondary text-[13px]">No rent income recorded yet</p>
           </div>
-          <div v-else class="space-y-0 border border-border rounded-md divide-y divide-border">
+          <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
             <div v-for="m in rentMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
               <div>
-                <div class="text-sm font-medium tabular-nums">
+                <div class="text-[13px] font-medium tabular-nums">
                   {{ isMultiCurrency ? formatAmount(Math.abs(m.quantity), nativeCurrency) : formatCurrency(Math.abs(m.quantity)) }}
-                  <span v-if="isMultiCurrency && m.sourceAmount" class="text-muted-foreground text-xs ml-1">
+                  <span v-if="isMultiCurrency && m.sourceAmount" class="text-text-secondary text-[11px] ml-1">
                     ({{ formatCurrency(Math.abs(m.sourceAmount)) }})
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-xs text-muted-foreground mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
               </div>
-              <span class="text-xs text-muted-foreground">{{ formatMovementDate(m.date) }}</span>
+              <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
             </div>
           </div>
         </CardContent>
@@ -324,7 +326,7 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Property Value ({{ nativeCurrency }})</label>
+            <label class="text-[13px] font-medium">Property Value ({{ nativeCurrency }})</label>
             <Input v-model.number="updateForm.currentValue" type="number" />
           </div>
         </div>
@@ -348,15 +350,15 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Amount ({{ nativeCurrency }})</label>
+            <label class="text-[13px] font-medium">Amount ({{ nativeCurrency }})</label>
             <Input v-model.number="rentForm.amount" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Date</label>
+            <label class="text-[13px] font-medium">Date</label>
             <Input v-model="rentForm.date" type="date" />
           </div>
           <div>
-            <label class="text-sm font-medium">Notes (optional)</label>
+            <label class="text-[13px] font-medium">Notes (optional)</label>
             <Input v-model="rentForm.notes" placeholder="e.g. January rent" />
           </div>
         </div>

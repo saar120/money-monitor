@@ -85,7 +85,7 @@ async function finish() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-background flex items-center justify-center p-8">
+  <div class="min-h-screen bg-bg-secondary flex items-center justify-center p-8">
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
     <div class="w-full max-w-lg">
@@ -94,8 +94,8 @@ async function finish() {
         <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/20 mb-4">
           <Wallet class="h-7 w-7 text-primary" />
         </div>
-        <h1 class="text-2xl font-bold heading-font text-foreground">Money Monitor</h1>
-        <p class="text-muted-foreground mt-1">Let's set up your desktop app</p>
+        <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
+        <p class="text-text-secondary mt-1">Let's set up your desktop app</p>
       </div>
 
       <!-- Progress -->
@@ -103,7 +103,7 @@ async function finish() {
         <div
           v-for="s in 3" :key="s"
           class="h-1.5 w-12 rounded-full transition-colors duration-200"
-          :class="s <= step ? 'bg-primary' : 'bg-surface-3'"
+          :class="s <= step ? 'bg-primary' : 'bg-bg-tertiary'"
         />
       </div>
 
@@ -139,30 +139,30 @@ async function finish() {
           </div>
 
           <div v-if="authMethod === 'api_key'">
-            <label class="text-sm font-medium text-foreground block mb-1.5">Anthropic API Key</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Anthropic API Key</label>
             <Input
               v-model="anthropicApiKey"
               type="password"
               placeholder="sk-ant-..."
             />
-            <p class="text-xs text-muted-foreground mt-1.5">
+            <p class="text-[11px] text-text-secondary mt-1.5">
               Get your key from console.anthropic.com
             </p>
           </div>
 
           <div v-else>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Claude Code OAuth Token</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Claude Code OAuth Token</label>
             <Input
               v-model="claudeOauthToken"
               type="password"
               placeholder="oat-..."
             />
-            <p class="text-xs text-muted-foreground mt-1.5">
+            <p class="text-[11px] text-text-secondary mt-1.5">
               Use the OAuth token from Claude Code CLI
             </p>
           </div>
 
-          <p class="text-xs text-muted-foreground">
+          <p class="text-[11px] text-text-secondary">
             You can skip this and set it later in Settings.
           </p>
         </CardContent>
@@ -200,10 +200,10 @@ async function finish() {
           </div>
 
           <div v-if="masterKeyMode === 'auto'">
-            <div class="p-3 rounded-lg bg-surface-1 border border-border font-mono text-xs break-all text-muted-foreground">
+            <div class="p-3 rounded-lg bg-bg-secondary border border-separator font-mono text-[11px] break-all text-text-secondary">
               {{ autoMasterKey }}
             </div>
-            <p class="text-xs text-muted-foreground mt-1.5">
+            <p class="text-[11px] text-text-secondary mt-1.5">
               This key is stored in your app config and encrypts bank login credentials.
             </p>
           </div>
@@ -233,22 +233,22 @@ async function finish() {
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Scrape Schedule (cron)</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Scrape Schedule (cron)</label>
             <Input v-model="scrapeCron" placeholder="0 6 * * *" />
           </div>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Timezone</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Timezone</label>
             <Input v-model="scrapeTimezone" placeholder="Asia/Jerusalem" />
           </div>
           <div>
-            <label class="text-sm font-medium text-foreground block mb-1.5">Telegram Bot Token</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Telegram Bot Token</label>
             <Input v-model="telegramBotToken" type="password" placeholder="Optional" />
           </div>
         </CardContent>
       </Card>
 
       <!-- Error -->
-      <p v-if="error" class="text-sm text-destructive mt-3">{{ error }}</p>
+      <p v-if="error" class="text-[13px] text-destructive mt-3">{{ error }}</p>
 
       <!-- Navigation -->
       <div class="flex items-center justify-between mt-6">

@@ -301,8 +301,8 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
     <!-- Header -->
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight heading-font">Scraping</h1>
-        <p class="text-sm text-muted-foreground">Monitor and manage bank scrapes</p>
+        <h1 class="text-[22px] font-semibold text-text-primary">Scraping</h1>
+        <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
       </div>
       <div class="flex items-center gap-2">
         <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
@@ -333,7 +333,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
     <!-- Error Banner -->
     <div
       v-if="errorMessage"
-      class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-sm text-destructive"
+      class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-[13px] text-destructive"
     >
       <XCircle class="h-4 w-4 flex-shrink-0" />
       <span class="flex-1">{{ errorMessage }}</span>
@@ -346,13 +346,13 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
             <Loader2 class="h-5 w-5 animate-spin text-primary" />
-            <CardTitle class="text-base">
+            <CardTitle class="text-[15px]">
               Active Scrape
               <Badge variant="secondary" class="ml-2">{{ triggerLabel(liveSession.trigger) }}</Badge>
             </CardTitle>
           </div>
           <div class="flex items-center gap-3">
-            <span class="text-sm text-muted-foreground">
+            <span class="text-[13px] text-text-secondary">
               <Clock class="inline h-3.5 w-3.5 mr-1" />
               {{ elapsedSeconds }}s
             </span>
@@ -368,7 +368,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           <div
             v-for="accountStatus in liveSession.accounts"
             :key="accountStatus.accountId"
-            class="flex items-center gap-3 text-sm"
+            class="flex items-center gap-3 text-[13px]"
           >
             <!-- Status icon -->
             <Loader2
@@ -385,14 +385,14 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
             />
             <div
               v-else
-              class="h-4 w-4 rounded-full border-2 border-muted-foreground/30 flex-shrink-0"
+              class="h-4 w-4 rounded-full border-2 border-text-secondary/30 flex-shrink-0"
             />
 
             <!-- Account name -->
             <span class="w-40 truncate font-medium">{{ getAccountName(accountStatus.accountId) }}</span>
 
             <!-- Status text -->
-            <span class="text-muted-foreground">
+            <span class="text-text-secondary">
               <template v-if="accountStatus.status === 'queued'">Queued</template>
               <template v-else-if="accountStatus.status === 'scraping'">Scraping...</template>
               <template v-else-if="accountStatus.status === 'done'">
@@ -419,8 +419,8 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
 
     <!-- Session History -->
     <div v-else class="space-y-2">
-      <h2 class="text-lg font-medium">Session History</h2>
-      <p v-if="sessions.length === 0" class="text-sm text-muted-foreground py-8 text-center">
+      <h2 class="text-[15px] font-semibold">Session History</h2>
+      <p v-if="sessions.length === 0" class="text-[13px] text-text-secondary py-8 text-center">
         No scrape sessions yet. Trigger a scrape to get started.
       </p>
       <div v-else class="space-y-1">
@@ -431,37 +431,37 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         >
           <!-- Session header row (clickable) -->
           <button
-            class="w-full flex items-center gap-3 px-4 py-3 text-sm hover:bg-accent/50 transition-colors text-left"
+            class="w-full flex items-center gap-3 px-4 py-3 text-[13px] hover:bg-bg-tertiary/50 transition-colors text-left"
             @click="toggleExpand(session.id)"
           >
             <ChevronDown
               v-if="expandedSessions.has(session.id)"
-              class="h-4 w-4 flex-shrink-0 text-muted-foreground"
+              class="h-4 w-4 flex-shrink-0 text-text-secondary"
             />
             <ChevronRight
               v-else
-              class="h-4 w-4 flex-shrink-0 text-muted-foreground"
+              class="h-4 w-4 flex-shrink-0 text-text-secondary"
             />
 
-            <span class="text-muted-foreground w-8 text-right">#{{ session.id }}</span>
+            <span class="text-text-secondary w-8 text-right">#{{ session.id }}</span>
             <span class="w-36">{{ formatDateTime(session.startedAt) }}</span>
             <Badge :variant="statusVariant(session.status)" class="w-20 justify-center">
               {{ session.status }}
             </Badge>
             <Badge variant="outline">{{ triggerLabel(session.trigger) }}</Badge>
-            <span class="truncate text-muted-foreground">{{ sessionAccountNames(session) }}</span>
-            <span class="flex-shrink-0 text-muted-foreground ml-auto">{{ sessionSummary(session) }}</span>
+            <span class="truncate text-text-secondary">{{ sessionAccountNames(session) }}</span>
+            <span class="flex-shrink-0 text-text-secondary ml-auto">{{ sessionSummary(session) }}</span>
           </button>
 
           <!-- Expanded per-account logs -->
           <div
             v-if="expandedSessions.has(session.id) && session.logs.length > 0"
-            class="border-t px-4 py-2 bg-surface-2"
+            class="border-t px-4 py-2 bg-bg-secondary"
           >
             <div
               v-for="log in session.logs"
               :key="log.id"
-              class="flex items-center gap-3 py-1.5 text-sm"
+              class="flex items-center gap-3 py-1.5 text-[13px]"
             >
               <CheckCircle2
                 v-if="log.status === 'success'"
@@ -472,13 +472,13 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
                 class="h-4 w-4 text-destructive flex-shrink-0"
               />
               <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
-              <span v-if="log.status === 'success'" class="text-muted-foreground">
+              <span v-if="log.status === 'success'" class="text-text-secondary">
                 {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
               </span>
               <span v-else class="text-destructive truncate">
                 {{ log.errorMessage ?? log.errorType ?? 'Error' }}
               </span>
-              <span v-if="log.durationMs" class="text-muted-foreground ml-auto">
+              <span v-if="log.durationMs" class="text-text-secondary ml-auto">
                 {{ formatDuration(log.durationMs) }}
               </span>
             </div>
@@ -494,7 +494,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           <DialogTitle>OTP Required — {{ otpAccountName }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 py-2">
-          <p class="text-sm text-muted-foreground">Enter the OTP code sent to your device.</p>
+          <p class="text-[13px] text-text-secondary">Enter the OTP code sent to your device.</p>
           <Input
             v-model="otpCode"
             placeholder="Enter OTP code"
@@ -517,7 +517,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           <DialogTitle>Manual Login — {{ manualLoginAccountName }}</DialogTitle>
         </DialogHeader>
         <div class="py-2">
-          <p class="text-sm text-muted-foreground">
+          <p class="text-[13px] text-text-secondary">
             A browser window should be open. Complete the login process there, then click "Done" below.
           </p>
         </div>

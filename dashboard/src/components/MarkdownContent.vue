@@ -40,7 +40,7 @@ const html = computed(() => {
 
 .markdown-content :deep(strong) {
   font-weight: 700;
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 .markdown-content :deep(ul),
@@ -69,24 +69,33 @@ const html = computed(() => {
 }
 
 .markdown-content :deep(thead) {
-  border-bottom: 2px solid var(--border-accent);
+  border-bottom: 1px solid var(--separator);
 }
 
 .markdown-content :deep(th) {
   padding: 0.5em 0.75em;
   text-align: left;
   font-weight: 600;
-  color: var(--primary);
+  color: var(--text-secondary);
+  font-size: 11px;
+  text-transform: uppercase;
+  letter-spacing: 0.05em;
   white-space: nowrap;
 }
 
 .markdown-content :deep(td) {
   padding: 0.4em 0.75em;
-  border-bottom: 1px solid var(--border);
+  border-bottom: 1px solid var(--separator);
 }
 
 .markdown-content :deep(tbody tr:hover) {
-  background: var(--primary-glow);
+  background: rgba(0, 0, 0, 0.02);
+}
+
+@media (prefers-color-scheme: dark) {
+  .markdown-content :deep(tbody tr:hover) {
+    background: rgba(255, 255, 255, 0.03);
+  }
 }
 
 .markdown-content :deep(tbody tr:last-child td) {
@@ -96,12 +105,12 @@ const html = computed(() => {
 /* Bold row for totals */
 .markdown-content :deep(td > strong),
 .markdown-content :deep(th > strong) {
-  color: var(--foreground);
+  color: var(--text-primary);
 }
 
 /* Inline code */
 .markdown-content :deep(code) {
-  background: var(--surface-3);
+  background: var(--bg-tertiary);
   padding: 0.15em 0.4em;
   border-radius: 4px;
   font-size: 0.875em;
@@ -109,7 +118,7 @@ const html = computed(() => {
 
 /* Code blocks */
 .markdown-content :deep(pre) {
-  background: var(--surface-3);
+  background: var(--bg-tertiary);
   padding: 0.75em 1em;
   border-radius: 8px;
   overflow-x: auto;
@@ -123,16 +132,16 @@ const html = computed(() => {
 
 /* Blockquotes */
 .markdown-content :deep(blockquote) {
-  border-left: 3px solid var(--primary);
+  border-left: 3px solid var(--accent);
   padding-left: 0.75em;
   margin: 0.5em 0;
-  color: var(--muted-foreground);
+  color: var(--text-secondary);
 }
 
 /* Horizontal rules */
 .markdown-content :deep(hr) {
   border: none;
-  border-top: 1px solid var(--border);
+  border-top: 1px solid var(--separator);
   margin: 0.75em 0;
 }
 </style>

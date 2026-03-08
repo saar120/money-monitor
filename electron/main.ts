@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, systemPreferences } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFile, execFileSync } from 'node:child_process';
@@ -40,7 +40,18 @@ function checkClaudeCli(): Promise<boolean> {
   });
 }
 
-// ── 4. Native macOS menu ────────────────────────────────────────────────────
+// ── 4. Get macOS accent color ────────────────────────────────────────────────
+function getAccentColor(): string {
+  if (process.platform !== 'darwin') return '#007AFF';
+  try {
+    const hex = systemPreferences.getAccentColor();
+    return `#${hex.slice(0, 6)}`;
+  } catch {
+    return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
+  }
+}
+
+// ── 5. Native macOS menu ────────────────────────────────────────────────────
 function buildMenu() {
   const template: Electron.MenuItemConstructorOptions[] = [
     {
@@ -94,15 +105,26 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ── 5. Window management ─────────────────────────────────────────────────────
+// ── 6. Window management ─────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
+
+function sendAccentColor() {
+  if (!mainWindow) return;
+  const color = getAccentColor();
+  mainWindow.webContents.executeJavaScript(
+    `document.documentElement.style.setProperty('--system-accent', '${color}')`
+  );
+}
 
 function createWindow(port: number) {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
-    titleBarStyle: 'hidden',
-    trafficLightPosition: { x: 20, y: 14 },
+    titleBarStyle: 'hiddenInset',
+    trafficLightPosition: { x: 20, y: 19 },
+    vibrancy: 'under-window',
+    visualEffectState: 'followWindow',
+    backgroundColor: '#00000000',
     webPreferences: {
       preload: join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -112,6 +134,23 @@ function createWindow(port: number) {
   });
 
   mainWindow.loadURL(`http://localhost:${port}`);
+
+  // Send accent color once page is ready
+  mainWindow.webContents.on('did-finish-load', () => {
+    sendAccentColor();
+  });
+
+  // Track focus/blur for UI desaturation
+  mainWindow.on('focus', () => {
+    mainWindow?.webContents.executeJavaScript(
+      `document.documentElement.classList.remove('window-blurred')`
+    );
+  });
+  mainWindow.on('blur', () => {
+    mainWindow?.webContents.executeJavaScript(
+      `document.documentElement.classList.add('window-blurred')`
+    );
+  });
 
   mainWindow.on('closed', () => {
     mainWindow = null;
@@ -154,6 +193,11 @@ app.whenReady().then(async () => {
     console.log(`[Electron] Data directory: ${dataDir}`);
 
     createWindow(port);
+
+    // Re-send accent color when system preferences change
+    nativeTheme.on('updated', () => {
+      sendAccentColor();
+    });
 
     app.on('activate', () => {
       if (BrowserWindow.getAllWindows().length === 0) {
