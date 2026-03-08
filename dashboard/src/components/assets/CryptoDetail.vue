@@ -11,6 +11,7 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
+import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency } from '@/lib/format';
 import { HOLDING_TYPE_LABELS } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -39,6 +40,8 @@ import {
 } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
+
+const { tooltip: themeTooltip, axisTicks, grid: themeGrid } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
@@ -263,10 +266,13 @@ const chartData = computed(() => {
     datasets: [{
       label: 'Value (ILS)',
       data: snapshots.value.map(s => s.totalValueIls),
-      borderColor: '#f59e0b',
-      backgroundColor: '#f59e0b20',
+      borderColor: '#007AFF',
+      backgroundColor: 'rgba(0, 122, 255, 0.15)',
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
+      borderWidth: 2.5,
+      borderCapStyle: 'round' as const,
+      borderJoinStyle: 'round' as const,
       pointRadius: 3,
       pointHoverRadius: 5,
       spanGaps: true,
@@ -274,16 +280,12 @@ const chartData = computed(() => {
   };
 });
 
-const chartOptions = {
+const chartOptions = computed(() => ({
   responsive: true,
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#18181c',
-      borderColor: 'rgba(139,92,246,0.2)',
-      borderWidth: 1,
-      titleColor: '#f0f0f3',
-      bodyColor: '#f0f0f3',
+      ...themeTooltip.value,
       callbacks: {
         label(ctx: { parsed: { y: number | null } }) {
           return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
@@ -292,10 +294,13 @@ const chartOptions = {
     },
   },
   scales: {
-    x: { ticks: { color: '#71717a' }, grid: { color: 'rgba(255,255,255,0.03)' } },
+    x: {
+      ticks: axisTicks.value,
+      grid: themeGrid.value,
+    },
     y: {
       ticks: {
-        color: '#71717a',
+        ...axisTicks.value,
         callback(value: number | string) {
           const v = Number(value);
           if (v >= 1_000_000) return `\u20AA${(v / 1_000_000).toFixed(1)}M`;
@@ -303,10 +308,10 @@ const chartOptions = {
           return `\u20AA${v}`;
         },
       },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      grid: themeGrid.value,
     },
   },
-};
+}));
 </script>
 
 <template>
@@ -319,17 +324,17 @@ const chartOptions = {
 
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
-      <p class="text-destructive text-sm">{{ assetApi.error.value }}</p>
+      <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
       <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
     <template v-else-if="asset">
       <!-- Header -->
       <div>
-        <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
+        <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="text-xs font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">Crypto</span>
-          <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
+          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">Crypto</span>
+          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
         </div>
       </div>
 
@@ -337,40 +342,40 @@ const chartOptions = {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Value (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Value (ILS)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Invested</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Invested</CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="asset.totalInvestedIls != null" class="text-2xl font-bold tabular-nums">{{ formatCurrency(asset.totalInvestedIls) }}</div>
-            <div v-else class="text-sm text-muted-foreground">No data</div>
+            <div v-if="asset.totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalInvestedIls) }}</div>
+            <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Return</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="totalReturn">
-              <div :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-2xl font-bold tabular-nums">
+              <div :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
                 {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatCurrency(Math.abs(totalReturn.amount)) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
                 <component :is="totalReturn.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-sm">
+                <span :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
                   {{ totalReturn.pct >= 0 ? '+' : '' }}{{ totalReturn.pct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-2xl font-bold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
+            <div v-else class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
           </CardContent>
         </Card>
       </div>
@@ -379,7 +384,7 @@ const chartOptions = {
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between">
-            <CardTitle class="text-base">Coin Holdings</CardTitle>
+            <CardTitle class="text-[15px]">Coin Holdings</CardTitle>
             <div class="flex items-center gap-2">
               <template v-if="quickUpdateMode">
                 <Button variant="outline" size="sm" @click="cancelQuickUpdate">Cancel</Button>
@@ -408,7 +413,7 @@ const chartOptions = {
           </div>
 
           <div v-else-if="holdings.length === 0" class="text-center py-8">
-            <p class="text-muted-foreground text-sm">No coins yet</p>
+            <p class="text-text-secondary text-[13px]">No coins yet</p>
             <Button size="sm" class="mt-2" @click="openAddHolding">
               <Plus class="h-4 w-4 mr-1" />
               Add First Coin
@@ -431,14 +436,14 @@ const chartOptions = {
               </TableHeader>
               <TableBody>
                 <TableRow v-for="h in holdings" :key="h.id" class="group">
-                  <TableCell class="font-medium text-sm">
+                  <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
-                    <div v-if="h.stale" class="flex items-center gap-1 text-muted-foreground mt-0.5">
+                    <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-amber-500" />
-                      <span class="text-xs">No price data</span>
+                      <span class="text-[11px]">No price data</span>
                     </div>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm">
+                  <TableCell class="text-right tabular-nums text-[13px]">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -449,7 +454,7 @@ const chartOptions = {
                     </template>
                     <template v-else>{{ h.quantity.toLocaleString() }}</template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground">
+                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -463,18 +468,18 @@ const chartOptions = {
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</TableCell>
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-[13px] font-medium">{{ formatCurrency(h.currentValueIls) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
-                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-sm tabular-nums font-medium">
+                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px] tabular-nums font-medium">
                         {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatCurrency(h.gainLoss) }}
                       </span>
-                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs block">
+                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px] block">
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                     </div>
-                    <span v-else class="text-muted-foreground text-sm">-</span>
+                    <span v-else class="text-text-secondary text-[13px]">-</span>
                   </TableCell>
                   <TableCell>
                     <div v-if="!quickUpdateMode" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -490,18 +495,18 @@ const chartOptions = {
 
           <!-- Mobile cards -->
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
-            <div v-for="h in holdings" :key="h.id" class="p-3 border border-border rounded-md">
+            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-md">
               <div class="flex items-center justify-between">
-                <span class="font-medium text-sm">{{ h.name }}</span>
-                <Badge variant="outline" class="text-xs">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                <span class="font-medium text-[13px]">{{ h.name }}</span>
+                <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
               </div>
-              <div class="text-xs text-muted-foreground mt-1">
+              <div class="text-[11px] text-text-secondary mt-1">
                 {{ h.quantity.toLocaleString() }} units
                 <span v-if="h.lastPrice != null"> @ {{ formatCurrency(h.lastPrice) }}</span>
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-sm font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
-                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs">
+                <span class="text-[13px] font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
+                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px]">
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
               </div>
@@ -513,7 +518,7 @@ const chartOptions = {
       <!-- Value over time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartData">
@@ -522,7 +527,7 @@ const chartOptions = {
           <div v-else-if="chartData">
             <Line :data="chartData" :options="chartOptions" />
           </div>
-          <div v-else class="text-sm text-muted-foreground text-center py-12">
+          <div v-else class="text-[13px] text-text-secondary text-center py-12">
             Update holdings to start building value history
           </div>
         </CardContent>
@@ -531,7 +536,7 @@ const chartOptions = {
       <!-- Movement history -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold heading-font">Buy / Sell History</h2>
+          <h2 class="text-[15px] font-semibold">Buy / Sell History</h2>
           <Button size="sm" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
             Add Movement
@@ -544,27 +549,27 @@ const chartOptions = {
         </div>
 
         <div v-else-if="buySellMovements.length === 0" class="text-center py-8">
-          <p class="text-muted-foreground text-sm">No buy/sell movements recorded yet.</p>
+          <p class="text-text-secondary text-[13px]">No buy/sell movements recorded yet.</p>
         </div>
 
-        <div v-else class="space-y-0 border border-border rounded-md divide-y divide-border">
+        <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
           <div v-for="m in buySellMovements" :key="m.id" class="px-4 py-3 group">
             <div class="flex items-start justify-between">
               <div>
                 <div class="flex items-center gap-2">
-                  <Badge :class="MOVEMENT_BADGE_CLASSES[m.type] ?? 'bg-muted text-muted-foreground'">{{ m.type }}</Badge>
-                  <span class="text-sm text-muted-foreground">{{ m.holdingName ?? 'General' }}</span>
+                  <Badge :class="MOVEMENT_BADGE_CLASSES[m.type] ?? 'bg-muted text-text-secondary'">{{ m.type }}</Badge>
+                  <span class="text-[13px] text-text-secondary">{{ m.holdingName ?? 'General' }}</span>
                 </div>
-                <div class="text-sm font-medium mt-1 tabular-nums">
+                <div class="text-[13px] font-medium mt-1 tabular-nums">
                   {{ m.quantity > 0 ? '+' : '' }}{{ m.quantity.toLocaleString() }} {{ m.currency }}
-                  <span v-if="m.pricePerUnit" class="text-muted-foreground">
+                  <span v-if="m.pricePerUnit" class="text-text-secondary">
                     @ {{ m.pricePerUnit.toLocaleString() }}/unit
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-xs text-muted-foreground mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">{{ formatMovementDate(m.date) }}</span>
+                <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -588,23 +593,23 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Name</label>
+            <label class="text-[13px] font-medium">Name</label>
             <Input v-model="holdingForm.name" placeholder="e.g. Bitcoin, Ethereum" />
           </div>
           <div>
-            <label class="text-sm font-medium">Currency / Ticker</label>
+            <label class="text-[13px] font-medium">Currency / Ticker</label>
             <Input v-model="holdingForm.currency" placeholder="BTC" />
           </div>
           <div>
-            <label class="text-sm font-medium">Quantity</label>
+            <label class="text-[13px] font-medium">Quantity</label>
             <Input v-model.number="holdingForm.quantity" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Cost Basis (ILS)</label>
+            <label class="text-[13px] font-medium">Cost Basis (ILS)</label>
             <Input v-model.number="holdingForm.costBasis" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Last Price (ILS)</label>
+            <label class="text-[13px] font-medium">Last Price (ILS)</label>
             <Input :model-value="holdingForm.lastPrice ?? ''" @update:model-value="(v: string | number) => holdingForm.lastPrice = v === '' ? null : Number(v)" type="number" />
           </div>
         </div>
@@ -652,11 +657,11 @@ const chartOptions = {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Date</label>
+            <label class="text-[13px] font-medium">Date</label>
             <Input v-model="movementForm.date" type="date" />
           </div>
           <div>
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="movementForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -665,7 +670,7 @@ const chartOptions = {
             </Select>
           </div>
           <div>
-            <label class="text-sm font-medium">Coin</label>
+            <label class="text-[13px] font-medium">Coin</label>
             <Select v-model="movementForm.holdingId">
               <SelectTrigger><SelectValue placeholder="Select coin" /></SelectTrigger>
               <SelectContent>
@@ -675,18 +680,18 @@ const chartOptions = {
             </Select>
           </div>
           <div>
-            <label class="text-sm font-medium">Quantity</label>
+            <label class="text-[13px] font-medium">Quantity</label>
             <Input v-model.number="movementForm.quantity" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Price per Unit (ILS)</label>
+            <label class="text-[13px] font-medium">Price per Unit (ILS)</label>
             <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="movementForm.notes" maxlength="500" />
           </div>
-          <p v-if="movementError" class="text-sm text-destructive">{{ movementError }}</p>
+          <p v-if="movementError" class="text-[13px] text-destructive">{{ movementError }}</p>
         </div>
         <DialogFooter>
           <DialogClose as-child>

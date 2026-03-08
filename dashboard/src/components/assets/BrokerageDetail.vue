@@ -11,6 +11,7 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
+import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
@@ -43,6 +44,8 @@ import {
 } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
+
+const { tooltip: themeTooltip, axisTicks, grid: themeGrid } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
@@ -140,7 +143,7 @@ const MOVEMENT_BADGE_CLASSES: Record<string, string> = {
 const BROKERAGE_MOVEMENT_TYPES = ['deposit', 'withdrawal', 'buy', 'sell', 'dividend'];
 
 function movementBadgeClass(type: string) {
-  return MOVEMENT_BADGE_CLASSES[type] ?? 'bg-muted text-muted-foreground';
+  return MOVEMENT_BADGE_CLASSES[type] ?? 'bg-muted text-text-secondary';
 }
 
 function formatMovementDate(iso: string) {
@@ -158,10 +161,13 @@ const chartData = computed(() => {
     datasets: [{
       label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
       data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
-      borderColor: ASSET_TYPE_COLORS['brokerage'] ?? typeColor.value,
-      backgroundColor: (ASSET_TYPE_COLORS['brokerage'] ?? typeColor.value) + '20',
+      borderColor: '#007AFF',
+      backgroundColor: 'rgba(0, 122, 255, 0.15)',
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
+      borderWidth: 2.5,
+      borderCapStyle: 'round' as const,
+      borderJoinStyle: 'round' as const,
       pointRadius: 3,
       pointHoverRadius: 5,
       spanGaps: true,
@@ -174,11 +180,7 @@ const chartOptions = computed(() => ({
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#18181c',
-      borderColor: 'rgba(139,92,246,0.2)',
-      borderWidth: 1,
-      titleColor: '#f0f0f3',
-      bodyColor: '#f0f0f3',
+      ...themeTooltip.value,
       callbacks: {
         label(ctx: { parsed: { y: number | null } }) {
           const currency = showingIls.value ? 'ILS' : assetCurrency.value;
@@ -189,12 +191,12 @@ const chartOptions = computed(() => ({
   },
   scales: {
     x: {
-      ticks: { color: '#71717a' },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      ticks: axisTicks.value,
+      grid: themeGrid.value,
     },
     y: {
       ticks: {
-        color: '#71717a',
+        ...axisTicks.value,
         callback(value: number | string) {
           const v = Number(value);
           const cur = showingIls.value ? 'ILS' : assetCurrency.value;
@@ -204,7 +206,7 @@ const chartOptions = computed(() => ({
           return `${sym}${v}`;
         },
       },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      grid: themeGrid.value,
     },
   },
 }));
@@ -447,7 +449,7 @@ async function confirmDeleteMovement() {
 
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
-      <p class="text-destructive text-sm">{{ assetApi.error.value }}</p>
+      <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
       <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
@@ -455,10 +457,10 @@ async function confirmDeleteMovement() {
       <!-- Asset header -->
       <div class="flex items-start justify-between">
         <div>
-          <h1 class="text-2xl font-semibold tracking-tight heading-font">{{ asset.name }}</h1>
+          <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
           <div class="flex items-center gap-2 mt-1">
             <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
-            <span v-if="asset.institution" class="text-sm text-muted-foreground">{{ asset.institution }}</span>
+            <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
             <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
           </div>
         </div>
@@ -471,40 +473,40 @@ async function confirmDeleteMovement() {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Current Value</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-2xl font-bold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Invested (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Invested (ILS)</CardTitle>
           </CardHeader>
           <CardContent>
-            <div v-if="totalInvestedIls != null" class="text-2xl font-bold tabular-nums">{{ formatAmount(totalInvestedIls, 'ILS') }}</div>
-            <div v-else class="text-sm text-muted-foreground">No data</div>
+            <div v-if="totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">{{ formatAmount(totalInvestedIls, 'ILS') }}</div>
+            <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-sm font-medium text-muted-foreground">Total Return (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return (ILS)</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="totalReturnIls != null">
-              <div :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-2xl font-bold tabular-nums">
+              <div :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
                 {{ totalReturnIls >= 0 ? '+' : '' }}{{ formatAmount(totalReturnIls, 'ILS') }}
               </div>
               <div v-if="returnPct != null" class="flex items-center gap-1 mt-0.5">
                 <component :is="totalReturnIls >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-sm">
+                <span :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
                   {{ returnPct >= 0 ? '+' : '' }}{{ returnPct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-sm text-muted-foreground">No data</div>
+            <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
       </div>
@@ -513,7 +515,7 @@ async function confirmDeleteMovement() {
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between">
-            <CardTitle class="text-base">Holdings</CardTitle>
+            <CardTitle class="text-[15px]">Holdings</CardTitle>
             <div class="flex items-center gap-2">
               <template v-if="quickUpdateMode">
                 <Button variant="outline" size="sm" @click="cancelQuickUpdate">Cancel</Button>
@@ -545,7 +547,7 @@ async function confirmDeleteMovement() {
 
           <!-- Empty -->
           <div v-else-if="holdings.length === 0" class="text-center py-8">
-            <p class="text-muted-foreground text-sm">No holdings yet</p>
+            <p class="text-text-secondary text-[13px]">No holdings yet</p>
             <Button size="sm" class="mt-2" @click="openAddHolding">
               <Plus class="h-4 w-4 mr-1" />
               Add First Holding
@@ -569,17 +571,17 @@ async function confirmDeleteMovement() {
               </TableHeader>
               <TableBody>
                 <TableRow v-for="h in holdings" :key="h.id" class="group">
-                  <TableCell class="font-medium text-sm">
+                  <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
-                    <div v-if="h.stale" class="flex items-center gap-1 text-muted-foreground mt-0.5">
+                    <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-amber-500" />
-                      <span class="text-xs">No price data</span>
+                      <span class="text-[11px]">No price data</span>
                     </div>
                   </TableCell>
                   <TableCell class="hidden md:table-cell">
-                    <Badge variant="outline" class="text-xs">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                    <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm">
+                  <TableCell class="text-right tabular-nums text-[13px]">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -590,7 +592,7 @@ async function confirmDeleteMovement() {
                     </template>
                     <template v-else>{{ h.quantity.toLocaleString() }}</template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground">
+                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -605,24 +607,24 @@ async function confirmDeleteMovement() {
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-sm font-medium">
+                  <TableCell class="text-right tabular-nums text-[13px] font-medium">
                     {{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}
                   </TableCell>
                   <!-- Cost basis — always native currency -->
-                  <TableCell class="text-right tabular-nums text-sm text-muted-foreground hidden lg:table-cell">
+                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell">
                     {{ formatAmount(h.costBasis, h.currency) }}
                   </TableCell>
                   <!-- P&L — always native currency, never ILS -->
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
-                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-sm tabular-nums font-medium">
+                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px] tabular-nums font-medium">
                         {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatAmount(h.gainLoss, h.currency) }}
                       </span>
-                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs block">
+                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px] block">
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                     </div>
-                    <span v-else class="text-muted-foreground text-sm">-</span>
+                    <span v-else class="text-text-secondary text-[13px]">-</span>
                   </TableCell>
                   <TableCell>
                     <div v-if="!quickUpdateMode" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
@@ -641,18 +643,18 @@ async function confirmDeleteMovement() {
 
           <!-- Mobile cards -->
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
-            <div v-for="h in holdings" :key="h.id" class="p-3 border border-border rounded-md">
+            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-md">
               <div class="flex items-center justify-between">
-                <span class="font-medium text-sm">{{ h.name }}</span>
-                <Badge variant="outline" class="text-xs">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                <span class="font-medium text-[13px]">{{ h.name }}</span>
+                <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
               </div>
-              <div v-if="h.quantity" class="text-xs text-muted-foreground mt-1">
+              <div v-if="h.quantity" class="text-[11px] text-text-secondary mt-1">
                 {{ h.quantity.toLocaleString() }} {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : 'units' }}
                 <span v-if="h.lastPrice"> @ {{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-sm font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</span>
-                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-xs">
+                <span class="text-[13px] font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</span>
+                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px]">
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
               </div>
@@ -664,7 +666,7 @@ async function confirmDeleteMovement() {
       <!-- Value over time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartData">
@@ -673,7 +675,7 @@ async function confirmDeleteMovement() {
           <div v-else-if="chartData">
             <Line :data="chartData" :options="chartOptions" />
           </div>
-          <div v-else class="text-sm text-muted-foreground text-center py-12">
+          <div v-else class="text-[13px] text-text-secondary text-center py-12">
             Update holdings to start building value history
           </div>
         </CardContent>
@@ -682,7 +684,7 @@ async function confirmDeleteMovement() {
       <!-- Movement history -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-lg font-semibold heading-font">Movement History</h2>
+          <h2 class="text-[15px] font-semibold">Movement History</h2>
           <Button size="sm" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
             Add Movement
@@ -696,34 +698,34 @@ async function confirmDeleteMovement() {
         </div>
 
         <div v-else-if="movementsList.length === 0" class="text-center py-8">
-          <p class="text-muted-foreground text-sm">No movements recorded yet. Add a movement to track your investment history.</p>
+          <p class="text-text-secondary text-[13px]">No movements recorded yet. Add a movement to track your investment history.</p>
           <Button size="sm" class="mt-2" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
             Add Movement
           </Button>
         </div>
 
-        <div v-else class="space-y-0 border border-border rounded-md divide-y divide-border">
+        <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
           <div v-for="m in movementsList" :key="m.id" class="px-4 py-3 group">
             <div class="flex items-start justify-between">
               <div>
                 <div class="flex items-center gap-2">
                   <Badge :class="movementBadgeClass(m.type)">{{ m.type }}</Badge>
-                  <span class="text-sm text-muted-foreground">{{ m.holdingName ?? 'General' }}</span>
+                  <span class="text-[13px] text-text-secondary">{{ m.holdingName ?? 'General' }}</span>
                 </div>
-                <div class="text-sm font-medium mt-1 tabular-nums">
+                <div class="text-[13px] font-medium mt-1 tabular-nums">
                   {{ m.quantity > 0 ? '+' : '' }}{{ m.quantity.toLocaleString() }} {{ m.currency }}
-                  <span v-if="m.pricePerUnit" class="text-muted-foreground">
+                  <span v-if="m.pricePerUnit" class="text-text-secondary">
                     @ {{ m.pricePerUnit.toLocaleString() }}/unit
                   </span>
                 </div>
-                <div v-if="m.sourceAmount" class="text-xs text-muted-foreground mt-0.5">
+                <div v-if="m.sourceAmount" class="text-[11px] text-text-secondary mt-0.5">
                   Source: {{ formatCurrency(m.sourceAmount) }} {{ m.sourceCurrency }}
                 </div>
-                <p v-if="m.notes" class="text-xs text-muted-foreground mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-xs text-muted-foreground">{{ formatMovementDate(m.date) }}</span>
+                <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -756,11 +758,11 @@ async function confirmDeleteMovement() {
         </DialogHeader>
         <div class="space-y-4">
           <div v-if="!editingHolding">
-            <label class="text-sm font-medium">Name</label>
+            <label class="text-[13px] font-medium">Name</label>
             <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit" />
           </div>
           <div v-if="!editingHolding">
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="holdingForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -769,23 +771,23 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div v-if="!editingHolding">
-            <label class="text-sm font-medium">Currency</label>
+            <label class="text-[13px] font-medium">Currency</label>
             <Input v-model="holdingForm.currency" placeholder="USD" />
           </div>
           <div>
-            <label class="text-sm font-medium">Quantity</label>
+            <label class="text-[13px] font-medium">Quantity</label>
             <Input v-model.number="holdingForm.quantity" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Cost Basis</label>
+            <label class="text-[13px] font-medium">Cost Basis</label>
             <Input v-model.number="holdingForm.costBasis" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Last Price</label>
+            <label class="text-[13px] font-medium">Last Price</label>
             <Input :model-value="holdingForm.lastPrice ?? ''" @update:model-value="(v: string | number) => holdingForm.lastPrice = v === '' ? null : Number(v)" type="number" />
           </div>
           <div>
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="holdingForm.notes" />
           </div>
         </div>
@@ -833,11 +835,11 @@ async function confirmDeleteMovement() {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-sm font-medium">Date</label>
+            <label class="text-[13px] font-medium">Date</label>
             <Input v-model="movementForm.date" type="date" />
           </div>
           <div>
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="movementForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -846,7 +848,7 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div>
-            <label class="text-sm font-medium">Holding (optional)</label>
+            <label class="text-[13px] font-medium">Holding (optional)</label>
             <Select v-model="movementForm.holdingId">
               <SelectTrigger><SelectValue placeholder="General (no holding)" /></SelectTrigger>
               <SelectContent>
@@ -856,40 +858,40 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div>
-            <label class="text-sm font-medium">{{ quantityLabel }}</label>
+            <label class="text-[13px] font-medium">{{ quantityLabel }}</label>
             <Input v-model.number="movementForm.quantity" type="number" />
-            <p v-if="sellMaxWarning" class="text-xs text-amber-500 mt-1">{{ sellMaxWarning }}</p>
+            <p v-if="sellMaxWarning" class="text-[11px] text-amber-500 mt-1">{{ sellMaxWarning }}</p>
           </div>
           <div>
-            <label class="text-sm font-medium">Currency</label>
+            <label class="text-[13px] font-medium">Currency</label>
             <Input v-model="movementForm.currency" />
           </div>
           <div v-if="showPricePerUnit">
-            <label class="text-sm font-medium">Price per Unit</label>
+            <label class="text-[13px] font-medium">Price per Unit</label>
             <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
           </div>
           <template v-if="isNonIls">
             <div>
-              <label class="text-sm font-medium">ILS Cost Basis (optional)</label>
+              <label class="text-[13px] font-medium">ILS Cost Basis (optional)</label>
               <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" placeholder="What you paid in ILS" />
-              <p class="text-xs text-muted-foreground mt-1">Leave empty if unknown or paid in {{ assetCurrency }}</p>
+              <p class="text-[11px] text-text-secondary mt-1">Leave empty if unknown or paid in {{ assetCurrency }}</p>
             </div>
           </template>
           <template v-else>
             <div>
-              <label class="text-sm font-medium">Source Amount (what you paid)</label>
+              <label class="text-[13px] font-medium">Source Amount (what you paid)</label>
               <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
             </div>
             <div>
-              <label class="text-sm font-medium">Source Currency</label>
+              <label class="text-[13px] font-medium">Source Currency</label>
               <Input v-model="movementForm.sourceCurrency" />
             </div>
           </template>
           <div>
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="movementForm.notes" maxlength="500" />
           </div>
-          <p v-if="movementError" class="text-sm text-destructive">{{ movementError }}</p>
+          <p v-if="movementError" class="text-[13px] text-destructive">{{ movementError }}</p>
         </div>
         <DialogFooter>
           <DialogClose as-child>
@@ -912,7 +914,7 @@ async function confirmDeleteMovement() {
             This will remove the {{ movementToDelete?.type }} movement from {{ formatMovementDate(movementToDelete?.date ?? '') }}.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <p v-if="deleteMovementError" class="text-sm text-destructive px-6">{{ deleteMovementError }}</p>
+        <p v-if="deleteMovementError" class="text-[13px] text-destructive px-6">{{ deleteMovementError }}</p>
         <AlertDialogFooter>
           <AlertDialogCancel @click="movementToDelete = null; deleteMovementError = null">Cancel</AlertDialogCancel>
           <Button

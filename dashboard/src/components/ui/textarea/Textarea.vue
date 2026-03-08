@@ -20,5 +20,5 @@ const modelValue = useVModel(props, "modelValue", emits, {
 </script>
 
 <template>
-  <textarea v-model="modelValue" :class="cn('flex min-h-20 w-full rounded-lg border border-border bg-surface-1 px-3 py-2 text-sm text-foreground ring-offset-background placeholder:text-muted-foreground focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/40 focus-visible:border-border-accent disabled:cursor-not-allowed disabled:opacity-50 transition-all duration-150', props.class)" />
+  <textarea v-model="modelValue" :class="cn('flex min-h-20 w-full rounded-md border border-separator bg-bg-primary px-2 py-1 text-[13px] text-text-primary placeholder:text-text-secondary focus-visible:outline-none focus-visible:ring-[3px] focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 transition-shadow duration-100', props.class)" />
 </template>

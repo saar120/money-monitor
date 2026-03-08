@@ -173,7 +173,7 @@ onUnmounted(() => {
 
 <template>
   <div class="space-y-4 animate-fade-in-up">
-    <h1 class="text-2xl font-semibold tracking-tight heading-font">Transactions</h1>
+    <h1 class="text-[22px] font-semibold text-text-primary">Transactions</h1>
 
     <!-- Filters -->
     <div>
@@ -244,7 +244,7 @@ onUnmounted(() => {
     <!-- Table -->
     <Card>
       <CardHeader class="pb-2">
-        <CardTitle class="text-base">
+        <CardTitle class="text-[15px]">
           {{ total }} transaction{{ total !== 1 ? 's' : '' }}
         </CardTitle>
       </CardHeader>
@@ -293,7 +293,7 @@ onUnmounted(() => {
                 </TableRow>
               </template>
               <TableRow v-else-if="transactions.length === 0">
-                <TableCell colspan="6" class="text-center text-muted-foreground py-12">
+                <TableCell colspan="6" class="text-center text-text-secondary py-12">
                   No transactions found
                 </TableCell>
               </TableRow>
@@ -305,7 +305,7 @@ onUnmounted(() => {
                 class="cursor-context-menu"
                 @contextmenu="openContextMenu($event, txn)"
               >
-                <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
+                <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
                 <TableCell class="max-w-xs truncate">
@@ -329,22 +329,22 @@ onUnmounted(() => {
                     :default-open="true"
                     @update:model-value="(val) => { editingCategoryFor = null; updateCategory(txn, val === '__none__' || val == null ? null : String(val)); }"
                   >
-                    <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
+                    <SelectTrigger class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1" :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''">
                       <SelectValue>
                         <Badge
                           v-if="txn.category"
                           variant="secondary"
-                          class="text-xs"
+                          class="text-[11px]"
                           :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                         >
                           {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                         </Badge>
-                        <span v-else class="text-muted-foreground">—</span>
+                        <span v-else class="text-text-secondary">—</span>
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent @close-auto-focus="editingCategoryFor = null">
                       <SelectItem value="__none__">
-                        <span class="text-muted-foreground">None</span>
+                        <span class="text-text-secondary">None</span>
                       </SelectItem>
                       <SelectItem
                         v-for="cat in availableCategories"
@@ -361,31 +361,31 @@ onUnmounted(() => {
                   <!-- Lightweight clickable display for all other rows -->
                   <button
                     v-else
-                    class="h-7 text-xs w-36 flex items-center px-1 rounded-md hover:bg-accent transition-colors"
+                    class="h-7 text-[11px] w-36 flex items-center px-1 rounded-md hover:bg-bg-tertiary transition-colors"
                     :class="updatingCategoryFor === txn.id ? 'opacity-50 pointer-events-none' : ''"
                     @click="editingCategoryFor = txn.id"
                   >
                     <Badge
                       v-if="txn.category"
                       variant="secondary"
-                      class="text-xs"
+                      class="text-[11px]"
                       :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                     >
                       {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                     </Badge>
-                    <span v-else class="text-muted-foreground">—</span>
+                    <span v-else class="text-text-secondary">—</span>
                   </button>
                 </TableCell>
                 <TableCell>
                   <Badge
                     :variant="txn.status === 'completed' ? 'default' : 'secondary'"
-                    class="text-xs"
+                    class="text-[11px]"
                     :class="txn.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : ''"
                   >
                     {{ txn.status }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-sm text-muted-foreground">{{ accountMap.get(txn.accountId) ?? txn.accountId }}</TableCell>
+                <TableCell class="text-[13px] text-text-secondary">{{ accountMap.get(txn.accountId) ?? txn.accountId }}</TableCell>
               </TableRow>
             </TableBody>
           </Table>
@@ -395,7 +395,7 @@ onUnmounted(() => {
 
     <!-- Pagination -->
     <div class="flex items-center justify-between">
-      <p class="text-sm text-muted-foreground">
+      <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
         {{ (filters.offset ?? 0) + 1 }}–{{ Math.min((filters.offset ?? 0) + (filters.limit ?? 50), total) }}
@@ -425,12 +425,12 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 min-w-[140px] rounded-md border bg-surface-2 text-foreground border-border backdrop-blur-md shadow-md py-1"
+        class="fixed z-50 min-w-[140px] border bg-bg-primary text-text-primary border-separator shadow-[0_4px_16px_rgba(0,0,0,0.12)] rounded-xl py-1"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
         @click.stop
       >
         <button
-          class="w-full px-3 py-1.5 text-sm text-left hover:bg-accent hover:text-accent-foreground transition-colors"
+          class="w-full px-3 py-1.5 text-[13px] text-left hover:bg-bg-tertiary hover:text-text-primary transition-colors"
           @click="toggleIgnore"
         >
           {{ contextMenu.txn.ignored ? 'Unignore transaction' : 'Ignore transaction' }}

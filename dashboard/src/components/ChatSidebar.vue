@@ -60,7 +60,7 @@ defineExpose({ loadSessions });
 
 <template>
   <div class="flex flex-col h-full">
-    <div class="p-3 border-b border-border">
+    <div class="p-3 border-b border-separator">
       <Button
         variant="outline"
         size="sm"
@@ -77,13 +77,13 @@ defineExpose({ loadSessions });
       <button
         v-for="session in sessions"
         :key="session.id"
-        class="group w-full text-left px-3 py-2.5 text-sm transition-colors hover:bg-surface-3 flex items-start gap-2"
-        :class="session.id === activeSessionId ? 'bg-primary/10 text-primary' : 'text-muted-foreground'"
+        class="group w-full text-left px-3 py-2.5 text-[13px] transition-colors hover:bg-bg-tertiary flex items-start gap-2"
+        :class="session.id === activeSessionId ? 'bg-primary/10 text-primary' : 'text-text-secondary'"
         @click="$emit('select', session)"
       >
         <MessageSquare class="h-4 w-4 mt-0.5 flex-shrink-0 opacity-50" />
         <div class="flex-1 min-w-0">
-          <div class="truncate text-sm font-medium">{{ session.title }}</div>
+          <div class="truncate text-[13px] font-medium">{{ session.title }}</div>
           <div class="text-[11px] opacity-60 mt-0.5">{{ formatDate(session.updatedAt) }}</div>
         </div>
         <div
@@ -97,7 +97,7 @@ defineExpose({ loadSessions });
         </div>
       </button>
 
-      <div v-if="sessions.length === 0" class="px-3 py-6 text-center text-muted-foreground text-xs">
+      <div v-if="sessions.length === 0" class="px-3 py-6 text-center text-text-secondary text-[11px]">
         No conversations yet
       </div>
     </div>

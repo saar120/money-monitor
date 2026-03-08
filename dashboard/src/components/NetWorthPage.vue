@@ -20,6 +20,7 @@ import {
   LIQUIDITY_LABELS, LIQUIDITY_STYLES, LIABILITY_TYPE_LABELS,
 } from '@/lib/net-worth-constants';
 import { getAssetCategory } from '@/lib/asset-categories';
+import { useChartTheme } from '@/composables/useChartTheme';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
@@ -44,6 +45,8 @@ import {
 } from 'lucide-vue-next';
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, LineElement, PointElement, Filler);
+
+const { textPrimary, tooltip: themeTooltip, legendLabels, axisTicks, grid: themeGrid, separator: themeSeparator } = useChartTheme();
 
 const router = useRouter();
 
@@ -134,6 +137,7 @@ const allocationData = computed(() => {
     datasets: [{
       data: slices.map(s => s.value),
       backgroundColor: slices.map(s => s.color),
+      borderRadius: 6,
     }],
   };
 });
@@ -149,31 +153,22 @@ const doughnutCenterTextPlugin = {
     ctx.save();
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    ctx.fillStyle = '#f0f0f3';
-    ctx.font = 'bold 16px Geist';
+    ctx.fillStyle = textPrimary.value;
+    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
     ctx.fillText(formatCompact(total), cx, cy);
     ctx.restore();
   },
 };
 
-const doughnutOptions = {
-  cutout: '65%',
+const doughnutOptions = computed(() => ({
+  cutout: '70%',
   plugins: {
     legend: {
       position: 'bottom' as const,
-      labels: {
-        color: '#71717a',
-        font: { family: 'Geist' },
-        usePointStyle: true,
-        pointStyle: 'circle',
-      },
+      labels: legendLabels.value,
     },
     tooltip: {
-      backgroundColor: '#18181c',
-      borderColor: 'rgba(139,92,246,0.2)',
-      borderWidth: 1,
-      titleColor: '#f0f0f3',
-      bodyColor: '#f0f0f3',
+      ...themeTooltip.value,
       callbacks: {
         label(ctx: { label?: string; parsed: number; dataset: { data: number[] } }) {
           const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0);
@@ -183,7 +178,7 @@ const doughnutOptions = {
       },
     },
   },
-};
+}));
 
 // ─── Trend line chart ───
 const showLiquidOnly = ref(false);
@@ -202,10 +197,13 @@ const trendData = computed(() => {
       datasets: [{
         label: 'Liquid Net Worth',
         data: series.map(p => p.liquidTotal),
-        borderColor: '#22d3ee',
-        backgroundColor: 'rgba(34, 211, 238, 0.15)',
+        borderColor: '#5AC8FA',
+        backgroundColor: 'rgba(90, 200, 250, 0.15)',
         fill: true,
-        tension: 0.3,
+        tension: 0.4,
+        borderWidth: 2.5,
+        borderCapStyle: 'round' as const,
+        borderJoinStyle: 'round' as const,
         pointRadius: 3,
         pointHoverRadius: 5,
         spanGaps: true,
@@ -218,10 +216,13 @@ const trendData = computed(() => {
     datasets: [{
       label: 'Total Net Worth',
       data: series.map(p => p.total),
-      borderColor: '#8b5cf6',
-      backgroundColor: 'rgba(139, 92, 246, 0.15)',
+      borderColor: '#007AFF',
+      backgroundColor: 'rgba(0, 122, 255, 0.15)',
       fill: true,
-      tension: 0.3,
+      tension: 0.4,
+      borderWidth: 2.5,
+      borderCapStyle: 'round' as const,
+      borderJoinStyle: 'round' as const,
       pointRadius: 3,
       pointHoverRadius: 5,
       spanGaps: true,
@@ -229,16 +230,12 @@ const trendData = computed(() => {
   };
 });
 
-const lineOptions = {
+const lineOptions = computed(() => ({
   responsive: true,
   plugins: {
     legend: { display: false },
     tooltip: {
-      backgroundColor: '#18181c',
-      borderColor: 'rgba(139,92,246,0.2)',
-      borderWidth: 1,
-      titleColor: '#f0f0f3',
-      bodyColor: '#f0f0f3',
+      ...themeTooltip.value,
       callbacks: {
         label(ctx: { parsed: { y: number | null } }) {
           return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
@@ -248,12 +245,12 @@ const lineOptions = {
   },
   scales: {
     x: {
-      ticks: { color: '#71717a' },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      ticks: axisTicks.value,
+      grid: themeGrid.value,
     },
     y: {
       ticks: {
-        color: '#71717a',
+        ...axisTicks.value,
         callback(value: number | string) {
           const v = Number(value);
           if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
@@ -261,10 +258,10 @@ const lineOptions = {
           return `₪${v}`;
         },
       },
-      grid: { color: 'rgba(255,255,255,0.03)' },
+      grid: themeGrid.value,
     },
   },
-};
+}));
 
 // ─── Asset expand/collapse ───
 const expandedAssets = ref(new Set<number>());
@@ -601,10 +598,10 @@ const fullLiabilityMap = computed(() => {
 
 <template>
   <div class="space-y-6 animate-fade-in-up">
-    <h1 class="text-2xl font-semibold tracking-tight heading-font">Net Worth</h1>
+    <h1 class="text-[22px] font-semibold text-text-primary">Net Worth</h1>
 
     <!-- Hero Card -->
-    <Card class="border-border-accent glow-primary animate-fade-in-up stagger-1">
+    <Card class="border-separator animate-fade-in-up stagger-1">
       <CardContent class="pt-6">
         <div v-if="netWorth.loading.value && !nw" class="grid grid-cols-[1fr_auto] gap-6">
           <Skeleton class="h-12 w-48" />
@@ -615,24 +612,24 @@ const fullLiabilityMap = computed(() => {
         </div>
         <div v-else-if="nw" class="grid grid-cols-[1fr_auto] gap-6 items-start max-md:grid-cols-1">
           <div>
-            <p class="text-xs font-medium text-muted-foreground uppercase tracking-widest mb-1">Total Net Worth</p>
-            <p class="text-4xl font-bold tabular-nums heading-font">
+            <p class="text-[11px] font-medium text-text-secondary uppercase tracking-widest mb-1">Total Net Worth</p>
+            <p class="text-4xl font-semibold tabular-nums text-text-primary">
               {{ nw.total > 0 || nw.assets.length > 0 || nw.banks.length > 0
                 ? formatCurrency(nw.total)
                 : '₪0.00' }}
             </p>
-            <p v-if="nw.total === 0 && nw.assets.length === 0" class="text-sm text-muted-foreground mt-2">
+            <p v-if="nw.total === 0 && nw.assets.length === 0" class="text-[13px] text-text-secondary mt-2">
               Add your first asset to start tracking net worth
               <Button size="sm" class="ml-2" @click="openAddAsset">Add Asset</Button>
             </p>
           </div>
           <div class="space-y-2 text-right max-md:text-left">
             <div>
-              <p class="text-xs text-muted-foreground">Liquid Net Worth</p>
-              <p class="text-lg font-semibold tabular-nums">{{ formatCurrency(nw.liquidTotal) }}</p>
+              <p class="text-[11px] text-text-secondary">Liquid Net Worth</p>
+              <p class="text-[15px] font-semibold tabular-nums">{{ formatCurrency(nw.liquidTotal) }}</p>
             </div>
             <div v-if="lastMonthDelta">
-              <p class="text-xs text-muted-foreground">vs Last Month</p>
+              <p class="text-[11px] text-text-secondary">vs Last Month</p>
               <Badge
                 :class="lastMonthDelta.diff >= 0
                   ? 'bg-success/10 text-success border-0'
@@ -652,29 +649,29 @@ const fullLiabilityMap = computed(() => {
     <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2">
       <Card>
         <CardHeader>
-          <CardTitle class="text-base">Allocation by Type</CardTitle>
+          <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
         </CardHeader>
         <CardContent>
           <Doughnut v-if="allocationData" :data="allocationData" :options="doughnutOptions" :plugins="[doughnutCenterTextPlugin]" />
           <Skeleton v-else-if="netWorth.loading.value" class="h-48 w-full rounded-md" />
-          <p v-else class="text-muted-foreground text-sm text-center py-12">No data yet</p>
+          <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
         </CardContent>
       </Card>
 
       <Card>
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-base">Net Worth Trend</CardTitle>
-          <div class="flex gap-1 text-xs">
+          <CardTitle class="text-[15px]">Net Worth Trend</CardTitle>
+          <div class="flex gap-1 text-[11px]">
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'ghost' : 'secondary'"
-              class="h-7 px-2 text-xs"
+              class="h-7 px-2 text-[11px]"
               @click="showLiquidOnly = false"
             >Total</Button>
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'secondary' : 'ghost'"
-              class="h-7 px-2 text-xs"
+              class="h-7 px-2 text-[11px]"
               @click="showLiquidOnly = true"
             >Liquid</Button>
           </div>
@@ -682,7 +679,7 @@ const fullLiabilityMap = computed(() => {
         <CardContent>
           <Line v-if="trendData" :data="trendData" :options="lineOptions" />
           <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-md" />
-          <p v-else class="text-sm text-muted-foreground text-center py-12">
+          <p v-else class="text-[13px] text-text-secondary text-center py-12">
             Start tracking your assets to see net worth history
           </p>
         </CardContent>
@@ -692,7 +689,7 @@ const fullLiabilityMap = computed(() => {
     <!-- Assets Section -->
     <div class="space-y-3 animate-fade-in-up stagger-3">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold heading-font">Assets</h2>
+        <h2 class="text-[15px] font-semibold">Assets</h2>
         <Button size="sm" @click="openAddAsset">
           <Plus class="h-4 w-4 mr-1" />
           Add Asset
@@ -703,11 +700,11 @@ const fullLiabilityMap = computed(() => {
         <div
           v-for="(asset, idx) in assets"
           :key="asset.id"
-          :class="['group', idx < assets.length - 1 ? 'border-b border-border' : '']"
+          :class="['group', idx < assets.length - 1 ? 'border-b border-separator' : '']"
         >
           <!-- Asset Row (collapsed) -->
           <div
-            class="flex items-center gap-3 px-4 py-3 hover:bg-surface-3/50 transition-colors duration-150 cursor-pointer"
+            class="flex items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
             @click="toggleExpand(asset.id)"
           >
             <div
@@ -716,10 +713,10 @@ const fullLiabilityMap = computed(() => {
             />
             <div class="flex-1 min-w-0">
               <p
-                class="text-sm font-medium hover:underline cursor-pointer"
+                class="text-[13px] font-medium hover:underline cursor-pointer"
                 @click.stop="router.push(`/net-worth/assets/${asset.id}`)"
               >{{ asset.name }}</p>
-              <p class="text-xs text-muted-foreground">
+              <p class="text-[11px] text-text-secondary">
                 {{ ASSET_TYPE_LABELS[asset.type] ?? asset.type }}
                 <template v-if="getFullAsset(asset.id)?.institution"> &middot; {{ getFullAsset(asset.id)!.institution }}</template>
                 <Badge
@@ -732,20 +729,20 @@ const fullLiabilityMap = computed(() => {
               </p>
             </div>
             <div class="text-right flex-shrink-0">
-              <p class="text-lg font-semibold tabular-nums">{{ assetNativeDisplay(asset) }}</p>
-              <p class="text-xs text-muted-foreground">{{ pctOfTotal(asset.totalValueIls) }} of total</p>
+              <p class="text-[15px] font-semibold tabular-nums">{{ assetNativeDisplay(asset) }}</p>
+              <p class="text-[11px] text-text-secondary">{{ pctOfTotal(asset.totalValueIls) }} of total</p>
             </div>
             <!-- Hover actions -->
             <div class="flex items-center gap-0.5 invisible group-hover:visible flex-shrink-0" @click.stop>
-              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-surface-2 transition-colors" @click="openEditAsset(getFullAsset(asset.id)!)">
+              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors" @click="openEditAsset(getFullAsset(asset.id)!)">
                 <Pencil class="h-3 w-3" />
               </button>
-              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-surface-2 transition-colors" @click="deletingAsset = { id: asset.id, name: asset.name }">
+              <button class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors" @click="deletingAsset = { id: asset.id, name: asset.name }">
                 <Trash2 class="h-3 w-3 text-destructive" />
               </button>
             </div>
             <ChevronDown
-              class="h-4 w-4 text-muted-foreground transition-transform duration-150 flex-shrink-0"
+              class="h-4 w-4 text-text-secondary transition-transform duration-150 flex-shrink-0"
               :class="{ 'rotate-180': expandedAssets.has(asset.id) }"
             />
           </div>
@@ -759,23 +756,23 @@ const fullLiabilityMap = computed(() => {
               <!-- Quick Update Mode -->
               <template v-if="editingAssetId === asset.id">
                 <div class="flex items-center justify-between mb-2">
-                  <p class="text-xs font-medium text-muted-foreground">Holdings (editing):</p>
+                  <p class="text-[11px] font-medium text-text-secondary">Holdings (editing):</p>
                   <div class="flex gap-1.5">
-                    <Button variant="outline" size="sm" class="h-7 text-xs" @click="cancelQuickUpdate">Cancel</Button>
-                    <Button size="sm" class="h-7 text-xs" @click="saveQuickUpdate(getFullAsset(asset.id)!)">Save Changes</Button>
+                    <Button variant="outline" size="sm" class="h-7 text-[11px]" @click="cancelQuickUpdate">Cancel</Button>
+                    <Button size="sm" class="h-7 text-[11px]" @click="saveQuickUpdate(getFullAsset(asset.id)!)">Save Changes</Button>
                   </div>
                 </div>
                 <div class="space-y-1.5">
                   <div
                     v-for="h in getFullAsset(asset.id)!.holdings"
                     :key="h.id"
-                    class="flex items-center gap-2 text-xs"
+                    class="flex items-center gap-2 text-[11px]"
                   >
                     <span class="w-24 truncate font-medium">{{ h.name }}</span>
                     <Input
                       type="number"
                       step="any"
-                      class="h-7 text-xs w-24"
+                      class="h-7 text-[11px] w-24"
                       :model-value="editedHoldings.get(h.id)?.quantity"
                       @update:model-value="(v: string | number) => {
                         const e = editedHoldings.get(h.id);
@@ -786,7 +783,7 @@ const fullLiabilityMap = computed(() => {
                       <Input
                         type="number"
                         step="any"
-                        class="h-7 text-xs w-24"
+                        class="h-7 text-[11px] w-24"
                         :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
                         @update:model-value="(v: string | number) => {
                           const e = editedHoldings.get(h.id);
@@ -807,11 +804,11 @@ const fullLiabilityMap = computed(() => {
 
               <!-- View Mode -->
               <template v-else>
-                <p class="text-xs font-medium text-muted-foreground mb-2">Holdings:</p>
-                <div v-if="getFullAsset(asset.id)!.holdings.length === 0" class="text-xs text-muted-foreground py-2">
+                <p class="text-[11px] font-medium text-text-secondary mb-2">Holdings:</p>
+                <div v-if="getFullAsset(asset.id)!.holdings.length === 0" class="text-[11px] text-text-secondary py-2">
                   <template v-if="getAssetCategory(asset.type) === 'crypto' || getAssetCategory(asset.type) === 'brokerage'">
                     No holdings yet.
-                    <Button variant="outline" size="sm" class="h-6 text-xs ml-2" @click.stop="openAddHolding(asset.id)">
+                    <Button variant="outline" size="sm" class="h-6 text-[11px] ml-2" @click.stop="openAddHolding(asset.id)">
                       <Plus class="h-3 w-3 mr-1" /> Add
                     </Button>
                   </template>
@@ -823,21 +820,21 @@ const fullLiabilityMap = computed(() => {
                   <div
                     v-for="h in getFullAsset(asset.id)!.holdings"
                     :key="h.id"
-                    class="flex items-center gap-2 text-xs group/holding"
+                    class="flex items-center gap-2 text-[11px] group/holding"
                   >
                     <span class="w-24 truncate font-medium">{{ h.name }}</span>
-                    <span class="w-20 text-muted-foreground tabular-nums">
+                    <span class="w-20 text-text-secondary tabular-nums">
                       <template v-if="h.quantity !== 1 || ['stock', 'etf', 'crypto'].includes(h.type)">
                         {{ h.quantity }} {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : h.currency }}
                       </template>
                       <template v-else>-</template>
                     </span>
-                    <span class="w-16 text-muted-foreground tabular-nums">
+                    <span class="w-16 text-text-secondary tabular-nums">
                       {{ h.lastPrice != null ? `${h.currency === 'ILS' ? '₪' : '$'}${h.lastPrice}` : '-' }}
                     </span>
-                    <span class="w-20 text-right tabular-nums font-medium" :class="h.stale ? 'text-muted-foreground' : ''">
+                    <span class="w-20 text-right tabular-nums font-medium" :class="h.stale ? 'text-text-secondary' : ''">
                       {{ formatCompact(h.currentValueIls) }}
-                      <AlertCircle v-if="h.stale" class="h-3 w-3 inline ml-0.5 text-muted-foreground" />
+                      <AlertCircle v-if="h.stale" class="h-3 w-3 inline ml-0.5 text-text-secondary" />
                     </span>
                     <span
                       v-if="h.gainLossPercent != null"
@@ -857,10 +854,10 @@ const fullLiabilityMap = computed(() => {
                     </div>
                   </div>
                   <div v-if="getAssetCategory(asset.type) === 'crypto' || getAssetCategory(asset.type) === 'brokerage'" class="flex gap-1.5 mt-1">
-                    <Button variant="outline" size="sm" class="h-6 text-xs" @click.stop="openAddHolding(asset.id)">
+                    <Button variant="outline" size="sm" class="h-6 text-[11px]" @click.stop="openAddHolding(asset.id)">
                       <Plus class="h-3 w-3 mr-1" /> Add Holding
                     </Button>
-                    <Button variant="outline" size="sm" class="h-6 text-xs" @click.stop="startQuickUpdate(getFullAsset(asset.id)!)">
+                    <Button variant="outline" size="sm" class="h-6 text-[11px]" @click.stop="startQuickUpdate(getFullAsset(asset.id)!)">
                       Update Values
                     </Button>
                   </div>
@@ -871,21 +868,21 @@ const fullLiabilityMap = computed(() => {
         </div>
       </Card>
 
-      <p v-else-if="!netWorth.loading.value" class="text-muted-foreground text-sm text-center py-6">
+      <p v-else-if="!netWorth.loading.value" class="text-text-secondary text-[13px] text-center py-6">
         No assets tracked yet.
       </p>
     </div>
 
     <!-- Bank Balances -->
     <div v-if="banks.length > 0" class="space-y-3 animate-fade-in-up stagger-4">
-      <h2 class="text-lg font-semibold heading-font">Bank Balances</h2>
+      <h2 class="text-[15px] font-semibold">Bank Balances</h2>
       <div class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]">
         <Card v-for="bank in banks" :key="bank.id">
           <CardHeader class="pb-1">
-            <CardTitle class="text-sm font-medium truncate">{{ bank.name }}</CardTitle>
+            <CardTitle class="text-[13px] font-medium truncate">{{ bank.name }}</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-xl font-bold tabular-nums">{{ formatCurrency(bank.balanceIls) }}</div>
+            <div class="text-[17px] font-semibold tabular-nums">{{ formatCurrency(bank.balanceIls) }}</div>
           </CardContent>
         </Card>
       </div>
@@ -894,7 +891,7 @@ const fullLiabilityMap = computed(() => {
     <!-- Liabilities Section -->
     <div class="space-y-3 animate-fade-in-up stagger-5">
       <div class="flex items-center justify-between">
-        <h2 class="text-lg font-semibold heading-font">Liabilities</h2>
+        <h2 class="text-[15px] font-semibold">Liabilities</h2>
         <Button size="sm" @click="openAddLiability">
           <Plus class="h-4 w-4 mr-1" />
           Add Liability
@@ -904,12 +901,12 @@ const fullLiabilityMap = computed(() => {
       <Card v-if="liabilities.length > 0">
         <template v-for="(liab, idx) in liabilities" :key="liab.id">
           <div
-            :class="['group px-4 py-3', idx < liabilities.length - 1 ? 'border-b border-border' : '']"
+            :class="['group px-4 py-3', idx < liabilities.length - 1 ? 'border-b border-separator' : '']"
           >
             <div class="flex items-start justify-between">
               <div class="flex-1 min-w-0">
-                <p class="text-sm font-medium">{{ liab.name }}</p>
-                <p class="text-xs text-muted-foreground">
+                <p class="text-[13px] font-medium">{{ liab.name }}</p>
+                <p class="text-[11px] text-text-secondary">
                   {{ liab.full ? (LIABILITY_TYPE_LABELS[liab.full.type] ?? liab.full.type) : '' }}
                   <template v-if="liab.full?.currency">
                     &middot; {{ liab.full.currency }}
@@ -925,27 +922,27 @@ const fullLiabilityMap = computed(() => {
                 </Button>
               </div>
             </div>
-            <p class="text-lg font-semibold tabular-nums mt-1">
+            <p class="text-[15px] font-semibold tabular-nums mt-1">
               {{ formatCurrency(liab.currentBalanceIls) }}
-              <span v-if="liab.full" class="text-xs text-muted-foreground font-normal">
+              <span v-if="liab.full" class="text-[11px] text-text-secondary font-normal">
                 remaining of {{ formatCurrency(liab.full.originalAmount) }}
               </span>
-              <span v-else class="text-xs text-muted-foreground font-normal">remaining</span>
+              <span v-else class="text-[11px] text-text-secondary font-normal">remaining</span>
             </p>
             <!-- Progress bar -->
             <div v-if="liab.full" class="mt-2">
               <div class="flex items-center gap-2">
-                <div class="flex-1 h-1.5 rounded-full bg-surface-3">
+                <div class="flex-1 h-1.5 rounded-full bg-bg-tertiary">
                   <div
                     class="h-1.5 rounded-full bg-success"
                     :style="{ width: paidOffPct(liab.full.originalAmount, liab.full.currentBalance) + '%' }"
                   />
                 </div>
-                <span class="text-xs text-muted-foreground">
+                <span class="text-[11px] text-text-secondary">
                   {{ paidOffPct(liab.full.originalAmount, liab.full.currentBalance).toFixed(0) }}% paid off
                 </span>
               </div>
-              <p v-if="liab.full.interestRate || liab.full.startDate" class="text-xs text-muted-foreground mt-1">
+              <p v-if="liab.full.interestRate || liab.full.startDate" class="text-[11px] text-text-secondary mt-1">
                 <template v-if="liab.full.interestRate">
                   {{ liab.full.interestRate }}% interest
                 </template>
@@ -958,7 +955,7 @@ const fullLiabilityMap = computed(() => {
           </div>
         </template>
       </Card>
-      <p v-else-if="!netWorth.loading.value" class="text-muted-foreground text-sm text-center py-6">
+      <p v-else-if="!netWorth.loading.value" class="text-text-secondary text-[13px] text-center py-6">
         No liabilities tracked.
       </p>
     </div>
@@ -971,11 +968,11 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Name</label>
+            <label class="text-[13px] font-medium">Name</label>
             <Input v-model="assetForm.name" placeholder="e.g. OneZero Portfolio" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="assetForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -988,7 +985,7 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div v-if="assetCategory === 'brokerage' || assetCategory === 'real_estate'" class="space-y-1.5">
-            <label class="text-sm font-medium">Currency</label>
+            <label class="text-[13px] font-medium">Currency</label>
             <Select v-model="assetForm.currency">
               <SelectTrigger>
                 <SelectValue />
@@ -1000,20 +997,20 @@ const fullLiabilityMap = computed(() => {
           </div>
           <template v-if="assetCategory === 'real_estate' && !editingAsset">
             <div class="space-y-1.5">
-              <label class="text-sm font-medium">Property Value ({{ assetForm.currency }})</label>
+              <label class="text-[13px] font-medium">Property Value ({{ assetForm.currency }})</label>
               <Input v-model.number="assetForm.initialValue" type="number" placeholder="e.g. 500000" />
             </div>
             <div class="space-y-1.5">
-              <label class="text-sm font-medium">Purchase Price (ILS)</label>
+              <label class="text-[13px] font-medium">Purchase Price (ILS)</label>
               <Input v-model.number="assetForm.initialCostBasis" type="number" placeholder="e.g. 2000000" />
             </div>
           </template>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Institution</label>
+            <label class="text-[13px] font-medium">Institution</label>
             <Input v-model="assetForm.institution" placeholder="e.g. oneZero, excelence" />
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-sm font-medium">Liquidity</label>
+            <label class="text-[13px] font-medium">Liquidity</label>
             <Select v-model="assetForm.liquidity">
               <SelectTrigger>
                 <SelectValue />
@@ -1026,7 +1023,7 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-sm font-medium">Linked Bank Account</label>
+            <label class="text-[13px] font-medium">Linked Bank Account</label>
             <Select v-model="assetForm.linkedAccountId">
               <SelectTrigger>
                 <SelectValue />
@@ -1044,7 +1041,7 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="assetForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>
@@ -1070,11 +1067,11 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Name</label>
+            <label class="text-[13px] font-medium">Name</label>
             <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit shkalit" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="holdingForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -1087,26 +1084,26 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Currency</label>
+            <label class="text-[13px] font-medium">Currency</label>
             <Input v-model="holdingForm.currency" placeholder="USD" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Quantity</label>
+            <label class="text-[13px] font-medium">Quantity</label>
             <Input type="number" step="any" v-model="holdingForm.quantity" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Cost Basis</label>
+            <label class="text-[13px] font-medium">Cost Basis</label>
             <Input type="number" step="any" v-model="holdingForm.costBasis" />
           </div>
           <div v-if="holdingShowPrice" class="space-y-1.5">
-            <label class="text-sm font-medium">Last Price (per unit)</label>
+            <label class="text-[13px] font-medium">Last Price (per unit)</label>
             <Input type="number" step="any" v-model="holdingForm.lastPrice" />
           </div>
-          <div v-if="holdingDoubleCount" class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-sm text-destructive">
+          <div v-if="holdingDoubleCount" class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[13px] text-destructive">
             ILS cash for this institution is already tracked via the linked bank account.
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="holdingForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>
@@ -1130,11 +1127,11 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Name</label>
+            <label class="text-[13px] font-medium">Name</label>
             <Input v-model="liabilityForm.name" placeholder="e.g. Poalim Loan" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Type</label>
+            <label class="text-[13px] font-medium">Type</label>
             <Select v-model="liabilityForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -1147,27 +1144,27 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Currency</label>
+            <label class="text-[13px] font-medium">Currency</label>
             <Input v-model="liabilityForm.currency" placeholder="ILS" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Original Amount</label>
+            <label class="text-[13px] font-medium">Original Amount</label>
             <Input type="number" step="any" v-model="liabilityForm.originalAmount" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Current Balance</label>
+            <label class="text-[13px] font-medium">Current Balance</label>
             <Input type="number" step="any" v-model="liabilityForm.currentBalance" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Interest Rate (%)</label>
+            <label class="text-[13px] font-medium">Interest Rate (%)</label>
             <Input type="number" step="0.01" v-model="liabilityForm.interestRate" placeholder="Annual rate" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Start Date</label>
+            <label class="text-[13px] font-medium">Start Date</label>
             <Input type="date" v-model="liabilityForm.startDate" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-sm font-medium">Notes</label>
+            <label class="text-[13px] font-medium">Notes</label>
             <Textarea v-model="liabilityForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>

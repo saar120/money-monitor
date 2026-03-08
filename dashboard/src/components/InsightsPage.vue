@@ -81,11 +81,11 @@ onMounted(async () => {
 
 <template>
   <div class="space-y-4 animate-fade-in-up">
-    <h1 class="text-2xl font-semibold tracking-tight heading-font">Insights</h1>
+    <h1 class="text-[22px] font-semibold text-text-primary">Insights</h1>
 
     <Card>
       <CardHeader class="pb-2">
-        <CardTitle class="text-base">
+        <CardTitle class="text-[15px]">
           <template v-if="!loading">
             {{ total }} transaction{{ total !== 1 ? 's' : '' }} need{{ total === 1 ? 's' : '' }} review
           </template>
@@ -117,7 +117,7 @@ onMounted(async () => {
                 </TableRow>
               </template>
               <TableRow v-else-if="items.length === 0">
-                <TableCell colspan="7" class="text-center text-muted-foreground py-12">
+                <TableCell colspan="7" class="text-center text-text-secondary py-12">
                   All clear! No transactions need review.
                 </TableCell>
               </TableRow>
@@ -126,7 +126,7 @@ onMounted(async () => {
                 v-for="txn in items"
                 :key="txn.id"
               >
-                <TableCell class="text-sm text-muted-foreground whitespace-nowrap">
+                <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
                 <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
@@ -140,14 +140,14 @@ onMounted(async () => {
                   <Badge
                     v-if="txn.category"
                     variant="secondary"
-                    class="text-xs"
+                    class="text-[11px]"
                     :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                   >
                     {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                   </Badge>
-                  <span v-else class="text-muted-foreground">—</span>
+                  <span v-else class="text-text-secondary">—</span>
                 </TableCell>
-                <TableCell class="max-w-xs text-sm text-muted-foreground">
+                <TableCell class="max-w-xs text-[13px] text-text-secondary">
                   {{ txn.reviewReason }}
                 </TableCell>
                 <TableCell class="text-center">
@@ -155,7 +155,7 @@ onMounted(async () => {
                     v-if="txn.confidence != null"
                     :variant="txn.confidence >= 0.8 ? 'default' : 'secondary'"
                     :class="[
-                      'text-xs tabular-nums',
+                      'text-[11px] tabular-nums',
                       txn.confidence < 0.5 ? 'bg-destructive/15 text-destructive' :
                       txn.confidence < 0.8 ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400' :
                       'bg-success/15 text-success'
@@ -163,7 +163,7 @@ onMounted(async () => {
                   >
                     {{ Math.round(txn.confidence * 100) }}%
                   </Badge>
-                  <span v-else class="text-muted-foreground">—</span>
+                  <span v-else class="text-text-secondary">—</span>
                 </TableCell>
                 <TableCell @click.stop>
                   <div class="flex items-center gap-2">
@@ -172,7 +172,7 @@ onMounted(async () => {
                       :disabled="resolvingId === txn.id"
                       @update:model-value="(val) => { if (val && val !== txn.category) resolve(txn, String(val)); }"
                     >
-                      <SelectTrigger class="h-7 text-xs w-36 border-0 bg-transparent hover:bg-accent px-1" :class="resolvingId === txn.id ? 'opacity-50' : ''">
+                      <SelectTrigger class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1" :class="resolvingId === txn.id ? 'opacity-50' : ''">
                         <SelectValue placeholder="Re-categorize" />
                       </SelectTrigger>
                       <SelectContent>
@@ -210,7 +210,7 @@ onMounted(async () => {
 
     <!-- Pagination -->
     <div v-if="total > 0" class="flex items-center justify-between">
-      <p class="text-sm text-muted-foreground">
+      <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
         {{ offset + 1 }}–{{ Math.min(offset + limit, total) }}
