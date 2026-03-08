@@ -1,16 +1,16 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { createTestDb, type TestDb } from '../helpers/db.js';
-import { insertAccount, insertTransaction, insertCategory } from '../helpers/fixtures.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount, insertTransaction, insertCategory } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
-vi.mock('../../db/connection.js', () => ({
+vi.mock('../db/connection.js', () => ({
   get db() { return testDb.db; },
   get sqlite() { return testDb.sqlite; },
 }));
 
 const { getSpendingSummary, comparePeriods, getTopMerchants } =
-  await import('../../services/summary.js');
+  await import('./summary.js');
 
 describe('summary service', () => {
   beforeEach(() => {

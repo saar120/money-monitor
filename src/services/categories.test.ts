@@ -1,17 +1,17 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { createTestDb, type TestDb } from '../helpers/db.js';
-import { insertCategory, insertAccount, insertTransaction } from '../helpers/fixtures.js';
-import * as schema from '../../db/schema.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertCategory, insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
+import * as schema from '../db/schema.js';
 
 let testDb: TestDb;
 
-vi.mock('../../db/connection.js', () => ({
+vi.mock('../db/connection.js', () => ({
   get db() { return testDb.db; },
   get sqlite() { return testDb.sqlite; },
 }));
 
 const { listCategories, createCategory, updateCategory, deleteCategory, isCategoryIgnored } =
-  await import('../../services/categories.js');
+  await import('./categories.js');
 
 describe('categories service', () => {
   beforeEach(() => {

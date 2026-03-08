@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { createTestDb, type TestDb } from '../helpers/db.js';
-import { insertAccount, insertTransaction, insertCategory } from '../helpers/fixtures.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount, insertTransaction, insertCategory } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
-vi.mock('../../db/connection.js', () => ({
+vi.mock('../db/connection.js', () => ({
   get db() { return testDb.db; },
   get sqlite() { return testDb.sqlite; },
 }));
@@ -17,7 +17,7 @@ const {
   setTransactionIgnored,
   updateTransactionCategory,
   categorizeTransaction,
-} = await import('../../services/transactions.js');
+} = await import('./transactions.js');
 
 describe('transactions service', () => {
   beforeEach(() => {

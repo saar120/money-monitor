@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('exchange-rates service', () => {
-  let getExchangeRates: typeof import('../../services/exchange-rates.js')['getExchangeRates'];
-  let convertToIls: typeof import('../../services/exchange-rates.js')['convertToIls'];
+  let getExchangeRates: typeof import('./exchange-rates.js')['getExchangeRates'];
+  let convertToIls: typeof import('./exchange-rates.js')['convertToIls'];
   let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -34,7 +34,7 @@ describe('exchange-rates service', () => {
       return Promise.reject(new Error('Unknown URL'));
     });
 
-    const mod = await import('../../services/exchange-rates.js');
+    const mod = await import('./exchange-rates.js');
     getExchangeRates = mod.getExchangeRates;
     convertToIls = mod.convertToIls;
   });

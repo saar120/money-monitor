@@ -1,27 +1,27 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
-import { createTestDb, type TestDb } from '../helpers/db.js';
-import { createTestServer, authHeaders, type TestServer } from '../helpers/server.js';
-import { insertAccount, insertLiability } from '../helpers/fixtures.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
+import { insertAccount, insertLiability } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
-vi.mock('../../db/connection.js', () => ({
+vi.mock('../db/connection.js', () => ({
   get db() { return testDb.db; },
   get sqlite() { return testDb.sqlite; },
 }));
 
-vi.mock('../../scraper/credential-store.js', () => ({
+vi.mock('../scraper/credential-store.js', () => ({
   getStoredCredentials: vi.fn().mockResolvedValue([]),
   storeCredentials: vi.fn().mockResolvedValue(undefined),
   deleteCredentials: vi.fn().mockResolvedValue(undefined),
 }));
 
-vi.mock('../../scraper/scraper.service.js', () => ({
+vi.mock('../scraper/scraper.service.js', () => ({
   MANUAL_LOGIN_COMPANIES: new Set(),
   startScraping: vi.fn(),
 }));
 
-vi.mock('../../services/exchange-rates.js', () => ({
+vi.mock('../services/exchange-rates.js', () => ({
   getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;

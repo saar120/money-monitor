@@ -5,10 +5,10 @@ import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readFileSync } from 'node:fs';
-import * as schema from '../../db/schema.js';
+import * as schema from './schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
-const migrationsFolder = join(__dirname, '..', '..', 'db', 'migrations');
+const migrationsFolder = join(__dirname, 'migrations');
 const journalPath = join(migrationsFolder, 'meta', '_journal.json');
 
 describe('database migrations', () => {

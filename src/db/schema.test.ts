@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
-import { createTestDb, type TestDb } from '../helpers/db.js';
-import { insertAccount, insertTransaction, insertCategory, insertAsset, insertHolding, insertLiability } from '../helpers/fixtures.js';
-import * as schema from '../../db/schema.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount, insertTransaction, insertCategory, insertAsset, insertHolding, insertLiability } from '../__tests__/helpers/fixtures.js';
+import * as schema from './schema.js';
 
 describe('database schema', () => {
   let testDb: TestDb;
