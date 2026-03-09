@@ -3,6 +3,7 @@ import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
 import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
+import { isDemoMode } from '../db/connection.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -57,6 +58,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         settings: {},
         dataDir: '',
         claude: { installed: false },
+        demoMode: isDemoMode(),
       });
     }
 
@@ -79,6 +81,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       settings,
       dataDir,
       claude: await getClaudeStatus(),
+      demoMode: isDemoMode(),
     });
   });
 

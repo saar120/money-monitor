@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getSettings, updateSettings, type SettingsResponse } from '../api/client';
+import { getSettings, updateSettings, toggleDemoMode, type SettingsResponse } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ function markDirty(key: string) {
 onMounted(async () => {
   try {
     data.value = await getSettings();
+    demoMode.value = data.value.demoMode ?? false;
     const s = data.value.settings;
     // Populate non-secret fields directly
     form.value.ANTHROPIC_MODEL = String(s.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
@@ -57,6 +58,19 @@ onMounted(async () => {
 });
 
 const isElectron = computed(() => data.value?.isElectron ?? false);
+const demoMode = ref(false);
+const togglingDemo = ref(false);
+
+async function handleDemoToggle(enabled: boolean) {
+  togglingDemo.value = true;
+  try {
+    await toggleDemoMode(enabled);
+    window.location.reload();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to toggle demo mode';
+    togglingDemo.value = false;
+  }
+}
 
 async function save() {
   saving.value = true;
@@ -285,5 +299,15 @@ async function save() {
         </div>
       </div>
     </template>
+
+    <!-- Demo mode toggle — subtle, at the very bottom -->
+    <div v-if="!loading" class="pt-8 flex items-center gap-2.5">
+      <Switch
+        :model-value="demoMode"
+        :disabled="togglingDemo"
+        @update:model-value="handleDemoToggle"
+      />
+      <span class="text-[11px] text-text-secondary select-none">Demo mode</span>
+    </div>
   </div>
 </template>

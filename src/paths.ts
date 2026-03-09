@@ -18,3 +18,4 @@ export const chatDir        = join(DATA_DIR, 'chat');
 export const sessionsDir    = join(DATA_DIR, 'chat', 'sessions');
 export const claudeDir      = join(DATA_DIR, '.claude');
 export const configPath     = join(DATA_DIR, 'config.json');
+export const demoDbPath     = join(DATA_DIR, 'demo.db');

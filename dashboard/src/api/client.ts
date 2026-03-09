@@ -680,6 +680,7 @@ export interface SettingsResponse {
   settings: Record<string, string | number | boolean>;
   dataDir: string;
   claude: { installed: boolean; version?: string };
+  demoMode: boolean;
 }
 
 export function getSettings() {
@@ -690,5 +691,18 @@ export function updateSettings(settings: Record<string, string | number | boolea
   return request<{ success: boolean }>('/settings', {
     method: 'POST',
     body: JSON.stringify(settings),
+  });
+}
+
+// ─── Demo Mode ───
+
+export function getDemoStatus() {
+  return request<{ demoMode: boolean }>('/demo/status');
+}
+
+export function toggleDemoMode(enabled: boolean) {
+  return request<{ success: boolean; demoMode: boolean }>('/demo/toggle', {
+    method: 'POST',
+    body: JSON.stringify({ enabled }),
   });
 }
