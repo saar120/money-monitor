@@ -25,9 +25,9 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 |---|---|
 | ![Net Worth](docs/screenshots/net_worth.png) | ![Insights](docs/screenshots/insights.png) |
 
-| Scraping |
-|---|
-| ![Scraping](docs/screenshots/scraping.png) |
+| Scraping | Telegram Bot |
+|---|---|
+| ![Scraping](docs/screenshots/scraping.png) | ![Telegram](docs/screenshots/telegram.png) |
 
 ## Tech Stack
 
