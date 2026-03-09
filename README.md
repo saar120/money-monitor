@@ -37,7 +37,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 | **Frontend** | Vue 3 (Composition API), Vite, Tailwind CSS |
 | **Database** | SQLite via better-sqlite3, Drizzle ORM |
 | **Scraping** | israeli-bank-scrapers, Puppeteer + Stealth Plugin |
-| **AI** | Anthropic Claude SDK (MCP tools for data queries) |
+| **AI** | Claude Code CLI via Agent SDK (MCP tools for data queries) |
 | **Scheduling** | node-cron (Israel timezone) |
 | **Charts** | Chart.js + vue-chartjs |
 | **UI Components** | Reka UI (headless), Lucide icons |
