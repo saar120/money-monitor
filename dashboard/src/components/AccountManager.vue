@@ -224,9 +224,9 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in-up">
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between flex-shrink-0 mb-4">
       <h1 class="text-[22px] font-semibold text-text-primary">Accounts</h1>
       <Button @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-2" />
@@ -235,12 +235,12 @@ onMounted(() => {
     </div>
 
     <!-- Loading skeletons -->
-    <div v-if="loading" class="space-y-3">
+    <div v-if="loading" class="space-y-3 flex-1 min-h-0 overflow-y-auto">
       <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
     </div>
 
     <!-- Account cards -->
-    <div v-else class="space-y-6">
+    <div v-else class="space-y-6 flex-1 min-h-0 overflow-y-auto">
       <p v-if="accounts.length === 0" class="text-text-secondary text-[13px] text-center py-12">
         No accounts configured. Add one to get started.
       </p>

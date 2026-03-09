@@ -122,7 +122,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-6rem)] animate-fade-in-up gap-4">
+  <div class="flex h-full min-h-0 animate-fade-in-up gap-4">
     <!-- Sidebar -->
     <Card
       v-if="sidebarOpen"

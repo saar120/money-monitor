@@ -104,7 +104,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
+  <div class="max-w-2xl mx-auto h-full overflow-y-auto space-y-6 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
       <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
@@ -283,6 +283,25 @@ async function save() {
         </CardContent>
       </Card>
 
+      <!-- Demo Mode -->
+      <Card>
+        <CardContent class="pt-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[13px] font-medium text-text-primary">Demo Mode</p>
+              <p class="text-[11px] text-text-secondary mt-0.5">
+                Load sample data to showcase the app without real bank credentials
+              </p>
+            </div>
+            <Switch
+              :model-value="demoMode"
+              :disabled="togglingDemo"
+              @update:model-value="handleDemoToggle"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Save -->
       <div class="flex items-center gap-3">
         <Button :disabled="saving" @click="save">
@@ -299,15 +318,5 @@ async function save() {
         </div>
       </div>
     </template>
-
-    <!-- Demo mode toggle — subtle, at the very bottom -->
-    <div v-if="!loading" class="pt-8 flex items-center gap-2.5">
-      <Switch
-        :model-value="demoMode"
-        :disabled="togglingDemo"
-        @update:model-value="handleDemoToggle"
-      />
-      <span class="text-[11px] text-text-secondary select-none">Demo mode</span>
-    </div>
   </div>
 </template>

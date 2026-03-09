@@ -297,9 +297,9 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in-up">
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <!-- Header -->
-    <div class="flex items-center justify-between">
+    <div class="flex items-center justify-between flex-shrink-0 mb-4">
       <div>
         <h1 class="text-[22px] font-semibold text-text-primary">Scraping</h1>
         <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
@@ -330,6 +330,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
       </div>
     </div>
 
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-4">
     <!-- Error Banner -->
     <div
       v-if="errorMessage"
@@ -486,6 +487,8 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         </div>
       </div>
     </div>
+
+    </div><!-- end scrollable content -->
 
     <!-- OTP Dialog -->
     <Dialog v-model:open="otpDialog">
