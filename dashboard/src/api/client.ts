@@ -697,10 +697,6 @@ export function updateSettings(settings: Record<string, string | number | boolea
 
 // ─── Demo Mode ───
 
-export function getDemoStatus() {
-  return request<{ demoMode: boolean }>('/demo/status');
-}
-
 export function toggleDemoMode(enabled: boolean) {
   return request<{ success: boolean; demoMode: boolean }>('/demo/toggle', {
     method: 'POST',

@@ -283,25 +283,6 @@ async function save() {
         </CardContent>
       </Card>
 
-      <!-- Demo Mode -->
-      <Card>
-        <CardContent class="pt-6">
-          <div class="flex items-center justify-between">
-            <div>
-              <p class="text-[13px] font-medium text-text-primary">Demo Mode</p>
-              <p class="text-[11px] text-text-secondary mt-0.5">
-                Load sample data to showcase the app without real bank credentials
-              </p>
-            </div>
-            <Switch
-              :model-value="demoMode"
-              :disabled="togglingDemo"
-              @update:model-value="handleDemoToggle"
-            />
-          </div>
-        </CardContent>
-      </Card>
-
       <!-- Save -->
       <div class="flex items-center gap-3">
         <Button :disabled="saving" @click="save">

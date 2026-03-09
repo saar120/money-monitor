@@ -37,16 +37,21 @@ function redact(value: string): string {
 }
 
 let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
+let claudeStatusCheckedAt = 0;
+const CLAUDE_STATUS_TTL = 60_000; // re-check every 60s
 
 async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
-  if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
+  if (cachedClaudeStatus && (cachedClaudeStatus.installed || Date.now() - claudeStatusCheckedAt < CLAUDE_STATUS_TTL)) {
+    return cachedClaudeStatus;
+  }
   try {
     const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
     cachedClaudeStatus = { installed: true, version: stdout.trim() };
-    return cachedClaudeStatus;
   } catch {
-    return { installed: false };
+    cachedClaudeStatus = { installed: false };
   }
+  claudeStatusCheckedAt = Date.now();
+  return cachedClaudeStatus;
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
