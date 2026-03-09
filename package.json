@@ -17,7 +17,7 @@
     "postinstall": "npx patch-package",
     "backup": "bash scripts/backup.sh",
     "restore": "bash scripts/restore.sh",
-    "electron:dev": "tsc && cp -r src/db/migrations dist/db/migrations && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron .",
+    "electron:dev": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron .",
     "electron:build": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron-builder",
     "electron:rebuild": "node scripts/electron-rebuild.cjs",
     "test": "vitest run",
@@ -28,6 +28,9 @@
     "type": "git",
     "url": "http://local_proxy@127.0.0.1:36222/git/saar120/money-monitor"
   },
+  "workspaces": [
+    "dashboard"
+  ],
   "keywords": [],
   "author": "",
   "license": "ISC",
