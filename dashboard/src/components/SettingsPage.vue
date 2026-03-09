@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getSettings, updateSettings, type SettingsResponse } from '../api/client';
+import { getSettings, updateSettings, toggleDemoMode, type SettingsResponse } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -39,6 +39,7 @@ function markDirty(key: string) {
 onMounted(async () => {
   try {
     data.value = await getSettings();
+    demoMode.value = data.value.demoMode ?? false;
     const s = data.value.settings;
     // Populate non-secret fields directly
     form.value.ANTHROPIC_MODEL = String(s.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
@@ -57,6 +58,19 @@ onMounted(async () => {
 });
 
 const isElectron = computed(() => data.value?.isElectron ?? false);
+const demoMode = ref(false);
+const togglingDemo = ref(false);
+
+async function handleDemoToggle(enabled: boolean) {
+  togglingDemo.value = true;
+  try {
+    await toggleDemoMode(enabled);
+    window.location.reload();
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to toggle demo mode';
+    togglingDemo.value = false;
+  }
+}
 
 async function save() {
   saving.value = true;
@@ -90,7 +104,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
+  <div class="max-w-2xl mx-auto h-full overflow-y-auto space-y-6 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
       <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
@@ -269,6 +283,25 @@ async function save() {
         </CardContent>
       </Card>
 
+      <!-- Demo Mode -->
+      <Card>
+        <CardContent class="pt-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[13px] font-medium text-text-primary">Demo Mode</p>
+              <p class="text-[11px] text-text-secondary mt-0.5">
+                Load sample data to showcase the app without real bank credentials
+              </p>
+            </div>
+            <Switch
+              :model-value="demoMode"
+              :disabled="togglingDemo"
+              @update:model-value="handleDemoToggle"
+            />
+          </div>
+        </CardContent>
+      </Card>
+
       <!-- Save -->
       <div class="flex items-center gap-3">
         <Button :disabled="saving" @click="save">
@@ -285,5 +318,15 @@ async function save() {
         </div>
       </div>
     </template>
+
+    <!-- Demo mode toggle — subtle, at the very bottom -->
+    <div v-if="!loading" class="pt-8 flex items-center gap-2.5">
+      <Switch
+        :model-value="demoMode"
+        :disabled="togglingDemo"
+        @update:model-value="handleDemoToggle"
+      />
+      <span class="text-[11px] text-text-secondary select-none">Demo mode</span>
+    </div>
   </div>
 </template>

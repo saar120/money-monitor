@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { db, sqlite } from './db/connection.js';
+import { db, sqlite, closeAll } from './db/connection.js';
 import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
@@ -17,6 +17,7 @@ import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
 import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
+import { demoRoutes } from './api/demo.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 
@@ -120,6 +121,7 @@ export async function createServer() {
   await app.register(liabilitiesRoutes);
   await app.register(netWorthRoutes);
   await app.register(settingsRoutes);
+  await app.register(demoRoutes);
 
   // Serve dashboard static files in production
   const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -167,7 +169,7 @@ export async function createServer() {
     stopScheduler();
     stopTelegramBot();
     await app.close();
-    sqlite.close();
+    closeAll();
   }
 
   return { app, start, shutdown };

@@ -113,6 +113,7 @@ function createWindow(port: number) {
   mainWindow = new BrowserWindow({
     width: 1200,
     height: 800,
+    icon: join(__dirname, 'icons', 'icon-256.png'),
     titleBarStyle: 'hiddenInset',
     trafficLightPosition: { x: 20, y: 19 },
     vibrancy: 'under-window',
@@ -159,6 +160,7 @@ app.whenReady().then(async () => {
       applicationName: 'Money Monitor',
       applicationVersion: app.getVersion(),
       copyright: 'Personal Finance Tracker',
+      iconPath: join(__dirname, 'icons', 'icon-512.png'),
     });
 
     buildMenu();

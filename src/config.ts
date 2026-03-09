@@ -28,6 +28,28 @@ export function saveConfigFile(settings: Record<string, string>): void {
   config = envSchema.parse(process.env);
 }
 
+// ── Zod schema ──────────────────────────────────────────────────────────────
+
+const envSchema = z.object({
+  PORT: z.coerce.number().default(3000),
+  HOST: z.string().default('127.0.0.1'),
+  CREDENTIALS_MASTER_KEY: z.string().min(1, 'CREDENTIALS_MASTER_KEY is required'),
+  SCRAPE_CRON: z.string().default('0 6 * * *'),
+  SCRAPE_TIMEZONE: z.string().default('Asia/Jerusalem'),
+  SCRAPE_START_DATE_MONTHS_BACK: z.coerce.number().default(3),
+  ANTHROPIC_API_KEY: z.string().default(''),
+  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  AI_MODEL: z.string().optional(),
+  AI_BATCH_MODEL: z.string().optional(),
+  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
+  API_TOKEN: z.string().optional(),
+  CORS_ORIGIN: z.string().optional(),
+  TELEGRAM_BOT_TOKEN: z.string().optional(),
+  TELEGRAM_ALLOWED_USERS: z.string().optional(),
+  SCRAPE_TIMEOUT: z.coerce.number().default(120000),
+  SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
+});
+
 // ── Load config source ──────────────────────────────────────────────────────
 
 if (!isElectronMode) {
@@ -52,28 +74,6 @@ if (!isElectronMode) {
     saveConfigFile({ CREDENTIALS_MASTER_KEY: key });
   }
 }
-
-// ── Zod schema ──────────────────────────────────────────────────────────────
-
-const envSchema = z.object({
-  PORT: z.coerce.number().default(3000),
-  HOST: z.string().default('127.0.0.1'),
-  CREDENTIALS_MASTER_KEY: z.string().min(1, 'CREDENTIALS_MASTER_KEY is required'),
-  SCRAPE_CRON: z.string().default('0 6 * * *'),
-  SCRAPE_TIMEZONE: z.string().default('Asia/Jerusalem'),
-  SCRAPE_START_DATE_MONTHS_BACK: z.coerce.number().default(3),
-  ANTHROPIC_API_KEY: z.string().default(''),
-  ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
-  AI_MODEL: z.string().optional(),
-  AI_BATCH_MODEL: z.string().optional(),
-  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
-  API_TOKEN: z.string().optional(),
-  CORS_ORIGIN: z.string().optional(),
-  TELEGRAM_BOT_TOKEN: z.string().optional(),
-  TELEGRAM_ALLOWED_USERS: z.string().optional(),
-  SCRAPE_TIMEOUT: z.coerce.number().default(120000),
-  SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
-});
 
 export let config = envSchema.parse(process.env);
 export type Config = z.infer<typeof envSchema>;

@@ -11,6 +11,24 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
 - **Local-First** — All data stays on your machine in a SQLite database. No cloud, no third-party data sharing
 
+## Screenshots
+
+| Overview | AI Chat |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![AI Chat](docs/screenshots/chat.png) |
+
+| Transactions | Accounts |
+|---|---|
+| ![Transactions](docs/screenshots/txns.png) | ![Accounts](docs/screenshots/accounts.png) |
+
+| Net Worth | Insights |
+|---|---|
+| ![Net Worth](docs/screenshots/net_worth.png) | ![Insights](docs/screenshots/insights.png) |
+
+| Scraping | Telegram Bot |
+|---|---|
+| ![Scraping](docs/screenshots/scraping.png) | ![Telegram](docs/screenshots/telegram.png) |
+
 ## Tech Stack
 
 | Layer | Technology |
@@ -19,7 +37,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 | **Frontend** | Vue 3 (Composition API), Vite, Tailwind CSS |
 | **Database** | SQLite via better-sqlite3, Drizzle ORM |
 | **Scraping** | israeli-bank-scrapers, Puppeteer + Stealth Plugin |
-| **AI** | Anthropic Claude SDK (MCP tools for data queries) |
+| **AI** | Claude Code CLI via Agent SDK (MCP tools for data queries) |
 | **Scheduling** | node-cron (Israel timezone) |
 | **Charts** | Chart.js + vue-chartjs |
 | **UI Components** | Reka UI (headless), Lucide icons |
@@ -27,47 +45,13 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 ## Architecture
 
-```
-┌─────────────────────────────────────────────────────────┐
-│                   Vue 3 Dashboard                       │
-│          (Charts, Tables, AI Chat, Account Mgmt)        │
-└──────────────────────┬──────────────────────────────────┘
-                       │ HTTP / SSE
-┌──────────────────────▼──────────────────────────────────┐
-│                  Fastify REST API                        │
-│  /accounts  /transactions  /summary  /scrape  /ai/chat  │
-└───┬──────────┬───────────┬──────────┬───────────────────┘
-    │          │           │          │
-    ▼          ▼           ▼          ▼
-┌────────┐ ┌────────┐ ┌────────┐ ┌──────────────────────┐
-│Scraper │ │Drizzle │ │  Cron  │ │   Claude AI Agent    │
-│Service │ │Queries │ │Scheduler│ │  (MCP Tools)         │
-│        │ │        │ │        │ │                      │
-│Puppeteer│ │ SQLite │ │Daily @ │ │ query_transactions   │
-│Headless│ │  + FTS │ │ 6am IL │ │ spending_summary     │
-│Browser │ │        │ │        │ │ categorize           │
-└───┬────┘ └───┬────┘ └───┬────┘ │ detect_recurring     │
-    │          │           │      │ compare_periods      │
-    │          ▼           │      │ spending_trends      │
-    │   ┌───────────┐      │      └──────────┬───────────┘
-    │   │  SQLite   │◄─────┘               │
-    │   │  Database │◄─────────────────────┘
-    └──►│           │
-        └───────────┘
+### System Overview
 
-┌─────────────────────────────┐
-│  Encrypted Credential Store │
-│  (AES-256-GCM, file-based)  │
-└─────────────────────────────┘
-```
+![System Architecture](docs/architecture/system-architecture.png)
 
-**Scrape flow:**
-1. User adds a bank/card account with credentials (encrypted and stored)
-2. A manual trigger or scheduled cron job starts a scrape session
-3. For each account: launch headless browser → log in → scrape transactions
-4. Transactions are deduplicated (SHA-256 hash) and inserted into SQLite
-5. AI auto-categorizes new transactions in the background
-6. Dashboard updates in real-time via Server-Sent Events
+### Data Flow
+
+![Data Flow](docs/architecture/data-flow.png)
 
 ## Supported Institutions
 

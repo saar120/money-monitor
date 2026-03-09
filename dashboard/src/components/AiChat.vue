@@ -122,7 +122,7 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="flex h-[calc(100vh-6rem)] animate-fade-in-up gap-4">
+  <div class="flex h-full min-h-0 animate-fade-in-up gap-4">
     <!-- Sidebar -->
     <Card
       v-if="sidebarOpen"
@@ -199,7 +199,7 @@ function handleKeydown(e: KeyboardEvent) {
                   {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
                 </span>
               </div>
-              <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" />
+              <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" :streaming="loading && i === messages.length - 1" />
               <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
             </div>
 

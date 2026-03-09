@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, type Context } from 'grammy';
 import { config } from '../config.js';
 import { chat } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/agent.js';
@@ -10,6 +10,7 @@ import {
   getSessionMessages,
 } from '../ai/sessions.js';
 import { getSessionId, setSessionId, clearSessionId } from './session-map.js';
+import { markdownToTelegramHtml } from './format.js';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -23,6 +24,15 @@ function parseAllowedUsers(): Set<number> {
       .filter(Boolean)
       .map(Number)
   );
+}
+
+/** Send an HTML-formatted message, falling back to plain text on parse errors. */
+async function replyHtml(ctx: Context, html: string): Promise<void> {
+  try {
+    await ctx.reply(html, { parse_mode: 'HTML' });
+  } catch {
+    await ctx.reply(html.replace(/<[^>]+>/g, ''));
+  }
 }
 
 /** Split text into chunks that fit Telegram's message limit. */
@@ -167,8 +177,9 @@ export function startTelegramBot(): void {
 
       if (result) {
         appendMessage(sessionId, 'assistant', result);
-        for (const chunk of splitMessage(result)) {
-          await ctx.reply(chunk);
+        const html = markdownToTelegramHtml(result);
+        for (const chunk of splitMessage(html)) {
+          await replyHtml(ctx, chunk);
         }
       } else {
         await ctx.reply('No response generated. Please try again.');

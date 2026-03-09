@@ -46,7 +46,7 @@ import {
 
 ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, LineElement, PointElement, Filler);
 
-const { textPrimary, tooltip: themeTooltip, legendLabels, axisTicks, grid: themeGrid, separator: themeSeparator } = useChartTheme();
+const { textPrimary, tooltip: themeTooltip, legendLabels, axisTicks, grid: themeGrid } = useChartTheme();
 
 const router = useRouter();
 
@@ -597,11 +597,11 @@ const fullLiabilityMap = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary">Net Worth</h1>
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-4">Net Worth</h1>
 
     <!-- Hero Card -->
-    <Card class="border-separator animate-fade-in-up stagger-1">
+    <Card class="border-separator animate-fade-in-up stagger-1 flex-shrink-0">
       <CardContent class="pt-6">
         <div v-if="netWorth.loading.value && !nw" class="grid grid-cols-[1fr_auto] gap-6">
           <Skeleton class="h-12 w-48" />
@@ -646,7 +646,7 @@ const fullLiabilityMap = computed(() => {
     </Card>
 
     <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2">
+    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2 flex-shrink-0 mt-4">
       <Card>
         <CardHeader>
           <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
@@ -685,6 +685,9 @@ const fullLiabilityMap = computed(() => {
         </CardContent>
       </Card>
     </div>
+
+    <!-- Scrollable lists section -->
+    <div class="flex-1 min-h-0 overflow-y-auto mt-4 space-y-4">
 
     <!-- Assets Section -->
     <div class="space-y-3 animate-fade-in-up stagger-3">
@@ -959,6 +962,8 @@ const fullLiabilityMap = computed(() => {
         No liabilities tracked.
       </p>
     </div>
+
+    </div><!-- end scrollable lists -->
 
     <!-- ─── Asset Dialog ─── -->
     <Dialog v-model:open="showAssetDialog">

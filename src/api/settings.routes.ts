@@ -1,7 +1,12 @@
 import type { FastifyInstance } from 'fastify';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
 import { hasAnthropicOAuth, loginWithAnthropic } from '../ai/auth.js';
+import { isDemoMode } from '../db/connection.js';
+
+const execFileAsync = promisify(execFile);
 
 const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
@@ -31,6 +36,19 @@ function redact(value: string): string {
   return '****' + value.slice(-4);
 }
 
+let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
+
+async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
+  if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
+  try {
+    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
+    cachedClaudeStatus = { installed: true, version: stdout.trim() };
+    return cachedClaudeStatus;
+  } catch {
+    return { installed: false };
+  }
+}
+
 export async function settingsRoutes(app: FastifyInstance) {
 
   app.get('/api/settings', async (_request, reply) => {
@@ -41,6 +59,8 @@ export async function settingsRoutes(app: FastifyInstance) {
         settings: {},
         dataDir: '',
         oauth: { anthropic: false },
+        claude: { installed: false },
+        demoMode: isDemoMode(),
       });
     }
 
@@ -63,6 +83,8 @@ export async function settingsRoutes(app: FastifyInstance) {
       settings,
       dataDir,
       oauth: { anthropic: hasAnthropicOAuth() },
+      claude: await getClaudeStatus(),
+      demoMode: isDemoMode(),
     });
   });
 
