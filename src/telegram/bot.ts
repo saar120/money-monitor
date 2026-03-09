@@ -1,4 +1,4 @@
-import { Bot } from 'grammy';
+import { Bot, type Context } from 'grammy';
 import { config } from '../config.js';
 import { chat } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/agent.js';
@@ -26,13 +26,12 @@ function parseAllowedUsers(): Set<number> {
   );
 }
 
-/** Send a message with HTML formatting, falling back to plain text on parse errors. */
-async function replyFormatted(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
+/** Send an HTML-formatted message, falling back to plain text on parse errors. */
+async function replyHtml(ctx: Context, html: string): Promise<void> {
   try {
-    await ctx.reply(markdownToTelegramHtml(text), { parse_mode: 'HTML' });
+    await ctx.reply(html, { parse_mode: 'HTML' });
   } catch {
-    // If Telegram rejects our HTML (e.g. malformed tags), send as plain text
-    await ctx.reply(text);
+    await ctx.reply(html.replace(/<[^>]+>/g, ''));
   }
 }
 
@@ -178,8 +177,9 @@ export function startTelegramBot(): void {
 
       if (result) {
         appendMessage(sessionId, 'assistant', result);
-        for (const chunk of splitMessage(result)) {
-          await replyFormatted(ctx, chunk);
+        const html = markdownToTelegramHtml(result);
+        for (const chunk of splitMessage(html)) {
+          await replyHtml(ctx, chunk);
         }
       } else {
         await ctx.reply('No response generated. Please try again.');

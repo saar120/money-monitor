@@ -22,12 +22,12 @@ function formatTable(tableBlock: string): string {
     Math.max(...rows.map(r => (r[col] ?? '').length)),
   );
 
-  // Render: header row, separator, data rows
-  const pad = (s: string, w: number, col: number) => {
-    // Right-align columns that look numeric (₪ or digits in every data cell)
-    const isNumeric = rows.slice(1).every(r => /^[₪\d,.%\s-]+$/.test(r[col] ?? ''));
-    return isNumeric ? s.padStart(w) : s.padEnd(w);
-  };
+  // Precompute which columns are numeric so we right-align them
+  const isNumericCol = Array.from({ length: colCount }, (_, col) =>
+    rows.slice(1).every(r => /^[₪\d,.%\s-]+$/.test(r[col] ?? '')),
+  );
+  const pad = (s: string, w: number, col: number) =>
+    isNumericCol[col] ? s.padStart(w) : s.padEnd(w);
 
   const formatted = rows.map((row) => {
     const cells = row.map((cell, ci) => pad(cell, widths[ci], ci));
