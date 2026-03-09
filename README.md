@@ -49,14 +49,6 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 ![System Architecture](docs/architecture/system-architecture.png)
 
-### Scraping Flow
-
-![Scraping Flow](docs/architecture/scraping-flow.png)
-
-### AI Chat Flow
-
-![AI Chat Flow](docs/architecture/ai-chat-flow.png)
-
 ### Data Flow
 
 ![Data Flow](docs/architecture/data-flow.png)
