@@ -60,48 +60,49 @@ export function isDemoMode(): boolean {
   return _isDemoMode;
 }
 
-export function swapToDemo(): { db: BetterSQLite3Database<typeof schema>; sqlite: BetterSqlite3Database } {
-  if (_isDemoMode) return { db: demoDb!, sqlite: demoSqlite! };
+export function swapToDemo(): void {
+  if (_isDemoMode) return;
 
-  // Create/open the demo database
-  demoSqlite = new Database(demoDbPath);
-  demoSqlite.pragma('journal_mode = WAL');
-  demoSqlite.pragma('foreign_keys = ON');
-  demoDb = drizzle(demoSqlite, { schema });
+  const newSqlite = new Database(demoDbPath);
+  try {
+    newSqlite.pragma('journal_mode = WAL');
+    newSqlite.pragma('foreign_keys = ON');
+    const newDb = drizzle(newSqlite, { schema });
 
-  // Run migrations + backfills on the demo db
-  migrate(demoDb, { migrationsFolder });
-  runBackfills(demoDb, demoSqlite);
+    migrate(newDb, { migrationsFolder });
+    runBackfills(newDb, newSqlite);
 
-  // Swap the live exports
-  db = demoDb;
-  sqlite = demoSqlite;
-  _isDemoMode = true;
-
-  return { db: demoDb, sqlite: demoSqlite };
+    // Only commit state after everything succeeds
+    demoSqlite = newSqlite;
+    demoDb = newDb;
+    db = newDb;
+    sqlite = newSqlite;
+    _isDemoMode = true;
+  } catch (err) {
+    newSqlite.close();
+    throw err;
+  }
 }
 
-export function swapToReal(): void {
-  if (!_isDemoMode) return;
-
-  // Close demo connection
+function closeDemoConnection(): void {
   if (demoSqlite) {
     demoSqlite.close();
     demoSqlite = null;
     demoDb = null;
   }
+}
 
-  // Restore real exports
+export function swapToReal(): void {
+  if (!_isDemoMode) return;
+
+  closeDemoConnection();
+
   db = realDb;
   sqlite = realSqlite;
   _isDemoMode = false;
 }
 
 export function closeAll(): void {
-  if (demoSqlite) {
-    demoSqlite.close();
-    demoSqlite = null;
-    demoDb = null;
-  }
+  closeDemoConnection();
   realSqlite.close();
 }

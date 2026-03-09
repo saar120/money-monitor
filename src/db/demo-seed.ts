@@ -1,7 +1,6 @@
 import { randomUUID } from 'node:crypto';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { Database as BetterSqlite3Database } from 'better-sqlite3';
-import { eq } from 'drizzle-orm';
 import * as schema from './schema.js';
 
 /**
@@ -37,7 +36,7 @@ export function seedDemoData(
       accountIds.push(result.id);
     }
 
-    const [hapoalimId, leumiId, isracardId, maxId] = accountIds;
+    const [hapoalimId, leumiId] = accountIds;
 
     // ─── Transactions ───
     // Generate ~200 transactions over the last 6 months
@@ -116,7 +115,6 @@ export function seedDemoData(
     ];
 
     const now = new Date();
-    let txCount = 0;
 
     // Generate 6 months of fixed monthly transactions
     for (let monthBack = 0; monthBack < 6; monthBack++) {
@@ -142,7 +140,6 @@ export function seedDemoData(
           confidence: 0.95,
           hash: randomUUID(),
         }).run();
-        txCount++;
       }
     }
 
@@ -176,7 +173,6 @@ export function seedDemoData(
           confidence: 0.9,
           hash: randomUUID(),
         }).run();
-        txCount++;
       }
     }
 

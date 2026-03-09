@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, TrendingUp, Settings } from 'lucide-vue-next';
-import { getNeedsReviewCount, getDemoStatus, toggleDemoMode } from '../api/client';
+import { getNeedsReviewCount, getSettings, toggleDemoMode } from '../api/client';
 
 const isElectron = !!(window as any).electronAPI;
 
@@ -23,12 +23,12 @@ const demoMode = ref(false);
 
 onMounted(async () => {
   try {
-    const [reviewRes, demoRes] = await Promise.all([
+    const [reviewRes, settingsRes] = await Promise.all([
       getNeedsReviewCount(),
-      getDemoStatus(),
+      getSettings(),
     ]);
     reviewCount.value = reviewRes.count;
-    demoMode.value = demoRes.demoMode;
+    demoMode.value = settingsRes.demoMode;
   } catch { /* ignore */ }
 });
 

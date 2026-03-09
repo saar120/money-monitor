@@ -1,5 +1,5 @@
 import type { FastifyInstance } from 'fastify';
-import { isDemoMode, swapToDemo, swapToReal } from '../db/connection.js';
+import { db, sqlite, isDemoMode, swapToDemo, swapToReal } from '../db/connection.js';
 import { seedDemoData } from '../db/demo-seed.js';
 import { stopScheduler, startScheduler } from '../scraper/scheduler.js';
 
@@ -14,13 +14,11 @@ export async function demoRoutes(app: FastifyInstance) {
     const enabled = body?.enabled ?? !isDemoMode();
 
     if (enabled && !isDemoMode()) {
-      // Switch to demo database
-      const { db, sqlite } = swapToDemo();
+      swapToDemo();
       seedDemoData(db, sqlite);
       stopScheduler();
       request.log.info('Demo mode enabled');
     } else if (!enabled && isDemoMode()) {
-      // Switch back to real database
       swapToReal();
       startScheduler();
       request.log.info('Demo mode disabled');
