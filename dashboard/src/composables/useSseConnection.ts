@@ -1,5 +1,5 @@
 import { ref, onUnmounted } from 'vue';
-import { createScrapeEventSource } from '../api/client';
+import { createScrapeEventSource, ensureScrapeEventsAuth } from '../api/client';
 
 export type SseHandlers = Record<string, (data: Record<string, unknown>) => void>;
 
@@ -9,11 +9,18 @@ export function useSseConnection(handlers: SseHandlers) {
   let eventSource: EventSource | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
-  function connect() {
+  async function connect() {
     disconnect();
 
-    eventSource = createScrapeEventSource();
-    isConnected.value = true;
+    try {
+      await ensureScrapeEventsAuth();
+      eventSource = createScrapeEventSource();
+      isConnected.value = true;
+    } catch {
+      isConnected.value = false;
+      reconnectTimer = setTimeout(() => { void connect(); }, 3000);
+      return;
+    }
 
     eventSource.onmessage = (event) => {
       const data = JSON.parse(event.data) as Record<string, unknown>;
@@ -26,7 +33,7 @@ export function useSseConnection(handlers: SseHandlers) {
     eventSource.onerror = () => {
       eventSource?.close();
       isConnected.value = false;
-      reconnectTimer = setTimeout(connect, 3000);
+      reconnectTimer = setTimeout(() => { void connect(); }, 3000);
     };
   }
 

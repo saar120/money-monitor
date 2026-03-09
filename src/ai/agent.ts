@@ -1,7 +1,5 @@
 import { query } from '@anthropic-ai/claude-agent-sdk';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
 import { config } from '../config.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
@@ -35,11 +33,7 @@ import { readMemory } from './memory.js';
 import { claudeDir } from '../paths.js';
 
 const LOCAL_CLAUDE_DIR = claudeDir;
-
-// Resolve the bundled cli.js path. In packaged Electron apps, swap app.asar → app.asar.unpacked
-// so the system node can execute it (system node can't read from asar archives).
-const sdkDir = dirname(fileURLToPath(import.meta.resolve('@anthropic-ai/claude-agent-sdk')));
-const CLAUDE_CLI_PATH = join(sdkDir, 'cli.js').replace('app.asar', 'app.asar.unpacked');
+const CLAUDE_CLI_PATH = process.env.CLAUDE_CODE_EXECUTABLE?.trim() || undefined;
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -156,7 +150,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     options: {
       model: config.ANTHROPIC_MODEL,
       systemPrompt,
-      pathToClaudeCodeExecutable: CLAUDE_CLI_PATH,
+      ...(CLAUDE_CLI_PATH ? { pathToClaudeCodeExecutable: CLAUDE_CLI_PATH } : {}),
       mcpServers: { [MCP_SERVER_NAME]: server },
       tools: [],
       allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
@@ -203,7 +197,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
     options: {
       model: config.ANTHROPIC_MODEL,
       systemPrompt: buildBatchCategorizerPrompt(catRows),
-      pathToClaudeCodeExecutable: CLAUDE_CLI_PATH,
+      ...(CLAUDE_CLI_PATH ? { pathToClaudeCodeExecutable: CLAUDE_CLI_PATH } : {}),
       tools: [],
       maxTurns: 1,
       env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },

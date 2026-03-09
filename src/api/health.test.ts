@@ -96,5 +96,29 @@ describe('health & auth routes', () => {
       });
       expect(res.statusCode).toBe(401);
     });
+
+    it('rejects SSE query token authentication', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/scrape/events?token=test-token',
+      });
+      expect(res.statusCode).toBe(401);
+    });
+
+    it('sets HttpOnly SSE auth cookie via authenticated bootstrap endpoint', async () => {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/api/auth/sse',
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+
+      const setCookie = res.headers['set-cookie'];
+      expect(setCookie).toBeDefined();
+      const cookie = Array.isArray(setCookie) ? setCookie.join(';') : String(setCookie);
+      expect(cookie).toContain('mm_api_token=');
+      expect(cookie).toContain('HttpOnly');
+      expect(cookie).toContain('Path=/api/scrape/events');
+    });
   });
 });

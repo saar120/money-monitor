@@ -38,8 +38,9 @@ let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
 
 async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
   if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
+  const claudeExecutable = process.env.CLAUDE_CODE_EXECUTABLE?.trim() || 'claude';
   try {
-    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
+    const { stdout } = await execFileAsync(claudeExecutable, ['--version'], { timeout: 5000 });
     cachedClaudeStatus = { installed: true, version: stdout.trim() };
     return cachedClaudeStatus;
   } catch {

@@ -219,7 +219,7 @@ async function handleScrape(account: Account) {
 
 onMounted(() => {
   fetchAccounts();
-  connectSse();
+  void connectSse();
 });
 </script>
 

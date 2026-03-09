@@ -8,6 +8,7 @@ import { addSseClient, removeSseClient, broadcastSseEvent } from './sse.js';
 import { submitOtp } from '../scraper/otp-bridge.js';
 import { confirmManualAction } from '../scraper/manual-action-bridge.js';
 import { cancelSession, hasActiveSessions, getActiveSessions, getUniqueActiveAccounts, runScrapeSession } from '../scraper/session-manager.js';
+import { config } from '../config.js';
 import type { ScrapeLog } from '../shared/types.js';
 
 type AccountInfo = { id: number; displayName: string; companyId: string };
@@ -26,6 +27,20 @@ function enrichLogsWithAccountNames(logs: ScrapeLog[], accountMap: Map<number, A
 }
 
 export async function scrapeRoutes(app: FastifyInstance) {
+
+  // ─── SSE auth bootstrap (sets HttpOnly cookie for EventSource auth) ───
+  app.post('/api/auth/sse', async (_request, reply) => {
+    if (!config.API_TOKEN) {
+      // Development mode can run without API auth; no cookie needed.
+      return reply.send({ success: true });
+    }
+
+    reply.header(
+      'Set-Cookie',
+      `mm_api_token=${encodeURIComponent(config.API_TOKEN)}; Path=/api/scrape/events; HttpOnly; SameSite=Strict; Max-Age=600`,
+    );
+    return reply.send({ success: true });
+  });
 
   // ─── SSE endpoint ───
 

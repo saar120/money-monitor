@@ -286,7 +286,7 @@ const { connect: connectSse } = useSseConnection({
 // ─── Lifecycle ───
 onMounted(() => {
   loadData();
-  connectSse();
+  void connectSse();
 });
 
 onUnmounted(() => {
