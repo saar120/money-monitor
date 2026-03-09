@@ -201,12 +201,23 @@ export function triggerScrapeAll() {
   return request<{ sessionId: number }>('/scrape/all', { method: 'POST' });
 }
 
-export function createScrapeEventSource(): EventSource {
+export async function ensureScrapeEventsAuth(): Promise<void> {
   const token = getApiToken();
-  const url = token
-    ? `${BASE_URL}/scrape/events?token=${encodeURIComponent(token)}`
-    : `${BASE_URL}/scrape/events`;
-  return new EventSource(url);
+  if (!token) return;
+
+  const res = await fetch(`${BASE_URL}/auth/sse`, {
+    method: 'POST',
+    headers: { Authorization: `Bearer ${token}` },
+  });
+
+  if (!res.ok) {
+    const error = await res.json().catch(() => ({ error: res.statusText }));
+    throw new Error((error as { error: string }).error || res.statusText);
+  }
+}
+
+export function createScrapeEventSource(): EventSource {
+  return new EventSource(`${BASE_URL}/scrape/events`);
 }
 
 export function submitOtp(accountId: number, code: string) {

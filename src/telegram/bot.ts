@@ -23,6 +23,7 @@ function parseAllowedUsers(): Set<number> {
       .map(s => s.trim())
       .filter(Boolean)
       .map(Number)
+      .filter(id => Number.isInteger(id) && id > 0)
   );
 }
 
@@ -77,23 +78,25 @@ function startTypingLoop(chatId: number, api: Bot['api']): () => void {
 export function startTelegramBot(): void {
   if (!config.TELEGRAM_BOT_TOKEN) return;
 
-  bot = new Bot(config.TELEGRAM_BOT_TOKEN);
   const allowedUsers = parseAllowedUsers();
 
-  // ── Access control middleware ──
+  // Security hard-stop: never run an open bot without an explicit allowlist.
   if (allowedUsers.size === 0) {
-    console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot is open to all users.');
+    console.warn('TELEGRAM_ALLOWED_USERS is empty or invalid — Telegram bot will not start.');
+    return;
   }
-  if (allowedUsers.size > 0) {
-    bot.use(async (ctx, next) => {
-      const userId = ctx.from?.id;
-      if (!userId || !allowedUsers.has(userId)) {
-        await ctx.reply('Access denied.');
-        return;
-      }
-      await next();
-    });
-  }
+
+  bot = new Bot(config.TELEGRAM_BOT_TOKEN);
+
+  // ── Access control middleware ──
+  bot.use(async (ctx, next) => {
+    const userId = ctx.from?.id;
+    if (!userId || !allowedUsers.has(userId)) {
+      await ctx.reply('Access denied.');
+      return;
+    }
+    await next();
+  });
 
   // ── Commands ──
 

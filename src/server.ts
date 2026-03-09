@@ -20,6 +20,42 @@ import { settingsRoutes } from './api/settings.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
 
+const SENSITIVE_QUERY_PARAMS = new Set(['token', 'api_token', 'access_token', 'authorization', 'auth']);
+
+function sanitizeUrlForLogs(rawUrl: string): string {
+  try {
+    const parsed = new URL(rawUrl, 'http://localhost');
+    for (const key of SENSITIVE_QUERY_PARAMS) {
+      if (parsed.searchParams.has(key)) {
+        parsed.searchParams.set(key, '[REDACTED]');
+      }
+    }
+    const query = parsed.searchParams.toString();
+    return query ? `${parsed.pathname}?${query}` : parsed.pathname;
+  } catch {
+    return rawUrl.replace(
+      /([?&](?:token|api_token|access_token|authorization|auth)=)[^&]*/gi,
+      '$1[REDACTED]',
+    );
+  }
+}
+
+function parseCookies(header: string | undefined): Record<string, string> {
+  if (!header) return {};
+  const cookies: Record<string, string> = {};
+  for (const part of header.split(';')) {
+    const [rawKey, ...rest] = part.trim().split('=');
+    if (!rawKey) continue;
+    const value = rest.join('=');
+    try {
+      cookies[rawKey] = decodeURIComponent(value);
+    } catch {
+      cookies[rawKey] = value;
+    }
+  }
+  return cookies;
+}
+
 export async function createServer() {
   const app = Fastify({
     logger: {
@@ -60,7 +96,7 @@ export async function createServer() {
   app.addHook('onResponse', (request, reply, done) => {
     request.log.info(
       { responseTime: reply.elapsedTime, statusCode: reply.statusCode },
-      `${request.method} ${request.url}`
+      `${request.method} ${sanitizeUrlForLogs(request.url)}`
     );
     done();
   });
@@ -83,14 +119,27 @@ export async function createServer() {
   });
 
   // API token authentication
+  const nodeEnv = process.env.NODE_ENV ?? 'development';
+  const requireApiToken = nodeEnv !== 'development' && nodeEnv !== 'test';
+  if (!config.API_TOKEN && requireApiToken) {
+    throw new Error(
+      `API_TOKEN is required when NODE_ENV=${nodeEnv}. Set API_TOKEN to secure all /api/* routes.`,
+    );
+  }
+
   if (config.API_TOKEN) {
     app.addHook('onRequest', async (request, reply) => {
       if (!request.url.startsWith('/api/')) return;
       if (request.url === '/api/health') return;
-      // SSE endpoints can't send Authorization headers; accept token as query param
+
+      // SSE endpoints can't reliably send Authorization headers; accept an HttpOnly cookie.
       if (request.url.startsWith('/api/scrape/events')) {
-        const token = (request.query as Record<string, string>).token;
-        if (token === config.API_TOKEN) return;
+        const auth = request.headers.authorization;
+        if (auth === `Bearer ${config.API_TOKEN}`) return;
+
+        const cookieToken = parseCookies(request.headers.cookie).mm_api_token;
+        if (cookieToken === config.API_TOKEN) return;
+
         return reply.status(401).send({ error: 'Unauthorized' });
       }
 
