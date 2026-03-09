@@ -10,6 +10,7 @@ import {
   getSessionMessages,
 } from '../ai/sessions.js';
 import { getSessionId, setSessionId, clearSessionId } from './session-map.js';
+import { markdownToTelegramHtml } from './format.js';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -23,6 +24,16 @@ function parseAllowedUsers(): Set<number> {
       .filter(Boolean)
       .map(Number)
   );
+}
+
+/** Send a message with HTML formatting, falling back to plain text on parse errors. */
+async function replyFormatted(ctx: { reply: (text: string, opts?: object) => Promise<unknown> }, text: string): Promise<void> {
+  try {
+    await ctx.reply(markdownToTelegramHtml(text), { parse_mode: 'HTML' });
+  } catch {
+    // If Telegram rejects our HTML (e.g. malformed tags), send as plain text
+    await ctx.reply(text);
+  }
 }
 
 /** Split text into chunks that fit Telegram's message limit. */
@@ -168,7 +179,7 @@ export function startTelegramBot(): void {
       if (result) {
         appendMessage(sessionId, 'assistant', result);
         for (const chunk of splitMessage(result)) {
-          await ctx.reply(chunk);
+          await replyFormatted(ctx, chunk);
         }
       } else {
         await ctx.reply('No response generated. Please try again.');
