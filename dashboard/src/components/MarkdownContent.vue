@@ -5,16 +5,30 @@ import DOMPurify from 'dompurify';
 
 const md = new Marked({ breaks: true, gfm: true });
 
-const props = defineProps<{ content: string }>();
-
-const html = computed(() => {
-  const raw = md.parse(props.content) as string;
-  return DOMPurify.sanitize(raw);
+const props = withDefaults(defineProps<{
+  content: string;
+  streaming?: boolean;
+}>(), {
+  streaming: false,
 });
+
+/** Split markdown into logical blocks on blank lines. */
+const blocks = computed(() => props.content.split(/\n\n+/).filter(Boolean));
+
+function renderBlock(text: string): string {
+  return DOMPurify.sanitize(md.parse(text) as string);
+}
 </script>
 
 <template>
-  <div class="markdown-content" v-html="html" />
+  <div class="markdown-content">
+    <div
+      v-for="(block, i) in blocks"
+      :key="'b' + i"
+      :class="{ 'md-block-enter': streaming }"
+      v-html="renderBlock(block)"
+    />
+  </div>
 </template>
 
 <style scoped>
@@ -143,5 +157,21 @@ const html = computed(() => {
   border: none;
   border-top: 1px solid var(--separator);
   margin: 0.75em 0;
+}
+
+/* Progressive block reveal during streaming */
+.md-block-enter {
+  animation: md-block-fade-in 0.35s ease both;
+}
+
+@keyframes md-block-fade-in {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
 }
 </style>

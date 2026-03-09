@@ -199,7 +199,7 @@ function handleKeydown(e: KeyboardEvent) {
                   {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
                 </span>
               </div>
-              <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" />
+              <MarkdownContent v-if="msg.role === 'assistant'" :content="msg.content" :streaming="loading && i === messages.length - 1" />
               <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
             </div>
 
