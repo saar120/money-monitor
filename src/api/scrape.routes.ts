@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
 import { eq, desc, inArray } from 'drizzle-orm';
-import { db } from '../db/connection.js';
+import { db, isDemoMode } from '../db/connection.js';
 import { accounts, scrapeLogs, scrapeSessions } from '../db/schema.js';
 import { scrapeLogsQuerySchema, scrapeSessionsQuerySchema, otpSubmitSchema } from './validation.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
@@ -87,6 +87,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
   // ─── Scrape single account (fire-and-forget) ───
 
   app.post<{ Params: { accountId: string } }>('/api/scrape/:accountId', async (request, reply) => {
+    if (isDemoMode()) return reply.status(400).send({ error: 'Scraping is disabled in demo mode' });
     const accountId = parseIntParam(request.params.accountId, 'account ID', reply);
     if (accountId === null) return;
 
@@ -104,6 +105,7 @@ export async function scrapeRoutes(app: FastifyInstance) {
   // ─── Scrape all accounts (fire-and-forget) ───
 
   app.post('/api/scrape/all', async (_request, reply) => {
+    if (isDemoMode()) return reply.status(400).send({ error: 'Scraping is disabled in demo mode' });
     if (hasActiveSessions()) {
       return reply.status(429).send({ error: 'A scrape is already in progress' });
     }

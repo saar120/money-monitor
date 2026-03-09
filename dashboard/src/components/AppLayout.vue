@@ -2,7 +2,7 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, TrendingUp, Settings } from 'lucide-vue-next';
-import { getNeedsReviewCount } from '../api/client';
+import { getNeedsReviewCount, getDemoStatus, toggleDemoMode } from '../api/client';
 
 const isElectron = !!(window as any).electronAPI;
 
@@ -19,13 +19,25 @@ onUnmounted(() => {
 });
 
 const reviewCount = ref(0);
+const demoMode = ref(false);
 
 onMounted(async () => {
   try {
-    const { count } = await getNeedsReviewCount();
-    reviewCount.value = count;
+    const [reviewRes, demoRes] = await Promise.all([
+      getNeedsReviewCount(),
+      getDemoStatus(),
+    ]);
+    reviewCount.value = reviewRes.count;
+    demoMode.value = demoRes.demoMode;
   } catch { /* ignore */ }
 });
+
+async function exitDemo() {
+  try {
+    await toggleDemoMode(false);
+    window.location.reload();
+  } catch { /* ignore */ }
+}
 
 const navSections = [
   {
@@ -137,6 +149,18 @@ function isActive(path: string): boolean {
         <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag;">
           <slot name="toolbar-actions" />
         </div>
+      </div>
+
+      <!-- Demo mode banner -->
+      <div
+        v-if="demoMode"
+        class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-[12px] text-amber-600 dark:text-amber-400"
+      >
+        <span>Demo Mode — Viewing sample data</span>
+        <button
+          class="underline hover:no-underline font-medium ml-1"
+          @click="exitDemo"
+        >Exit</button>
       </div>
 
       <main ref="mainEl" class="flex-1 overflow-y-auto p-6 min-w-0">

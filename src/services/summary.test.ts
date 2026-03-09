@@ -7,6 +7,8 @@ let testDb: TestDb;
 vi.mock('../db/connection.js', () => ({
   get db() { return testDb.db; },
   get sqlite() { return testDb.sqlite; },
+  isDemoMode: () => false,
+  closeAll: () => {},
 }));
 
 const { getSpendingSummary, comparePeriods, getTopMerchants } =
