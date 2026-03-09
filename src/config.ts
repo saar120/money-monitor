@@ -64,6 +64,8 @@ const envSchema = z.object({
   SCRAPE_START_DATE_MONTHS_BACK: z.coerce.number().default(3),
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  AI_MODEL: z.string().optional(),
+  AI_BATCH_MODEL: z.string().optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
   API_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
@@ -75,3 +77,23 @@ const envSchema = z.object({
 
 export let config = envSchema.parse(process.env);
 export type Config = z.infer<typeof envSchema>;
+
+/**
+ * Parse a model spec string like "anthropic:claude-sonnet-4-6" or "openai:gpt-4o".
+ * Falls back to `anthropic` provider if no colon separator is found (backward compat).
+ */
+export function parseModelSpec(spec: string): { provider: string; model: string } {
+  const idx = spec.indexOf(':');
+  if (idx === -1) return { provider: 'anthropic', model: spec };
+  return { provider: spec.slice(0, idx), model: spec.slice(idx + 1) };
+}
+
+/** Resolve the effective AI model spec (AI_MODEL > ANTHROPIC_MODEL fallback). */
+export function getAIModelSpec(): string {
+  return config.AI_MODEL || `anthropic:${config.ANTHROPIC_MODEL}`;
+}
+
+/** Resolve the batch model spec (AI_BATCH_MODEL > AI_MODEL fallback). */
+export function getBatchModelSpec(): string {
+  return config.AI_BATCH_MODEL || getAIModelSpec();
+}

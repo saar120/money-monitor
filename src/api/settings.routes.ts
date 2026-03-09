@@ -1,10 +1,7 @@
 import type { FastifyInstance } from 'fastify';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
-
-const execFileAsync = promisify(execFile);
+import { hasAnthropicOAuth, loginWithAnthropic } from '../ai/auth.js';
 
 const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
@@ -34,19 +31,6 @@ function redact(value: string): string {
   return '****' + value.slice(-4);
 }
 
-let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
-
-async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
-  if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
-  try {
-    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
-    cachedClaudeStatus = { installed: true, version: stdout.trim() };
-    return cachedClaudeStatus;
-  } catch {
-    return { installed: false };
-  }
-}
-
 export async function settingsRoutes(app: FastifyInstance) {
 
   app.get('/api/settings', async (_request, reply) => {
@@ -56,7 +40,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         isElectron: false,
         settings: {},
         dataDir: '',
-        claude: { installed: false },
+        oauth: { anthropic: false },
       });
     }
 
@@ -78,7 +62,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       isElectron: isElectronMode,
       settings,
       dataDir,
-      claude: await getClaudeStatus(),
+      oauth: { anthropic: hasAnthropicOAuth() },
     });
   });
 
@@ -108,5 +92,21 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: `Failed to save settings: ${msg}` });
     }
     return reply.send({ success: true });
+  });
+
+  // ── OAuth endpoints ──────────────────────────────────────────────────────────
+
+  app.post('/api/settings/oauth/anthropic', async (_request, reply) => {
+    try {
+      await loginWithAnthropic();
+      return reply.send({ success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  app.get('/api/settings/oauth/status', async (_request, reply) => {
+    return reply.send({ anthropic: hasAnthropicOAuth() });
   });
 }

@@ -679,7 +679,7 @@ export interface SettingsResponse {
   isElectron: boolean;
   settings: Record<string, string | number | boolean>;
   dataDir: string;
-  claude: { installed: boolean; version?: string };
+  oauth: { anthropic: boolean };
 }
 
 export function getSettings() {

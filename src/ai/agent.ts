@@ -1,8 +1,9 @@
-import { query } from '@anthropic-ai/claude-agent-sdk';
+import { Agent } from '@mariozechner/pi-agent-core';
+import { getModel, completeSimple } from '@mariozechner/pi-ai';
+import type { KnownProvider, AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai';
+import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
-import { config } from '../config.js';
+import { config, parseModelSpec, getAIModelSpec, getBatchModelSpec } from '../config.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
 import { buildBatchCategorizerPrompt, buildFinancialAdvisorPrompt, partitionCategories } from './prompts.js';
@@ -19,7 +20,6 @@ import {
   buildGetTopMerchantsTool,
   buildCategorizeTransactionTool,
   buildSaveMemoryTool,
-  buildMcpServerFromTools,
 } from './tools.js';
 import {
   buildGetNetWorthTool,
@@ -32,14 +32,10 @@ import {
   buildManageLiabilityTool,
 } from './asset-tools.js';
 import { readMemory } from './memory.js';
-import { claudeDir } from '../paths.js';
+import { resolveApiKey, loadCredentials } from './auth.js';
 
-const LOCAL_CLAUDE_DIR = claudeDir;
-
-// Resolve the bundled cli.js path. In packaged Electron apps, swap app.asar → app.asar.unpacked
-// so the system node can execute it (system node can't read from asar archives).
-const sdkDir = dirname(fileURLToPath(import.meta.resolve('@anthropic-ai/claude-agent-sdk')));
-const CLAUDE_CLI_PATH = join(sdkDir, 'cli.js').replace('app.asar', 'app.asar.unpacked');
+// Load OAuth credentials at module init
+loadCredentials();
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -79,8 +75,6 @@ export type ChatEvent =
 
 // ── Tool status mapping ─────────────────────────────────────────────────────────
 
-const MCP_SERVER_NAME = 'financial-tools';
-
 const TOOL_STATUS: Record<string, string> = {
   query_transactions: 'Searching transactions...',
   get_spending_summary: 'Analyzing spending...',
@@ -101,8 +95,44 @@ const TOOL_STATUS: Record<string, string> = {
   manage_liability: 'Updating liability...',
 };
 
-function describeToolCall(toolName: string): string {
-  return TOOL_STATUS[toolName.replace(`mcp__${MCP_SERVER_NAME}__`, '')] ?? 'Processing...';
+// ── Helpers ──────────────────────────────────────────────────────────────────────
+
+const MAX_TURNS = 8;
+
+/** Extract text from the last assistant message in a list. */
+function extractAssistantText(messages: AgentMessage[]): string {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const msg = messages[i];
+    if (msg && 'role' in msg && msg.role === 'assistant') {
+      const assistantMsg = msg as AssistantMessage;
+      return assistantMsg.content
+        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+        .map(b => b.text)
+        .join('');
+    }
+  }
+  return '';
+}
+
+/** Convert ChatMessage history to Pi Message objects for multi-turn context. */
+function convertHistoryToMessages(history: ChatMessage[]): Message[] {
+  return history.map((m): Message => {
+    if (m.role === 'user') {
+      return { role: 'user', content: m.content, timestamp: Date.now() } as UserMessage;
+    }
+    // Assistant messages need full structure — metadata fields are placeholders
+    // since convertToLlm only extracts role + content for the API request
+    return {
+      role: 'assistant',
+      content: [{ type: 'text', text: m.content }],
+      api: '' as any,
+      provider: '',
+      model: '',
+      usage: { inputTokens: 0, outputTokens: 0, totalTokens: 0 } as any,
+      stopReason: 'stop',
+      timestamp: Date.now(),
+    } as AssistantMessage;
+  });
 }
 
 // ── Chat ────────────────────────────────────────────────────────────────────────
@@ -121,17 +151,14 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   const categoryNames = cats.map(c => c.name);
   const ignoredCategoryNames = ignored.map(c => c.name);
 
-  const historyLines = conversationHistory.slice(0, -1).map(m =>
-    `${m.role === 'user' ? 'Human' : 'Assistant'}: ${m.content}`
-  );
-  const lastMsg = conversationHistory[conversationHistory.length - 1];
-  const prompt = historyLines.length > 0
-    ? `Previous conversation:\n${historyLines.join('\n\n')}\n\nCurrent question: ${lastMsg.content}`
-    : lastMsg.content;
-
   const memory = readMemory();
   const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
-  const server = buildMcpServerFromTools(MCP_SERVER_NAME, [
+
+  const { provider, model: modelName } = parseModelSpec(getAIModelSpec());
+  // getModel is strictly typed; dynamic strings from config need a cast on the result
+  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
+
+  const tools = [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
     buildGetAccountBalancesTool(),
@@ -149,35 +176,75 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildManageHoldingTool(),
     buildRecordMovementTool(),
     buildManageLiabilityTool(),
-  ]);
+  ];
 
-  for await (const msg of query({
-    prompt,
-    options: {
-      model: config.ANTHROPIC_MODEL,
+  const agent = new Agent({
+    initialState: {
       systemPrompt,
-      pathToClaudeCodeExecutable: CLAUDE_CLI_PATH,
-      mcpServers: { [MCP_SERVER_NAME]: server },
-      tools: [],
-      allowedTools: [`mcp__${MCP_SERVER_NAME}__*`],
-      maxTurns: 8,
-      includePartialMessages: true,
-      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
+      model,
+      tools,
     },
-  })) {
-    if (msg.type === 'stream_event') {
-      const event = msg.event;
-      if (event.type === 'content_block_start' && event.content_block.type === 'tool_use') {
-        yield { type: 'status', text: describeToolCall(event.content_block.name) };
-      } else if (event.type === 'content_block_delta' && event.delta.type === 'text_delta') {
-        yield { type: 'text_delta', text: event.delta.text };
+    getApiKey: resolveApiKey,
+  });
+
+  // Queue-based bridge: subscribe() events → async generator
+  type QueueItem = ChatEvent | { done: true };
+  const queue: QueueItem[] = [];
+  let waiting: (() => void) | null = null;
+  const push = (item: QueueItem) => {
+    queue.push(item);
+    if (waiting) { waiting(); waiting = null; }
+  };
+  const pull = () => new Promise<void>(r => {
+    if (queue.length > 0) r();
+    else waiting = r;
+  });
+
+  let turnCount = 0;
+
+  agent.subscribe((event: AgentEvent) => {
+    if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
+      push({ type: 'text_delta', text: event.assistantMessageEvent.delta });
+    }
+    if (event.type === 'tool_execution_start') {
+      push({ type: 'status', text: TOOL_STATUS[event.toolName] ?? 'Processing...' });
+    }
+    if (event.type === 'turn_end') {
+      turnCount++;
+      if (turnCount >= MAX_TURNS) {
+        agent.abort();
+        push({ type: 'result', text: 'I reached the maximum number of steps. Please try a more specific question.' });
+        push({ done: true });
       }
     }
-    if (msg.type === 'result' && msg.subtype === 'success') {
-      yield { type: 'result', text: msg.result };
+    if (event.type === 'agent_end') {
+      const finalText = extractAssistantText(event.messages);
+      push({ type: 'result', text: finalText });
+      push({ done: true });
     }
-    if (msg.type === 'result' && msg.subtype === 'error_max_turns') {
-      yield { type: 'result', text: 'I reached the maximum number of steps. Please try a more specific question.' };
+  });
+
+  // Load conversation history as proper multi-turn messages
+  const priorMessages = convertHistoryToMessages(conversationHistory.slice(0, -1));
+  if (priorMessages.length > 0) {
+    agent.replaceMessages(priorMessages as AgentMessage[]);
+  }
+
+  const lastMsg = conversationHistory[conversationHistory.length - 1];
+  const promptPromise = agent.prompt(lastMsg.content).catch(err => {
+    push({ type: 'error', text: err instanceof Error ? err.message : String(err) });
+    push({ done: true });
+  });
+
+  while (true) {
+    await pull();
+    while (queue.length > 0) {
+      const item = queue.shift()!;
+      if ('done' in item) {
+        await promptPromise;
+        return;
+      }
+      yield item;
     }
   }
 }
@@ -197,22 +264,24 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   const validCategories = new Set(categoryNames);
   const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
-  let text = '';
-  for await (const msg of query({
-    prompt: `Categorize these transactions:\n${txnList}`,
-    options: {
-      model: config.ANTHROPIC_MODEL,
-      systemPrompt: buildBatchCategorizerPrompt(catRows),
-      pathToClaudeCodeExecutable: CLAUDE_CLI_PATH,
-      tools: [],
-      maxTurns: 1,
-      env: { ...process.env, CLAUDE_CONFIG_DIR: LOCAL_CLAUDE_DIR },
-    },
-  })) {
-    if (msg.type === 'result' && msg.subtype === 'success') {
-      text = msg.result;
-    }
-  }
+  const { provider, model: modelName } = parseModelSpec(getBatchModelSpec());
+  // getModel is strictly typed; dynamic strings from config need a cast on the result
+  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
+
+  // Resolve OAuth key if available
+  const oauthKey = await resolveApiKey(provider);
+
+  const response = await completeSimple(model, {
+    systemPrompt: buildBatchCategorizerPrompt(catRows),
+    messages: [{ role: 'user', content: `Categorize these transactions:\n${txnList}`, timestamp: Date.now() }],
+  }, {
+    ...(oauthKey ? { apiKey: oauthKey } : {}),
+  });
+
+  const text = response.content
+    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
+    .map(b => b.text)
+    .join('');
 
   let categorized = 0;
   try {

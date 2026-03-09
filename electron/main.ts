@@ -1,7 +1,7 @@
 import { app, BrowserWindow, dialog, Menu, nativeTheme, systemPreferences } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -33,14 +33,7 @@ process.env.API_TOKEN = authToken;
 // ── Expose app version for preload ───────────────────────────────────────────
 process.env.MM_APP_VERSION = app.getVersion();
 
-// ── 3. Check for Claude Code CLI ─────────────────────────────────────────────
-function checkClaudeCli(): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile('which', ['claude'], (err) => resolve(!err));
-  });
-}
-
-// ── 4. Get macOS accent color ────────────────────────────────────────────────
+// ── 3. Get macOS accent color ────────────────────────────────────────────────
 function getAccentColor(): string {
   if (process.platform !== 'darwin') return '#007AFF';
   try {
@@ -170,22 +163,8 @@ app.whenReady().then(async () => {
 
     buildMenu();
 
-    // Start server import and CLI check concurrently
-    const [serverModule, hasClaude] = await Promise.all([
-      import('../dist/server.js'),
-      checkClaudeCli(),
-    ]);
-
-    if (!hasClaude) {
-      dialog.showErrorBox(
-        'Claude Code CLI Required',
-        'Money Monitor requires Claude Code CLI to be installed.\n\n' +
-        'Install it with: npm install -g @anthropic-ai/claude-code\n\n' +
-        'The app will continue without AI features.'
-      );
-    }
-
-    const { createServer } = serverModule;
+    // Start server import
+    const { createServer } = await import('../dist/server.js');
     const { start, shutdown } = await createServer();
     const port = await start({ port: 0 });
 
