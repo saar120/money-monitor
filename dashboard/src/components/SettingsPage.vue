@@ -318,5 +318,15 @@ async function save() {
         </div>
       </div>
     </template>
+
+    <!-- Demo mode toggle — subtle, at the very bottom -->
+    <div v-if="!loading" class="pt-8 flex items-center gap-2.5">
+      <Switch
+        :model-value="demoMode"
+        :disabled="togglingDemo"
+        @update:model-value="handleDemoToggle"
+      />
+      <span class="text-[11px] text-text-secondary select-none">Demo mode</span>
+    </div>
   </div>
 </template>
