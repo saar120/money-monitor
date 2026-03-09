@@ -10,7 +10,6 @@ import { useApi } from '../composables/useApi';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
-import { PROVIDERS } from '@/lib/providers';
 import { formatCurrency } from '@/lib/format';
 import { useChartTheme } from '@/composables/useChartTheme';
 
@@ -57,6 +56,8 @@ const chartColors = ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55',
                      '#5AC8FA', '#FFCC00', '#FF3B30', '#30D158', '#64D2FF'];
 
 const chartOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
   plugins: {
     legend: { labels: legendLabels.value },
     tooltip: themeTooltip.value,
@@ -76,6 +77,8 @@ const chartOptions = computed(() => ({
 }));
 
 const doughnutOptions = computed(() => ({
+  responsive: true,
+  maintainAspectRatio: false,
   cutout: '70%',
   plugins: chartOptions.value.plugins,
 }));
@@ -128,153 +131,138 @@ const cashflowChartData = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-6 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary">Overview</h1>
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-3">Overview</h1>
 
-    <!-- Bank Balances -->
-    <div v-if="bankAccounts.length > 0" class="space-y-3">
-      <h2 class="text-[15px] font-semibold text-text-primary">Bank Balances</h2>
-      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
-        <Card v-for="account in bankAccounts" :key="account.id">
-          <CardHeader class="pb-1">
-            <CardTitle class="text-[13px] font-medium truncate">{{ account.displayName }}</CardTitle>
-          </CardHeader>
-          <CardContent>
-            <div v-if="account.balance != null" class="text-[17px] font-semibold">
-              {{ formatCurrency(account.balance) }}
-            </div>
-            <div v-else class="text-[13px] text-text-secondary">No balance data</div>
-            <p class="text-[11px] text-text-secondary mt-1">
-              {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
-            </p>
+    <div class="flex-1 min-h-0 overflow-y-auto space-y-3">
+      <!-- Bank Balances + Credit Card Spending — compact top row -->
+      <!-- Section headers -->
+      <div class="grid grid-cols-[auto_1fr] gap-3 items-end">
+        <h2 v-if="bankAccounts.length > 0" class="text-[13px] font-semibold text-text-secondary uppercase tracking-wider">Bank Balances</h2>
+        <div v-else-if="accountsData.loading.value" />
+        <div v-else />
+        <h2 class="text-[13px] font-semibold text-text-secondary uppercase tracking-wider">Credit Card Spending</h2>
+      </div>
+      <!-- All cards in one flat flex row so they share the same height -->
+      <div class="flex gap-2 items-stretch">
+        <!-- Bank Balances -->
+        <template v-if="bankAccounts.length > 0">
+          <Card v-for="account in bankAccounts" :key="account.id" class="min-w-[160px]">
+            <CardContent class="py-3 px-4">
+              <p class="text-[12px] font-medium truncate text-text-secondary">{{ account.displayName }}</p>
+              <p v-if="account.balance != null" class="text-[16px] font-semibold mt-0.5">
+                {{ formatCurrency(account.balance) }}
+              </p>
+              <p v-else class="text-[12px] text-text-secondary mt-0.5">No balance data</p>
+            </CardContent>
+          </Card>
+        </template>
+        <Skeleton v-else-if="accountsData.loading.value" class="h-16 w-48 rounded-lg" />
+
+        <!-- Spacer between sections -->
+        <div class="w-4 flex-shrink-0" />
+
+        <!-- Credit Card Spending -->
+        <Card class="flex-1">
+          <CardContent class="py-3 px-4">
+            <p class="text-[12px] text-text-secondary">This Month</p>
+            <div v-if="categorySummary.loading.value"><Skeleton class="h-6 w-24 mt-0.5" /></div>
+            <p v-else class="text-[18px] font-semibold mt-0.5">{{ formatCurrency(thisMonthTotal) }}</p>
+          </CardContent>
+        </Card>
+        <Card class="flex-1">
+          <CardContent class="py-3 px-4">
+            <p class="text-[12px] text-text-secondary">Last Month</p>
+            <div v-if="lastMonthSummary.loading.value"><Skeleton class="h-6 w-24 mt-0.5" /></div>
+            <p v-else class="text-[18px] font-semibold mt-0.5">{{ formatCurrency(lastMonthTotal) }}</p>
+          </CardContent>
+        </Card>
+        <Card class="flex-1">
+          <CardContent class="py-3 px-4">
+            <p class="text-[12px] text-text-secondary">Difference</p>
+            <div v-if="categorySummary.loading.value || lastMonthSummary.loading.value"><Skeleton class="h-6 w-24 mt-0.5" /></div>
+            <template v-else>
+              <p
+                class="text-[18px] font-semibold mt-0.5"
+                :class="Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal) ? 'text-destructive' : 'text-success'"
+              >
+                {{ formatCurrency(Math.abs(Math.abs(thisMonthTotal) - Math.abs(lastMonthTotal))) }}
+              </p>
+              <Badge
+                v-if="Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal)"
+                variant="destructive"
+                class="mt-1 text-[10px]"
+              >↑ More than last month</Badge>
+              <Badge v-else class="mt-1 text-[10px] bg-success/10 text-success">↓ Less than last month</Badge>
+            </template>
           </CardContent>
         </Card>
       </div>
-    </div>
-    <div v-else-if="accountsData.loading.value" class="space-y-3">
-      <h2 class="text-[15px] font-semibold text-text-primary">Bank Balances</h2>
-      <Skeleton class="h-24 w-full rounded-lg" />
-    </div>
 
-    <!-- Credit Card Spending -->
-    <h2 class="text-[15px] font-semibold text-text-primary">Credit Card Spending</h2>
-    <div class="grid grid-cols-3 gap-4">
-      <Card>
-        <CardHeader class="pb-2">
-          <CardTitle class="text-[13px] font-medium text-text-secondary">This Month</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="categorySummary.loading.value">
-            <Skeleton class="h-8 w-32" />
-          </div>
-          <div v-else class="text-[22px] font-semibold">{{ formatCurrency(thisMonthTotal) }}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader class="pb-2">
-          <CardTitle class="text-[13px] font-medium text-text-secondary">Last Month</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="lastMonthSummary.loading.value">
-            <Skeleton class="h-8 w-32" />
-          </div>
-          <div v-else class="text-[22px] font-semibold">{{ formatCurrency(lastMonthTotal) }}</div>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader class="pb-2">
-          <CardTitle class="text-[13px] font-medium text-text-secondary">Difference</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <div v-if="categorySummary.loading.value || lastMonthSummary.loading.value">
-            <Skeleton class="h-8 w-32" />
-          </div>
-          <template v-else>
-            <div
-              class="text-[22px] font-semibold"
-              :class="thisMonthTotal > lastMonthTotal ? 'text-destructive' : 'text-success'"
-            >
-              {{ formatCurrency(Math.abs(thisMonthTotal - lastMonthTotal)) }}
-            </div>
-            <Badge
-              v-if="thisMonthTotal > lastMonthTotal"
-              variant="destructive"
-              class="mt-2"
-            >
-              ↑ More than last month
-            </Badge>
-            <Badge
-              v-else
-              class="mt-2 bg-success/10 text-success"
-            >
-              ↓ Less than last month
-            </Badge>
-          </template>
-        </CardContent>
-      </Card>
-    </div>
-
-    <!-- Charts Row -->
-    <div class="grid grid-cols-2 gap-4">
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-[15px]">Spending by Category</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" :options="doughnutOptions" />
-          <Skeleton v-else-if="categorySummary.loading.value" class="h-48 w-full rounded-md" />
-          <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
-        </CardContent>
-      </Card>
-
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-[15px]">Monthly Trend</CardTitle>
-        </CardHeader>
-        <CardContent>
-          <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" :options="chartOptions" />
-          <Skeleton v-else-if="monthlySummary.loading.value" class="h-48 w-full rounded-md" />
-          <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
-        </CardContent>
-      </Card>
-    </div>
-
-    <!-- Cashflow -->
-    <Card>
-      <CardHeader>
-        <CardTitle class="text-[15px]">Cashflow</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <Bar v-if="cashflowSummary.data.value" :data="cashflowChartData" :options="chartOptions" />
-        <Skeleton v-else-if="cashflowSummary.loading.value" class="h-48 w-full rounded-md" />
-        <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
-      </CardContent>
-    </Card>
-
-    <!-- Per Account -->
-    <div v-if="accountSummary.loading.value" class="space-y-3">
-      <h2 class="text-[15px] font-semibold text-text-primary">Per Account (This Month)</h2>
-      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
-        <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
-      </div>
-    </div>
-    <div v-else-if="accountSummary.data.value">
-      <h2 class="text-[15px] font-semibold text-text-primary mb-3">Per Account (This Month)</h2>
-      <p v-if="accountSummary.data.value.summary.length === 0" class="text-text-secondary text-[13px]">
-        No account data yet
-      </p>
-      <div class="grid gap-3" style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))">
-        <Card v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
-          <CardHeader class="pb-1">
-            <CardTitle class="text-[13px] font-medium truncate">{{ acc.displayName }}</CardTitle>
+      <!-- Charts Row — constrained height -->
+      <div class="grid grid-cols-2 gap-3">
+        <Card>
+          <CardHeader class="py-3 px-4">
+            <CardTitle class="text-[14px]">Spending by Category</CardTitle>
           </CardHeader>
-          <CardContent>
-            <div class="text-[17px] font-semibold">{{ formatCurrency(acc.totalAmount) }}</div>
-            <p class="text-[11px] text-text-secondary mt-1">{{ acc.transactionCount }} transactions</p>
+          <CardContent class="px-4 pb-3 pt-0">
+            <div class="h-[220px] flex items-center justify-center">
+              <Doughnut v-if="categorySummary.data.value" :data="categoryChartData" :options="doughnutOptions" />
+              <Skeleton v-else-if="categorySummary.loading.value" class="h-full w-full rounded-md" />
+              <p v-else class="text-text-secondary text-[13px]">No data yet</p>
+            </div>
           </CardContent>
         </Card>
+
+        <Card>
+          <CardHeader class="py-3 px-4">
+            <CardTitle class="text-[14px]">Monthly Trend</CardTitle>
+          </CardHeader>
+          <CardContent class="px-4 pb-3 pt-0">
+            <div class="h-[220px]">
+              <Bar v-if="monthlySummary.data.value" :data="monthlyChartData" :options="chartOptions" />
+              <Skeleton v-else-if="monthlySummary.loading.value" class="h-full w-full rounded-md" />
+              <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
+            </div>
+          </CardContent>
+        </Card>
+      </div>
+
+      <!-- Cashflow -->
+      <Card>
+        <CardHeader class="py-3 px-4">
+          <CardTitle class="text-[14px]">Cashflow</CardTitle>
+        </CardHeader>
+        <CardContent class="px-4 pb-3 pt-0">
+          <div class="h-[200px]">
+            <Bar v-if="cashflowSummary.data.value" :data="cashflowChartData" :options="chartOptions" />
+            <Skeleton v-else-if="cashflowSummary.loading.value" class="h-full w-full rounded-md" />
+            <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Per Account -->
+      <div v-if="accountSummary.loading.value" class="space-y-1.5">
+        <h2 class="text-[13px] font-semibold text-text-secondary uppercase tracking-wider">Per Account (This Month)</h2>
+        <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))">
+          <Skeleton v-for="i in 3" :key="i" class="h-16 w-full rounded-lg" />
+        </div>
+      </div>
+      <div v-else-if="accountSummary.data.value">
+        <h2 class="text-[13px] font-semibold text-text-secondary uppercase tracking-wider mb-2">Per Account (This Month)</h2>
+        <p v-if="accountSummary.data.value.summary.length === 0" class="text-text-secondary text-[13px]">
+          No account data yet
+        </p>
+        <div class="grid gap-2" style="grid-template-columns: repeat(auto-fill, minmax(160px, 1fr))">
+          <Card v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
+            <CardContent class="py-3 px-4">
+              <p class="text-[12px] font-medium truncate text-text-secondary">{{ acc.displayName }}</p>
+              <p class="text-[16px] font-semibold mt-0.5">{{ formatCurrency(acc.totalAmount) }}</p>
+              <p class="text-[11px] text-text-secondary">{{ acc.transactionCount }} transactions</p>
+            </CardContent>
+          </Card>
+        </div>
       </div>
     </div>
   </div>
