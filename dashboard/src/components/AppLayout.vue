@@ -64,7 +64,8 @@ function isActive(path: string): boolean {
       />
 
       <!-- Logo area -->
-      <div class="flex items-center h-10 px-4 flex-shrink-0" :class="{ 'mt-3': !isElectron }">
+      <div class="flex items-center h-10 px-4 flex-shrink-0 gap-2" :class="{ 'mt-3': !isElectron }">
+        <img src="/icon-192.png" alt="" class="h-5 w-5 rounded" />
         <span class="text-[13px] font-semibold text-text-primary tracking-tight">
           Money Monitor
         </span>
