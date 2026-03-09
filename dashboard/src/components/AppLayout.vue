@@ -164,7 +164,7 @@ function isActive(path: string): boolean {
         >Exit</button>
       </div>
 
-      <main ref="mainEl" class="flex-1 overflow-y-auto p-6 min-w-0">
+      <main ref="mainEl" class="flex-1 flex flex-col overflow-hidden p-6 min-w-0">
         <slot />
       </main>
     </div>

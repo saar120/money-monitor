@@ -104,7 +104,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-6 animate-fade-in-up">
+  <div class="max-w-2xl mx-auto h-full overflow-y-auto space-y-6 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
       <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
@@ -279,6 +279,25 @@ async function save() {
             <Badge :variant="data?.claude?.installed ? 'default' : 'destructive'">
               {{ data?.claude?.installed ? (data.claude.version || 'Installed') : 'Not found' }}
             </Badge>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Demo Mode -->
+      <Card>
+        <CardContent class="pt-6">
+          <div class="flex items-center justify-between">
+            <div>
+              <p class="text-[13px] font-medium text-text-primary">Demo Mode</p>
+              <p class="text-[11px] text-text-secondary mt-0.5">
+                Load sample data to showcase the app without real bank credentials
+              </p>
+            </div>
+            <Switch
+              :model-value="demoMode"
+              :disabled="togglingDemo"
+              @update:model-value="handleDemoToggle"
+            />
           </div>
         </CardContent>
       </Card>

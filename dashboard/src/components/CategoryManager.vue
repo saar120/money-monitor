@@ -133,8 +133,8 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="space-y-4 animate-fade-in-up">
-    <div class="flex items-center justify-between">
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <div class="flex items-center justify-between flex-shrink-0 mb-4">
       <h1 class="text-[22px] font-semibold text-text-primary">Categories</h1>
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" /> Add category
@@ -180,8 +180,8 @@ onMounted(load);
     </Card>
 
     <!-- Table -->
-    <Card>
-      <CardContent class="p-0">
+    <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <CardContent class="p-0 flex-1 min-h-0 overflow-auto">
         <Table>
           <TableHeader>
             <TableRow>

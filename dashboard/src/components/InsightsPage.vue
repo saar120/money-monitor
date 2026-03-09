@@ -80,19 +80,19 @@ onMounted(async () => {
 </script>
 
 <template>
-  <div class="space-y-4 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary">Insights</h1>
+  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-4">Insights</h1>
 
-    <Card>
-      <CardHeader class="pb-2">
+    <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
+      <CardHeader class="pb-2 flex-shrink-0">
         <CardTitle class="text-[15px]">
           <template v-if="!loading">
             {{ total }} transaction{{ total !== 1 ? 's' : '' }} need{{ total === 1 ? 's' : '' }} review
           </template>
         </CardTitle>
       </CardHeader>
-      <CardContent class="p-0">
-        <div class="overflow-x-auto">
+      <CardContent class="p-0 flex-1 min-h-0">
+        <div class="overflow-auto h-full">
           <Table>
             <TableHeader>
               <TableRow>
@@ -209,7 +209,7 @@ onMounted(async () => {
     </Card>
 
     <!-- Pagination -->
-    <div v-if="total > 0" class="flex items-center justify-between">
+    <div v-if="total > 0" class="flex items-center justify-between flex-shrink-0 pt-4">
       <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
