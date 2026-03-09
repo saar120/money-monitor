@@ -11,6 +11,24 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
 - **Local-First** — All data stays on your machine in a SQLite database. No cloud, no third-party data sharing
 
+## Screenshots
+
+| Overview | AI Chat |
+|---|---|
+| ![Overview](docs/screenshots/overview.png) | ![AI Chat](docs/screenshots/chat.png) |
+
+| Transactions | Accounts |
+|---|---|
+| ![Transactions](docs/screenshots/txns.png) | ![Accounts](docs/screenshots/accounts.png) |
+
+| Net Worth | Insights |
+|---|---|
+| ![Net Worth](docs/screenshots/net_worth.png) | ![Insights](docs/screenshots/insights.png) |
+
+| Scraping |
+|---|
+| ![Scraping](docs/screenshots/scraping.png) |
+
 ## Tech Stack
 
 | Layer | Technology |
