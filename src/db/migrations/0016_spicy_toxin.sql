@@ -1,0 +1,1 @@
+CREATE INDEX IF NOT EXISTS `idx_transactions_category_date` ON `transactions` (`category`,`date`);
