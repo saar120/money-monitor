@@ -103,6 +103,8 @@ SCRAPE_START_DATE_MONTHS_BACK=3
 # AI (required for AI features)
 ANTHROPIC_API_KEY=<your-api-key>
 ANTHROPIC_MODEL=claude-sonnet-4-6
+# Optional: absolute path to Claude Code executable (if `claude` is not on PATH)
+# CLAUDE_CODE_EXECUTABLE=/Users/you/.local/bin/claude
 
 # Dashboard API URL
 VITE_API_URL=http://localhost:3000
