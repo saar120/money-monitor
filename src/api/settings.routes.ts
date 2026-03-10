@@ -1,6 +1,8 @@
 import type { FastifyInstance } from 'fastify';
 import { execFile } from 'node:child_process';
 import { promisify } from 'node:util';
+import { getModels } from '@mariozechner/pi-ai';
+import type { KnownProvider } from '@mariozechner/pi-ai';
 import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
 import { hasAnthropicOAuth, loginWithAnthropic } from '../ai/auth.js';
@@ -14,6 +16,9 @@ const SECRET_KEYS = new Set([
   'CLAUDE_CODE_OAUTH_TOKEN',
   'API_TOKEN',
   'TELEGRAM_BOT_TOKEN',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
 ]);
 
 /** Settable keys (exposed in GET, writable in POST) */
@@ -21,6 +26,13 @@ const SETTABLE_KEYS = [
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_MODEL',
   'CLAUDE_CODE_OAUTH_TOKEN',
+  'AI_PROVIDER',
+  'AI_CHAT_MODEL',
+  'AI_BATCH_PROVIDER',
+  'AI_BATCH_MODEL_ID',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
   'CREDENTIALS_MASTER_KEY',
   'SCRAPE_CRON',
   'SCRAPE_TIMEZONE',
@@ -119,6 +131,32 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: `Failed to save settings: ${msg}` });
     }
     return reply.send({ success: true });
+  });
+
+  // ── AI Provider registry ──────────────────────────────────────────────────────
+
+  const SUPPORTED_PROVIDERS = [
+    { id: 'anthropic', name: 'Anthropic', authTypes: ['api_key', 'oauth'] as const, apiKeyField: 'ANTHROPIC_API_KEY' as const },
+    { id: 'openai', name: 'OpenAI', authTypes: ['api_key'] as const, apiKeyField: 'OPENAI_API_KEY' as const },
+    { id: 'google', name: 'Google Gemini', authTypes: ['api_key'] as const, apiKeyField: 'GEMINI_API_KEY' as const },
+    { id: 'openrouter', name: 'OpenRouter', authTypes: ['api_key'] as const, apiKeyField: 'OPENROUTER_API_KEY' as const },
+  ];
+
+  app.get('/api/ai/providers', async (_request, reply) => {
+    const providers = SUPPORTED_PROVIDERS.map(p => {
+      const models = getModels(p.id as KnownProvider).map(m => ({
+        id: m.id,
+        name: m.name,
+        reasoning: m.reasoning,
+      }));
+      const keyValue = config[p.apiKeyField];
+      return {
+        ...p,
+        models,
+        hasKey: typeof keyValue === 'string' && keyValue.length > 0,
+      };
+    });
+    return reply.send({ providers });
   });
 
   // ── OAuth endpoints ──────────────────────────────────────────────────────────

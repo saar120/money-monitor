@@ -61,6 +61,33 @@ describe('settings routes', () => {
     });
   });
 
+  // ── GET /api/ai/providers ──
+
+  describe('GET /api/ai/providers', () => {
+    it('returns supported providers with models', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/ai/providers',
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.providers).toBeInstanceOf(Array);
+      expect(body.providers.length).toBe(4);
+
+      const anthropic = body.providers.find((p: any) => p.id === 'anthropic');
+      expect(anthropic).toBeDefined();
+      expect(anthropic.name).toBe('Anthropic');
+      expect(anthropic.models.length).toBeGreaterThan(0);
+      expect(anthropic.models[0]).toHaveProperty('id');
+      expect(anthropic.models[0]).toHaveProperty('name');
+
+      const openai = body.providers.find((p: any) => p.id === 'openai');
+      expect(openai).toBeDefined();
+      expect(openai.hasKey).toBe(false); // no key in test env
+    });
+  });
+
   // ── POST /api/settings ──
 
   describe('POST /api/settings', () => {
