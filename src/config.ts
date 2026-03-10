@@ -39,6 +39,13 @@ const envSchema = z.object({
   SCRAPE_START_DATE_MONTHS_BACK: z.coerce.number().default(3),
   ANTHROPIC_API_KEY: z.string().default(''),
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
+  AI_PROVIDER: z.string().default('anthropic'),
+  AI_CHAT_MODEL: z.string().default(''),
+  AI_BATCH_PROVIDER: z.string().default(''),
+  AI_BATCH_MODEL_ID: z.string().default(''),
+  OPENAI_API_KEY: z.string().default(''),
+  GEMINI_API_KEY: z.string().default(''),
+  OPENROUTER_API_KEY: z.string().default(''),
   AI_MODEL: z.string().optional(),
   AI_BATCH_MODEL: z.string().optional(),
   CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
@@ -88,12 +95,17 @@ export function parseModelSpec(spec: string): { provider: string; model: string 
   return { provider: spec.slice(0, idx), model: spec.slice(idx + 1) };
 }
 
-/** Resolve the effective AI model spec (AI_MODEL > ANTHROPIC_MODEL fallback). */
+/** Resolve the effective AI model spec (AI_MODEL > AI_PROVIDER:AI_CHAT_MODEL > anthropic:ANTHROPIC_MODEL). */
 export function getAIModelSpec(): string {
-  return config.AI_MODEL || `anthropic:${config.ANTHROPIC_MODEL}`;
+  if (config.AI_MODEL) return config.AI_MODEL;
+  const model = config.AI_CHAT_MODEL || config.ANTHROPIC_MODEL;
+  return `${config.AI_PROVIDER}:${model}`;
 }
 
-/** Resolve the batch model spec (AI_BATCH_MODEL > AI_MODEL fallback). */
+/** Resolve the batch model spec (AI_BATCH_MODEL > AI_BATCH_PROVIDER:AI_BATCH_MODEL_ID > chat spec). */
 export function getBatchModelSpec(): string {
-  return config.AI_BATCH_MODEL || getAIModelSpec();
+  if (config.AI_BATCH_MODEL) return config.AI_BATCH_MODEL;
+  const provider = config.AI_BATCH_PROVIDER || config.AI_PROVIDER;
+  const model = config.AI_BATCH_MODEL_ID || config.AI_CHAT_MODEL || config.ANTHROPIC_MODEL;
+  return `${provider}:${model}`;
 }
