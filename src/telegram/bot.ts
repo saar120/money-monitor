@@ -200,9 +200,14 @@ export function startTelegramBot(): void {
     { command: 'switch', description: 'Switch to a session by ID prefix' },
   ]).catch(() => {});
 
+  // ── Catch unhandled errors so the polling loop keeps running ──
+  bot.catch((err) => {
+    console.error('[Telegram] Unhandled error in bot handler:', err.message ?? err);
+  });
+
   // ── Start long polling ──
   bot.start({
-    onStart: () => console.log('Telegram bot started'),
+    onStart: () => console.log('[Telegram] Bot started (long polling)'),
   });
 }
 
@@ -211,4 +216,9 @@ export function stopTelegramBot(): void {
     bot.stop();
     bot = null;
   }
+}
+
+export function restartTelegramBot(): void {
+  stopTelegramBot();
+  startTelegramBot();
 }

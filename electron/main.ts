@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -98,7 +98,13 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ── 6. Window management ─────────────────────────────────────────────────────
+// ── 6. Prevent macOS App Nap from suspending background work ─────────────────
+// 'prevent-app-suspension' keeps the process alive for cron jobs and SSE
+// streams without preventing the display from sleeping.
+const powerSaveId = powerSaveBlocker.start('prevent-app-suspension');
+console.log(`[Electron] Power save blocker started (id: ${powerSaveId})`);
+
+// ── 7. Window management ─────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
 
 function sendAccentColor() {
@@ -124,6 +130,7 @@ function createWindow(port: number) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -167,7 +174,7 @@ app.whenReady().then(async () => {
 
     // Start server import
     const { createServer } = await import('../dist/server.js');
-    const { start, shutdown } = await createServer();
+    const { start, shutdown, onResume } = await createServer();
     const port = await start({ port: 0 });
 
     console.log(`[Electron] Server started on port ${port}`);
@@ -184,6 +191,15 @@ app.whenReady().then(async () => {
       if (BrowserWindow.getAllWindows().length === 0) {
         createWindow(port);
       }
+    });
+
+    // After system sleep, node-cron timers may have drifted, the Telegram
+    // polling connection will have dropped, and SSE streams will be stale.
+    // Restart all background services and reload the page.
+    powerMonitor.on('resume', () => {
+      console.log('[Electron] System resumed from sleep — restarting background services');
+      onResume();
+      mainWindow?.webContents.reload();
     });
 
     let quitting = false;
