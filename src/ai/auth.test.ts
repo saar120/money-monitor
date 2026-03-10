@@ -35,10 +35,10 @@ const { resolveApiKey, PROVIDER_KEY_MAP, loadCredentials } = await import('./aut
 function resetConfig() {
   Object.assign(mockConfig, {
     ANTHROPIC_API_KEY: '',
+    ANTHROPIC_OAUTH_TOKEN: undefined,
     OPENAI_API_KEY: '',
     GEMINI_API_KEY: '',
     OPENROUTER_API_KEY: '',
-    CLAUDE_CODE_OAUTH_TOKEN: undefined,
   });
 }
 
@@ -72,15 +72,15 @@ describe('resolveApiKey', () => {
     expect(await resolveApiKey('anthropic')).toBe('oauth-key-123');
   });
 
-  it('falls through to CLAUDE_CODE_OAUTH_TOKEN for anthropic (step 2)', async () => {
+  it('falls through to ANTHROPIC_OAUTH_TOKEN for anthropic (step 2)', async () => {
     mockGetOAuthApiKey.mockResolvedValue(null);
-    mockConfig.CLAUDE_CODE_OAUTH_TOKEN = 'oat-test-token';
+    mockConfig.ANTHROPIC_OAUTH_TOKEN = 'oat-test-token';
     expect(await resolveApiKey('anthropic')).toBe('oat-test-token');
   });
 
-  it('skips CLAUDE_CODE_OAUTH_TOKEN for non-anthropic providers', async () => {
+  it('skips ANTHROPIC_OAUTH_TOKEN for non-anthropic providers', async () => {
     mockGetOAuthApiKey.mockResolvedValue(null);
-    mockConfig.CLAUDE_CODE_OAUTH_TOKEN = 'oat-test-token';
+    mockConfig.ANTHROPIC_OAUTH_TOKEN = 'oat-test-token';
     mockConfig.OPENAI_API_KEY = 'sk-openai';
     expect(await resolveApiKey('openai')).toBe('sk-openai');
   });

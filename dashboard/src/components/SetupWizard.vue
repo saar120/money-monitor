@@ -1,12 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { updateSettings, getAIProviders, type AIProvider } from '../api/client';
+import { updateSettings, getAIProviders, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, type AIProvider } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check } from 'lucide-vue-next';
+import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check, CheckCircle } from 'lucide-vue-next';
 
 const router = useRouter();
 const isElectron = !!(window as any).electronAPI;
@@ -55,9 +55,49 @@ const scrapeCron = ref('0 6 * * *');
 const scrapeTimezone = ref('Asia/Jerusalem');
 const telegramBotToken = ref('');
 
+// Anthropic OAuth
+const oauthConnected = ref(false);
+const oauthStep = ref<'idle' | 'waiting_code' | 'submitting'>('idle');
+const oauthCode = ref('');
+const oauthError = ref('');
+
+async function startOAuth() {
+  oauthError.value = '';
+  oauthStep.value = 'waiting_code';
+  try {
+    const { url } = await startAnthropicOAuth();
+    window.open(url, '_blank');
+  } catch (e) {
+    oauthError.value = e instanceof Error ? e.message : 'Failed to start OAuth';
+    oauthStep.value = 'idle';
+  }
+}
+
+async function submitOAuthCode() {
+  if (!oauthCode.value.trim()) return;
+  oauthError.value = '';
+  oauthStep.value = 'submitting';
+  try {
+    await completeAnthropicOAuth(oauthCode.value.trim());
+    oauthConnected.value = true;
+    oauthStep.value = 'idle';
+    oauthCode.value = '';
+  } catch (e) {
+    oauthError.value = e instanceof Error ? e.message : 'Authorization failed';
+    oauthStep.value = 'waiting_code';
+  }
+}
+
+function cancelOAuth() {
+  cancelAnthropicOAuth().catch(() => {});
+  oauthStep.value = 'idle';
+  oauthCode.value = '';
+  oauthError.value = '';
+}
+
 const canProceed = computed(() => {
   if (step.value === 1) {
-    return !!(apiKey.value.trim() || oauthToken.value.trim());
+    return !!(apiKey.value.trim() || oauthToken.value.trim() || oauthConnected.value);
   }
   if (step.value === 2) return masterKey.value.length >= 8;
   return true;
@@ -90,7 +130,7 @@ async function finish() {
       settings[provider.apiKeyField] = apiKey.value.trim();
     }
     if (selectedProvider.value === 'anthropic' && oauthToken.value.trim()) {
-      settings.CLAUDE_CODE_OAUTH_TOKEN = oauthToken.value.trim();
+      settings.ANTHROPIC_OAUTH_TOKEN = oauthToken.value.trim();
     }
     if (telegramBotToken.value.trim()) {
       settings.TELEGRAM_BOT_TOKEN = telegramBotToken.value.trim();
@@ -165,16 +205,56 @@ async function finish() {
             />
           </div>
 
-          <!-- OAuth token (Anthropic only) -->
+          <!-- Anthropic OAuth (alternative to API key) -->
           <template v-if="selectedProvider === 'anthropic'">
             <div class="relative flex items-center justify-center">
               <div class="absolute border-t w-full" />
-              <span class="relative bg-background px-2 text-xs text-muted-foreground">or</span>
+              <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
             </div>
+
+            <div v-if="oauthConnected && oauthStep === 'idle'" class="flex items-center gap-2 text-[13px]">
+              <CheckCircle class="h-4 w-4 text-green-500" />
+              <span class="text-text-secondary">Anthropic OAuth connected</span>
+            </div>
+
+            <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
+              <Button variant="outline" size="sm" @click="startOAuth" class="w-full">
+                Login with Anthropic
+              </Button>
+              <p class="text-[11px] text-text-secondary">
+                Use your Anthropic account instead of an API key
+              </p>
+            </div>
+
+            <div v-else-if="oauthStep === 'waiting_code'" class="space-y-2">
+              <p class="text-[12px] text-text-secondary">
+                A browser window has been opened. After authorizing, paste the code below:
+              </p>
+              <div class="flex gap-2">
+                <Input
+                  v-model="oauthCode"
+                  placeholder="Paste authorization code..."
+                  class="flex-1"
+                  @keydown.enter="submitOAuthCode"
+                />
+                <Button size="sm" :disabled="!oauthCode.trim()" @click="submitOAuthCode">
+                  Submit
+                </Button>
+              </div>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">Cancel</button>
+            </div>
+
+            <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
+              Verifying authorization...
+            </div>
+
+            <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
+
+            <!-- Manual OAuth token paste -->
             <div class="space-y-1">
               <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
               <Input type="password" v-model="oauthToken" placeholder="oat-..." />
-              <p class="text-[11px] text-text-secondary mt-1">From Claude Code CLI</p>
+              <p class="text-[11px] text-text-secondary mt-1">Paste an OAuth token directly (e.g. from Claude Code CLI)</p>
             </div>
           </template>
 
@@ -297,7 +377,7 @@ async function finish() {
           <Button
             v-if="step === 1"
             variant="ghost"
-            @click="step = 2; apiKey = ''; oauthToken = ''"
+            @click="step = 2; apiKey = ''; oauthToken = ''; cancelOAuth()"
           >
             Skip
           </Button>

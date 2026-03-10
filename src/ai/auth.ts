@@ -25,16 +25,60 @@ function saveCredentials(): void {
   writeFileSync(CREDENTIALS_PATH, JSON.stringify(credentials, null, 2), { mode: 0o600 });
 }
 
-/** Run the Anthropic OAuth device code login flow. */
-export async function loginWithAnthropic(): Promise<void> {
-  const creds = await loginAnthropic(
-    (url: string) => console.log(`[OAuth] Open this URL to authorize: ${url}`),
-    async () => {
-      throw new Error('Manual code input not implemented — use browser flow');
-    },
-  );
-  credentials.anthropic = creds;
-  saveCredentials();
+// ── Two-step Anthropic OAuth (PKCE) ──────────────────────────────────────────
+
+let pendingCodeResolve: ((code: string) => void) | null = null;
+let pendingLoginPromise: Promise<void> | null = null;
+
+/**
+ * Step 1: Start the Anthropic OAuth PKCE flow.
+ * Returns the authorization URL the user must open in a browser.
+ * The flow suspends until `completeAnthropicOAuth` is called with the code.
+ */
+export function startAnthropicOAuth(): Promise<string> {
+  if (pendingCodeResolve) {
+    throw new Error('OAuth flow already in progress');
+  }
+
+  return new Promise<string>((resolveUrl, rejectUrl) => {
+    const codePromise = new Promise<string>((resolve) => {
+      pendingCodeResolve = resolve;
+    });
+
+    pendingLoginPromise = loginAnthropic(
+      (url: string) => resolveUrl(url),
+      () => codePromise,
+    ).then(creds => {
+      credentials.anthropic = creds;
+      saveCredentials();
+    }).catch(err => {
+      // If onAuthUrl never fired, reject the outer promise
+      rejectUrl(err);
+    }).finally(() => {
+      pendingCodeResolve = null;
+      pendingLoginPromise = null;
+    });
+  });
+}
+
+/**
+ * Step 2: Complete the OAuth flow by providing the authorization code
+ * the user copied from the browser redirect.
+ */
+export async function completeAnthropicOAuth(code: string): Promise<void> {
+  if (!pendingCodeResolve) {
+    throw new Error('No OAuth flow in progress');
+  }
+  pendingCodeResolve(code);
+  if (pendingLoginPromise) {
+    await pendingLoginPromise;
+  }
+}
+
+/** Cancel any in-progress OAuth flow. */
+export function cancelAnthropicOAuth(): void {
+  pendingCodeResolve = null;
+  pendingLoginPromise = null;
 }
 
 /** Maps provider IDs to their config API key field names. */
@@ -47,7 +91,7 @@ export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
 
 /**
  * Get API key for a provider, auto-refreshing OAuth tokens if needed.
- * Falls back through: OAuth → CLAUDE_CODE_OAUTH_TOKEN → config API key → undefined.
+ * Falls back through: OAuth → manual OAuth token → config API key → undefined (pi-ai checks env vars).
  */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
   // 1. Try OAuth credentials (auto-refresh)
@@ -62,9 +106,9 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
     console.error(`[OAuth] Failed to refresh token for ${provider}:`, err instanceof Error ? err.message : err);
   }
 
-  // 2. CLAUDE_CODE_OAUTH_TOKEN fallback (anthropic only)
-  if (provider === 'anthropic' && config.CLAUDE_CODE_OAUTH_TOKEN) {
-    return config.CLAUDE_CODE_OAUTH_TOKEN;
+  // 2. Manually-pasted OAuth token (Anthropic only)
+  if (provider === 'anthropic' && config.ANTHROPIC_OAUTH_TOKEN) {
+    return config.ANTHROPIC_OAUTH_TOKEN;
   }
 
   // 3. Provider-specific API key from config

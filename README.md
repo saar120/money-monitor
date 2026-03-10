@@ -5,7 +5,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 ## Features
 
 - **Automatic Bank Scraping** — Connects to 9 Israeli banks and 8 credit card providers via headless browser automation
-- **AI Financial Advisor** — Chat with Claude about your spending habits, get category suggestions, detect recurring charges, and compare periods
+- **AI Financial Advisor** — Chat with your AI about spending habits, get category suggestions, detect recurring charges, and compare periods
 - **Interactive Dashboard** — Real-time charts, spending breakdowns, transaction search, and account management
 - **Scheduled Scraping** — Configurable cron-based background scraping with live progress via SSE
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
@@ -37,7 +37,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 | **Frontend** | Vue 3 (Composition API), Vite, Tailwind CSS |
 | **Database** | SQLite via better-sqlite3, Drizzle ORM |
 | **Scraping** | israeli-bank-scrapers, Puppeteer + Stealth Plugin |
-| **AI** | Claude Code CLI via Agent SDK (MCP tools for data queries) |
+| **AI** | Pi AI multi-provider framework (Anthropic, OpenAI, Google, OpenRouter) |
 | **Scheduling** | node-cron (Israel timezone) |
 | **Charts** | Chart.js + vue-chartjs |
 | **UI Components** | Reka UI (headless), Lucide icons |

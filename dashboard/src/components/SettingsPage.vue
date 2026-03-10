@@ -1,11 +1,10 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getSettings, updateSettings, toggleDemoMode, getAIProviders, type SettingsResponse, type AIProvider } from '../api/client';
+import { getSettings, updateSettings, toggleDemoMode, getAIProviders, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, type SettingsResponse, type AIProvider } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Badge } from '@/components/ui/badge';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
 import { Settings, Bot, Key, Clock, Send, FolderOpen, Save, CheckCircle, AlertCircle } from 'lucide-vue-next';
 
@@ -21,8 +20,8 @@ const useSeparateBatch = ref(false);
 // Editable fields — populated from API, secrets left empty until user types
 const form = ref({
   ANTHROPIC_API_KEY: '',
+  ANTHROPIC_OAUTH_TOKEN: '',
   ANTHROPIC_MODEL: 'claude-sonnet-4-6',
-  CLAUDE_CODE_OAUTH_TOKEN: '',
   AI_PROVIDER: 'anthropic',
   AI_CHAT_MODEL: '',
   AI_BATCH_PROVIDER: '',
@@ -108,6 +107,48 @@ async function handleDemoToggle(enabled: boolean) {
   }
 }
 
+// ── Anthropic OAuth ──────────────────────────────────────────────────────────
+
+const oauthConnected = computed(() => data.value?.oauth?.anthropic ?? false);
+const oauthStep = ref<'idle' | 'waiting_code' | 'submitting'>('idle');
+const oauthCode = ref('');
+const oauthError = ref('');
+async function startOAuth() {
+  oauthError.value = '';
+  oauthStep.value = 'waiting_code';
+  try {
+    const { url } = await startAnthropicOAuth();
+    window.open(url, '_blank');
+  } catch (e) {
+    oauthError.value = e instanceof Error ? e.message : 'Failed to start OAuth';
+    oauthStep.value = 'idle';
+  }
+}
+
+async function submitOAuthCode() {
+  if (!oauthCode.value.trim()) return;
+  oauthError.value = '';
+  oauthStep.value = 'submitting';
+  try {
+    await completeAnthropicOAuth(oauthCode.value.trim());
+    if (data.value) data.value.oauth.anthropic = true;
+    oauthStep.value = 'idle';
+    oauthCode.value = '';
+  } catch (e) {
+    oauthError.value = e instanceof Error ? e.message : 'Authorization failed';
+    oauthStep.value = 'waiting_code';
+  }
+}
+
+function cancelOAuth() {
+  cancelAnthropicOAuth().catch(() => {});
+  oauthStep.value = 'idle';
+  oauthCode.value = '';
+  oauthError.value = '';
+}
+
+// ── Save ─────────────────────────────────────────────────────────────────────
+
 async function save() {
   saving.value = true;
   error.value = '';
@@ -128,7 +169,7 @@ async function save() {
     };
     // Only include secrets that the user actually modified
     const secretKeys = [
-      'ANTHROPIC_API_KEY', 'CLAUDE_CODE_OAUTH_TOKEN', 'CREDENTIALS_MASTER_KEY',
+      'ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'CREDENTIALS_MASTER_KEY',
       'TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY',
     ] as const;
     for (const key of secretKeys) {
@@ -180,6 +221,24 @@ async function save() {
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
+          <!-- Current status -->
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary bg-bg-secondary rounded-md px-3 py-2">
+            <span>Provider: <strong class="text-text-primary">{{ currentProvider?.name ?? form.AI_PROVIDER }}</strong></span>
+            <span>Model: <strong class="text-text-primary">{{ form.AI_CHAT_MODEL || form.ANTHROPIC_MODEL || 'default' }}</strong></span>
+            <span v-if="form.AI_PROVIDER === 'anthropic'">
+              Auth:
+              <strong class="text-text-primary" v-if="oauthConnected">OAuth</strong>
+              <strong class="text-text-primary" v-else-if="data?.settings?.ANTHROPIC_OAUTH_TOKEN">Token</strong>
+              <strong class="text-text-primary" v-else-if="data?.settings?.ANTHROPIC_API_KEY">API Key</strong>
+              <strong class="text-destructive" v-else>Not set</strong>
+            </span>
+            <span v-else>
+              Auth:
+              <strong class="text-text-primary" v-if="currentProvider?.hasKey">API Key</strong>
+              <strong class="text-destructive" v-else>Not set</strong>
+            </span>
+          </div>
+
           <!-- Provider -->
           <div class="space-y-1">
             <label class="text-[13px] font-medium text-text-primary block">Provider</label>
@@ -207,17 +266,63 @@ async function save() {
             />
           </div>
 
-          <!-- OAuth Token (Anthropic only) -->
-          <div v-if="form.AI_PROVIDER === 'anthropic'" class="space-y-1">
-            <label class="text-[13px] font-medium text-text-primary block">Claude Code OAuth Token</label>
-            <Input
-              type="password"
-              v-model="form.CLAUDE_CODE_OAUTH_TOKEN"
-              :placeholder="data?.settings?.CLAUDE_CODE_OAUTH_TOKEN ? String(data.settings.CLAUDE_CODE_OAUTH_TOKEN) : 'Not set'"
-              @input="markDirty('CLAUDE_CODE_OAUTH_TOKEN')"
-            />
-            <p class="text-[11px] text-text-secondary mt-1">Alternative to API Key — from Claude Code CLI</p>
-          </div>
+          <!-- Anthropic OAuth (alternative to API key) -->
+          <template v-if="form.AI_PROVIDER === 'anthropic'">
+            <div class="relative flex items-center justify-center">
+              <div class="absolute border-t w-full" />
+              <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
+            </div>
+
+            <div v-if="oauthConnected && oauthStep === 'idle'" class="flex items-center gap-2 text-[13px]">
+              <CheckCircle class="h-4 w-4 text-green-500" />
+              <span class="text-text-secondary">Anthropic OAuth connected</span>
+            </div>
+
+            <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
+              <Button variant="outline" size="sm" @click="startOAuth" class="w-full">
+                Login with Anthropic
+              </Button>
+              <p class="text-[11px] text-text-secondary">
+                Use your Anthropic account instead of an API key
+              </p>
+            </div>
+
+            <div v-else-if="oauthStep === 'waiting_code'" class="space-y-2">
+              <p class="text-[12px] text-text-secondary">
+                A browser window has been opened. After authorizing, paste the code below:
+              </p>
+              <div class="flex gap-2">
+                <Input
+                  v-model="oauthCode"
+                  placeholder="Paste authorization code..."
+                  class="flex-1"
+                  @keydown.enter="submitOAuthCode"
+                />
+                <Button size="sm" :disabled="!oauthCode.trim()" @click="submitOAuthCode">
+                  Submit
+                </Button>
+              </div>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">Cancel</button>
+            </div>
+
+            <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
+              Verifying authorization...
+            </div>
+
+            <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
+
+            <!-- Manual OAuth token paste -->
+            <div class="space-y-1">
+              <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
+              <Input
+                type="password"
+                v-model="form.ANTHROPIC_OAUTH_TOKEN"
+                :placeholder="data?.settings?.ANTHROPIC_OAUTH_TOKEN ? String(data.settings.ANTHROPIC_OAUTH_TOKEN) : 'Not set'"
+                @input="markDirty('ANTHROPIC_OAUTH_TOKEN')"
+              />
+              <p class="text-[11px] text-text-secondary mt-1">Paste an OAuth token directly (e.g. from Claude Code CLI)</p>
+            </div>
+          </template>
 
           <!-- Chat Model -->
           <div class="space-y-1">
@@ -394,12 +499,6 @@ async function save() {
           <div class="flex items-center justify-between">
             <span class="text-[13px] text-text-secondary">Data Directory</span>
             <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{ data?.dataDir }}</code>
-          </div>
-          <div class="flex items-center justify-between">
-            <span class="text-[13px] text-text-secondary">Claude Code CLI</span>
-            <Badge :variant="data?.claude?.installed ? 'default' : 'destructive'">
-              {{ data?.claude?.installed ? (data.claude.version || 'Installed') : 'Not found' }}
-            </Badge>
           </div>
         </CardContent>
       </Card>

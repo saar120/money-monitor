@@ -1,19 +1,15 @@
 import type { FastifyInstance } from 'fastify';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
 import { getModels } from '@mariozechner/pi-ai';
 import type { KnownProvider } from '@mariozechner/pi-ai';
 import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
 import { dataDir } from '../paths.js';
-import { hasAnthropicOAuth, loginWithAnthropic } from '../ai/auth.js';
+import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
-
-const execFileAsync = promisify(execFile);
 
 const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
   'ANTHROPIC_API_KEY',
-  'CLAUDE_CODE_OAUTH_TOKEN',
+  'ANTHROPIC_OAUTH_TOKEN',
   'API_TOKEN',
   'TELEGRAM_BOT_TOKEN',
   'OPENAI_API_KEY',
@@ -24,8 +20,8 @@ const SECRET_KEYS = new Set([
 /** Settable keys (exposed in GET, writable in POST) */
 const SETTABLE_KEYS = [
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_OAUTH_TOKEN',
   'ANTHROPIC_MODEL',
-  'CLAUDE_CODE_OAUTH_TOKEN',
   'AI_PROVIDER',
   'AI_CHAT_MODEL',
   'AI_BATCH_PROVIDER',
@@ -48,24 +44,6 @@ function redact(value: string): string {
   return '****' + value.slice(-4);
 }
 
-let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
-let claudeStatusCheckedAt = 0;
-const CLAUDE_STATUS_TTL = 60_000; // re-check every 60s
-
-async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
-  if (cachedClaudeStatus && (cachedClaudeStatus.installed || Date.now() - claudeStatusCheckedAt < CLAUDE_STATUS_TTL)) {
-    return cachedClaudeStatus;
-  }
-  try {
-    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
-    cachedClaudeStatus = { installed: true, version: stdout.trim() };
-  } catch {
-    cachedClaudeStatus = { installed: false };
-  }
-  claudeStatusCheckedAt = Date.now();
-  return cachedClaudeStatus;
-}
-
 export async function settingsRoutes(app: FastifyInstance) {
 
   app.get('/api/settings', async (_request, reply) => {
@@ -76,7 +54,6 @@ export async function settingsRoutes(app: FastifyInstance) {
         settings: {},
         dataDir: '',
         oauth: { anthropic: false },
-        claude: { installed: false },
         demoMode: isDemoMode(),
       });
     }
@@ -100,7 +77,6 @@ export async function settingsRoutes(app: FastifyInstance) {
       settings,
       dataDir,
       oauth: { anthropic: hasAnthropicOAuth() },
-      claude: await getClaudeStatus(),
       demoMode: isDemoMode(),
     });
   });
@@ -161,14 +137,36 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // ── OAuth endpoints ──────────────────────────────────────────────────────────
 
-  app.post('/api/settings/oauth/anthropic', async (_request, reply) => {
+  /** Start the Anthropic PKCE OAuth flow — returns the URL the user must open. */
+  app.post('/api/settings/oauth/anthropic/start', async (_request, reply) => {
     try {
-      await loginWithAnthropic();
+      const url = await startAnthropicOAuth();
+      return reply.send({ url });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  /** Complete the OAuth flow with the authorization code from the browser redirect. */
+  app.post('/api/settings/oauth/anthropic/complete', async (request, reply) => {
+    const { code } = request.body as { code?: string };
+    if (!code) {
+      return reply.status(400).send({ error: 'Authorization code is required' });
+    }
+    try {
+      await completeAnthropicOAuth(code);
       return reply.send({ success: true });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
       return reply.status(500).send({ error: msg });
     }
+  });
+
+  /** Cancel any in-progress OAuth flow. */
+  app.post('/api/settings/oauth/anthropic/cancel', async (_request, reply) => {
+    cancelAnthropicOAuth();
+    return reply.send({ success: true });
   });
 
   app.get('/api/settings/oauth/status', async (_request, reply) => {

@@ -48,7 +48,7 @@ const envSchema = z.object({
   OPENROUTER_API_KEY: z.string().default(''),
   AI_MODEL: z.string().optional(),
   AI_BATCH_MODEL: z.string().optional(),
-  CLAUDE_CODE_OAUTH_TOKEN: z.string().optional(),
+  ANTHROPIC_OAUTH_TOKEN: z.string().optional(),
   API_TOKEN: z.string().optional(),
   CORS_ORIGIN: z.string().optional(),
   TELEGRAM_BOT_TOKEN: z.string().optional(),

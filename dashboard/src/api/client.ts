@@ -680,7 +680,6 @@ export interface SettingsResponse {
   settings: Record<string, string | number | boolean>;
   dataDir: string;
   oauth: { anthropic: boolean };
-  claude: { installed: boolean; version?: string };
   demoMode: boolean;
 }
 
@@ -712,6 +711,27 @@ export function updateSettings(settings: Record<string, string | number | boolea
     method: 'POST',
     body: JSON.stringify(settings),
   });
+}
+
+// ─── OAuth ───
+
+export function startAnthropicOAuth() {
+  return request<{ url: string }>('/settings/oauth/anthropic/start', { method: 'POST' });
+}
+
+export function completeAnthropicOAuth(code: string) {
+  return request<{ success: boolean }>('/settings/oauth/anthropic/complete', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function cancelAnthropicOAuth() {
+  return request<{ success: boolean }>('/settings/oauth/anthropic/cancel', { method: 'POST' });
+}
+
+export function getOAuthStatus() {
+  return request<{ anthropic: boolean }>('/settings/oauth/status');
 }
 
 // ─── Demo Mode ───

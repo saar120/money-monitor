@@ -35,7 +35,6 @@ vi.mock('../paths.js', () => ({
   credentialsPath: '/tmp/test-money-monitor/credentials.enc',
   chatDir: '/tmp/test-money-monitor/chat',
   sessionsDir: '/tmp/test-money-monitor/chat/sessions',
-  claudeDir: '/tmp/test-money-monitor/.claude',
   configPath: '/tmp/test-money-monitor/config.json',
 }));
 
