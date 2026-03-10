@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { getTransactions, getCategories, resolveTransaction, type Transaction, type Category } from '../api/client';
+import { useReviewCount } from '../composables/useReviewCount';
 import { Button } from '@/components/ui/button';
 import {
   Select,
@@ -28,6 +29,7 @@ const total = ref(0);
 const loading = ref(false);
 const categories = ref<Category[]>([]);
 const categoryMap = computed(() => buildCategoryMap(categories.value));
+const { reviewCount } = useReviewCount();
 const resolvingId = ref<number | null>(null);
 const offset = ref(0);
 const limit = 50;
@@ -38,6 +40,7 @@ async function fetchItems() {
     const result = await getTransactions({ needsReview: true, limit, offset: offset.value });
     items.value = result.transactions;
     total.value = result.pagination.total;
+    reviewCount.value = result.pagination.total;
   } catch (err) {
     console.error('Failed to fetch needs-review transactions:', err);
   } finally {
@@ -51,6 +54,7 @@ async function resolve(txn: Transaction, category: string) {
     await resolveTransaction(txn.id, category);
     items.value = items.value.filter(t => t.id !== txn.id);
     total.value--;
+    reviewCount.value = total.value;
   } catch (err) {
     console.error('Failed to resolve transaction:', err);
   } finally {

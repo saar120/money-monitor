@@ -2,7 +2,8 @@
 import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { LayoutDashboard, Receipt, Building2, Bot, Tag, Activity, Lightbulb, TrendingUp, Settings } from 'lucide-vue-next';
-import { getNeedsReviewCount, getSettings, toggleDemoMode } from '../api/client';
+import { getSettings, toggleDemoMode } from '../api/client';
+import { useReviewCount } from '../composables/useReviewCount';
 
 const isElectron = !!(window as any).electronAPI;
 
@@ -18,16 +19,15 @@ onUnmounted(() => {
   removeAfterEach();
 });
 
-const reviewCount = ref(0);
+const { reviewCount, refresh: refreshReviewCount } = useReviewCount();
 const demoMode = ref(false);
 
 onMounted(async () => {
   try {
-    const [reviewRes, settingsRes] = await Promise.all([
-      getNeedsReviewCount(),
+    const [, settingsRes] = await Promise.all([
+      refreshReviewCount(),
       getSettings(),
     ]);
-    reviewCount.value = reviewRes.count;
     demoMode.value = settingsRes.demoMode;
   } catch { /* ignore */ }
 });
