@@ -3,7 +3,7 @@ import { join } from 'node:path';
 import { loginAnthropic, getOAuthApiKey } from '@mariozechner/pi-ai/oauth';
 import type { OAuthCredentials } from '@mariozechner/pi-ai/oauth';
 import { dataDir } from '../paths.js';
-import { config } from '../config.js';
+import { config, type Config } from '../config.js';
 
 const CREDENTIALS_PATH = join(dataDir, 'oauth-credentials.json');
 
@@ -16,15 +16,6 @@ export function loadCredentials(): void {
     credentials = JSON.parse(readFileSync(CREDENTIALS_PATH, 'utf-8'));
   } catch {
     credentials = {};
-  }
-
-  // Migration: bootstrap from CLAUDE_CODE_OAUTH_TOKEN if no anthropic credentials yet
-  if (!credentials.anthropic && config.CLAUDE_CODE_OAUTH_TOKEN) {
-    credentials.anthropic = {
-      access: config.CLAUDE_CODE_OAUTH_TOKEN,
-      refresh: '',
-      expires: 0,
-    };
   }
 }
 
@@ -46,18 +37,44 @@ export async function loginWithAnthropic(): Promise<void> {
   saveCredentials();
 }
 
+/** Maps provider IDs to their config API key field names. */
+export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
+  anthropic: 'ANTHROPIC_API_KEY',
+  openai: 'OPENAI_API_KEY',
+  google: 'GEMINI_API_KEY',
+  openrouter: 'OPENROUTER_API_KEY',
+};
+
 /**
  * Get API key for a provider, auto-refreshing OAuth tokens if needed.
- * Returns undefined if no OAuth credentials available (lets pi-ai fall back to env vars).
+ * Falls back through: OAuth → CLAUDE_CODE_OAUTH_TOKEN → config API key → undefined.
  */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
-  const result = await getOAuthApiKey(provider, credentials);
-  if (result) {
-    // Update persisted credentials if they were refreshed
-    credentials[provider] = result.newCredentials;
-    saveCredentials();
-    return result.apiKey;
+  // 1. Try OAuth credentials (auto-refresh)
+  try {
+    const result = await getOAuthApiKey(provider, credentials);
+    if (result) {
+      credentials[provider] = result.newCredentials;
+      saveCredentials();
+      return result.apiKey;
+    }
+  } catch (err) {
+    console.error(`[OAuth] Failed to refresh token for ${provider}:`, err instanceof Error ? err.message : err);
   }
+
+  // 2. CLAUDE_CODE_OAUTH_TOKEN fallback (anthropic only)
+  if (provider === 'anthropic' && config.CLAUDE_CODE_OAUTH_TOKEN) {
+    return config.CLAUDE_CODE_OAUTH_TOKEN;
+  }
+
+  // 3. Provider-specific API key from config
+  const configKey = PROVIDER_KEY_MAP[provider];
+  if (configKey) {
+    const key = config[configKey];
+    if (typeof key === 'string' && key) return key;
+  }
+
+  // 4. Undefined — pi-ai will check env vars as final fallback
   return undefined;
 }
 
