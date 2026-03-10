@@ -688,6 +688,25 @@ export function getSettings() {
   return request<SettingsResponse>('/settings');
 }
 
+export interface AIProviderModel {
+  id: string;
+  name: string;
+  reasoning: boolean;
+}
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  models: AIProviderModel[];
+  authTypes: string[];
+  apiKeyField: string;
+  hasKey: boolean;
+}
+
+export function getAIProviders() {
+  return request<{ providers: AIProvider[] }>('/ai/providers');
+}
+
 export function updateSettings(settings: Record<string, string | number | boolean>) {
   return request<{ success: boolean }>('/settings', {
     method: 'POST',
