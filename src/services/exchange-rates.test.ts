@@ -100,7 +100,7 @@ describe('exchange-rates service', () => {
       expect(result2.stale).toBe(false);
     });
 
-    it('throws when fiat API fails with no cache', async () => {
+    it('returns ILS-only fallback when fiat API fails with no cache', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('boi.org.il')) {
           return Promise.resolve({ ok: false, status: 500 });
@@ -114,10 +114,12 @@ describe('exchange-rates service', () => {
         return Promise.reject(new Error('Unknown URL'));
       });
 
-      await expect(getExchangeRates()).rejects.toThrow();
+      const result = await getExchangeRates();
+      expect(result.rates).toEqual({ ILS: 1 });
+      expect(result.stale).toBe(true);
     });
 
-    it('throws when BTC API returns unexpected format with no cache', async () => {
+    it('returns ILS-only fallback when BTC API returns unexpected format with no cache', async () => {
       mockFetch.mockImplementation((url: string) => {
         if (url.includes('boi.org.il')) {
           return Promise.resolve({
@@ -136,7 +138,9 @@ describe('exchange-rates service', () => {
         return Promise.reject(new Error('Unknown URL'));
       });
 
-      await expect(getExchangeRates()).rejects.toThrow();
+      const result = await getExchangeRates();
+      expect(result.rates).toEqual({ ILS: 1 });
+      expect(result.stale).toBe(true);
     });
   });
 });
