@@ -19,7 +19,7 @@ import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
-import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
+import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
 
 export async function createServer() {
   const app = Fastify({
@@ -172,7 +172,14 @@ export async function createServer() {
     closeAll();
   }
 
-  return { app, start, shutdown };
+  /** Restart background services after system sleep/wake. */
+  function onResume() {
+    stopScheduler();
+    startScheduler();
+    restartTelegramBot();
+  }
+
+  return { app, start, shutdown, onResume };
 }
 
 export { db };

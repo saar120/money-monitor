@@ -12,21 +12,62 @@ const props = withDefaults(defineProps<{
   streaming: false,
 });
 
-/** Split markdown into logical blocks on blank lines. */
-const blocks = computed(() => props.content.split(/\n\n+/).filter(Boolean));
+/**
+ * Split markdown into logical blocks on blank lines,
+ * but keep fenced code blocks (```) intact.
+ */
+function splitBlocks(text: string): string[] {
+  const blocks: string[] = [];
+  let current = '';
+  let inFence = false;
 
-function renderBlock(text: string): string {
-  return DOMPurify.sanitize(md.parse(text) as string);
+  for (const line of text.split('\n')) {
+    if (/^```/.test(line)) inFence = !inFence;
+
+    if (!inFence && line.trim() === '' && current.trim()) {
+      blocks.push(current);
+      current = '';
+    } else {
+      current += (current ? '\n' : '') + line;
+    }
+  }
+  if (current.trim()) blocks.push(current);
+  return blocks;
 }
+
+const blocks = computed(() => splitBlocks(props.content));
+
+/** Cache rendered HTML keyed by source text to avoid re-parsing unchanged blocks. */
+const CACHE_MAX = 512;
+const renderCache = new Map<string, string>();
+
+const renderedBlocks = computed(() =>
+  blocks.value.map((block) => {
+    let html = renderCache.get(block);
+    if (html) {
+      // Move to end for LRU ordering
+      renderCache.delete(block);
+      renderCache.set(block, html);
+    } else {
+      html = DOMPurify.sanitize(md.parse(block) as string);
+      renderCache.set(block, html);
+      if (renderCache.size > CACHE_MAX) {
+        // Evict oldest entry
+        renderCache.delete(renderCache.keys().next().value!);
+      }
+    }
+    return html;
+  }),
+);
 </script>
 
 <template>
   <div class="markdown-content">
     <div
-      v-for="(block, i) in blocks"
+      v-for="(html, i) in renderedBlocks"
       :key="'b' + i"
       :class="{ 'md-block-enter': streaming }"
-      v-html="renderBlock(block)"
+      v-html="html"
     />
   </div>
 </template>

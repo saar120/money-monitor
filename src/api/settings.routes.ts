@@ -1,25 +1,34 @@
 import type { FastifyInstance } from 'fastify';
-import { execFile } from 'node:child_process';
-import { promisify } from 'node:util';
-import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
+import { getModels } from '@mariozechner/pi-ai';
+import type { KnownProvider } from '@mariozechner/pi-ai';
+import { config, isElectronMode, saveConfigFile, configFileExists } from '../config.js';
 import { dataDir } from '../paths.js';
+import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, PROVIDER_KEY_MAP } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
-
-const execFileAsync = promisify(execFile);
 
 const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
   'ANTHROPIC_API_KEY',
-  'CLAUDE_CODE_OAUTH_TOKEN',
+  'ANTHROPIC_OAUTH_TOKEN',
   'API_TOKEN',
   'TELEGRAM_BOT_TOKEN',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
 ]);
 
 /** Settable keys (exposed in GET, writable in POST) */
 const SETTABLE_KEYS = [
   'ANTHROPIC_API_KEY',
+  'ANTHROPIC_OAUTH_TOKEN',
   'ANTHROPIC_MODEL',
-  'CLAUDE_CODE_OAUTH_TOKEN',
+  'AI_PROVIDER',
+  'AI_CHAT_MODEL',
+  'AI_BATCH_PROVIDER',
+  'AI_BATCH_MODEL_ID',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
   'CREDENTIALS_MASTER_KEY',
   'SCRAPE_CRON',
   'SCRAPE_TIMEZONE',
@@ -28,24 +37,12 @@ const SETTABLE_KEYS = [
   'SCRAPE_SHOW_BROWSER',
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_ALLOWED_USERS',
+  'AI_MAX_TURNS',
 ] as const;
 
 function redact(value: string): string {
   if (value.length <= 4) return '********';
   return '****' + value.slice(-4);
-}
-
-let cachedClaudeStatus: { installed: boolean; version?: string } | null = null;
-
-async function getClaudeStatus(): Promise<{ installed: boolean; version?: string }> {
-  if (cachedClaudeStatus?.installed) return cachedClaudeStatus;
-  try {
-    const { stdout } = await execFileAsync('claude', ['--version'], { timeout: 5000 });
-    cachedClaudeStatus = { installed: true, version: stdout.trim() };
-    return cachedClaudeStatus;
-  } catch {
-    return { installed: false };
-  }
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
@@ -57,7 +54,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         isElectron: false,
         settings: {},
         dataDir: '',
-        claude: { installed: false },
+        oauth: { anthropic: false },
         demoMode: isDemoMode(),
       });
     }
@@ -76,11 +73,11 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      needsSetup: isElectronMode && loadConfigFile() === null,
+      needsSetup: isElectronMode && !configFileExists(),
       isElectron: isElectronMode,
       settings,
       dataDir,
-      claude: await getClaudeStatus(),
+      oauth: { anthropic: hasAnthropicOAuth() },
       demoMode: isDemoMode(),
     });
   });
@@ -111,5 +108,75 @@ export async function settingsRoutes(app: FastifyInstance) {
       return reply.status(500).send({ error: `Failed to save settings: ${msg}` });
     }
     return reply.send({ success: true });
+  });
+
+  // ── AI Provider registry ──────────────────────────────────────────────────────
+
+  const PROVIDER_META: Record<string, { name: string; authTypes: readonly string[] }> = {
+    anthropic: { name: 'Anthropic', authTypes: ['api_key', 'oauth'] },
+    openai: { name: 'OpenAI', authTypes: ['api_key'] },
+    google: { name: 'Google Gemini', authTypes: ['api_key'] },
+    openrouter: { name: 'OpenRouter', authTypes: ['api_key'] },
+  };
+
+  const SUPPORTED_PROVIDERS = Object.entries(PROVIDER_KEY_MAP).map(([id, apiKeyField]) => ({
+    id,
+    apiKeyField,
+    ...PROVIDER_META[id] ?? { name: id, authTypes: ['api_key'] },
+  }));
+
+  app.get('/api/ai/providers', async (_request, reply) => {
+    const providers = SUPPORTED_PROVIDERS.map(p => {
+      const models = getModels(p.id as KnownProvider).map(m => ({
+        id: m.id,
+        name: m.name,
+        reasoning: m.reasoning,
+      }));
+      const keyValue = config[p.apiKeyField];
+      return {
+        ...p,
+        models,
+        hasKey: typeof keyValue === 'string' && keyValue.length > 0,
+      };
+    });
+    return reply.send({ providers });
+  });
+
+  // ── OAuth endpoints ──────────────────────────────────────────────────────────
+
+  /** Start the Anthropic PKCE OAuth flow — returns the URL the user must open. */
+  app.post('/api/settings/oauth/anthropic/start', async (_request, reply) => {
+    try {
+      const url = await startAnthropicOAuth();
+      return reply.send({ url });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  /** Complete the OAuth flow with the authorization code from the browser redirect. */
+  app.post('/api/settings/oauth/anthropic/complete', async (request, reply) => {
+    const { code } = request.body as { code?: string };
+    if (!code) {
+      return reply.status(400).send({ error: 'Authorization code is required' });
+    }
+    try {
+      await completeAnthropicOAuth(code);
+      return reply.send({ success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  /** Cancel any in-progress OAuth flow. */
+  app.post('/api/settings/oauth/anthropic/cancel', async (_request, reply) => {
+    cancelAnthropicOAuth();
+    return reply.send({ success: true });
+  });
+
+  app.get('/api/settings/oauth/status', async (_request, reply) => {
+    return reply.send({ anthropic: hasAnthropicOAuth() });
   });
 }

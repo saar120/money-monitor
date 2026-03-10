@@ -1,11 +1,13 @@
 <script setup lang="ts">
-import { ref, computed } from 'vue';
+import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { updateSettings } from '../api/client';
+import { updateSettings, getAIProviders, type AIProvider } from '../api/client';
+import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check } from 'lucide-vue-next';
+import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check, CheckCircle } from 'lucide-vue-next';
 
 const router = useRouter();
 const isElectron = !!(window as any).electronAPI;
@@ -14,10 +16,25 @@ const step = ref(1);
 const saving = ref(false);
 const error = ref('');
 
-// Step 1: AI Authentication
-const authMethod = ref<'api_key' | 'oauth'>('api_key');
-const anthropicApiKey = ref('');
-const claudeOauthToken = ref('');
+// Step 1: AI Provider
+const providers = ref<AIProvider[]>([]);
+const selectedProvider = ref('anthropic');
+const selectedModel = ref('');
+const apiKey = ref('');
+const oauthToken = ref('');
+
+onMounted(async () => {
+  try {
+    const { providers: p } = await getAIProviders();
+    providers.value = p;
+  } catch (e) {
+    console.error('Failed to load AI providers:', e);
+  }
+});
+
+const currentProvider = computed(() =>
+  providers.value.find(p => p.id === selectedProvider.value)
+);
 
 // Step 2: Credentials Master Key
 const masterKeyMode = ref<'auto' | 'custom'>('auto');
@@ -39,10 +56,15 @@ const scrapeCron = ref('0 6 * * *');
 const scrapeTimezone = ref('Asia/Jerusalem');
 const telegramBotToken = ref('');
 
+// Anthropic OAuth
+const oauthConnected = ref(false);
+const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useAnthropicOAuth({
+  onSuccess: () => { oauthConnected.value = true; },
+});
+
 const canProceed = computed(() => {
   if (step.value === 1) {
-    if (authMethod.value === 'api_key') return anthropicApiKey.value.trim().length > 0;
-    return claudeOauthToken.value.trim().length > 0;
+    return !!(apiKey.value.trim() || oauthToken.value.trim() || oauthConnected.value);
   }
   if (step.value === 2) return masterKey.value.length >= 8;
   return true;
@@ -64,12 +86,18 @@ async function finish() {
       CREDENTIALS_MASTER_KEY: masterKey.value,
       SCRAPE_CRON: scrapeCron.value,
       SCRAPE_TIMEZONE: scrapeTimezone.value,
+      AI_PROVIDER: selectedProvider.value,
     };
-    if (authMethod.value === 'api_key' && anthropicApiKey.value.trim()) {
-      settings.ANTHROPIC_API_KEY = anthropicApiKey.value.trim();
+    if (selectedModel.value) {
+      settings.AI_CHAT_MODEL = selectedModel.value;
     }
-    if (authMethod.value === 'oauth' && claudeOauthToken.value.trim()) {
-      settings.CLAUDE_CODE_OAUTH_TOKEN = claudeOauthToken.value.trim();
+    // Provider-specific API key
+    const provider = currentProvider.value;
+    if (provider && apiKey.value.trim()) {
+      settings[provider.apiKeyField] = apiKey.value.trim();
+    }
+    if (selectedProvider.value === 'anthropic' && oauthToken.value.trim()) {
+      settings.ANTHROPIC_OAUTH_TOKEN = oauthToken.value.trim();
     }
     if (telegramBotToken.value.trim()) {
       settings.TELEGRAM_BOT_TOKEN = telegramBotToken.value.trim();
@@ -107,7 +135,7 @@ async function finish() {
         />
       </div>
 
-      <!-- Step 1: AI Authentication -->
+      <!-- Step 1: AI Provider -->
       <Card v-if="step === 1">
         <CardHeader>
           <div class="flex items-center gap-3">
@@ -115,51 +143,101 @@ async function finish() {
               <Bot class="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle>AI Authentication</CardTitle>
-              <CardDescription>Required for AI features like chat and categorization</CardDescription>
+              <CardTitle>AI Provider</CardTitle>
+              <CardDescription>Choose your AI provider and enter your API key</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
-          <div class="flex gap-2">
+          <!-- Provider buttons -->
+          <div class="grid grid-cols-2 gap-2">
             <Button
-              :variant="authMethod === 'api_key' ? 'default' : 'outline'"
-              size="sm"
-              @click="authMethod = 'api_key'"
+              v-for="p in providers"
+              :key="p.id"
+              :variant="selectedProvider === p.id ? 'default' : 'outline'"
+              @click="selectedProvider = p.id; selectedModel = ''; apiKey = ''"
+              class="justify-start"
             >
-              API Key
-            </Button>
-            <Button
-              :variant="authMethod === 'oauth' ? 'default' : 'outline'"
-              size="sm"
-              @click="authMethod = 'oauth'"
-            >
-              OAuth Token
+              {{ p.name }}
             </Button>
           </div>
 
-          <div v-if="authMethod === 'api_key'">
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Anthropic API Key</label>
+          <!-- API Key -->
+          <div class="space-y-1">
+            <label class="text-[13px] font-medium text-text-primary block">{{ currentProvider?.name ?? 'API' }} Key</label>
             <Input
-              v-model="anthropicApiKey"
               type="password"
-              placeholder="sk-ant-..."
+              v-model="apiKey"
+              :placeholder="selectedProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'"
             />
-            <p class="text-[11px] text-text-secondary mt-1.5">
-              Get your key from console.anthropic.com
-            </p>
           </div>
 
-          <div v-else>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Claude Code OAuth Token</label>
-            <Input
-              v-model="claudeOauthToken"
-              type="password"
-              placeholder="oat-..."
-            />
-            <p class="text-[11px] text-text-secondary mt-1.5">
-              Use the OAuth token from Claude Code CLI
-            </p>
+          <!-- Anthropic OAuth (alternative to API key) -->
+          <template v-if="selectedProvider === 'anthropic'">
+            <div class="relative flex items-center justify-center">
+              <div class="absolute border-t w-full" />
+              <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
+            </div>
+
+            <div v-if="oauthConnected && oauthStep === 'idle'" class="flex items-center gap-2 text-[13px]">
+              <CheckCircle class="h-4 w-4 text-green-500" />
+              <span class="text-text-secondary">Anthropic OAuth connected</span>
+            </div>
+
+            <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
+              <Button variant="outline" size="sm" @click="startOAuth" class="w-full">
+                Login with Anthropic
+              </Button>
+              <p class="text-[11px] text-text-secondary">
+                Use your Anthropic account instead of an API key
+              </p>
+            </div>
+
+            <div v-else-if="oauthStep === 'waiting_code'" class="space-y-2">
+              <p class="text-[12px] text-text-secondary">
+                A browser window has been opened. After authorizing, paste the code below:
+              </p>
+              <div class="flex gap-2">
+                <Input
+                  v-model="oauthCode"
+                  placeholder="Paste authorization code..."
+                  class="flex-1"
+                  @keydown.enter="submitOAuthCode"
+                />
+                <Button size="sm" :disabled="!oauthCode.trim()" @click="submitOAuthCode">
+                  Submit
+                </Button>
+              </div>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">Cancel</button>
+            </div>
+
+            <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
+              Verifying authorization...
+            </div>
+
+            <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
+
+            <!-- Manual OAuth token paste -->
+            <div class="space-y-1">
+              <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
+              <Input type="password" v-model="oauthToken" placeholder="oat-..." />
+              <p class="text-[11px] text-text-secondary mt-1">Paste an OAuth token directly (e.g. from Claude Code CLI)</p>
+            </div>
+          </template>
+
+          <!-- Model selection -->
+          <div class="space-y-1">
+            <label class="text-[13px] font-medium text-text-primary block">Model</label>
+            <Select v-model="selectedModel">
+              <SelectTrigger>
+                <SelectValue placeholder="Select model" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem v-for="m in currentProvider?.models ?? []" :key="m.id" :value="m.id">
+                  {{ m.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
           </div>
 
           <p class="text-[11px] text-text-secondary">
@@ -266,7 +344,7 @@ async function finish() {
           <Button
             v-if="step === 1"
             variant="ghost"
-            @click="step = 2; anthropicApiKey = ''; claudeOauthToken = ''"
+            @click="step = 2; apiKey = ''; oauthToken = ''; cancelOAuth()"
           >
             Skip
           </Button>

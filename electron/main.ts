@@ -1,7 +1,7 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences, Tray } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { execFile, execFileSync } from 'node:child_process';
+import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
@@ -33,14 +33,7 @@ process.env.API_TOKEN = authToken;
 // ── Expose app version for preload ───────────────────────────────────────────
 process.env.MM_APP_VERSION = app.getVersion();
 
-// ── 3. Check for Claude Code CLI ─────────────────────────────────────────────
-function checkClaudeCli(): Promise<boolean> {
-  return new Promise((resolve) => {
-    execFile('which', ['claude'], (err) => resolve(!err));
-  });
-}
-
-// ── 4. Get macOS accent color ────────────────────────────────────────────────
+// ── 3. Get macOS accent color ────────────────────────────────────────────────
 function getAccentColor(): string {
   if (process.platform !== 'darwin') return '#007AFF';
   try {
@@ -105,8 +98,16 @@ function buildMenu() {
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
-// ── 6. Window management ─────────────────────────────────────────────────────
+// ── 6. Prevent macOS App Nap from suspending background work ─────────────────
+// 'prevent-app-suspension' keeps the process alive for cron jobs and SSE
+// streams without preventing the display from sleeping.
+const powerSaveId = powerSaveBlocker.start('prevent-app-suspension');
+console.log(`[Electron] Power save blocker started (id: ${powerSaveId})`);
+
+// ── 7. Window management ─────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 
 function sendAccentColor() {
   if (!mainWindow) return;
@@ -131,6 +132,7 @@ function createWindow(port: number) {
       contextIsolation: true,
       nodeIntegration: false,
       sandbox: false,
+      backgroundThrottling: false,
     },
   });
 
@@ -153,9 +155,58 @@ function createWindow(port: number) {
     );
   });
 
+  // Hide to tray instead of closing when the user clicks X
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function createTray(port: number) {
+  // Electron auto-detects 'Template' in filename and picks up @2x for retina
+  const icon = nativeImage.createFromPath(join(__dirname, 'icons', 'trayTemplate.png'));
+  icon.setTemplateImage(true);
+  tray = new Tray(icon);
+  tray.setToolTip('Money Monitor');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Money Monitor',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow(port);
+        }
+      },
+    },
+    {
+      label: 'Scrape Now',
+      click: () => {
+        fetch(`http://localhost:${port}/api/scrape/all`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch((err) => console.error('[Tray] Scrape request failed:', err));
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
 }
 
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
@@ -172,29 +223,16 @@ app.whenReady().then(async () => {
 
     buildMenu();
 
-    // Start server import and CLI check concurrently
-    const [serverModule, hasClaude] = await Promise.all([
-      import('../dist/server.js'),
-      checkClaudeCli(),
-    ]);
-
-    if (!hasClaude) {
-      dialog.showErrorBox(
-        'Claude Code CLI Required',
-        'Money Monitor requires Claude Code CLI to be installed.\n\n' +
-        'Install it with: npm install -g @anthropic-ai/claude-code\n\n' +
-        'The app will continue without AI features.'
-      );
-    }
-
-    const { createServer } = serverModule;
-    const { start, shutdown } = await createServer();
+    // Start server import
+    const { createServer } = await import('../dist/server.js');
+    const { start, shutdown, onResume } = await createServer();
     const port = await start({ port: 0 });
 
     console.log(`[Electron] Server started on port ${port}`);
     console.log(`[Electron] Data directory: ${dataDir}`);
 
     createWindow(port);
+    createTray(port);
 
     // Re-send accent color when system preferences change
     nativeTheme.on('updated', () => {
@@ -202,9 +240,25 @@ app.whenReady().then(async () => {
     });
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
         createWindow(port);
       }
+    });
+
+    // After system sleep, node-cron timers may have drifted, the Telegram
+    // polling connection will have dropped, and SSE streams will be stale.
+    // Restart all background services and reload the page.
+    powerMonitor.on('resume', () => {
+      console.log('[Electron] System resumed from sleep — restarting background services');
+      onResume();
+      mainWindow?.webContents.reload();
+    });
+
+    app.on('before-quit', () => {
+      isQuitting = true;
     });
 
     let quitting = false;
@@ -227,6 +281,9 @@ app.whenReady().then(async () => {
   }
 });
 
+// On macOS, keep the app running in the tray when all windows are closed
 app.on('window-all-closed', () => {
-  app.quit();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });

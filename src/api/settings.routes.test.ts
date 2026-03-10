@@ -61,6 +61,89 @@ describe('settings routes', () => {
     });
   });
 
+  // ── GET /api/ai/providers ──
+
+  describe('GET /api/ai/providers', () => {
+    it('returns supported providers with models', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/ai/providers',
+        headers: authHeaders(),
+      });
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.providers).toBeInstanceOf(Array);
+      expect(body.providers.length).toBe(4);
+
+      const anthropic = body.providers.find((p: any) => p.id === 'anthropic');
+      expect(anthropic).toBeDefined();
+      expect(anthropic.name).toBe('Anthropic');
+      expect(anthropic.models.length).toBeGreaterThan(0);
+      expect(anthropic.models[0]).toHaveProperty('id');
+      expect(anthropic.models[0]).toHaveProperty('name');
+
+      const openai = body.providers.find((p: any) => p.id === 'openai');
+      expect(openai).toBeDefined();
+      expect(openai.hasKey).toBe(false); // no key in test env
+    });
+
+    it('includes all 4 providers with correct metadata', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/ai/providers',
+        headers: authHeaders(),
+      });
+      const { providers } = JSON.parse(res.body);
+
+      const ids = providers.map((p: any) => p.id);
+      expect(ids).toEqual(['anthropic', 'openai', 'google', 'openrouter']);
+
+      // Anthropic supports both API key and OAuth
+      const anthropic = providers.find((p: any) => p.id === 'anthropic');
+      expect(anthropic.authTypes).toEqual(['api_key', 'oauth']);
+      expect(anthropic.apiKeyField).toBe('ANTHROPIC_API_KEY');
+
+      // Other providers support API key only
+      for (const id of ['openai', 'google', 'openrouter']) {
+        const p = providers.find((x: any) => x.id === id);
+        expect(p.authTypes).toEqual(['api_key']);
+      }
+    });
+
+    it('each model has id, name, and reasoning fields', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/ai/providers',
+        headers: authHeaders(),
+      });
+      const { providers } = JSON.parse(res.body);
+
+      for (const provider of providers) {
+        expect(provider.models.length).toBeGreaterThan(0);
+        for (const model of provider.models) {
+          expect(model).toHaveProperty('id');
+          expect(model).toHaveProperty('name');
+          expect(model).toHaveProperty('reasoning');
+          expect(typeof model.reasoning).toBe('boolean');
+        }
+      }
+    });
+
+    it('reports hasKey false when no API keys configured', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/ai/providers',
+        headers: authHeaders(),
+      });
+      const { providers } = JSON.parse(res.body);
+
+      // All keys are empty in test mock config
+      for (const provider of providers) {
+        expect(provider.hasKey).toBe(false);
+      }
+    });
+  });
+
   // ── POST /api/settings ──
 
   describe('POST /api/settings', () => {

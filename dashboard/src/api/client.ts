@@ -628,6 +628,7 @@ export interface NetWorth {
   liabilities: NetWorthLiability[];
   liabilitiesTotal: number;
   exchangeRates: Record<string, number>;
+  ratesStale?: boolean;
   calculatedAt: string;
 }
 
@@ -679,12 +680,31 @@ export interface SettingsResponse {
   isElectron: boolean;
   settings: Record<string, string | number | boolean>;
   dataDir: string;
-  claude: { installed: boolean; version?: string };
+  oauth: { anthropic: boolean };
   demoMode: boolean;
 }
 
 export function getSettings() {
   return request<SettingsResponse>('/settings');
+}
+
+export interface AIProviderModel {
+  id: string;
+  name: string;
+  reasoning: boolean;
+}
+
+export interface AIProvider {
+  id: string;
+  name: string;
+  models: AIProviderModel[];
+  authTypes: string[];
+  apiKeyField: string;
+  hasKey: boolean;
+}
+
+export function getAIProviders() {
+  return request<{ providers: AIProvider[] }>('/ai/providers');
 }
 
 export function updateSettings(settings: Record<string, string | number | boolean>) {
@@ -694,11 +714,28 @@ export function updateSettings(settings: Record<string, string | number | boolea
   });
 }
 
-// ─── Demo Mode ───
+// ─── OAuth ───
 
-export function getDemoStatus() {
-  return request<{ demoMode: boolean }>('/demo/status');
+export function startAnthropicOAuth() {
+  return request<{ url: string }>('/settings/oauth/anthropic/start', { method: 'POST' });
 }
+
+export function completeAnthropicOAuth(code: string) {
+  return request<{ success: boolean }>('/settings/oauth/anthropic/complete', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function cancelAnthropicOAuth() {
+  return request<{ success: boolean }>('/settings/oauth/anthropic/cancel', { method: 'POST' });
+}
+
+export function getOAuthStatus() {
+  return request<{ anthropic: boolean }>('/settings/oauth/status');
+}
+
+// ─── Demo Mode ───
 
 export function toggleDemoMode(enabled: boolean) {
   return request<{ success: boolean; demoMode: boolean }>('/demo/toggle', {

@@ -600,6 +600,15 @@ const fullLiabilityMap = computed(() => {
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-4">Net Worth</h1>
 
+    <!-- Stale rates warning -->
+    <div
+      v-if="nw?.ratesStale"
+      class="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-[12px] text-amber-600 dark:text-amber-400 flex-shrink-0"
+    >
+      <AlertCircle class="h-3.5 w-3.5 flex-shrink-0" />
+      <span>Exchange rates unavailable — some values may be inaccurate</span>
+    </div>
+
     <!-- Hero Card -->
     <Card class="border-separator animate-fade-in-up stagger-1 flex-shrink-0">
       <CardContent class="pt-6">

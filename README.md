@@ -5,7 +5,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 ## Features
 
 - **Automatic Bank Scraping** — Connects to 9 Israeli banks and 8 credit card providers via headless browser automation
-- **AI Financial Advisor** — Chat with Claude about your spending habits, get category suggestions, detect recurring charges, and compare periods
+- **AI Financial Advisor** — Chat with your AI about spending habits, get category suggestions, detect recurring charges, and compare periods
 - **Interactive Dashboard** — Real-time charts, spending breakdowns, transaction search, and account management
 - **Scheduled Scraping** — Configurable cron-based background scraping with live progress via SSE
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
@@ -37,7 +37,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 | **Frontend** | Vue 3 (Composition API), Vite, Tailwind CSS |
 | **Database** | SQLite via better-sqlite3, Drizzle ORM |
 | **Scraping** | israeli-bank-scrapers, Puppeteer + Stealth Plugin |
-| **AI** | Claude Code CLI via Agent SDK (MCP tools for data queries) |
+| **AI** | Pi AI multi-provider framework (Anthropic, OpenAI, Google, OpenRouter) |
 | **Scheduling** | node-cron (Israel timezone) |
 | **Charts** | Chart.js + vue-chartjs |
 | **UI Components** | Reka UI (headless), Lucide icons |
@@ -63,7 +63,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 - **Node.js** 18 or later
 - **npm**
-- **Anthropic API key** (for AI features — get one at [console.anthropic.com](https://console.anthropic.com))
+- **AI provider API key** (for AI features — supports [Anthropic](https://console.anthropic.com), [OpenAI](https://platform.openai.com), [Google Gemini](https://aistudio.google.com), or [OpenRouter](https://openrouter.ai))
 
 ## Local Setup
 
@@ -99,9 +99,10 @@ SCRAPE_CRON="0 6 * * *"
 SCRAPE_TIMEZONE=Asia/Jerusalem
 SCRAPE_START_DATE_MONTHS_BACK=3
 
-# AI (required for AI features)
-ANTHROPIC_API_KEY=<your-api-key>
-ANTHROPIC_MODEL=claude-sonnet-4-6
+# AI — pick one provider (required for AI features)
+AI_PROVIDER=anthropic                   # anthropic | openai | google | openrouter
+AI_CHAT_MODEL=claude-sonnet-4-6         # model ID within the chosen provider
+ANTHROPIC_API_KEY=<your-api-key>        # or OPENAI_API_KEY / GEMINI_API_KEY / OPENROUTER_API_KEY
 
 # Dashboard API URL
 VITE_API_URL=http://localhost:3000
@@ -145,7 +146,7 @@ money-monitor/
 │   │   ├── summary.routes.ts
 │   │   ├── ai.routes.ts
 │   │   └── categories.routes.ts
-│   ├── ai/                     # Claude integration + MCP tools
+│   ├── ai/                     # Multi-provider AI agent + financial tools
 │   ├── db/                     # Schema, connection, migrations
 │   ├── scraper/                # Bank scraping + credential encryption
 │   └── shared/                 # Shared types

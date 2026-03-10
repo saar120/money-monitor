@@ -10,6 +10,13 @@ vi.mock('../config.js', () => ({
     SCRAPE_START_DATE_MONTHS_BACK: 3,
     ANTHROPIC_API_KEY: '',
     ANTHROPIC_MODEL: 'claude-sonnet-4-6',
+    AI_PROVIDER: 'anthropic',
+    AI_CHAT_MODEL: '',
+    AI_BATCH_PROVIDER: '',
+    AI_BATCH_MODEL_ID: '',
+    OPENAI_API_KEY: '',
+    GEMINI_API_KEY: '',
+    OPENROUTER_API_KEY: '',
     API_TOKEN: 'test-token',
     CORS_ORIGIN: undefined,
     TELEGRAM_BOT_TOKEN: undefined,
@@ -28,7 +35,6 @@ vi.mock('../paths.js', () => ({
   credentialsPath: '/tmp/test-money-monitor/credentials.enc',
   chatDir: '/tmp/test-money-monitor/chat',
   sessionsDir: '/tmp/test-money-monitor/chat/sessions',
-  claudeDir: '/tmp/test-money-monitor/.claude',
   configPath: '/tmp/test-money-monitor/config.json',
 }));
 

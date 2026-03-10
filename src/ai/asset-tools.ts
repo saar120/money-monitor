@@ -1,186 +1,181 @@
-import { tool } from '@anthropic-ai/claude-agent-sdk';
-import { z } from 'zod';
+import { Type } from '@sinclair/typebox';
+import { StringEnum } from '@mariozechner/pi-ai';
 import {
   ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, MOVEMENT_TYPES, LIABILITY_TYPES,
 } from '../shared/types.js';
 import * as assetService from '../services/assets.js';
 import * as liabilityService from '../services/liabilities.js';
 import * as netWorthService from '../services/net-worth.js';
-
-function toolResult(text: string, isError = false) {
-  return { content: [{ type: 'text' as const, text }], ...(isError ? { isError: true } : {}) };
-}
-
-async function safeTool(fn: () => Promise<string>) {
-  try {
-    return toolResult(await fn());
-  } catch (e) {
-    const message = e instanceof Error ? e.message : String(e);
-    console.error('[asset-tools] Tool error:', e);
-    return toolResult(`Error: ${message}`, true);
-  }
-}
+import { createAgentTool } from './tool-adapter.js';
 
 // ── Read tool builders ──────────────────────────────────────────────────────────
 
 export function buildGetNetWorthTool() {
-  return tool(
-    'get_net_worth',
-    'Get a complete net worth summary: bank balances, investment assets, liabilities, and totals. Use this when the user asks about their overall financial picture, net worth, or total assets.',
-    {},
-    async () => safeTool(() => getNetWorth()),
-  );
+  return createAgentTool({
+    name: 'get_net_worth',
+    description: 'Get a complete net worth summary: bank balances, investment assets, liabilities, and totals. Use this when the user asks about their overall financial picture, net worth, or total assets.',
+    label: 'Calculating net worth',
+    parameters: Type.Object({}),
+    execute: async () => getNetWorth(),
+  });
 }
 
 export function buildGetAssetDetailsTool() {
-  return tool(
-    'get_asset_details',
-    'Get detailed information about a specific asset including holdings, P&L, and optionally movements and value history. Search by name (fuzzy match) or ID.',
-    {
-      asset_id: z.number().optional().describe('Asset ID (use this if you know the exact ID)'),
-      asset_name: z.string().optional().describe('Asset name to search for (case-insensitive fuzzy match)'),
-      include_movements: z.boolean().optional().describe('Include recent movements/transactions (default false)'),
-      include_snapshots: z.boolean().optional().describe('Include value history snapshots (default false)'),
-    },
-    async (args) => safeTool(() => getAssetDetails(args)),
-  );
+  return createAgentTool({
+    name: 'get_asset_details',
+    description: 'Get detailed information about a specific asset including holdings, P&L, and optionally movements and value history. Search by name (fuzzy match) or ID.',
+    label: 'Looking up asset details',
+    parameters: Type.Object({
+      asset_id: Type.Optional(Type.Number({ description: 'Asset ID (use this if you know the exact ID)' })),
+      asset_name: Type.Optional(Type.String({ description: 'Asset name to search for (case-insensitive fuzzy match)' })),
+      include_movements: Type.Optional(Type.Boolean({ description: 'Include recent movements/transactions (default false)' })),
+      include_snapshots: Type.Optional(Type.Boolean({ description: 'Include value history snapshots (default false)' })),
+    }),
+    execute: async (args) => getAssetDetails(args),
+  });
 }
 
 export function buildGetLiabilitiesTool() {
-  return tool(
-    'get_liabilities',
-    'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
-    {
-      include_inactive: z.boolean().optional().describe('Include deactivated liabilities (default false)'),
-    },
-    async (args) => safeTool(() => getLiabilities(args)),
-  );
+  return createAgentTool({
+    name: 'get_liabilities',
+    description: 'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
+    label: 'Checking liabilities',
+    parameters: Type.Object({
+      include_inactive: Type.Optional(Type.Boolean({ description: 'Include deactivated liabilities (default false)' })),
+    }),
+    execute: async (args) => getLiabilities(args),
+  });
 }
 
 export function buildGetNetWorthHistoryTool() {
-  return tool(
-    'get_net_worth_history',
-    'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. Use this when the user asks how their net worth has changed.',
-    {
-      start_date: z.string().optional().describe('Start date (ISO, e.g. "2025-01-01"). Defaults to 1 year ago.'),
-      end_date: z.string().optional().describe('End date (ISO, e.g. "2026-03-01"). Defaults to today.'),
-      granularity: z.enum(['daily', 'weekly', 'monthly']).optional().describe('Data point frequency (default: monthly)'),
-    },
-    async (args) => safeTool(() => getNetWorthHistory(args)),
-  );
+  return createAgentTool({
+    name: 'get_net_worth_history',
+    description: 'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. Use this when the user asks how their net worth has changed.',
+    label: 'Loading net worth history',
+    parameters: Type.Object({
+      start_date: Type.Optional(Type.String({ description: 'Start date (ISO, e.g. "2025-01-01"). Defaults to 1 year ago.' })),
+      end_date: Type.Optional(Type.String({ description: 'End date (ISO, e.g. "2026-03-01"). Defaults to today.' })),
+      granularity: Type.Optional(StringEnum(['daily', 'weekly', 'monthly'], { description: 'Data point frequency (default: monthly)' })),
+    }),
+    execute: async (args) => getNetWorthHistory(args as Parameters<typeof getNetWorthHistory>[0]),
+  });
 }
 
 // ── Write tool builders ─────────────────────────────────────────────────────────
 
 export function buildManageAssetTool() {
-  return tool(
-    'manage_asset',
-    `Create, update, or modify assets. Actions:
+  return createAgentTool({
+    name: 'manage_asset',
+    description: `Create, update, or modify assets. Actions:
 - "create": Create a new asset (pension, fund, keren_hishtalmut, real_estate, crypto, brokerage)
 - "update": Update asset metadata (name, institution, liquidity, notes)
 - "update_value": Update the current value of a simple_value or real_estate asset (optionally record a contribution)
 - "record_rent": Record rent income for a real_estate asset
 Before calling, confirm the details with the user if there is any ambiguity.`,
-    {
-      action: z.enum(['create', 'update', 'update_value', 'record_rent']).describe('The action to perform'),
+    label: 'Updating asset',
+    parameters: Type.Object({
+      action: StringEnum(['create', 'update', 'update_value', 'record_rent'], { description: 'The action to perform' }),
       // For create
-      name: z.string().optional().describe('Asset name (required for create)'),
-      type: z.enum(ASSET_TYPES).optional().describe('Asset type (required for create)'),
-      institution: z.string().optional().describe('Financial institution name'),
-      currency: z.string().optional().describe('Currency code (default: ILS)'),
-      liquidity: z.enum(LIQUIDITY_TYPES).optional().describe('Liquidity level'),
-      initial_value: z.number().optional().describe('Initial value for create'),
-      initial_cost_basis: z.number().optional().describe('Initial cost basis for create'),
-      notes: z.string().optional().describe('Notes'),
+      name: Type.Optional(Type.String({ description: 'Asset name (required for create)' })),
+      type: Type.Optional(StringEnum(ASSET_TYPES as unknown as string[], { description: 'Asset type (required for create)' })),
+      institution: Type.Optional(Type.String({ description: 'Financial institution name' })),
+      currency: Type.Optional(Type.String({ description: 'Currency code (default: ILS)' })),
+      liquidity: Type.Optional(StringEnum(LIQUIDITY_TYPES as unknown as string[], { description: 'Liquidity level' })),
+      initial_value: Type.Optional(Type.Number({ description: 'Initial value for create' })),
+      initial_cost_basis: Type.Optional(Type.Number({ description: 'Initial cost basis for create' })),
+      notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update, update_value, record_rent
-      asset_id: z.number().optional().describe('Asset ID (required for update/update_value/record_rent)'),
+      asset_id: Type.Optional(Type.Number({ description: 'Asset ID (required for update/update_value/record_rent)' })),
       // For update_value
-      current_value: z.number().optional().describe('New current value (required for update_value)'),
-      contribution: z.number().optional().describe('Contribution amount to add to cost basis'),
-      date: z.string().optional().describe('Date (ISO, defaults to today)'),
+      current_value: Type.Optional(Type.Number({ description: 'New current value (required for update_value)' })),
+      contribution: Type.Optional(Type.Number({ description: 'Contribution amount to add to cost basis' })),
+      date: Type.Optional(Type.String({ description: 'Date (ISO, defaults to today)' })),
       // For record_rent
-      amount: z.number().optional().describe('Rent amount (required for record_rent)'),
-    },
-    async (args) => safeTool(() => manageAsset(args)),
-  );
+      amount: Type.Optional(Type.Number({ description: 'Rent amount (required for record_rent)' })),
+    }),
+    execute: async (args) => manageAsset(args),
+  });
 }
 
 export function buildManageHoldingTool() {
-  return tool(
-    'manage_holding',
-    `Create, update, or delete individual holdings within an asset (stocks, ETFs, crypto coins, cash positions).
+  return createAgentTool({
+    name: 'manage_holding',
+    description: `Create, update, or delete individual holdings within an asset (stocks, ETFs, crypto coins, cash positions).
 - "create": Add a new holding to an asset
 - "update": Update holding quantity, cost basis, or price
 - "delete": Remove a holding from an asset
 Before calling, confirm the details with the user if there is any ambiguity.`,
-    {
-      action: z.enum(['create', 'update', 'delete']).describe('The action to perform'),
+    label: 'Updating holding',
+    parameters: Type.Object({
+      action: StringEnum(['create', 'update', 'delete'], { description: 'The action to perform' }),
       // For create
-      asset_id: z.number().optional().describe('Asset ID (required for create)'),
-      name: z.string().optional().describe('Holding name, e.g. "AAPL", "BTC" (required for create)'),
-      type: z.enum(HOLDING_TYPES).optional().describe('Holding type (required for create)'),
-      currency: z.string().optional().describe('Currency code (required for create)'),
-      quantity: z.number().optional().describe('Quantity/amount'),
-      cost_basis: z.number().optional().describe('Total cost basis'),
-      last_price: z.number().optional().describe('Last known price per unit'),
-      notes: z.string().optional().describe('Notes'),
+      asset_id: Type.Optional(Type.Number({ description: 'Asset ID (required for create)' })),
+      name: Type.Optional(Type.String({ description: 'Holding name, e.g. "AAPL", "BTC" (required for create)' })),
+      type: Type.Optional(StringEnum(HOLDING_TYPES as unknown as string[], { description: 'Holding type (required for create)' })),
+      currency: Type.Optional(Type.String({ description: 'Currency code (required for create)' })),
+      quantity: Type.Optional(Type.Number({ description: 'Quantity/amount' })),
+      cost_basis: Type.Optional(Type.Number({ description: 'Total cost basis' })),
+      last_price: Type.Optional(Type.Number({ description: 'Last known price per unit' })),
+      notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update/delete
-      holding_id: z.number().optional().describe('Holding ID (required for update/delete)'),
-    },
-    async (args) => safeTool(() => manageHolding(args)),
-  );
+      holding_id: Type.Optional(Type.Number({ description: 'Holding ID (required for update/delete)' })),
+    }),
+    execute: async (args) => manageHolding(args),
+  });
 }
 
 export function buildRecordMovementTool() {
-  return tool(
-    'record_movement',
-    `Record a financial movement (buy, sell, deposit, withdrawal, dividend) on a brokerage or crypto asset.
+  return createAgentTool({
+    name: 'record_movement',
+    description: `Record a financial movement (buy, sell, deposit, withdrawal, dividend) on a brokerage or crypto asset.
 Movement types by asset category:
 - Brokerage: deposit, withdrawal, buy, sell, dividend
 - Crypto: buy, sell
 - Simple value (pension/fund/kh): contribution (use manage_asset update_value instead)
 - Real estate: rent_income (use manage_asset record_rent instead)
 Before calling, confirm the details with the user. Quantity must be positive for buy/deposit/dividend, negative for sell/withdrawal.`,
-    {
-      asset_id: z.number().describe('Asset ID'),
-      holding_id: z.number().optional().describe('Holding ID (required for buy/sell)'),
-      type: z.enum(MOVEMENT_TYPES).describe('Movement type'),
-      quantity: z.number().describe('Amount (positive for buy/deposit/dividend, negative for sell/withdrawal)'),
-      currency: z.string().describe('Currency code'),
-      price_per_unit: z.number().optional().describe('Price per unit (required for buy/sell on stock/etf/crypto holdings)'),
-      source_amount: z.number().optional().describe('Amount in source currency (e.g. ILS amount for foreign currency deposits)'),
-      source_currency: z.string().optional().describe('Source currency code (e.g. "ILS")'),
-      date: z.string().describe('Date (ISO, e.g. "2026-03-07")'),
-      notes: z.string().optional().describe('Notes'),
-    },
-    async (args) => safeTool(() => recordMovement(args)),
-  );
+    label: 'Recording movement',
+    parameters: Type.Object({
+      asset_id: Type.Number({ description: 'Asset ID' }),
+      holding_id: Type.Optional(Type.Number({ description: 'Holding ID (required for buy/sell)' })),
+      type: StringEnum(MOVEMENT_TYPES as unknown as string[], { description: 'Movement type' }),
+      quantity: Type.Number({ description: 'Amount (positive for buy/deposit/dividend, negative for sell/withdrawal)' }),
+      currency: Type.String({ description: 'Currency code' }),
+      price_per_unit: Type.Optional(Type.Number({ description: 'Price per unit (required for buy/sell on stock/etf/crypto holdings)' })),
+      source_amount: Type.Optional(Type.Number({ description: 'Amount in source currency (e.g. ILS amount for foreign currency deposits)' })),
+      source_currency: Type.Optional(Type.String({ description: 'Source currency code (e.g. "ILS")' })),
+      date: Type.String({ description: 'Date (ISO, e.g. "2026-03-07")' }),
+      notes: Type.Optional(Type.String({ description: 'Notes' })),
+    }),
+    execute: async (args) => recordMovement(args),
+  });
 }
 
 export function buildManageLiabilityTool() {
-  return tool(
-    'manage_liability',
-    `Create, update, or deactivate liabilities (loans, mortgages, credit lines).
+  return createAgentTool({
+    name: 'manage_liability',
+    description: `Create, update, or deactivate liabilities (loans, mortgages, credit lines).
 - "create": Add a new liability
 - "update": Update liability details (balance, interest rate, etc.)
 - "deactivate": Mark a liability as inactive (paid off)
 Before calling, confirm the details with the user if there is any ambiguity.`,
-    {
-      action: z.enum(['create', 'update', 'deactivate']).describe('The action to perform'),
+    label: 'Updating liability',
+    parameters: Type.Object({
+      action: StringEnum(['create', 'update', 'deactivate'], { description: 'The action to perform' }),
       // For create
-      name: z.string().optional().describe('Liability name (required for create)'),
-      type: z.enum(LIABILITY_TYPES).optional().describe('Liability type (required for create)'),
-      currency: z.string().optional().describe('Currency code (default: ILS)'),
-      original_amount: z.number().optional().describe('Original loan amount (required for create)'),
-      current_balance: z.number().optional().describe('Current outstanding balance (required for create)'),
-      interest_rate: z.number().optional().describe('Annual interest rate (percentage)'),
-      start_date: z.string().optional().describe('Start date (ISO)'),
-      notes: z.string().optional().describe('Notes'),
+      name: Type.Optional(Type.String({ description: 'Liability name (required for create)' })),
+      type: Type.Optional(StringEnum(LIABILITY_TYPES as unknown as string[], { description: 'Liability type (required for create)' })),
+      currency: Type.Optional(Type.String({ description: 'Currency code (default: ILS)' })),
+      original_amount: Type.Optional(Type.Number({ description: 'Original loan amount (required for create)' })),
+      current_balance: Type.Optional(Type.Number({ description: 'Current outstanding balance (required for create)' })),
+      interest_rate: Type.Optional(Type.Number({ description: 'Annual interest rate (percentage)' })),
+      start_date: Type.Optional(Type.String({ description: 'Start date (ISO)' })),
+      notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update/deactivate
-      liability_id: z.number().optional().describe('Liability ID (required for update/deactivate)'),
-    },
-    async (args) => safeTool(() => manageLiability(args)),
-  );
+      liability_id: Type.Optional(Type.Number({ description: 'Liability ID (required for update/deactivate)' })),
+    }),
+    execute: async (args) => manageLiability(args),
+  });
 }
 
 // ── Query functions ─────────────────────────────────────────────────────────────
@@ -357,9 +352,6 @@ async function manageHolding(input: {
       notes: input.notes,
     });
     if (!result.ok) return JSON.stringify({ error: result.error });
-
-    // Return the full asset for consistency with old behavior
-    // The holding result contains the holding but old code returned full asset
     return JSON.stringify(result.holding);
   }
 
