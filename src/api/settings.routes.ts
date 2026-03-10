@@ -1,9 +1,9 @@
 import type { FastifyInstance } from 'fastify';
 import { getModels } from '@mariozechner/pi-ai';
 import type { KnownProvider } from '@mariozechner/pi-ai';
-import { config, isElectronMode, saveConfigFile, loadConfigFile } from '../config.js';
+import { config, isElectronMode, saveConfigFile, configFileExists } from '../config.js';
 import { dataDir } from '../paths.js';
-import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth } from '../ai/auth.js';
+import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, PROVIDER_KEY_MAP } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
 
 const SECRET_KEYS = new Set([
@@ -73,7 +73,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      needsSetup: isElectronMode && loadConfigFile() === null,
+      needsSetup: isElectronMode && !configFileExists(),
       isElectron: isElectronMode,
       settings,
       dataDir,
@@ -112,12 +112,18 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // ── AI Provider registry ──────────────────────────────────────────────────────
 
-  const SUPPORTED_PROVIDERS = [
-    { id: 'anthropic', name: 'Anthropic', authTypes: ['api_key', 'oauth'] as const, apiKeyField: 'ANTHROPIC_API_KEY' as const },
-    { id: 'openai', name: 'OpenAI', authTypes: ['api_key'] as const, apiKeyField: 'OPENAI_API_KEY' as const },
-    { id: 'google', name: 'Google Gemini', authTypes: ['api_key'] as const, apiKeyField: 'GEMINI_API_KEY' as const },
-    { id: 'openrouter', name: 'OpenRouter', authTypes: ['api_key'] as const, apiKeyField: 'OPENROUTER_API_KEY' as const },
-  ];
+  const PROVIDER_META: Record<string, { name: string; authTypes: readonly string[] }> = {
+    anthropic: { name: 'Anthropic', authTypes: ['api_key', 'oauth'] },
+    openai: { name: 'OpenAI', authTypes: ['api_key'] },
+    google: { name: 'Google Gemini', authTypes: ['api_key'] },
+    openrouter: { name: 'OpenRouter', authTypes: ['api_key'] },
+  };
+
+  const SUPPORTED_PROVIDERS = Object.entries(PROVIDER_KEY_MAP).map(([id, apiKeyField]) => ({
+    id,
+    apiKeyField,
+    ...PROVIDER_META[id] ?? { name: id, authTypes: ['api_key'] },
+  }));
 
   app.get('/api/ai/providers', async (_request, reply) => {
     const providers = SUPPORTED_PROVIDERS.map(p => {

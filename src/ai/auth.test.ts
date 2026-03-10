@@ -13,8 +13,9 @@ vi.mock('../paths.js', () => ({
 }));
 
 // Mock filesystem (prevent actual disk writes)
+const mockReadFileSync = vi.fn().mockReturnValue('{}');
 vi.mock('node:fs', () => ({
-  readFileSync: vi.fn().mockReturnValue('{}'),
+  readFileSync: mockReadFileSync,
   writeFileSync: vi.fn(),
   mkdirSync: vi.fn(),
 }));
@@ -65,6 +66,9 @@ describe('resolveApiKey', () => {
   });
 
   it('returns OAuth API key when available (step 1)', async () => {
+    // Seed credentials so the OAuth branch is entered
+    mockReadFileSync.mockReturnValue(JSON.stringify({ anthropic: { refresh: 'existing-tok' } }));
+    loadCredentials();
     mockGetOAuthApiKey.mockResolvedValue({
       apiKey: 'oauth-key-123',
       newCredentials: { refresh: 'tok' },

@@ -17,10 +17,20 @@ export function loadConfigFile(): Record<string, string> | null {
   }
 }
 
+/** Whether a config file has been written (cached to avoid repeated disk reads). */
+let _configFileExists: boolean | null = null;
+
+export function configFileExists(): boolean {
+  if (_configFileExists !== null) return _configFileExists;
+  _configFileExists = loadConfigFile() !== null;
+  return _configFileExists;
+}
+
 export function saveConfigFile(settings: Record<string, string>): void {
   const existing = loadConfigFile() ?? {};
   const merged = { ...existing, ...settings };
   writeFileSync(configPath, JSON.stringify(merged, null, 2), { mode: 0o600 });
+  _configFileExists = true;
   // Update process.env and re-parse config so runtime values reflect the new settings
   for (const [key, value] of Object.entries(settings)) {
     process.env[key] = String(value);

@@ -38,14 +38,23 @@ function splitBlocks(text: string): string[] {
 const blocks = computed(() => splitBlocks(props.content));
 
 /** Cache rendered HTML keyed by source text to avoid re-parsing unchanged blocks. */
+const CACHE_MAX = 512;
 const renderCache = new Map<string, string>();
 
 const renderedBlocks = computed(() =>
   blocks.value.map((block) => {
     let html = renderCache.get(block);
-    if (!html) {
+    if (html) {
+      // Move to end for LRU ordering
+      renderCache.delete(block);
+      renderCache.set(block, html);
+    } else {
       html = DOMPurify.sanitize(md.parse(block) as string);
       renderCache.set(block, html);
+      if (renderCache.size > CACHE_MAX) {
+        // Evict oldest entry
+        renderCache.delete(renderCache.keys().next().value!);
+      }
     }
     return html;
   }),

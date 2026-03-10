@@ -32,22 +32,15 @@ import {
   buildManageLiabilityTool,
 } from './asset-tools.js';
 import { readMemory } from './memory.js';
-import { resolveApiKey, loadCredentials, PROVIDER_KEY_MAP } from './auth.js';
+import { resolveApiKey, loadCredentials } from './auth.js';
 
 // Load OAuth credentials at module init
 loadCredentials();
 
-/** Check if the environment or config has an API key for the given provider. */
+/** Check if the environment has an API key that pi-ai would discover for this provider. */
 function hasEnvApiKey(provider: string): boolean {
-  // Check config-based keys (set via Settings UI)
-  const configKey = PROVIDER_KEY_MAP[provider];
-  if (configKey) {
-    const val = config[configKey];
-    if (typeof val === 'string' && val) return true;
-  }
-  // Check env vars that pi-ai looks for
   const envMap: Record<string, string[]> = {
-    anthropic: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
+    anthropic: ['ANTHROPIC_API_KEY'],
     openai: ['OPENAI_API_KEY'],
     google: ['GEMINI_API_KEY'],
     groq: ['GROQ_API_KEY'],

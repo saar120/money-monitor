@@ -9,20 +9,27 @@ const CREDENTIALS_PATH = join(dataDir, 'oauth-credentials.json');
 
 // In-memory cache of credentials keyed by provider
 let credentials: Record<string, OAuthCredentials> = {};
+let lastSavedJson = '';
 
 /** Load persisted OAuth credentials from disk. */
 export function loadCredentials(): void {
   try {
-    credentials = JSON.parse(readFileSync(CREDENTIALS_PATH, 'utf-8'));
+    const raw = readFileSync(CREDENTIALS_PATH, 'utf-8');
+    credentials = JSON.parse(raw);
+    lastSavedJson = raw;
   } catch {
     credentials = {};
+    lastSavedJson = '';
   }
 }
 
-/** Persist credentials to disk. */
+/** Persist credentials to disk (skips write if unchanged). */
 function saveCredentials(): void {
+  const json = JSON.stringify(credentials, null, 2);
+  if (json === lastSavedJson) return;
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(CREDENTIALS_PATH, JSON.stringify(credentials, null, 2), { mode: 0o600 });
+  writeFileSync(CREDENTIALS_PATH, json, { mode: 0o600 });
+  lastSavedJson = json;
 }
 
 // ── Two-step Anthropic OAuth (PKCE) ──────────────────────────────────────────
