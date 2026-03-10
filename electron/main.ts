@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences, Tray } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -106,6 +106,8 @@ console.log(`[Electron] Power save blocker started (id: ${powerSaveId})`);
 
 // ── 7. Window management ─────────────────────────────────────────────────────
 let mainWindow: BrowserWindow | null = null;
+let tray: Tray | null = null;
+let isQuitting = false;
 
 function sendAccentColor() {
   if (!mainWindow) return;
@@ -153,9 +155,58 @@ function createWindow(port: number) {
     );
   });
 
+  // Hide to tray instead of closing when the user clicks X
+  mainWindow.on('close', (e) => {
+    if (!isQuitting) {
+      e.preventDefault();
+      mainWindow?.hide();
+    }
+  });
+
   mainWindow.on('closed', () => {
     mainWindow = null;
   });
+}
+
+function createTray(port: number) {
+  // Electron auto-detects 'Template' in filename and picks up @2x for retina
+  const icon = nativeImage.createFromPath(join(__dirname, 'icons', 'trayTemplate.png'));
+  icon.setTemplateImage(true);
+  tray = new Tray(icon);
+  tray.setToolTip('Money Monitor');
+
+  const contextMenu = Menu.buildFromTemplate([
+    {
+      label: 'Open Money Monitor',
+      click: () => {
+        if (mainWindow) {
+          mainWindow.show();
+          mainWindow.focus();
+        } else {
+          createWindow(port);
+        }
+      },
+    },
+    {
+      label: 'Scrape Now',
+      click: () => {
+        fetch(`http://localhost:${port}/api/scrape/all`, {
+          method: 'POST',
+          headers: { Authorization: `Bearer ${authToken}` },
+        }).catch((err) => console.error('[Tray] Scrape request failed:', err));
+      },
+    },
+    { type: 'separator' },
+    {
+      label: 'Quit',
+      click: () => {
+        isQuitting = true;
+        app.quit();
+      },
+    },
+  ]);
+
+  tray.setContextMenu(contextMenu);
 }
 
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
@@ -181,6 +232,7 @@ app.whenReady().then(async () => {
     console.log(`[Electron] Data directory: ${dataDir}`);
 
     createWindow(port);
+    createTray(port);
 
     // Re-send accent color when system preferences change
     nativeTheme.on('updated', () => {
@@ -188,7 +240,10 @@ app.whenReady().then(async () => {
     });
 
     app.on('activate', () => {
-      if (BrowserWindow.getAllWindows().length === 0) {
+      if (mainWindow) {
+        mainWindow.show();
+        mainWindow.focus();
+      } else {
         createWindow(port);
       }
     });
@@ -200,6 +255,10 @@ app.whenReady().then(async () => {
       console.log('[Electron] System resumed from sleep — restarting background services');
       onResume();
       mainWindow?.webContents.reload();
+    });
+
+    app.on('before-quit', () => {
+      isQuitting = true;
     });
 
     let quitting = false;
@@ -222,6 +281,9 @@ app.whenReady().then(async () => {
   }
 });
 
+// On macOS, keep the app running in the tray when all windows are closed
 app.on('window-all-closed', () => {
-  app.quit();
+  if (process.platform !== 'darwin') {
+    app.quit();
+  }
 });
