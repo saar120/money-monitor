@@ -251,6 +251,16 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       }
     }
     if (event.type === 'agent_end') {
+      // Check if the agent ended due to a provider error
+      const lastMsg = event.messages[event.messages.length - 1];
+      if (lastMsg && 'stopReason' in lastMsg && lastMsg.stopReason === 'error') {
+        const errorText = ('errorMessage' in lastMsg && lastMsg.errorMessage)
+          ? String(lastMsg.errorMessage)
+          : 'The AI provider returned an error. Please check your API key and try again.';
+        push({ type: 'error', text: errorText });
+        push({ done: true });
+        return;
+      }
       const finalText = extractAssistantText(event.messages);
       push({ type: 'result', text: finalText });
       push({ done: true });
