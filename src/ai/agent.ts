@@ -1,6 +1,6 @@
 import { Agent } from '@mariozechner/pi-agent-core';
 import { getModel, completeSimple } from '@mariozechner/pi-ai';
-import type { KnownProvider, AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai';
+import type { AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai';
 import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, parseModelSpec, getAIModelSpec, getBatchModelSpec } from '../config.js';
@@ -32,10 +32,32 @@ import {
   buildManageLiabilityTool,
 } from './asset-tools.js';
 import { readMemory } from './memory.js';
-import { resolveApiKey, loadCredentials } from './auth.js';
+import { resolveApiKey, loadCredentials, PROVIDER_KEY_MAP } from './auth.js';
 
 // Load OAuth credentials at module init
 loadCredentials();
+
+/** Check if the environment or config has an API key for the given provider. */
+function hasEnvApiKey(provider: string): boolean {
+  // Check config-based keys (set via Settings UI)
+  const configKey = PROVIDER_KEY_MAP[provider];
+  if (configKey) {
+    const val = config[configKey];
+    if (typeof val === 'string' && val) return true;
+  }
+  // Check env vars that pi-ai looks for
+  const envMap: Record<string, string[]> = {
+    anthropic: ['ANTHROPIC_OAUTH_TOKEN', 'ANTHROPIC_API_KEY'],
+    openai: ['OPENAI_API_KEY'],
+    google: ['GEMINI_API_KEY'],
+    groq: ['GROQ_API_KEY'],
+    xai: ['XAI_API_KEY'],
+    openrouter: ['OPENROUTER_API_KEY'],
+    mistral: ['MISTRAL_API_KEY'],
+  };
+  const vars = envMap[provider];
+  return vars ? vars.some(v => !!process.env[v]) : false;
+}
 
 function formatTransactionForPrompt(t: Transaction): string {
   const meta = parseMeta(t.meta);
@@ -155,6 +177,17 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
 
   const { provider, model: modelName } = parseModelSpec(getAIModelSpec());
+
+  // Pre-validate auth before entering the agent loop.
+  // The pi-agent-core library uses a fire-and-forget async IIFE internally,
+  // so any error from within the loop becomes an unhandled promise rejection.
+  // By checking here, we fail fast with a clear error to the user.
+  const apiKey = await resolveApiKey(provider);
+  if (!apiKey && !hasEnvApiKey(provider)) {
+    yield { type: 'error', text: 'Authentication expired or missing. Please re-authenticate via Settings → AI Provider, or set your API key environment variable.' };
+    return;
+  }
+
   // getModel is strictly typed; dynamic strings from config need a cast on the result
   const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
 
