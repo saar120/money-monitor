@@ -15,6 +15,7 @@ let inflightFetch: Promise<ExchangeRateResult> | null = null;
 async function fetchFiatRates(): Promise<Record<string, number>> {
   const res = await fetch(
     'https://www.boi.org.il/PublicApi/GetExchangeRates?asXml=false',
+    { signal: AbortSignal.timeout(8000) },
   );
   if (!res.ok) throw new Error(`Bank of Israel API returned ${res.status}`);
   const data = (await res.json()) as {
@@ -36,6 +37,7 @@ async function fetchFiatRates(): Promise<Record<string, number>> {
 async function fetchBtcRate(): Promise<number> {
   const res = await fetch(
     'https://api.coingecko.com/api/v3/simple/price?ids=bitcoin&vs_currencies=ils',
+    { signal: AbortSignal.timeout(8000) },
   );
   if (!res.ok) throw new Error(`CoinGecko API returned ${res.status}`);
   const data = (await res.json()) as { bitcoin?: { ils?: number } };
@@ -98,7 +100,12 @@ export async function getExchangeRates(): Promise<ExchangeRateResult> {
           fetchedAt: lastFetched.toISOString(),
         };
       }
-      throw err;
+      console.error('Exchange rate fetch failed with no cache — using fallback (ILS only):', err);
+      return {
+        rates: { ILS: 1 },
+        stale: true,
+        fetchedAt: new Date().toISOString(),
+      };
     } finally {
       inflightFetch = null;
     }

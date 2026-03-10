@@ -628,6 +628,7 @@ export interface NetWorth {
   liabilities: NetWorthLiability[];
   liabilitiesTotal: number;
   exchangeRates: Record<string, number>;
+  ratesStale?: boolean;
   calculatedAt: string;
 }
 

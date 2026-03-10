@@ -49,7 +49,7 @@ export function generateDatePoints(startDate: string, endDate: string, granulari
 // ── Current Net Worth ──
 
 export async function getNetWorth() {
-  const { rates } = await getExchangeRates();
+  const { rates, stale: ratesStale } = await getExchangeRates();
 
   // 1. Bank accounts
   const bankRows = db.select().from(accounts)
@@ -110,6 +110,7 @@ export async function getNetWorth() {
     assets: assetsResult, assetsTotal,
     liabilities: liabilitiesResult, liabilitiesTotal,
     exchangeRates: rates,
+    ratesStale,
     calculatedAt: new Date().toISOString(),
   };
 }
