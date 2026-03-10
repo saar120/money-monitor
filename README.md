@@ -73,7 +73,6 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 git clone https://github.com/saar120/money-monitor.git
 cd money-monitor
 npm install
-cd dashboard && npm install && cd ..
 ```
 
 ### 2. Configure environment
@@ -195,7 +194,7 @@ npm run backup -- /path/to/usb/drive  # saves to a custom directory
 ```bash
 git clone https://github.com/saar120/money-monitor.git
 cd money-monitor
-npm install && cd dashboard && npm install && cd ..
+npm install
 
 # Restore from archive
 npm run restore -- /path/to/money-monitor-backup-20260305_120000.tar.gz
