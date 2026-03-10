@@ -94,16 +94,18 @@ export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
  * Falls back through: OAuth → manual OAuth token → config API key → undefined (pi-ai checks env vars).
  */
 export async function resolveApiKey(provider: string): Promise<string | undefined> {
-  // 1. Try OAuth credentials (auto-refresh)
-  try {
-    const result = await getOAuthApiKey(provider, credentials);
-    if (result) {
-      credentials[provider] = result.newCredentials;
-      saveCredentials();
-      return result.apiKey;
+  // 1. Try OAuth credentials (auto-refresh) — only if we have stored creds for this provider
+  if (credentials[provider]) {
+    try {
+      const result = await getOAuthApiKey(provider, credentials);
+      if (result) {
+        credentials[provider] = result.newCredentials;
+        saveCredentials();
+        return result.apiKey;
+      }
+    } catch (err) {
+      console.error(`[OAuth] Failed to refresh token for ${provider}:`, err instanceof Error ? err.message : err);
     }
-  } catch (err) {
-    console.error(`[OAuth] Failed to refresh token for ${provider}:`, err instanceof Error ? err.message : err);
   }
 
   // 2. Manually-pasted OAuth token (Anthropic only)
