@@ -37,6 +37,7 @@ const form = ref({
   SCRAPE_SHOW_BROWSER: false,
   TELEGRAM_BOT_TOKEN: '',
   TELEGRAM_ALLOWED_USERS: '',
+  AI_MAX_TURNS: '8',
 });
 
 const currentProvider = computed(() =>
@@ -84,6 +85,7 @@ onMounted(async () => {
     form.value.SCRAPE_TIMEOUT = String(s.SCRAPE_TIMEOUT || '120000');
     form.value.SCRAPE_SHOW_BROWSER = s.SCRAPE_SHOW_BROWSER === true || s.SCRAPE_SHOW_BROWSER === 'true';
     form.value.TELEGRAM_ALLOWED_USERS = String(s.TELEGRAM_ALLOWED_USERS || '');
+    form.value.AI_MAX_TURNS = String(s.AI_MAX_TURNS || '8');
     // Secret fields show redacted placeholder — left empty until user types
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load settings';
@@ -166,6 +168,7 @@ async function save() {
       SCRAPE_TIMEOUT: form.value.SCRAPE_TIMEOUT,
       SCRAPE_SHOW_BROWSER: form.value.SCRAPE_SHOW_BROWSER,
       TELEGRAM_ALLOWED_USERS: form.value.TELEGRAM_ALLOWED_USERS,
+      AI_MAX_TURNS: form.value.AI_MAX_TURNS,
     };
     // Only include secrets that the user actually modified
     const secretKeys = [
@@ -386,6 +389,15 @@ async function save() {
                 </Select>
               </div>
             </template>
+          </div>
+
+          <!-- Max Turns -->
+          <div class="border-t pt-4 space-y-1">
+            <label class="text-[13px] font-medium text-text-primary block">Max Tool Rounds</label>
+            <Input v-model="form.AI_MAX_TURNS" type="number" min="1" max="20" />
+            <p class="text-[11px] text-text-secondary mt-1">
+              Maximum API calls per chat message (each tool use is one round). Lower values reduce rate-limit issues but may limit complex answers.
+            </p>
           </div>
         </CardContent>
       </Card>

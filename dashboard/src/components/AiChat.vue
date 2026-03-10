@@ -83,21 +83,24 @@ async function sendMessage(text?: string) {
   await scrollToBottom();
 
   try {
-    // Add assistant message upfront so text streams into it
-    messages.value.push({ role: 'assistant', content: '' });
-    const msgIndex = messages.value.length - 1;
+    // Accumulate response without showing partial text —
+    // the typing indicator stays visible until the full message is ready.
+    let accumulated = '';
 
     for await (const event of aiChatStream(sessionId, messageText)) {
       if (event.type === 'text_delta') {
-        messages.value[msgIndex]!.content += event.text;
-        await scrollToBottom();
+        accumulated += event.text;
       } else if (event.type === 'status') {
         status.value = event.text;
       } else if (event.type === 'result') {
-        messages.value[msgIndex]!.content = event.text;
+        accumulated = event.text;
       } else if (event.type === 'error') {
         throw new Error(event.text);
       }
+    }
+
+    if (accumulated) {
+      messages.value.push({ role: 'assistant', content: accumulated });
     }
     // Refresh sidebar to update title/timestamp
     sidebarRef.value?.loadSessions();

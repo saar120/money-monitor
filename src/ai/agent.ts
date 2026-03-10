@@ -119,7 +119,8 @@ const TOOL_STATUS: Record<string, string> = {
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
-const MAX_TURNS = 8;
+/** Read at call time so settings changes take effect without restart. */
+function getMaxTurns() { return config.AI_MAX_TURNS; }
 
 /** Extract text from the last assistant message in a list. */
 function extractAssistantText(messages: AgentMessage[]): string {
@@ -244,7 +245,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     }
     if (event.type === 'turn_end') {
       turnCount++;
-      if (turnCount >= MAX_TURNS) {
+      if (turnCount >= getMaxTurns()) {
         agent.abort();
         push({ type: 'result', text: 'I reached the maximum number of steps. Please try a more specific question.' });
         push({ done: true });

@@ -55,6 +55,7 @@ const envSchema = z.object({
   TELEGRAM_ALLOWED_USERS: z.string().optional(),
   SCRAPE_TIMEOUT: z.coerce.number().default(120000),
   SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
+  AI_MAX_TURNS: z.coerce.number().int().min(1).max(20).default(8),
 });
 
 // ── Load config source ──────────────────────────────────────────────────────
