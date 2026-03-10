@@ -1,6 +1,6 @@
 {
   "name": "money-monitor",
-  "version": "1.0.0",
+  "version": "0.1.0-alpha.1",
   "description": "",
   "main": "electron/main.js",
   "type": "module",
@@ -61,7 +61,8 @@
     "asarUnpack": [
       "node_modules/better-sqlite3/**",
       "node_modules/puppeteer-core/**"
-    ]
+    ],
+    "publish": null
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
