@@ -30,7 +30,9 @@ export function isSafeStorageAvailable(): boolean {
 
 /** Encrypt a plaintext secret.  Returns an `enc:<base64>` string. */
 export function encryptSecret(plaintext: string): string {
-  if (!_encrypt) return plaintext;
+  if (!_encrypt) {
+    throw new Error('Cannot encrypt secret: no safe-storage backend registered');
+  }
   const buf = _encrypt(plaintext);
   return ENC_PREFIX + buf.toString('base64');
 }

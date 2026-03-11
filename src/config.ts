@@ -6,11 +6,12 @@ import { isSafeStorageAvailable, encryptSecret, decryptSecret, isEncrypted } fro
 
 export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
 
-// ── Keys whose values are encrypted at rest via Electron safeStorage ────────
-const SECRET_CONFIG_KEYS = new Set([
+// ── Keys whose values are secrets (encrypted at rest, redacted in API responses) ─
+export const SECRET_KEYS = new Set([
   'CREDENTIALS_MASTER_KEY',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_OAUTH_TOKEN',
+  'API_TOKEN',
   'OPENAI_API_KEY',
   'GEMINI_API_KEY',
   'OPENROUTER_API_KEY',
@@ -34,7 +35,7 @@ function loadRawConfigFile(): Record<string, string> | null {
 export function loadConfigFile(): Record<string, string> | null {
   const raw = loadRawConfigFile();
   if (!raw) return null;
-  for (const key of SECRET_CONFIG_KEYS) {
+  for (const key of SECRET_KEYS) {
     const val = raw[key];
     if (val && isEncrypted(val)) {
       try {
@@ -63,7 +64,7 @@ export function saveConfigFile(settings: Record<string, string>): void {
   // Encrypt secret values when safe storage is available
   const toWrite: Record<string, string> = {};
   for (const [key, value] of Object.entries(settings)) {
-    if (SECRET_CONFIG_KEYS.has(key) && isSafeStorageAvailable() && value) {
+    if (SECRET_KEYS.has(key) && isSafeStorageAvailable() && value) {
       toWrite[key] = encryptSecret(value);
     } else {
       toWrite[key] = value;
@@ -116,14 +117,22 @@ if (!isElectronMode) {
   const { config: loadDotenv } = await import('dotenv');
   loadDotenv();
 } else {
-  // Electron: load config.json into process.env
-  const fileConfig = loadConfigFile();
-  if (fileConfig) {
-    for (const [key, value] of Object.entries(fileConfig)) {
+  // Electron: load config.json into process.env (single disk read for both load and migration)
+  const raw = loadRawConfigFile();
+  if (raw) {
+    for (const [key, value] of Object.entries(raw)) {
       // Don't override env vars set by the Electron main process
-      if (value != null && !process.env[key]) {
-        process.env[key] = String(value);
+      if (value == null || process.env[key]) continue;
+      let plain = value;
+      if (SECRET_KEYS.has(key) && isEncrypted(value)) {
+        try {
+          plain = decryptSecret(value);
+        } catch (err) {
+          console.error(`[Config] Failed to decrypt ${key}:`, err instanceof Error ? err.message : err);
+          continue; // skip corrupted value
+        }
       }
+      process.env[key] = String(plain);
     }
   }
   // Auto-generate CREDENTIALS_MASTER_KEY if not set (first launch)
@@ -133,21 +142,17 @@ if (!isElectronMode) {
     saveConfigFile({ CREDENTIALS_MASTER_KEY: key });
   }
   // Migrate plaintext secrets to encrypted form when safe storage becomes available
-  if (isSafeStorageAvailable()) {
-    const raw = loadRawConfigFile();
-    if (raw) {
-      const toMigrate: Record<string, string> = {};
-      for (const key of SECRET_CONFIG_KEYS) {
-        const val = raw[key];
-        if (val && !isEncrypted(val)) {
-          toMigrate[key] = val;
-        }
+  if (isSafeStorageAvailable() && raw) {
+    const toMigrate: Record<string, string> = {};
+    for (const key of SECRET_KEYS) {
+      const val = raw[key];
+      if (val && !isEncrypted(val)) {
+        toMigrate[key] = val;
       }
-      if (Object.keys(toMigrate).length > 0) {
-        // Re-save plaintext secrets — saveConfigFile will encrypt them
-        saveConfigFile(toMigrate);
-        console.log(`[Config] Migrated ${Object.keys(toMigrate).length} secret(s) to safe storage`);
-      }
+    }
+    if (Object.keys(toMigrate).length > 0) {
+      saveConfigFile(toMigrate);
+      console.log(`[Config] Migrated ${Object.keys(toMigrate).length} secret(s) to safe storage`);
     }
   }
 }
