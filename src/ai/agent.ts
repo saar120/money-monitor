@@ -20,6 +20,7 @@ import {
   buildGetTopMerchantsTool,
   buildCategorizeTransactionTool,
   buildSaveMemoryTool,
+  buildAddCategoryTool,
 } from './tools.js';
 import {
   buildGetNetWorthTool,
@@ -99,6 +100,7 @@ const TOOL_STATUS: Record<string, string> = {
   detect_recurring_transactions: 'Detecting recurring charges...',
   get_top_merchants: 'Finding top merchants...',
   categorize_transaction: 'Categorizing transaction...',
+  add_category: 'Adding category...',
   save_memory: 'Saving to memory...',
   get_net_worth: 'Calculating net worth...',
   get_asset_details: 'Looking up asset details...',
@@ -194,6 +196,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildDetectRecurringTransactionsTool(),
     buildGetTopMerchantsTool(),
     buildCategorizeTransactionTool(categoryNames),
+    buildAddCategoryTool(),
     buildSaveMemoryTool(),
     buildGetNetWorthTool(),
     buildGetAssetDetailsTool(),

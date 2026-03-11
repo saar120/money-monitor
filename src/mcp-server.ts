@@ -21,6 +21,7 @@ const {
   detectRecurringTransactions,
   getTopMerchants,
   categorizeTransaction,
+  addCategory,
 } = await import('./ai/tools.js');
 
 const {
@@ -204,6 +205,26 @@ server.registerTool('categorize_transaction', {
 }, async (args) => {
   try {
     return { content: [{ type: 'text', text: categorizeTransaction(args) }] };
+  } catch (e) {
+    return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+  }
+});
+
+server.registerTool('add_category', {
+  title: 'Add Category',
+  description:
+    'Create a new spending category. Requires a unique machine-friendly name (lowercase, dashes/underscores) ' +
+    'and a human-readable label. Optionally set a color and categorization rules for the AI.',
+  inputSchema: {
+    name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/).describe('Unique machine name (lowercase, dashes/underscores, e.g. "groceries")'),
+    label: z.string().describe('Human-readable display name (e.g. "Groceries & Food")'),
+    color: z.string().optional().describe('Hex color code (e.g. "#4CAF50")'),
+    rules: z.string().optional().describe('Categorization hints for the AI (e.g. "Supermarkets, markets, food delivery")'),
+  },
+  annotations: { readOnlyHint: false, destructiveHint: false, idempotentHint: true, openWorldHint: false },
+}, async (args) => {
+  try {
+    return { content: [{ type: 'text', text: addCategory(args) }] };
   } catch (e) {
     return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
   }
