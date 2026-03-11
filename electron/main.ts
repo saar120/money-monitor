@@ -1,4 +1,16 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences, Tray } from 'electron';
+import {
+  app,
+  BrowserWindow,
+  dialog,
+  Menu,
+  nativeImage,
+  nativeTheme,
+  powerMonitor,
+  powerSaveBlocker,
+  safeStorage,
+  systemPreferences,
+  Tray,
+} from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
@@ -39,15 +51,7 @@ process.env.MM_APP_VERSION = app.getVersion();
 
 // ── 3. Get system accent color ───────────────────────────────────────────────
 function getAccentColor(): string {
-  if (isMac) {
-    try {
-      const hex = systemPreferences.getAccentColor();
-      return `#${hex.slice(0, 6)}`;
-    } catch {
-      return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
-    }
-  }
-  if (isWin) {
+  if (isMac || isWin) {
     try {
       const hex = systemPreferences.getAccentColor();
       return `#${hex.slice(0, 6)}`;
@@ -135,7 +139,7 @@ function sendAccentColor() {
   if (!mainWindow) return;
   const color = getAccentColor();
   mainWindow.webContents.executeJavaScript(
-    `document.documentElement.style.setProperty('--system-accent', '${color}')`
+    `document.documentElement.style.setProperty('--system-accent', '${color}')`,
   );
 }
 
@@ -174,12 +178,12 @@ function createWindow(port: number) {
   // Track focus/blur for UI desaturation
   mainWindow.on('focus', () => {
     mainWindow?.webContents.executeJavaScript(
-      `document.documentElement.classList.remove('window-blurred')`
+      `document.documentElement.classList.remove('window-blurred')`,
     );
   });
   mainWindow.on('blur', () => {
     mainWindow?.webContents.executeJavaScript(
-      `document.documentElement.classList.add('window-blurred')`
+      `document.documentElement.classList.add('window-blurred')`,
     );
   });
 
@@ -258,6 +262,25 @@ app.whenReady().then(async () => {
 
     buildMenu();
 
+    // ── Register OS-level safe storage for secrets ────────────────────────────
+    // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
+    // encrypt/decrypt strings.  Registration must happen before the backend
+    // import so config.ts can use it when loading secrets from config.json.
+    if (safeStorage.isEncryptionAvailable()) {
+      const { registerSafeStorage } = await import('../dist/safe-storage.js');
+      registerSafeStorage({
+        encrypt: (plaintext: string) => safeStorage.encryptString(plaintext),
+        decrypt: (encrypted: Buffer) => safeStorage.decryptString(encrypted),
+      });
+      console.log(
+        '[Electron] Safe storage registered (backend:',
+        safeStorage.getSelectedStorageBackend?.() ?? 'unknown',
+        ')',
+      );
+    } else {
+      console.warn('[Electron] Safe storage not available — secrets will be stored in plaintext');
+    }
+
     // Start server import
     const { createServer } = await import('../dist/server.js');
     const { start, shutdown, onResume } = await createServer();
@@ -310,7 +333,7 @@ app.whenReady().then(async () => {
     console.error('[Electron] Fatal startup error:', err);
     dialog.showErrorBox(
       'Money Monitor Failed to Start',
-      `The application could not start:\n\n${message}\n\nPlease check the logs or reinstall.`
+      `The application could not start:\n\n${message}\n\nPlease check the logs or reinstall.`,
     );
     app.exit(1);
   }

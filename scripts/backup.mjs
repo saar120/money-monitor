@@ -5,11 +5,9 @@
  * Usage: node scripts/backup.mjs [backup-dir]
  */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, unlinkSync } from 'node:fs';
+import { existsSync, mkdirSync, unlinkSync, copyFileSync, createWriteStream } from 'node:fs';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { createGzip } from 'node:zlib';
-import { createWriteStream, createReadStream } from 'node:fs';
 import { pipeline } from 'node:stream/promises';
 import { pack } from 'tar';
 
@@ -36,7 +34,6 @@ if (existsSync(DB_FILE)) {
   } catch {
     console.warn(`Warning: sqlite3 command failed, copying database file directly`);
     // Fallback: copy the file directly (less safe with active WAL connections)
-    const { copyFileSync } = await import('node:fs');
     copyFileSync(DB_FILE, DB_SNAPSHOT);
     files.push(DB_SNAPSHOT);
   }
