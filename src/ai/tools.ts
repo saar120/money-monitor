@@ -5,6 +5,7 @@ import { db } from '../db/connection.js';
 import { accounts } from '../db/schema.js';
 import { appendMemory } from './memory.js';
 import { listTransactions, categorizeTransaction as categorizeTx } from '../services/transactions.js';
+import { createCategory as createCategoryService } from '../services/categories.js';
 import { getSpendingSummary as getSpendingSummaryService, comparePeriods as comparePeriodsService, getSpendingTrends as getSpendingTrendsService, detectRecurringTransactions as detectRecurringService, getTopMerchants as getTopMerchantsService } from '../services/summary.js';
 import { createAgentTool } from './tool-adapter.js';
 
@@ -154,6 +155,21 @@ export function buildSaveMemoryTool() {
   });
 }
 
+export function buildAddCategoryTool() {
+  return createAgentTool({
+    name: 'add_category',
+    description: 'Create a new spending category. Requires a unique machine-friendly name (lowercase, dashes/underscores) and a human-readable label. Optionally set a color and categorization rules.',
+    label: 'Adding category',
+    parameters: Type.Object({
+      name: Type.String({ description: 'Unique machine name (lowercase, dashes/underscores, e.g. "groceries" or "eating-out")' }),
+      label: Type.String({ description: 'Human-readable display name (e.g. "Groceries & Food")' }),
+      color: Type.Optional(Type.String({ description: 'Hex color code (e.g. "#4CAF50")' })),
+      rules: Type.Optional(Type.String({ description: 'Categorization hints for the AI (e.g. "Supermarkets, markets, food delivery")' })),
+    }),
+    execute: async (args) => addCategory(args),
+  });
+}
+
 // ── Thin wrappers that delegate to service layer ────────────────────────────────
 
 export function queryTransactions(input: { account_id?: number; start_date?: string; end_date?: string; category?: string; status?: string; min_amount?: number; max_amount?: number; search?: string; limit?: number }): string {
@@ -163,6 +179,12 @@ export function queryTransactions(input: { account_id?: number; start_date?: str
     { limit, sortBy: 'date', sortOrder: 'desc' },
   );
   return JSON.stringify({ transactions: result.transactions, total: result.pagination.total, returned: result.transactions.length });
+}
+
+export function addCategory(input: { name: string; label: string; color?: string; rules?: string }): string {
+  const result = createCategoryService(input);
+  if (!result.ok) return JSON.stringify({ error: result.error });
+  return JSON.stringify({ success: true, category: result.category });
 }
 
 export function getSpendingSummary(input: { group_by?: 'category' | 'month' | 'account'; account_id?: number; start_date?: string; end_date?: string }): string {
