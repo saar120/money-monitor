@@ -1,0 +1,37 @@
+title = "money-monitor gitleaks config"
+
+[extend]
+  useDefault = true
+
+# Custom rules for secrets relevant to this project
+[[rules]]
+  id = "anthropic-api-key"
+  description = "Anthropic API Key"
+  regex = '''sk-ant-api\d{2}-[A-Za-z0-9_-]{20,}'''
+  keywords = ["sk-ant-api"]
+
+[[rules]]
+  id = "openai-api-key"
+  description = "OpenAI API Key"
+  regex = '''sk-[A-Za-z0-9]{20,}'''
+  keywords = ["sk-"]
+
+[[rules]]
+  id = "telegram-bot-token"
+  description = "Telegram Bot Token"
+  regex = '''\d{8,10}:[A-Za-z0-9_-]{35}'''
+  keywords = ["telegram", "bot"]
+
+[[rules]]
+  id = "generic-credentials-master-key"
+  description = "Credentials Master Key (hex)"
+  regex = '''CREDENTIALS_MASTER_KEY\s*=\s*[0-9a-fA-F]{32,}'''
+  keywords = ["CREDENTIALS_MASTER_KEY"]
+
+[allowlist]
+  description = "Global allowlist"
+  paths = [
+    '''\.env\.example$''',
+    '''package-lock\.json$''',
+    '''\.gitleaks\.toml$''',
+  ]

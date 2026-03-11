@@ -22,7 +22,25 @@
     "electron:rebuild": "node scripts/electron-rebuild.cjs",
     "test": "vitest run",
     "test:watch": "vitest",
-    "test:coverage": "vitest run --coverage"
+    "test:coverage": "vitest run --coverage",
+    "lint": "eslint .",
+    "lint:fix": "eslint . --fix",
+    "format": "prettier --write .",
+    "format:check": "prettier --check .",
+    "prepare": "husky"
+  },
+  "lint-staged": {
+    "*.{js,ts}": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.vue": [
+      "eslint --fix",
+      "prettier --write"
+    ],
+    "*.{css,json,md,yaml,yml}": [
+      "prettier --write"
+    ]
   },
   "repository": {
     "type": "git",
@@ -84,6 +102,9 @@
     "zod": "^4.3.6"
   },
   "devDependencies": {
+    "@commitlint/cli": "^20.4.3",
+    "@commitlint/config-conventional": "^20.4.3",
+    "@eslint/js": "^10.0.1",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.0",
     "@types/node-cron": "^3.0.11",
@@ -91,8 +112,16 @@
     "drizzle-kit": "^0.31.9",
     "electron": "^40.8.0",
     "electron-builder": "^26.8.1",
+    "eslint": "^10.0.3",
+    "eslint-config-prettier": "^10.1.8",
+    "eslint-plugin-vue": "^10.8.0",
+    "husky": "^9.1.7",
+    "lint-staged": "^16.3.3",
+    "prettier": "^3.8.1",
     "tsx": "^4.21.0",
     "typescript": "^5.9.3",
-    "vitest": "^4.0.18"
+    "typescript-eslint": "^8.57.0",
+    "vitest": "^4.0.18",
+    "vue-eslint-parser": "^10.4.0"
   }
 }
