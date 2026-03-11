@@ -2,7 +2,12 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { configPath } from './paths.js';
-import { isSafeStorageAvailable, encryptSecret, decryptSecret, isEncrypted } from './safe-storage.js';
+import {
+  isSafeStorageAvailable,
+  encryptSecret,
+  decryptSecret,
+  isEncrypted,
+} from './safe-storage.js';
 
 export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
 
@@ -41,7 +46,10 @@ export function loadConfigFile(): Record<string, string> | null {
       try {
         raw[key] = decryptSecret(val);
       } catch (err) {
-        console.error(`[Config] Failed to decrypt ${key}:`, err instanceof Error ? err.message : err);
+        console.error(
+          `[Config] Failed to decrypt ${key}:`,
+          err instanceof Error ? err.message : err,
+        );
         // Remove the corrupted value so the user can re-enter it
         delete raw[key];
       }
@@ -110,6 +118,9 @@ const envSchema = z.object({
   AI_MAX_TURNS: z.coerce.number().int().min(1).max(20).default(8),
 });
 
+export type Config = z.infer<typeof envSchema>;
+export let config: Config;
+
 // ── Load config source ──────────────────────────────────────────────────────
 
 if (!isElectronMode) {
@@ -128,7 +139,10 @@ if (!isElectronMode) {
         try {
           plain = decryptSecret(value);
         } catch (err) {
-          console.error(`[Config] Failed to decrypt ${key}:`, err instanceof Error ? err.message : err);
+          console.error(
+            `[Config] Failed to decrypt ${key}:`,
+            err instanceof Error ? err.message : err,
+          );
           continue; // skip corrupted value
         }
       }
@@ -157,8 +171,7 @@ if (!isElectronMode) {
   }
 }
 
-export let config = envSchema.parse(process.env);
-export type Config = z.infer<typeof envSchema>;
+config = envSchema.parse(process.env);
 
 /**
  * Parse a model spec string like "anthropic:claude-sonnet-4-6" or "openai:gpt-4o".
