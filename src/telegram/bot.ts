@@ -9,8 +9,9 @@ import {
   appendMessage,
   getSessionMessages,
 } from '../ai/sessions.js';
-import { getSessionId, setSessionId, clearSessionId } from './session-map.js';
+import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
 import { markdownToTelegramHtml } from './format.js';
+import { registerSendMessage, registerGetChatIds } from './alerts.js';
 
 const MAX_MESSAGE_LENGTH = 4096;
 
@@ -80,6 +81,17 @@ export function startTelegramBot(): void {
   bot = new Bot(config.TELEGRAM_BOT_TOKEN);
   const allowedUsers = parseAllowedUsers();
 
+  // Register alert infrastructure so alerts.ts can send messages
+  const botRef = bot;
+  registerSendMessage(async (chatId: number, html: string) => {
+    try {
+      await botRef.api.sendMessage(chatId, html, { parse_mode: 'HTML' });
+    } catch {
+      await botRef.api.sendMessage(chatId, html.replace(/<[^>]+>/g, ''));
+    }
+  });
+  registerGetChatIds(() => getAllChatIds());
+
   // ── Access control middleware ──
   if (allowedUsers.size === 0) {
     console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot is open to all users.');
@@ -144,6 +156,23 @@ export function startTelegramBot(): void {
     await ctx.reply(`Switched to session: ${match.title}`);
   });
 
+  bot.command('alerts', async (ctx) => {
+    const { loadAlertSettings } = await import('./alert-settings.js');
+    const s = loadAlertSettings();
+    const on = (v: boolean) => v ? '✅' : '❌';
+    const lines = [
+      `**Alerts: ${on(s.enabled)}**`,
+      `${on(s.dailyDigest.enabled)} Daily digest (large charge ≥₪${s.dailyDigest.largeChargeThreshold})`,
+      `${on(s.unusualSpending.enabled)} Unusual spending (≥${s.unusualSpending.percentThreshold}% spike)`,
+      `${on(s.newRecurring.enabled)} New recurring charges`,
+      `${on(s.reviewReminder.enabled)} Review reminders`,
+      `${on(s.monthlySummary.enabled)} Monthly summary`,
+      `${on(s.netWorthChange.enabled)} Net worth changes (≥₪${s.netWorthChange.changeThreshold})`,
+    ];
+    const html = markdownToTelegramHtml(lines.join('\n'));
+    await replyHtml(ctx, html);
+  });
+
   // ── Message handler ──
 
   bot.on('message:text', async (ctx) => {
@@ -198,6 +227,7 @@ export function startTelegramBot(): void {
     { command: 'memory', description: 'View shared memory' },
     { command: 'sessions', description: 'List recent sessions' },
     { command: 'switch', description: 'Switch to a session by ID prefix' },
+    { command: 'alerts', description: 'View alert settings' },
   ]).catch(() => {});
 
   // ── Catch unhandled errors so the polling loop keeps running ──

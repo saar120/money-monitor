@@ -743,3 +743,49 @@ export function toggleDemoMode(enabled: boolean) {
     body: JSON.stringify({ enabled }),
   });
 }
+
+// ─── Alert Settings ───
+
+export interface AlertSettingSection {
+  enabled: boolean;
+}
+
+export interface AlertSettings {
+  enabled: boolean;
+  dailyDigest: {
+    enabled: boolean;
+    largeChargeThreshold: number;
+    reportErrors: boolean;
+  };
+  unusualSpending: {
+    enabled: boolean;
+    percentThreshold: number;
+  };
+  newRecurring: AlertSettingSection;
+  reviewReminder: AlertSettingSection;
+  monthlySummary: AlertSettingSection;
+  netWorthChange: {
+    enabled: boolean;
+    changeThreshold: number;
+    milestoneInterval: number;
+  };
+}
+
+export function getAlertSettings() {
+  return request<AlertSettings>('/alerts/settings');
+}
+
+export function updateAlertSettings(settings: Partial<AlertSettings>) {
+  return request<AlertSettings>('/alerts/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+}
+
+export function resetAlertSettings() {
+  return request<AlertSettings>('/alerts/settings/reset', { method: 'POST' });
+}
+
+export function sendTestAlert() {
+  return request<{ success: boolean; message: string }>('/alerts/test', { method: 'POST' });
+}

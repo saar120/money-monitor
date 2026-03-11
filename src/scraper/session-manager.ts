@@ -3,7 +3,9 @@ import { db } from '../db/connection.js';
 import { accounts, scrapeSessions } from '../db/schema.js';
 import type { Account, ScrapeSession } from '../shared/types.js';
 import { scrapeAccount } from './scraper.service.js';
+import type { ScrapeResult } from './scraper.service.js';
 import { broadcastSseEvent } from '../api/sse.js';
+import { runPostScrapeAlerts } from '../telegram/alerts.js';
 
 interface ActiveSession {
   session: ScrapeSession;
@@ -85,6 +87,7 @@ export function runScrapeSession(
   broadcastSseEvent({ type: 'session-started', sessionId: session.id, accountIds, trigger });
 
   const promise = (async () => {
+    const allResults: ScrapeResult[] = [];
     try {
       let hasError = false;
       for (const account of accountsToScrape) {
@@ -92,6 +95,7 @@ export function runScrapeSession(
         broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId: account.id });
         const results = await scrapeAccount(account, session.id, abortController.signal);
         for (const result of results) {
+          allResults.push(result);
           if (!result.success) hasError = true;
           broadcastSseEvent({
             type: result.success ? 'account-scrape-done' : 'account-scrape-error',
@@ -108,11 +112,19 @@ export function runScrapeSession(
       const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
       completeSession(session.id, finalStatus);
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
+
+      // Send Telegram alerts after scrape completes
+      runPostScrapeAlerts(allResults).catch(err => {
+        console.error('[Scrape] Post-scrape alerts failed:', err instanceof Error ? err.message : err);
+      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`[Scrape] Session ${session.id} failed:`, errorMessage);
       completeSession(session.id, 'error');
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error', error: errorMessage });
+
+      // Still send alerts on error
+      runPostScrapeAlerts(allResults).catch(() => {});
     }
   })();
 

@@ -48,3 +48,9 @@ export function clearSessionId(chatId: number): void {
   delete map[String(chatId)];
   save();
 }
+
+/** Return all known Telegram chat IDs (for broadcasting alerts). */
+export function getAllChatIds(): number[] {
+  const map = load();
+  return Object.keys(map).map(Number).filter(n => !isNaN(n));
+}

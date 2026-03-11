@@ -18,6 +18,7 @@ import { liabilitiesRoutes } from './api/liabilities.routes.js';
 import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
+import { alertsRoutes } from './api/alerts.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
 
@@ -121,6 +122,7 @@ export async function createServer() {
   await app.register(liabilitiesRoutes);
   await app.register(netWorthRoutes);
   await app.register(settingsRoutes);
+  await app.register(alertsRoutes);
   await app.register(demoRoutes);
 
   // Serve dashboard static files in production

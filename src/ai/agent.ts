@@ -36,6 +36,10 @@ import {
   buildRecordMovementTool,
   buildManageLiabilityTool,
 } from './asset-tools.js';
+import {
+  buildGetAlertSettingsTool,
+  buildUpdateAlertSettingsTool,
+} from './alert-tools.js';
 import { readMemory } from './memory.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
 
@@ -122,6 +126,8 @@ const TOOL_STATUS: Record<string, string> = {
   manage_holding: 'Updating holding...',
   record_movement: 'Recording movement...',
   manage_liability: 'Updating liability...',
+  get_alert_settings: 'Checking alert settings...',
+  update_alert_settings: 'Updating alert settings...',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
@@ -229,6 +235,8 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     buildManageHoldingTool(),
     buildRecordMovementTool(),
     buildManageLiabilityTool(),
+    buildGetAlertSettingsTool(),
+    buildUpdateAlertSettingsTool(),
   ];
 
   const agent = new Agent({
