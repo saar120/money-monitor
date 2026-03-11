@@ -161,7 +161,7 @@ export function buildAddCategoryTool() {
     description: 'Create a new spending category. Requires a unique machine-friendly name (lowercase, dashes/underscores) and a human-readable label. Optionally set a color and categorization rules.',
     label: 'Adding category',
     parameters: Type.Object({
-      name: Type.String({ description: 'Unique machine name (lowercase, dashes/underscores, e.g. "groceries" or "eating-out")' }),
+      name: Type.String({ pattern: '^[a-z0-9][a-z0-9_-]*$', description: 'Unique machine name (lowercase, dashes/underscores, e.g. "groceries" or "eating-out")' }),
       label: Type.String({ description: 'Human-readable display name (e.g. "Groceries & Food")' }),
       color: Type.Optional(Type.String({ description: 'Hex color code (e.g. "#4CAF50")' })),
       rules: Type.Optional(Type.String({ description: 'Categorization hints for the AI (e.g. "Supermarkets, markets, food delivery")' })),
