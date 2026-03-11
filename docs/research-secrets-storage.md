@@ -8,24 +8,26 @@
 Money Monitor stores secrets in two modes:
 
 ### Standalone Mode (Linux/macOS server)
+
 - Secrets in `.env` file loaded via `dotenv`
 - `CREDENTIALS_MASTER_KEY` stored as **plaintext** in `.env`
 
 ### Electron Mode (Desktop)
+
 - Secrets in `data/config.json` (permissions `0o600`)
 - `CREDENTIALS_MASTER_KEY` auto-generated on first launch via `randomBytes(32)`
 - Session `API_TOKEN` generated fresh per launch
 
 ### Secret Inventory
 
-| Secret | Storage | Protection |
-|--------|---------|------------|
-| `CREDENTIALS_MASTER_KEY` | `.env` or `config.json` | File permissions (`0o600`) only |
-| Bank credentials | `credentials.enc` | AES-256-GCM (derived from master key via scrypt) |
-| OAuth tokens | `oauth-credentials.json` | File permissions (`0o600`) only |
-| API keys (Anthropic, OpenAI, etc.) | `.env` or `config.json` | File permissions only |
-| `API_TOKEN` | env var (Electron: runtime-generated) | In-memory only in Electron |
-| `TELEGRAM_BOT_TOKEN` | `.env` or `config.json` | File permissions only |
+| Secret                             | Storage                               | Protection                                       |
+| ---------------------------------- | ------------------------------------- | ------------------------------------------------ |
+| `CREDENTIALS_MASTER_KEY`           | `.env` or `config.json`               | File permissions (`0o600`) only                  |
+| Bank credentials                   | `credentials.enc`                     | AES-256-GCM (derived from master key via scrypt) |
+| OAuth tokens                       | `oauth-credentials.json`              | File permissions (`0o600`) only                  |
+| API keys (Anthropic, OpenAI, etc.) | `.env` or `config.json`               | File permissions only                            |
+| `API_TOKEN`                        | env var (Electron: runtime-generated) | In-memory only in Electron                       |
+| `TELEGRAM_BOT_TOKEN`               | `.env` or `config.json`               | File permissions only                            |
 
 **Key finding:** Bank credentials are well-protected (AES-256-GCM), but the **master key itself** and all API tokens sit as plaintext on disk. The master key is the single point of failure.
 
@@ -54,6 +56,7 @@ Maintained keytar replacement for plain Node.js (not just Electron). Could work 
 ### 4. Headless Linux (no desktop)
 
 OS keychains require a desktop session (D-Bus + GNOME Keyring/KWallet). Headless servers (Docker, VPS) don't have this. Alternatives:
+
 - Accept master key only via environment variable (never write to disk)
 - Use SOPS/age for encrypted `.env` files
 - Use a secrets manager (HashiCorp Vault, etc.) — overkill for personal use
@@ -62,14 +65,14 @@ OS keychains require a desktop session (D-Bus + GNOME Keyring/KWallet). Headless
 
 ## Security Comparison
 
-| Attack Vector | Current (plaintext file) | OS Keychain |
-|---|---|---|
-| Another user reads `.env` | Blocked by file perms | Blocked + encrypted |
-| Malware as your user reads files | **Vulnerable** | **Better** (macOS prompts, Windows DPAPI, Linux varies) |
-| Disk stolen / cold boot | **Vulnerable** | **Protected** (encrypted, tied to OS credentials) |
-| Backup exfiltration | **Vulnerable** (plaintext in tar) | **Protected** (key stays in keychain) |
-| Root/admin access | Vulnerable | Also vulnerable |
-| Memory dump | Vulnerable | Also vulnerable |
+| Attack Vector                    | Current (plaintext file)          | OS Keychain                                             |
+| -------------------------------- | --------------------------------- | ------------------------------------------------------- |
+| Another user reads `.env`        | Blocked by file perms             | Blocked + encrypted                                     |
+| Malware as your user reads files | **Vulnerable**                    | **Better** (macOS prompts, Windows DPAPI, Linux varies) |
+| Disk stolen / cold boot          | **Vulnerable**                    | **Protected** (encrypted, tied to OS credentials)       |
+| Backup exfiltration              | **Vulnerable** (plaintext in tar) | **Protected** (key stays in keychain)                   |
+| Root/admin access                | Vulnerable                        | Also vulnerable                                         |
+| Memory dump                      | Vulnerable                        | Also vulnerable                                         |
 
 ### Assessment
 

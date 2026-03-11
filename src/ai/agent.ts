@@ -6,7 +6,11 @@ import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, parseModelSpec, getAIModelSpec, getBatchModelSpec } from '../config.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
-import { buildBatchCategorizerPrompt, buildFinancialAdvisorPrompt, partitionCategories } from './prompts.js';
+import {
+  buildBatchCategorizerPrompt,
+  buildFinancialAdvisorPrompt,
+  partitionCategories,
+} from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
@@ -50,7 +54,7 @@ function hasEnvApiKey(provider: string): boolean {
     mistral: ['MISTRAL_API_KEY'],
   };
   const vars = envMap[provider];
-  return vars ? vars.some(v => !!process.env[v]) : false;
+  return vars ? vars.some((v) => !!process.env[v]) : false;
 }
 
 function formatTransactionForPrompt(t: Transaction): string {
@@ -62,7 +66,10 @@ function formatTransactionForPrompt(t: Transaction): string {
 
 /** Strip markdown code fences that the model may wrap around JSON. */
 function cleanJsonResponse(text: string): string {
-  return text.replace(/^```(?:json)?\n?/m, '').replace(/\n?```$/m, '').trim();
+  return text
+    .replace(/^```(?:json)?\n?/m, '')
+    .replace(/\n?```$/m, '')
+    .trim();
 }
 
 /** Parse the model's JSON response, validate categories, and return valid results. */
@@ -72,7 +79,12 @@ function processCategoryResults(
   validIds: Set<number>,
 ): Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> {
   const clean = cleanJsonResponse(text);
-  const results: Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> = JSON.parse(clean);
+  const results: Array<{
+    id: number;
+    category: string;
+    confidence?: number;
+    reviewReason?: string;
+  }> = JSON.parse(clean);
   return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
 }
 
@@ -115,7 +127,9 @@ const TOOL_STATUS: Record<string, string> = {
 // ── Helpers ──────────────────────────────────────────────────────────────────────
 
 /** Read at call time so settings changes take effect without restart. */
-function getMaxTurns() { return config.AI_MAX_TURNS; }
+function getMaxTurns() {
+  return config.AI_MAX_TURNS;
+}
 
 /** Extract text from the last assistant message in a list. */
 function extractAssistantText(messages: AgentMessage[]): string {
@@ -125,7 +139,7 @@ function extractAssistantText(messages: AgentMessage[]): string {
       const assistantMsg = msg as AssistantMessage;
       return assistantMsg.content
         .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map(b => b.text)
+        .map((b) => b.text)
         .join('');
     }
   }
@@ -156,18 +170,21 @@ function convertHistoryToMessages(history: ChatMessage[]): Message[] {
 // ── Chat ────────────────────────────────────────────────────────────────────────
 
 function getCategoriesWithRules(): CategoryWithRules[] {
-  return db.select({
-    name: categories.name,
-    rules: categories.rules,
-    ignoredFromStats: categories.ignoredFromStats,
-  }).from(categories).all();
+  return db
+    .select({
+      name: categories.name,
+      rules: categories.rules,
+      ignoredFromStats: categories.ignoredFromStats,
+    })
+    .from(categories)
+    .all();
 }
 
 export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<ChatEvent> {
   const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
-  const categoryNames = cats.map(c => c.name);
-  const ignoredCategoryNames = ignored.map(c => c.name);
+  const categoryNames = cats.map((c) => c.name);
+  const ignoredCategoryNames = ignored.map((c) => c.name);
 
   const memory = readMemory();
   const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
@@ -180,12 +197,18 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   // By checking here, we fail fast with a clear error to the user.
   const apiKey = await resolveApiKey(provider);
   if (!apiKey && !hasEnvApiKey(provider)) {
-    yield { type: 'error', text: 'Authentication expired or missing. Please re-authenticate via Settings → AI Provider, or set your API key environment variable.' };
+    yield {
+      type: 'error',
+      text: 'Authentication expired or missing. Please re-authenticate via Settings → AI Provider, or set your API key environment variable.',
+    };
     return;
   }
 
   // getModel is strictly typed; dynamic strings from config need a cast on the result
-  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
+  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+    provider,
+    modelName,
+  );
 
   const tools = [
     buildQueryTransactionsTool(),
@@ -223,12 +246,16 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   let waiting: (() => void) | null = null;
   const push = (item: QueueItem) => {
     queue.push(item);
-    if (waiting) { waiting(); waiting = null; }
+    if (waiting) {
+      waiting();
+      waiting = null;
+    }
   };
-  const pull = () => new Promise<void>(r => {
-    if (queue.length > 0) r();
-    else waiting = r;
-  });
+  const pull = () =>
+    new Promise<void>((r) => {
+      if (queue.length > 0) r();
+      else waiting = r;
+    });
 
   let turnCount = 0;
 
@@ -243,7 +270,10 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       turnCount++;
       if (turnCount >= getMaxTurns()) {
         agent.abort();
-        push({ type: 'result', text: 'I reached the maximum number of steps. Please try a more specific question.' });
+        push({
+          type: 'result',
+          text: 'I reached the maximum number of steps. Please try a more specific question.',
+        });
         push({ done: true });
       }
     }
@@ -251,9 +281,10 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
       // Check if the agent ended due to a provider error
       const lastMsg = event.messages[event.messages.length - 1];
       if (lastMsg && 'stopReason' in lastMsg && lastMsg.stopReason === 'error') {
-        const errorText = ('errorMessage' in lastMsg && lastMsg.errorMessage)
-          ? String(lastMsg.errorMessage)
-          : 'The AI provider returned an error. Please check your API key and try again.';
+        const errorText =
+          'errorMessage' in lastMsg && lastMsg.errorMessage
+            ? String(lastMsg.errorMessage)
+            : 'The AI provider returned an error. Please check your API key and try again.';
         push({ type: 'error', text: errorText });
         push({ done: true });
         return;
@@ -271,7 +302,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   }
 
   const lastMsg = conversationHistory[conversationHistory.length - 1];
-  const promptPromise = agent.prompt(lastMsg.content).catch(err => {
+  const promptPromise = agent.prompt(lastMsg.content).catch((err) => {
     push({ type: 'error', text: err instanceof Error ? err.message : String(err) });
     push({ done: true });
   });
@@ -296,36 +327,53 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   if (txns.length === 0) return { categorized: 0 };
 
   const catRows = getCategoriesWithRules();
-  const categoryNames = catRows.map(r => r.name);
+  const categoryNames = catRows.map((r) => r.name);
   if (categoryNames.length === 0) return { categorized: 0 };
-  const ignoredCategories = new Set(catRows.filter(r => r.ignoredFromStats).map(r => r.name));
+  const ignoredCategories = new Set(catRows.filter((r) => r.ignoredFromStats).map((r) => r.name));
 
-  const validIds = new Set(txns.map(t => t.id));
+  const validIds = new Set(txns.map((t) => t.id));
   const validCategories = new Set(categoryNames);
   const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
   const { provider, model: modelName } = parseModelSpec(getBatchModelSpec());
   // getModel is strictly typed; dynamic strings from config need a cast on the result
-  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
+  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+    provider,
+    modelName,
+  );
 
   // Resolve OAuth key if available
   const oauthKey = await resolveApiKey(provider);
 
-  const response = await completeSimple(model, {
-    systemPrompt: buildBatchCategorizerPrompt(catRows),
-    messages: [{ role: 'user', content: `Categorize these transactions:\n${txnList}`, timestamp: Date.now() }],
-  }, {
-    ...(oauthKey ? { apiKey: oauthKey } : {}),
-  });
+  const response = await completeSimple(
+    model,
+    {
+      systemPrompt: buildBatchCategorizerPrompt(catRows),
+      messages: [
+        {
+          role: 'user',
+          content: `Categorize these transactions:\n${txnList}`,
+          timestamp: Date.now(),
+        },
+      ],
+    },
+    {
+      ...(oauthKey ? { apiKey: oauthKey } : {}),
+    },
+  );
 
   const text = response.content
     .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map(b => b.text)
+    .map((b) => b.text)
     .join('');
 
   let categorized = 0;
   try {
-    for (const { id, category, confidence, reviewReason } of processCategoryResults(text, validCategories, validIds)) {
+    for (const { id, category, confidence, reviewReason } of processCategoryResults(
+      text,
+      validCategories,
+      validIds,
+    )) {
       const needsReview = confidence !== undefined && confidence < 0.8;
       db.update(transactions)
         .set({
@@ -340,7 +388,10 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
       categorized++;
     }
   } catch (err) {
-    console.error('[AI] Failed to process categorization results:', err instanceof Error ? err.message : err);
+    console.error(
+      '[AI] Failed to process categorization results:',
+      err instanceof Error ? err.message : err,
+    );
   }
 
   return { categorized };
@@ -350,14 +401,14 @@ export async function batchCategorize(
   batchSize: number = 50,
   ids?: number[],
 ): Promise<{ categorized: number }> {
-  const uncategorized = ids && ids.length > 0
-    ? db.select().from(transactions)
-        .where(and(isNull(transactions.category), inArray(transactions.id, ids)))
-        .all()
-    : db.select().from(transactions)
-        .where(isNull(transactions.category))
-        .limit(batchSize)
-        .all();
+  const uncategorized =
+    ids && ids.length > 0
+      ? db
+          .select()
+          .from(transactions)
+          .where(and(isNull(transactions.category), inArray(transactions.id, ids)))
+          .all()
+      : db.select().from(transactions).where(isNull(transactions.category)).limit(batchSize).all();
 
   return categorizeBatch(uncategorized);
 }
@@ -370,9 +421,14 @@ export async function recategorize(
   if (startDate) conditions.push(gte(transactions.date, startDate));
   if (endDate) conditions.push(lte(transactions.date, endDate));
 
-  const toProcess = conditions.length > 0
-    ? db.select().from(transactions).where(and(...conditions)).all()
-    : db.select().from(transactions).all();
+  const toProcess =
+    conditions.length > 0
+      ? db
+          .select()
+          .from(transactions)
+          .where(and(...conditions))
+          .all()
+      : db.select().from(transactions).all();
 
   return categorizeBatch(toProcess);
 }

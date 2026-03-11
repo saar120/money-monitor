@@ -1,9 +1,21 @@
 import type { FastifyInstance } from 'fastify';
 import { getModels } from '@mariozechner/pi-ai';
 import type { KnownProvider } from '@mariozechner/pi-ai';
-import { config, isElectronMode, saveConfigFile, configFileExists, SECRET_KEYS } from '../config.js';
+import {
+  config,
+  isElectronMode,
+  saveConfigFile,
+  configFileExists,
+  SECRET_KEYS,
+} from '../config.js';
 import { dataDir } from '../paths.js';
-import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, PROVIDER_KEY_MAP } from '../ai/auth.js';
+import {
+  hasAnthropicOAuth,
+  startAnthropicOAuth,
+  completeAnthropicOAuth,
+  cancelAnthropicOAuth,
+  PROVIDER_KEY_MAP,
+} from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
 
 /** Settable keys (exposed in GET, writable in POST) */
@@ -35,7 +47,6 @@ function redact(value: string): string {
 }
 
 export async function settingsRoutes(app: FastifyInstance) {
-
   app.get('/api/settings', async (_request, reply) => {
     if (!isElectronMode) {
       return reply.send({
@@ -73,7 +84,11 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   app.post('/api/settings', async (request, reply) => {
     if (!isElectronMode) {
-      return reply.status(400).send({ error: 'Settings can only be updated in Electron mode. Edit .env for standalone mode.' });
+      return reply
+        .status(400)
+        .send({
+          error: 'Settings can only be updated in Electron mode. Edit .env for standalone mode.',
+        });
     }
 
     const body = request.body as Record<string, unknown>;
@@ -111,12 +126,12 @@ export async function settingsRoutes(app: FastifyInstance) {
   const SUPPORTED_PROVIDERS = Object.entries(PROVIDER_KEY_MAP).map(([id, apiKeyField]) => ({
     id,
     apiKeyField,
-    ...PROVIDER_META[id] ?? { name: id, authTypes: ['api_key'] },
+    ...(PROVIDER_META[id] ?? { name: id, authTypes: ['api_key'] }),
   }));
 
   app.get('/api/ai/providers', async (_request, reply) => {
-    const providers = SUPPORTED_PROVIDERS.map(p => {
-      const models = getModels(p.id as KnownProvider).map(m => ({
+    const providers = SUPPORTED_PROVIDERS.map((p) => {
+      const models = getModels(p.id as KnownProvider).map((m) => ({
         id: m.id,
         name: m.name,
         reasoning: m.reasoning,

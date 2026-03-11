@@ -14,6 +14,6 @@ execFileSync('npx', [
   '--runtime=electron',
   `--target=${target}`,
   '--dist-url=https://electronjs.org/headers',
-], { cwd, stdio: 'inherit' });
+], { cwd, stdio: 'inherit', shell: true });
 
 console.log('Rebuild complete.');
