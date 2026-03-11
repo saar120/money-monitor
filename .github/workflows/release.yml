@@ -3,7 +3,7 @@ name: Build & Release
 on:
   push:
     tags:
-      - "v*"
+      - 'v*'
 
 # Ensure only one release build runs at a time
 concurrency:
@@ -11,7 +11,7 @@ concurrency:
   cancel-in-progress: true
 
 jobs:
-  build-and-release:
+  build-mac:
     runs-on: macos-latest
     permissions:
       contents: write
@@ -36,12 +36,46 @@ jobs:
       - name: Build and package
         run: npm run electron:build
         env:
-          CSC_IDENTITY_AUTO_DISCOVERY: "false"
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Upload DMG to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.dmg
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+
+  build-windows:
+    runs-on: windows-latest
+    permissions:
+      contents: write
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - name: Extract version from tag
+        shell: bash
+        run: echo "VERSION=${GITHUB_REF_NAME#v}" >> $GITHUB_ENV
+
+      - name: Install dependencies
+        run: npm ci
+
+      - name: Set package version
+        run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
+
+      - name: Build and package
+        run: npm run electron:build:win
+
+      - name: Upload EXE to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.exe
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
