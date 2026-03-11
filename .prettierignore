@@ -1,0 +1,12 @@
+dist
+node_modules
+dashboard/dist
+dashboard/node_modules
+data
+backups
+*.db
+*.db-journal
+pnpm-lock.yaml
+package-lock.json
+electron/**/*.js
+electron/**/*.mjs
