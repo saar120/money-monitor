@@ -1,21 +1,10 @@
 import type { FastifyInstance } from 'fastify';
 import { getModels } from '@mariozechner/pi-ai';
 import type { KnownProvider } from '@mariozechner/pi-ai';
-import { config, isElectronMode, saveConfigFile, configFileExists } from '../config.js';
+import { config, isElectronMode, saveConfigFile, configFileExists, SECRET_KEYS } from '../config.js';
 import { dataDir } from '../paths.js';
 import { hasAnthropicOAuth, startAnthropicOAuth, completeAnthropicOAuth, cancelAnthropicOAuth, PROVIDER_KEY_MAP } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
-
-const SECRET_KEYS = new Set([
-  'CREDENTIALS_MASTER_KEY',
-  'ANTHROPIC_API_KEY',
-  'ANTHROPIC_OAUTH_TOKEN',
-  'API_TOKEN',
-  'TELEGRAM_BOT_TOKEN',
-  'OPENAI_API_KEY',
-  'GEMINI_API_KEY',
-  'OPENROUTER_API_KEY',
-]);
 
 /** Settable keys (exposed in GET, writable in POST) */
 const SETTABLE_KEYS = [
