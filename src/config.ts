@@ -2,12 +2,25 @@ import { readFileSync, writeFileSync } from 'node:fs';
 import { randomBytes } from 'node:crypto';
 import { z } from 'zod';
 import { configPath } from './paths.js';
+import { isSafeStorageAvailable, encryptSecret, decryptSecret, isEncrypted } from './safe-storage.js';
 
 export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
 
+// ── Keys whose values are encrypted at rest via Electron safeStorage ────────
+const SECRET_CONFIG_KEYS = new Set([
+  'CREDENTIALS_MASTER_KEY',
+  'ANTHROPIC_API_KEY',
+  'ANTHROPIC_OAUTH_TOKEN',
+  'OPENAI_API_KEY',
+  'GEMINI_API_KEY',
+  'OPENROUTER_API_KEY',
+  'TELEGRAM_BOT_TOKEN',
+]);
+
 // ── Config file helpers (Electron mode) ─────────────────────────────────────
 
-export function loadConfigFile(): Record<string, string> | null {
+/** Read raw config.json (values may be encrypted). */
+function loadRawConfigFile(): Record<string, string> | null {
   try {
     return JSON.parse(readFileSync(configPath, 'utf-8'));
   } catch (e: any) {
@@ -17,21 +30,49 @@ export function loadConfigFile(): Record<string, string> | null {
   }
 }
 
+/** Load config.json, decrypting any safeStorage-encrypted secret values. */
+export function loadConfigFile(): Record<string, string> | null {
+  const raw = loadRawConfigFile();
+  if (!raw) return null;
+  for (const key of SECRET_CONFIG_KEYS) {
+    const val = raw[key];
+    if (val && isEncrypted(val)) {
+      try {
+        raw[key] = decryptSecret(val);
+      } catch (err) {
+        console.error(`[Config] Failed to decrypt ${key}:`, err instanceof Error ? err.message : err);
+        // Remove the corrupted value so the user can re-enter it
+        delete raw[key];
+      }
+    }
+  }
+  return raw;
+}
+
 /** Whether a config file has been written (cached to avoid repeated disk reads). */
 let _configFileExists: boolean | null = null;
 
 export function configFileExists(): boolean {
   if (_configFileExists !== null) return _configFileExists;
-  _configFileExists = loadConfigFile() !== null;
+  _configFileExists = loadRawConfigFile() !== null;
   return _configFileExists;
 }
 
 export function saveConfigFile(settings: Record<string, string>): void {
-  const existing = loadConfigFile() ?? {};
-  const merged = { ...existing, ...settings };
+  const existing = loadRawConfigFile() ?? {};
+  // Encrypt secret values when safe storage is available
+  const toWrite: Record<string, string> = {};
+  for (const [key, value] of Object.entries(settings)) {
+    if (SECRET_CONFIG_KEYS.has(key) && isSafeStorageAvailable() && value) {
+      toWrite[key] = encryptSecret(value);
+    } else {
+      toWrite[key] = value;
+    }
+  }
+  const merged = { ...existing, ...toWrite };
   writeFileSync(configPath, JSON.stringify(merged, null, 2), { mode: 0o600 });
   _configFileExists = true;
-  // Update process.env and re-parse config so runtime values reflect the new settings
+  // Update process.env with plaintext values and re-parse config
   for (const [key, value] of Object.entries(settings)) {
     process.env[key] = String(value);
   }
@@ -90,6 +131,24 @@ if (!isElectronMode) {
     const key = randomBytes(32).toString('hex');
     process.env.CREDENTIALS_MASTER_KEY = key;
     saveConfigFile({ CREDENTIALS_MASTER_KEY: key });
+  }
+  // Migrate plaintext secrets to encrypted form when safe storage becomes available
+  if (isSafeStorageAvailable()) {
+    const raw = loadRawConfigFile();
+    if (raw) {
+      const toMigrate: Record<string, string> = {};
+      for (const key of SECRET_CONFIG_KEYS) {
+        const val = raw[key];
+        if (val && !isEncrypted(val)) {
+          toMigrate[key] = val;
+        }
+      }
+      if (Object.keys(toMigrate).length > 0) {
+        // Re-save plaintext secrets — saveConfigFile will encrypt them
+        saveConfigFile(toMigrate);
+        console.log(`[Config] Migrated ${Object.keys(toMigrate).length} secret(s) to safe storage`);
+      }
+    }
   }
 }
 

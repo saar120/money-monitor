@@ -1,4 +1,4 @@
-import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences, Tray } from 'electron';
+import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, safeStorage, systemPreferences, Tray } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -222,6 +222,21 @@ app.whenReady().then(async () => {
     });
 
     buildMenu();
+
+    // ── Register OS-level safe storage for secrets ────────────────────────────
+    // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
+    // encrypt/decrypt strings.  Registration must happen before the backend
+    // import so config.ts can use it when loading secrets from config.json.
+    if (safeStorage.isEncryptionAvailable()) {
+      const { registerSafeStorage } = await import('../dist/safe-storage.js');
+      registerSafeStorage({
+        encrypt: (plaintext: string) => safeStorage.encryptString(plaintext),
+        decrypt: (encrypted: Buffer) => safeStorage.decryptString(encrypted),
+      });
+      console.log('[Electron] Safe storage registered (backend:', safeStorage.getSelectedStorageBackend?.() ?? 'unknown', ')');
+    } else {
+      console.warn('[Electron] Safe storage not available — secrets will be stored in plaintext');
+    }
 
     // Start server import
     const { createServer } = await import('../dist/server.js');
