@@ -735,6 +735,43 @@ export function getOAuthStatus() {
   return request<{ anthropic: boolean }>('/settings/oauth/status');
 }
 
+// ─── Backup & Restore ───
+
+export interface BackupEntry {
+  filename: string;
+  size: number;
+  createdAt: string;
+}
+
+export function getBackups() {
+  return request<{ backups: BackupEntry[]; backupsDir: string }>('/backups');
+}
+
+export function createBackup() {
+  return request<{ success: boolean; backup: BackupEntry & { files: string[] } }>('/backup', {
+    method: 'POST',
+  });
+}
+
+export function deleteBackup(filename: string) {
+  return request<{ success: boolean }>(`/backups/${encodeURIComponent(filename)}`, {
+    method: 'DELETE',
+  });
+}
+
+export function restoreBackup(filename: string) {
+  return request<{ success: boolean; message: string }>('/restore', {
+    method: 'POST',
+    body: JSON.stringify({ filename }),
+  });
+}
+
+export function getBackupDownloadUrl(filename: string): string {
+  const token = getApiToken();
+  const base = `${BASE_URL}/backups/${encodeURIComponent(filename)}`;
+  return token ? `${base}?token=${encodeURIComponent(token)}` : base;
+}
+
 // ─── Demo Mode ───
 
 export function toggleDemoMode(enabled: boolean) {

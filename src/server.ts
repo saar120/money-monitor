@@ -17,6 +17,7 @@ import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
 import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
+import { backupRoutes } from './api/backup.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { startScheduler, stopScheduler } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
@@ -88,8 +89,8 @@ export async function createServer() {
     app.addHook('onRequest', async (request, reply) => {
       if (!request.url.startsWith('/api/')) return;
       if (request.url === '/api/health') return;
-      // SSE endpoints can't send Authorization headers; accept token as query param
-      if (request.url.startsWith('/api/scrape/events')) {
+      // SSE & download endpoints can't send Authorization headers; accept token as query param
+      if (request.url.startsWith('/api/scrape/events') || (request.method === 'GET' && request.url.startsWith('/api/backups/'))) {
         const token = (request.query as Record<string, string>).token;
         if (token === config.API_TOKEN) return;
         return reply.status(401).send({ error: 'Unauthorized' });
@@ -121,6 +122,7 @@ export async function createServer() {
   await app.register(liabilitiesRoutes);
   await app.register(netWorthRoutes);
   await app.register(settingsRoutes);
+  await app.register(backupRoutes);
   await app.register(demoRoutes);
 
   // Serve dashboard static files in production

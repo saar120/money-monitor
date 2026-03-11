@@ -1,13 +1,13 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getSettings, updateSettings, toggleDemoMode, getAIProviders, type SettingsResponse, type AIProvider } from '../api/client';
+import { getSettings, updateSettings, toggleDemoMode, getAIProviders, getBackups, createBackup, deleteBackup, restoreBackup, getBackupDownloadUrl, type SettingsResponse, type AIProvider, type BackupEntry } from '../api/client';
 import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Bot, Key, Clock, Send, FolderOpen, Save, CheckCircle, AlertCircle } from 'lucide-vue-next';
+import { Settings, Bot, Key, Clock, Send, FolderOpen, Save, CheckCircle, AlertCircle, Archive, Download, Trash2, RotateCcw } from 'lucide-vue-next';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -88,6 +88,7 @@ onMounted(async () => {
     form.value.TELEGRAM_ALLOWED_USERS = String(s.TELEGRAM_ALLOWED_USERS || '');
     form.value.AI_MAX_TURNS = String(s.AI_MAX_TURNS || '8');
     // Secret fields show redacted placeholder — left empty until user types
+    loadBackups();
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to load settings';
   } finally {
@@ -116,6 +117,91 @@ const oauthConnected = computed(() => data.value?.oauth?.anthropic ?? false);
 const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useAnthropicOAuth({
   onSuccess: () => { if (data.value) data.value.oauth.anthropic = true; },
 });
+
+// ── Backup & Restore ──────────────────────────────────────────────────────────
+
+const backups = ref<BackupEntry[]>([]);
+const backupsLoading = ref(false);
+const backupCreating = ref(false);
+const backupRestoring = ref<string | null>(null);
+const backupError = ref('');
+const backupSuccess = ref('');
+const confirmRestore = ref<string | null>(null);
+
+async function loadBackups() {
+  backupsLoading.value = true;
+  try {
+    const result = await getBackups();
+    backups.value = result.backups;
+  } catch (e) {
+    backupError.value = e instanceof Error ? e.message : 'Failed to load backups';
+  } finally {
+    backupsLoading.value = false;
+  }
+}
+
+async function handleCreateBackup() {
+  backupCreating.value = true;
+  backupError.value = '';
+  backupSuccess.value = '';
+  try {
+    const result = await createBackup();
+    backupSuccess.value = `Backup created: ${result.backup.filename}`;
+    await loadBackups();
+  } catch (e) {
+    backupError.value = e instanceof Error ? e.message : 'Backup failed';
+  } finally {
+    backupCreating.value = false;
+  }
+}
+
+async function handleDeleteBackup(filename: string) {
+  backupError.value = '';
+  backupSuccess.value = '';
+  try {
+    await deleteBackup(filename);
+    backups.value = backups.value.filter(b => b.filename !== filename);
+  } catch (e) {
+    backupError.value = e instanceof Error ? e.message : 'Delete failed';
+  }
+}
+
+function handleDownloadBackup(filename: string) {
+  const url = getBackupDownloadUrl(filename);
+  const a = document.createElement('a');
+  a.href = url;
+  a.download = filename;
+  a.click();
+}
+
+async function handleRestore(filename: string) {
+  if (confirmRestore.value !== filename) {
+    confirmRestore.value = filename;
+    return;
+  }
+  confirmRestore.value = null;
+  backupRestoring.value = filename;
+  backupError.value = '';
+  backupSuccess.value = '';
+  try {
+    const result = await restoreBackup(filename);
+    backupSuccess.value = result.message;
+  } catch (e) {
+    backupError.value = e instanceof Error ? e.message : 'Restore failed';
+  } finally {
+    backupRestoring.value = null;
+  }
+}
+
+function formatFileSize(bytes: number): string {
+  if (bytes < 1024) return `${bytes} B`;
+  if (bytes < 1024 * 1024) return `${(bytes / 1024).toFixed(1)} KB`;
+  return `${(bytes / (1024 * 1024)).toFixed(1)} MB`;
+}
+
+function formatBackupDate(iso: string): string {
+  return new Date(iso).toLocaleString();
+}
 
 // ── Save ─────────────────────────────────────────────────────────────────────
 
@@ -479,6 +565,91 @@ async function save() {
           <div class="flex items-center justify-between">
             <span class="text-[13px] text-text-secondary">Data Directory</span>
             <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{ data?.dataDir }}</code>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Backup & Restore -->
+      <Card>
+        <CardHeader>
+          <div class="flex items-center gap-3">
+            <Archive class="h-5 w-5 text-primary" />
+            <div>
+              <CardTitle class="text-[15px]">Backup & Restore</CardTitle>
+              <CardDescription>Create and manage database backups</CardDescription>
+            </div>
+          </div>
+        </CardHeader>
+        <CardContent class="space-y-4">
+          <div class="flex items-center gap-3">
+            <Button :disabled="backupCreating" @click="handleCreateBackup" variant="outline" size="sm">
+              <Archive class="h-4 w-4 mr-1" />
+              {{ backupCreating ? 'Creating...' : 'Create Backup' }}
+            </Button>
+          </div>
+
+          <div v-if="backupSuccess" class="flex items-center gap-1.5 text-[13px] text-success">
+            <CheckCircle class="h-4 w-4" />
+            {{ backupSuccess }}
+          </div>
+          <div v-if="backupError" class="flex items-center gap-1.5 text-[13px] text-destructive">
+            <AlertCircle class="h-4 w-4" />
+            {{ backupError }}
+          </div>
+
+          <div v-if="backupsLoading" class="text-[13px] text-text-secondary">Loading backups...</div>
+
+          <div v-else-if="backups.length === 0" class="text-[13px] text-text-secondary">
+            No backups yet. Create one to get started.
+          </div>
+
+          <div v-else class="space-y-2">
+            <div
+              v-for="backup in backups"
+              :key="backup.filename"
+              class="flex items-center justify-between bg-bg-secondary rounded-md px-3 py-2"
+            >
+              <div class="min-w-0 flex-1">
+                <p class="text-[13px] text-text-primary font-medium truncate">{{ backup.filename }}</p>
+                <p class="text-[11px] text-text-secondary">
+                  {{ formatBackupDate(backup.createdAt) }} &middot; {{ formatFileSize(backup.size) }}
+                </p>
+              </div>
+              <div class="flex items-center gap-1 ml-3 shrink-0">
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 w-7 p-0"
+                  @click="handleDownloadBackup(backup.filename)"
+                  title="Download"
+                >
+                  <Download class="h-3.5 w-3.5" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 w-7 p-0"
+                  :disabled="backupRestoring === backup.filename"
+                  @click="handleRestore(backup.filename)"
+                  :title="confirmRestore === backup.filename ? 'Click again to confirm restore' : 'Restore'"
+                  :class="confirmRestore === backup.filename ? 'text-warning' : ''"
+                >
+                  <RotateCcw class="h-3.5 w-3.5" :class="backupRestoring === backup.filename ? 'animate-spin' : ''" />
+                </Button>
+                <Button
+                  variant="ghost"
+                  size="sm"
+                  class="h-7 w-7 p-0 text-destructive"
+                  @click="handleDeleteBackup(backup.filename)"
+                  title="Delete"
+                >
+                  <Trash2 class="h-3.5 w-3.5" />
+                </Button>
+              </div>
+            </div>
+            <p v-if="confirmRestore" class="text-[11px] text-warning">
+              Click restore again to confirm. This will overwrite the current database and requires a restart.
+            </p>
           </div>
         </CardContent>
       </Card>
