@@ -1,4 +1,5 @@
 import { app, BrowserWindow, dialog, Menu, nativeImage, nativeTheme, powerMonitor, powerSaveBlocker, systemPreferences, Tray } from 'electron';
+import type { BrowserWindowConstructorOptions } from 'electron';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -6,8 +7,11 @@ import { fileURLToPath } from 'node:url';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
+const isMac = process.platform === 'darwin';
+const isWin = process.platform === 'win32';
+
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
-if (process.platform === 'darwin' && !process.env.PATH?.includes('/usr/local/bin')) {
+if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
   try {
     const shellPath = execFileSync('/bin/zsh', ['-ilc', 'echo $PATH'], {
       encoding: 'utf8',
@@ -33,21 +37,34 @@ process.env.API_TOKEN = authToken;
 // ── Expose app version for preload ───────────────────────────────────────────
 process.env.MM_APP_VERSION = app.getVersion();
 
-// ── 3. Get macOS accent color ────────────────────────────────────────────────
+// ── 3. Get system accent color ───────────────────────────────────────────────
 function getAccentColor(): string {
-  if (process.platform !== 'darwin') return '#007AFF';
-  try {
-    const hex = systemPreferences.getAccentColor();
-    return `#${hex.slice(0, 6)}`;
-  } catch {
-    return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
+  if (isMac) {
+    try {
+      const hex = systemPreferences.getAccentColor();
+      return `#${hex.slice(0, 6)}`;
+    } catch {
+      return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
+    }
   }
+  if (isWin) {
+    try {
+      const hex = systemPreferences.getAccentColor();
+      return `#${hex.slice(0, 6)}`;
+    } catch {
+      // Fall through to default
+    }
+  }
+  return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
 }
 
-// ── 5. Native macOS menu ────────────────────────────────────────────────────
+// ── 5. Native menu (platform-aware) ─────────────────────────────────────────
 function buildMenu() {
-  const template: Electron.MenuItemConstructorOptions[] = [
-    {
+  const template: Electron.MenuItemConstructorOptions[] = [];
+
+  // macOS gets the app-name submenu with hide/quit actions
+  if (isMac) {
+    template.push({
       label: app.name,
       submenu: [
         { role: 'about' },
@@ -58,6 +75,13 @@ function buildMenu() {
         { type: 'separator' },
         { role: 'quit' },
       ],
+    });
+  }
+
+  template.push(
+    {
+      label: 'File',
+      submenu: isMac ? [{ role: 'close' }] : [{ role: 'quit' }],
     },
     {
       label: 'Edit',
@@ -87,14 +111,12 @@ function buildMenu() {
     },
     {
       label: 'Window',
-      submenu: [
-        { role: 'minimize' },
-        { role: 'zoom' },
-        { type: 'separator' },
-        { role: 'front' },
-      ],
+      submenu: isMac
+        ? [{ role: 'minimize' }, { role: 'zoom' }, { type: 'separator' }, { role: 'front' }]
+        : [{ role: 'minimize' }, { role: 'close' }],
     },
-  ];
+  );
+
   Menu.setApplicationMenu(Menu.buildFromTemplate(template));
 }
 
@@ -118,15 +140,10 @@ function sendAccentColor() {
 }
 
 function createWindow(port: number) {
-  mainWindow = new BrowserWindow({
+  const windowOptions: BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
-    icon: join(__dirname, 'icons', 'icon-256.png'),
-    titleBarStyle: 'hiddenInset',
-    trafficLightPosition: { x: 20, y: 19 },
-    vibrancy: 'under-window',
-    visualEffectState: 'followWindow',
-    backgroundColor: '#00000000',
+    icon: join(__dirname, 'icons', isWin ? 'icon.ico' : 'icon-256.png'),
     webPreferences: {
       preload: join(__dirname, 'preload.mjs'),
       contextIsolation: true,
@@ -134,7 +151,18 @@ function createWindow(port: number) {
       sandbox: false,
       backgroundThrottling: false,
     },
-  });
+  };
+
+  // macOS-specific window chrome
+  if (isMac) {
+    windowOptions.titleBarStyle = 'hiddenInset';
+    windowOptions.trafficLightPosition = { x: 20, y: 19 };
+    windowOptions.vibrancy = 'under-window';
+    windowOptions.visualEffectState = 'followWindow';
+    windowOptions.backgroundColor = '#00000000';
+  }
+
+  mainWindow = new BrowserWindow(windowOptions);
 
   mainWindow.loadURL(`http://localhost:${port}`);
 
@@ -169,9 +197,16 @@ function createWindow(port: number) {
 }
 
 function createTray(port: number) {
-  // Electron auto-detects 'Template' in filename and picks up @2x for retina
-  const icon = nativeImage.createFromPath(join(__dirname, 'icons', 'trayTemplate.png'));
-  icon.setTemplateImage(true);
+  let icon: Electron.NativeImage;
+  if (isMac) {
+    // Electron auto-detects 'Template' in filename and picks up @2x for retina
+    icon = nativeImage.createFromPath(join(__dirname, 'icons', 'trayTemplate.png'));
+    icon.setTemplateImage(true);
+  } else if (isWin) {
+    icon = nativeImage.createFromPath(join(__dirname, 'icons', 'icon.ico'));
+  } else {
+    icon = nativeImage.createFromPath(join(__dirname, 'icons', 'icon-256.png'));
+  }
   tray = new Tray(icon);
   tray.setToolTip('Money Monitor');
 
@@ -281,9 +316,10 @@ app.whenReady().then(async () => {
   }
 });
 
-// On macOS, keep the app running in the tray when all windows are closed
+// On macOS and Windows, keep the app running in the tray when all windows are closed.
+// On Linux, quit when all windows are closed (no tray-on-close convention).
 app.on('window-all-closed', () => {
-  if (process.platform !== 'darwin') {
+  if (!isMac && !isWin) {
     app.quit();
   }
 });
