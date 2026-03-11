@@ -1,44 +1,23 @@
-import { and, eq, gte, lte, sql, isNull } from 'drizzle-orm';
+import { and, eq, gte, lte, sql, isNull, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions, scrapeLogs, accounts, categories } from '../db/schema.js';
+import { transactions, accounts, categories } from '../db/schema.js';
 import { loadAlertSettings, saveAlertSettings } from './alert-settings.js';
 import {
-  getSpendingTrends,
   detectRecurringTransactions,
   getSpendingSummary,
   comparePeriods,
 } from '../services/summary.js';
 import { getNetWorth } from '../services/net-worth.js';
-import { todayInIsrael, monthsAgoStart } from '../shared/dates.js';
-import { markdownToTelegramHtml } from './format.js';
+import { todayInIsrael } from '../shared/dates.js';
+import { markdownToTelegramHtml, splitMessage } from './format.js';
 import type { ScrapeResult } from '../scraper/scraper.service.js';
-
-const MAX_MESSAGE_LENGTH = 4096;
 
 // ── Telegram send helper ──────────────────────────────────────────────────────
 
-/** Import bot dynamically to avoid circular deps */
 let _sendMessage: ((chatId: number, html: string) => Promise<void>) | null = null;
 
 export function registerSendMessage(fn: (chatId: number, html: string) => Promise<void>) {
   _sendMessage = fn;
-}
-
-function splitMessage(text: string): string[] {
-  if (text.length <= MAX_MESSAGE_LENGTH) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_MESSAGE_LENGTH) {
-      chunks.push(remaining);
-      break;
-    }
-    let splitAt = remaining.lastIndexOf('\n', MAX_MESSAGE_LENGTH);
-    if (splitAt <= 0) splitAt = MAX_MESSAGE_LENGTH;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt).replace(/^\n/, '');
-  }
-  return chunks;
 }
 
 async function sendAlert(chatIds: number[], markdown: string): Promise<void> {
@@ -67,7 +46,7 @@ function getChatIds(): number[] {
   return _getAllChatIds?.() ?? [];
 }
 
-// ── Formatting helpers ────────────────────────────────────────────────────────
+// ── Shared helpers ──────────────────────────────────────────────────────────
 
 const fmt = (n: number): string => {
   const abs = Math.abs(n);
@@ -77,7 +56,34 @@ const fmt = (n: number): string => {
   return n.toLocaleString('en-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
-const fmtPercent = (n: number): string => `${n > 0 ? '+' : ''}${Math.round(n)}%`;
+/** Get category name → label map from DB. */
+function getCategoryLabelMap(): Map<string, string> {
+  const rows = db.select({ name: categories.name, label: categories.label })
+    .from(categories).all();
+  return new Map(rows.map(c => [c.name, c.label]));
+}
+
+/** Compute month offset from a [year, month] pair. Returns { year, month (1-12), start, end }. */
+function monthOffset(baseYear: number, baseMonth: number, offset: number) {
+  const d = new Date(baseYear, baseMonth - 1 + offset, 1);
+  const y = d.getFullYear();
+  const m = d.getMonth() + 1;
+  const ms = String(m).padStart(2, '0');
+  const lastDay = new Date(y, m, 0).getDate();
+  return {
+    year: y,
+    month: m,
+    start: `${y}-${ms}-01`,
+    end: `${y}-${ms}-${String(lastDay).padStart(2, '0')}`,
+  };
+}
+
+/** Yesterday's date in Israel timezone (YYYY-MM-DD). */
+function yesterdayInIsrael(): string {
+  const d = new Date();
+  d.setDate(d.getDate() - 1);
+  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+}
 
 // ── 1. Post-Scrape Daily Digest ───────────────────────────────────────────────
 
@@ -90,22 +96,17 @@ export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promi
 
   const lines: string[] = ['**📊 Scrape Complete**', ''];
 
-  // Summarize results
   const totalNew = scrapeResults.reduce((s, r) => s + r.transactionsNew, 0);
   const totalFound = scrapeResults.reduce((s, r) => s + r.transactionsFound, 0);
-  const successes = scrapeResults.filter(r => r.success);
   const failures = scrapeResults.filter(r => !r.success);
 
   if (totalNew > 0) {
-    // Get the new transactions to sum amounts
     const today = todayInIsrael();
-    const yesterday = new Date(new Date().setDate(new Date().getDate() - 1))
-      .toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+    const yesterday = yesterdayInIsrael();
 
     const recentTxns = db.select({
       chargedAmount: transactions.chargedAmount,
       description: transactions.description,
-      category: transactions.category,
     }).from(transactions)
       .where(and(
         gte(transactions.date, yesterday),
@@ -143,14 +144,19 @@ export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promi
     lines.push('No new transactions found.');
   }
 
-  // Report failures
+  // Report failures — batch account name lookup
   if (settings.dailyDigest.reportErrors && failures.length > 0) {
+    const failedIds = failures.map(f => f.accountId);
+    const acctRows = failedIds.length > 0
+      ? db.select({ id: accounts.id, displayName: accounts.displayName })
+          .from(accounts).where(inArray(accounts.id, failedIds)).all()
+      : [];
+    const nameMap = new Map(acctRows.map(a => [a.id, a.displayName]));
+
     lines.push('');
     lines.push(`**❌ ${failures.length} scrape error(s):**`);
     for (const f of failures) {
-      const acct = db.select({ displayName: accounts.displayName })
-        .from(accounts).where(eq(accounts.id, f.accountId)).get();
-      const name = acct?.displayName ?? `Account #${f.accountId}`;
+      const name = nameMap.get(f.accountId) ?? `Account #${f.accountId}`;
       lines.push(`• ${name}: ${f.error ?? f.errorType ?? 'Unknown error'}`);
     }
   }
@@ -170,39 +176,27 @@ export async function checkUnusualSpending(): Promise<void> {
   const threshold = settings.unusualSpending.percentThreshold;
   const today = todayInIsrael();
   const [year, month] = today.split('-').map(Number);
-
-  // Current month so far
-  const currentStart = `${year}-${String(month).padStart(2, '0')}-01`;
-  const currentEnd = today;
-
-  // Same period last month (day 1 to same day)
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
   const dayOfMonth = parseInt(today.split('-')[2]);
-  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-  const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(dayOfMonth).padStart(2, '0')}`;
 
-  // Compare by category
+  const currentStart = `${year}-${String(month).padStart(2, '0')}-01`;
+  const prev = monthOffset(year, month, -1);
+  const prevEnd = `${prev.year}-${String(prev.month).padStart(2, '0')}-${String(dayOfMonth).padStart(2, '0')}`;
+
   const result = comparePeriods({
-    period1Start: prevStart,
+    period1Start: prev.start,
     period1End: prevEnd,
     period2Start: currentStart,
-    period2End: currentEnd,
+    period2End: today,
   });
 
   const spikes = result.comparison.filter(c => {
     if (c.change_percent === null) return false;
-    // Only flag spending increases (negative amounts = spending)
     return c.period2_total < 0 && c.change_percent < -threshold;
   });
 
   if (spikes.length === 0) return;
 
-  // Get category labels
-  const catRows = db.select({ name: categories.name, label: categories.label })
-    .from(categories).all();
-  const labelMap = new Map(catRows.map(c => [c.name, c.label]));
-
+  const labelMap = getCategoryLabelMap();
   const lines: string[] = ['**📈 Unusual Spending Alert**', ''];
 
   for (const spike of spikes.slice(0, 5)) {
@@ -258,19 +252,15 @@ export async function checkReviewNeeded(): Promise<void> {
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
 
-  const count = db.select({ count: sql<number>`COUNT(*)` })
-    .from(transactions)
-    .where(eq(transactions.needsReview, true))
-    .get();
+  // Single query for both counts
+  const counts = db.select({
+    reviewCount: sql<number>`SUM(CASE WHEN ${transactions.needsReview} = 1 THEN 1 ELSE 0 END)`,
+    uncatCount: sql<number>`SUM(CASE WHEN ${transactions.category} IS NULL THEN 1 ELSE 0 END)`,
+  }).from(transactions).get();
 
-  const reviewCount = count?.count ?? 0;
-  if (reviewCount === 0) return;
-
-  const uncategorized = db.select({ count: sql<number>`COUNT(*)` })
-    .from(transactions)
-    .where(isNull(transactions.category))
-    .get();
-  const uncatCount = uncategorized?.count ?? 0;
+  const reviewCount = counts?.reviewCount ?? 0;
+  const uncatCount = counts?.uncatCount ?? 0;
+  if (reviewCount === 0 && uncatCount === 0) return;
 
   const lines: string[] = ['**🔍 Transactions Need Review**', ''];
   if (reviewCount > 0) {
@@ -287,6 +277,8 @@ export async function checkReviewNeeded(): Promise<void> {
 
 // ── 5. Monthly Summary ────────────────────────────────────────────────────────
 
+const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
+
 export async function sendMonthlySummary(): Promise<void> {
   const settings = loadAlertSettings();
   if (!settings.enabled || !settings.monthlySummary.enabled) return;
@@ -297,59 +289,44 @@ export async function sendMonthlySummary(): Promise<void> {
   const today = todayInIsrael();
   const [year, month] = today.split('-').map(Number);
 
-  // Last month
-  const prevMonth = month === 1 ? 12 : month - 1;
-  const prevYear = month === 1 ? year - 1 : year;
-  const prevStart = `${prevYear}-${String(prevMonth).padStart(2, '0')}-01`;
-  const lastDay = new Date(year, month - 1, 0).getDate(); // last day of prev month
-  const prevEnd = `${prevYear}-${String(prevMonth).padStart(2, '0')}-${String(lastDay).padStart(2, '0')}`;
-
-  // Two months ago for comparison
-  const prev2Month = prevMonth === 1 ? 12 : prevMonth - 1;
-  const prev2Year = prevMonth === 1 ? prevYear - 1 : prevYear;
-  const prev2Start = `${prev2Year}-${String(prev2Month).padStart(2, '0')}-01`;
-  const lastDay2 = new Date(prevYear, prevMonth - 1, 0).getDate();
-  const prev2End = `${prev2Year}-${String(prev2Month).padStart(2, '0')}-${String(lastDay2).padStart(2, '0')}`;
+  const prev = monthOffset(year, month, -1);
+  const prev2 = monthOffset(year, month, -2);
 
   // Get cashflow for last month
   const cashflow = getSpendingSummary(
-    { startDate: prevStart, endDate: prevEnd },
+    { startDate: prev.start, endDate: prev.end },
     'cashflow',
   );
-  const cf = (cashflow as any).summary?.[0] ?? { income: 0, expense: 0 };
-  const income = cf.income ?? 0;
-  const expense = cf.expense ?? 0;
+  const cfRow = cashflow.summary[0] as { income?: number; expense?: number } | undefined;
+  const income = cfRow?.income ?? 0;
+  const expense = cfRow?.expense ?? 0;
   const savings = income - expense;
   const savingsRate = income > 0 ? (savings / income) * 100 : 0;
 
   // Top spending categories
   const catSummary = getSpendingSummary(
-    { startDate: prevStart, endDate: prevEnd },
+    { startDate: prev.start, endDate: prev.end },
     'category',
   );
-  const topCats = (catSummary as any).summary
-    ?.filter((s: any) => s.totalAmount < 0)
-    .sort((a: any, b: any) => a.totalAmount - b.totalAmount)
-    .slice(0, 3) ?? [];
+  const topCats = (catSummary.summary as Array<{ category?: string; totalAmount: number }>)
+    .filter(s => s.totalAmount < 0)
+    .sort((a, b) => a.totalAmount - b.totalAmount)
+    .slice(0, 3);
 
-  // Get category labels
-  const catRows = db.select({ name: categories.name, label: categories.label })
-    .from(categories).all();
-  const labelMap = new Map(catRows.map(c => [c.name, c.label]));
+  const labelMap = getCategoryLabelMap();
 
   // Month-over-month comparison
   const comparison = comparePeriods({
-    period1Start: prev2Start,
-    period1End: prev2End,
-    period2Start: prevStart,
-    period2End: prevEnd,
+    period1Start: prev2.start,
+    period1End: prev2.end,
+    period2Start: prev.start,
+    period2End: prev.end,
   });
 
-  const monthNames = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
-  const monthLabel = monthNames[prevMonth - 1];
+  const monthLabel = MONTH_NAMES[prev.month - 1];
 
   const lines: string[] = [
-    `**📅 Monthly Summary — ${monthLabel} ${prevYear}**`,
+    `**📅 Monthly Summary — ${monthLabel} ${prev.year}**`,
     '',
     `💰 Income: ₪${fmt(income)}`,
     `💸 Spending: ₪${fmt(expense)}`,
@@ -360,7 +337,7 @@ export async function sendMonthlySummary(): Promise<void> {
     lines.push('');
     lines.push('**Top spending categories:**');
     for (const cat of topCats) {
-      const label = labelMap.get(cat.category) ?? cat.category;
+      const label = labelMap.get(cat.category ?? 'uncategorized') ?? cat.category ?? 'uncategorized';
       lines.push(`• ${label}: ₪${fmt(Math.abs(cat.totalAmount))}`);
     }
   }
@@ -369,7 +346,7 @@ export async function sendMonthlySummary(): Promise<void> {
     const pct = comparison.summary.change_percent;
     const dir = pct < 0 ? 'less' : 'more';
     lines.push('');
-    lines.push(`vs. ${monthNames[prev2Month - 1]}: You spent **${Math.abs(Math.round(pct))}% ${dir}**`);
+    lines.push(`vs. ${MONTH_NAMES[prev2.month - 1]}: You spent **${Math.abs(Math.round(pct))}% ${dir}**`);
   }
 
   await sendAlert(chatIds, lines.join('\n'));
@@ -390,7 +367,6 @@ export async function checkNetWorthChanges(): Promise<void> {
     const last = settings._lastNetWorthTotal;
 
     if (last === undefined) {
-      // First run — just record current
       settings._lastNetWorthTotal = current;
       saveAlertSettings(settings);
       return;
@@ -431,7 +407,6 @@ export async function checkNetWorthChanges(): Promise<void> {
       await sendAlert(chatIds, lines.join('\n'));
     }
 
-    // Always update last known value
     settings._lastNetWorthTotal = current;
     saveAlertSettings(settings);
   } catch (err) {
@@ -441,35 +416,27 @@ export async function checkNetWorthChanges(): Promise<void> {
 
 // ── Orchestration ─────────────────────────────────────────────────────────────
 
+/** Run a named alert function, logging errors without throwing. */
+async function safeRun(name: string, fn: () => Promise<void>): Promise<void> {
+  try {
+    await fn();
+  } catch (err) {
+    console.error(`[Alerts] ${name} failed:`, err instanceof Error ? err.message : err);
+  }
+}
+
 /** Run all post-scrape alerts. Called after a scrape session completes. */
 export async function runPostScrapeAlerts(scrapeResults: ScrapeResult[]): Promise<void> {
-  try {
-    await sendPostScrapeDigest(scrapeResults);
-  } catch (err) {
-    console.error('[Alerts] Daily digest failed:', err instanceof Error ? err.message : err);
-  }
+  // Digest must run first (it's the primary notification)
+  await safeRun('Daily digest', () => sendPostScrapeDigest(scrapeResults));
 
-  try {
-    await checkUnusualSpending();
-  } catch (err) {
-    console.error('[Alerts] Unusual spending check failed:', err instanceof Error ? err.message : err);
-  }
+  // These are independent — run in parallel
+  await Promise.allSettled([
+    safeRun('Unusual spending', checkUnusualSpending),
+    safeRun('Review check', checkReviewNeeded),
+    safeRun('Net worth', checkNetWorthChanges),
+  ]);
 
-  try {
-    await checkNewRecurring();
-  } catch (err) {
-    console.error('[Alerts] Recurring check failed:', err instanceof Error ? err.message : err);
-  }
-
-  try {
-    await checkReviewNeeded();
-  } catch (err) {
-    console.error('[Alerts] Review check failed:', err instanceof Error ? err.message : err);
-  }
-
-  try {
-    await checkNetWorthChanges();
-  } catch (err) {
-    console.error('[Alerts] Net worth check failed:', err instanceof Error ? err.message : err);
-  }
+  // Recurring must run after the parallel batch (it writes to settings)
+  await safeRun('Recurring check', checkNewRecurring);
 }

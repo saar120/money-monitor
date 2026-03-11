@@ -1,9 +1,9 @@
 import { Type } from '@sinclair/typebox';
 import { createAgentTool } from './tool-adapter.js';
 import {
-  loadAlertSettings,
   updateAlertSettings,
-  type AlertSettings,
+  getPublicSettings,
+  type AlertPublicSettings,
 } from '../telegram/alert-settings.js';
 
 export function buildGetAlertSettingsTool() {
@@ -14,9 +14,7 @@ export function buildGetAlertSettingsTool() {
     label: 'Checking alert settings',
     parameters: Type.Object({}),
     execute: async () => {
-      const settings = loadAlertSettings();
-      const { _lastNetWorthTotal, _knownRecurring, ...publicSettings } = settings;
-      return JSON.stringify(publicSettings, null, 2);
+      return JSON.stringify(getPublicSettings(), null, 2);
     },
   });
 }
@@ -45,19 +43,19 @@ export function buildUpdateAlertSettingsTool() {
       net_worth_milestone_interval: Type.Optional(Type.Number({ description: 'Net worth milestone interval in ILS (e.g. 100000)' })),
     }),
     execute: async (args) => {
-      const patch: any = {};
+      const patch: Partial<AlertPublicSettings> = {};
 
       if (args.enabled !== undefined) patch.enabled = args.enabled;
 
       if (args.daily_digest_enabled !== undefined || args.daily_digest_large_charge_threshold !== undefined || args.daily_digest_report_errors !== undefined) {
-        patch.dailyDigest = {};
+        patch.dailyDigest = {} as AlertPublicSettings['dailyDigest'];
         if (args.daily_digest_enabled !== undefined) patch.dailyDigest.enabled = args.daily_digest_enabled;
         if (args.daily_digest_large_charge_threshold !== undefined) patch.dailyDigest.largeChargeThreshold = args.daily_digest_large_charge_threshold;
         if (args.daily_digest_report_errors !== undefined) patch.dailyDigest.reportErrors = args.daily_digest_report_errors;
       }
 
       if (args.unusual_spending_enabled !== undefined || args.unusual_spending_percent_threshold !== undefined) {
-        patch.unusualSpending = {};
+        patch.unusualSpending = {} as AlertPublicSettings['unusualSpending'];
         if (args.unusual_spending_enabled !== undefined) patch.unusualSpending.enabled = args.unusual_spending_enabled;
         if (args.unusual_spending_percent_threshold !== undefined) patch.unusualSpending.percentThreshold = args.unusual_spending_percent_threshold;
       }
@@ -67,15 +65,14 @@ export function buildUpdateAlertSettingsTool() {
       if (args.monthly_summary_enabled !== undefined) patch.monthlySummary = { enabled: args.monthly_summary_enabled };
 
       if (args.net_worth_change_enabled !== undefined || args.net_worth_change_threshold !== undefined || args.net_worth_milestone_interval !== undefined) {
-        patch.netWorthChange = {};
+        patch.netWorthChange = {} as AlertPublicSettings['netWorthChange'];
         if (args.net_worth_change_enabled !== undefined) patch.netWorthChange.enabled = args.net_worth_change_enabled;
         if (args.net_worth_change_threshold !== undefined) patch.netWorthChange.changeThreshold = args.net_worth_change_threshold;
         if (args.net_worth_milestone_interval !== undefined) patch.netWorthChange.milestoneInterval = args.net_worth_milestone_interval;
       }
 
-      const updated = updateAlertSettings(patch);
-      const { _lastNetWorthTotal, _knownRecurring, ...publicSettings } = updated;
-      return JSON.stringify({ success: true, settings: publicSettings }, null, 2);
+      updateAlertSettings(patch);
+      return JSON.stringify({ success: true, settings: getPublicSettings() }, null, 2);
     },
   });
 }

@@ -112,19 +112,16 @@ export function runScrapeSession(
       const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
       completeSession(session.id, finalStatus);
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
-
-      // Send Telegram alerts after scrape completes
-      runPostScrapeAlerts(allResults).catch(err => {
-        console.error('[Scrape] Post-scrape alerts failed:', err instanceof Error ? err.message : err);
-      });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`[Scrape] Session ${session.id} failed:`, errorMessage);
       completeSession(session.id, 'error');
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error', error: errorMessage });
-
-      // Still send alerts on error
-      runPostScrapeAlerts(allResults).catch(() => {});
+    } finally {
+      // Send Telegram alerts once, regardless of success or failure
+      runPostScrapeAlerts(allResults).catch(err => {
+        console.error('[Scrape] Post-scrape alerts failed:', err instanceof Error ? err.message : err);
+      });
     }
   })();
 

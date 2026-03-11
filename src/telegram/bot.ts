@@ -10,10 +10,8 @@ import {
   getSessionMessages,
 } from '../ai/sessions.js';
 import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
-import { markdownToTelegramHtml } from './format.js';
+import { markdownToTelegramHtml, splitMessage } from './format.js';
 import { registerSendMessage, registerGetChatIds } from './alerts.js';
-
-const MAX_MESSAGE_LENGTH = 4096;
 
 let bot: Bot | null = null;
 
@@ -34,25 +32,6 @@ async function replyHtml(ctx: Context, html: string): Promise<void> {
   } catch {
     await ctx.reply(html.replace(/<[^>]+>/g, ''));
   }
-}
-
-/** Split text into chunks that fit Telegram's message limit. */
-function splitMessage(text: string): string[] {
-  if (text.length <= MAX_MESSAGE_LENGTH) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_MESSAGE_LENGTH) {
-      chunks.push(remaining);
-      break;
-    }
-    // Try to split at last newline within limit
-    let splitAt = remaining.lastIndexOf('\n', MAX_MESSAGE_LENGTH);
-    if (splitAt <= 0) splitAt = MAX_MESSAGE_LENGTH;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt).replace(/^\n/, '');
-  }
-  return chunks;
 }
 
 /** Resolve or create a session for a Telegram chat. */
