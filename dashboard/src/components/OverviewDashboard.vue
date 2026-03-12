@@ -139,6 +139,7 @@ const doughnutOptions = computed(() => ({
   responsive: true,
   maintainAspectRatio: false,
   cutout: '70%',
+  spacing: 3,
   plugins: chartOptions.value.plugins,
 }));
 
