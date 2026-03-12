@@ -8,6 +8,7 @@ import {
   powerMonitor,
   powerSaveBlocker,
   safeStorage,
+  shell,
   systemPreferences,
   Tray,
 } from 'electron';
@@ -102,14 +103,15 @@ function buildMenu() {
     {
       label: 'View',
       submenu: [
-        { role: 'reload' },
-        { role: 'forceReload' },
-        { role: 'toggleDevTools' },
-        { type: 'separator' },
-        { role: 'resetZoom' },
-        { role: 'zoomIn' },
-        { role: 'zoomOut' },
-        { type: 'separator' },
+        // Only expose dev tools in development builds
+        ...(app.isPackaged
+          ? []
+          : [
+              { role: 'reload' as const },
+              { role: 'forceReload' as const },
+              { role: 'toggleDevTools' as const },
+              { type: 'separator' as const },
+            ]),
         { role: 'togglefullscreen' },
       ],
     },
@@ -145,6 +147,7 @@ function sendAccentColor() {
 
 function createWindow(port: number) {
   const windowOptions: BrowserWindowConstructorOptions = {
+    show: false, // prevent white flash — show only after ready-to-show
     width: 1200,
     height: 800,
     minWidth: 800,
@@ -156,6 +159,7 @@ function createWindow(port: number) {
       nodeIntegration: false,
       sandbox: false,
       backgroundThrottling: false,
+      spellcheck: true,
     },
   };
 
@@ -166,16 +170,51 @@ function createWindow(port: number) {
     windowOptions.vibrancy = 'under-window';
     windowOptions.visualEffectState = 'followWindow';
     windowOptions.backgroundColor = '#00000000';
+    windowOptions.acceptFirstMouse = true; // respond to first click on unfocused window
   }
 
   mainWindow = new BrowserWindow(windowOptions);
 
+  // Show window only after content is painted (prevents white flash on startup)
+  mainWindow.once('ready-to-show', () => {
+    mainWindow?.show();
+  });
+
   mainWindow.loadURL(`http://localhost:${port}`);
 
-  // Send accent color once page is ready
+  // Send accent color once page is ready + lock zoom level
   mainWindow.webContents.on('did-finish-load', () => {
     sendAccentColor();
+    // Lock zoom — desktop apps don't zoom like browsers
+    mainWindow?.webContents.setZoomFactor(1);
+    mainWindow?.webContents.setVisualZoomLevelLimits(1, 1);
   });
+
+  // ── Block browser-like navigation (back/forward, dropped URLs, ctrl+click) ──
+  const appOrigin = `http://localhost:${port}`;
+  mainWindow.webContents.on('will-navigate', (e, url) => {
+    if (!url.startsWith(appOrigin)) {
+      e.preventDefault();
+      shell.openExternal(url);
+    }
+  });
+
+  // Block ctrl+click / middle-click / target="_blank" from opening new windows
+  mainWindow.webContents.setWindowOpenHandler(({ url }) => {
+    shell.openExternal(url);
+    return { action: 'deny' };
+  });
+
+  // ── Block zoom keyboard shortcuts in production ─────────────────────────────
+  if (app.isPackaged) {
+    mainWindow.webContents.on('before-input-event', (event, input) => {
+      const isMeta = input.meta || input.control;
+      // Block zoom shortcuts (Cmd/Ctrl + =/-/0)
+      if (isMeta && ['+', '=', '-', '0'].includes(input.key)) {
+        event.preventDefault();
+      }
+    });
+  }
 
   // Track focus/blur for UI desaturation
   mainWindow.on('focus', () => {

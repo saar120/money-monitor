@@ -56,6 +56,7 @@ export default tseslint.config(
         URLSearchParams: 'readonly',
         EventSource: 'readonly',
         HTMLElement: 'readonly',
+        KeyboardEvent: 'readonly',
       },
     },
     rules: {

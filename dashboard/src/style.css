@@ -1,22 +1,22 @@
-@import "tailwindcss";
+@import 'tailwindcss';
 
 /* ─── macOS Native Design Tokens ─── */
 
 /* Light mode */
 :root {
-  --bg-primary: #FFFFFF;
-  --bg-secondary: #F5F5F7;
-  --bg-tertiary: #E5E5EA;
+  --bg-primary: #ffffff;
+  --bg-secondary: #f5f5f7;
+  --bg-tertiary: #e5e5ea;
   --text-primary: rgba(0, 0, 0, 0.847);
   --text-secondary: rgba(0, 0, 0, 0.498);
   --text-tertiary: rgba(0, 0, 0, 0.247);
   --separator: rgba(0, 0, 0, 0.1);
-  --accent: var(--system-accent, #007AFF);
+  --accent: var(--system-accent, #007aff);
   --accent-hover: color-mix(in srgb, var(--accent) 85%, black);
   --accent-15: color-mix(in srgb, var(--accent) 15%, transparent);
   --accent-30: color-mix(in srgb, var(--accent) 30%, transparent);
-  --success: #34C759;
-  --destructive: #FF3B30;
+  --success: #34c759;
+  --destructive: #ff3b30;
 
   /* Compatibility aliases for existing Tailwind classes */
   --background: var(--bg-primary);
@@ -26,7 +26,7 @@
   --popover: var(--bg-primary);
   --popover-foreground: var(--text-primary);
   --primary: var(--accent);
-  --primary-foreground: #FFFFFF;
+  --primary-foreground: #ffffff;
   --secondary: var(--bg-tertiary);
   --secondary-foreground: var(--text-primary);
   --muted: var(--bg-secondary);
@@ -38,27 +38,27 @@
   --ring: var(--accent);
   --radius: 10px;
 
-  --chart-1: #007AFF;
-  --chart-2: #34C759;
-  --chart-3: #FF9500;
-  --chart-4: #AF52DE;
-  --chart-5: #FF2D55;
+  --chart-1: #007aff;
+  --chart-2: #34c759;
+  --chart-3: #ff9500;
+  --chart-4: #af52de;
+  --chart-5: #ff2d55;
 }
 
 /* Dark mode */
 @media (prefers-color-scheme: dark) {
   :root {
-    --bg-primary: #1C1C1E;
-    --bg-secondary: #2C2C2E;
-    --bg-tertiary: #3A3A3C;
+    --bg-primary: #1c1c1e;
+    --bg-secondary: #2c2c2e;
+    --bg-tertiary: #3a3a3c;
     --text-primary: rgba(255, 255, 255, 0.847);
     --text-secondary: rgba(255, 255, 255, 0.549);
     --text-tertiary: rgba(255, 255, 255, 0.247);
     --separator: rgba(255, 255, 255, 0.1);
-    --accent: var(--system-accent, #0A84FF);
+    --accent: var(--system-accent, #0a84ff);
     --accent-hover: color-mix(in srgb, var(--accent) 85%, white);
-    --success: #32D74B;
-    --destructive: #FF453A;
+    --success: #32d74b;
+    --destructive: #ff453a;
 
     --background: var(--bg-primary);
     --foreground: var(--text-primary);
@@ -67,7 +67,7 @@
     --popover: var(--bg-primary);
     --popover-foreground: var(--text-primary);
     --primary: var(--accent);
-    --primary-foreground: #FFFFFF;
+    --primary-foreground: #ffffff;
     --secondary: var(--bg-tertiary);
     --secondary-foreground: var(--text-primary);
     --muted: var(--bg-secondary);
@@ -78,11 +78,11 @@
     --input: var(--separator);
     --ring: var(--accent);
 
-    --chart-1: #0A84FF;
-    --chart-2: #32D74B;
-    --chart-3: #FF9F0A;
-    --chart-4: #BF5AF2;
-    --chart-5: #FF375F;
+    --chart-1: #0a84ff;
+    --chart-2: #32d74b;
+    --chart-3: #ff9f0a;
+    --chart-4: #bf5af2;
+    --chart-5: #ff375f;
   }
 }
 
@@ -132,34 +132,97 @@
 
 @layer base {
   * {
-    @apply border-border outline-ring/50;
+    @apply border-border;
     cursor: default;
   }
-  a, button, [role="button"], input, textarea, select, [tabindex] {
+  a,
+  button,
+  [role='button'],
+  input,
+  textarea,
+  select,
+  [tabindex] {
     cursor: default;
+  }
+  html,
+  body {
+    overscroll-behavior: none; /* prevent rubber-band bouncing on the root */
   }
   body {
     @apply text-foreground bg-background;
     margin: 0;
-    font-family: ui-sans-serif, system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+    font-family:
+      ui-sans-serif,
+      system-ui,
+      -apple-system,
+      BlinkMacSystemFont,
+      sans-serif;
     font-size: 13px;
     line-height: 1.4;
     -webkit-font-smoothing: antialiased;
     -moz-osx-font-smoothing: grayscale;
+    text-rendering: optimizeLegibility;
     user-select: none;
   }
   .electron body {
     background: transparent;
   }
-  /* Allow text selection on content areas */
-  p, span, td, th, li, pre, code, h1, h2, h3, h4, h5, h6,
-  .selectable, [contenteditable] {
+
+  /* ── Native focus rings ── */
+  /* Remove browser default blue outline on mouse click */
+  :focus {
+    outline: none;
+  }
+  /* Show accent-colored ring only for keyboard navigation (Tab) */
+  :focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 2px;
+    border-radius: 4px;
+  }
+  input:focus-visible,
+  textarea:focus-visible {
+    outline: 2px solid var(--accent);
+    outline-offset: 0;
+  }
+
+  /* Allow text selection only in chat messages and transaction tables */
+  .chat-messages,
+  .chat-messages *,
+  table td,
+  table th,
+  .selectable,
+  [contenteditable] {
     user-select: text;
   }
-  input, textarea {
+  input,
+  textarea {
     user-select: text;
     cursor: text;
   }
+
+  /* ── Prevent drag on non-content elements (no ghost image, no URL preview) ── */
+  a,
+  img,
+  svg,
+  canvas {
+    -webkit-user-drag: none;
+  }
+  img,
+  svg,
+  canvas {
+    user-select: none;
+  }
+
+  /* ── Interactive elements inside drag regions must opt out ── */
+  [style*='app-region: drag'] button,
+  [style*='app-region: drag'] a,
+  [style*='app-region: drag'] input,
+  [style*='app-region: drag'] [role='button'],
+  [style*='app-region: drag'] [role='tab'],
+  [style*='app-region: drag'] [role='menuitem'] {
+    -webkit-app-region: no-drag;
+  }
+
   #app {
     max-width: none;
     margin: 0;
@@ -188,7 +251,9 @@
   }
 
   /* Monospace */
-  code, pre, .font-mono {
+  code,
+  pre,
+  .font-mono {
     font-family: ui-monospace, 'SF Mono', SFMono-Regular, Menlo, Monaco, Consolas, monospace;
   }
 }
@@ -206,9 +271,15 @@
 }
 
 @keyframes shimmer {
-  0% { opacity: 0.3; }
-  50% { opacity: 0.7; }
-  100% { opacity: 0.3; }
+  0% {
+    opacity: 0.3;
+  }
+  50% {
+    opacity: 0.7;
+  }
+  100% {
+    opacity: 0.3;
+  }
 }
 
 @layer utilities {
@@ -216,11 +287,21 @@
     animation: fade-in-up 0.3s ease-out both;
   }
 
-  .stagger-1 { animation-delay: 50ms; }
-  .stagger-2 { animation-delay: 100ms; }
-  .stagger-3 { animation-delay: 150ms; }
-  .stagger-4 { animation-delay: 200ms; }
-  .stagger-5 { animation-delay: 250ms; }
+  .stagger-1 {
+    animation-delay: 50ms;
+  }
+  .stagger-2 {
+    animation-delay: 100ms;
+  }
+  .stagger-3 {
+    animation-delay: 150ms;
+  }
+  .stagger-4 {
+    animation-delay: 200ms;
+  }
+  .stagger-5 {
+    animation-delay: 250ms;
+  }
 
   .skeleton-shimmer {
     background: var(--bg-tertiary);
