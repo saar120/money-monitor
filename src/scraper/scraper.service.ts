@@ -7,7 +7,13 @@ import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import { dataDir } from '../paths.js';
-import type { Account, ScraperTransaction, ScraperAccountResult, NewTransaction, CompanyId } from '../shared/types.js';
+import type {
+  Account,
+  ScraperTransaction,
+  ScraperAccountResult,
+  NewTransaction,
+  CompanyId,
+} from '../shared/types.js';
 import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
 import { waitForOtp } from './otp-bridge.js';
@@ -72,12 +78,14 @@ function resolveAccountForCard(
   }
 
   // 3. Look for an existing sibling account with same credentialsRef + accountNumber
-  const existing = db.select().from(accounts)
+  const existing = db
+    .select()
+    .from(accounts)
     .where(
       and(
         eq(accounts.credentialsRef, parentAccount.credentialsRef),
         eq(accounts.accountNumber, cardNumber),
-      )
+      ),
     )
     .get();
 
@@ -85,13 +93,17 @@ function resolveAccountForCard(
 
   // 4. Auto-create a new account for this card
   const suffix = cardNumber.slice(-4);
-  const newAccount = db.insert(accounts).values({
-    companyId: parentAccount.companyId,
-    displayName: `${parentAccount.displayName} (${suffix})`,
-    accountNumber: cardNumber,
-    accountType: getAccountType(parentAccount.companyId as CompanyId),
-    credentialsRef: parentAccount.credentialsRef,
-  }).returning().get();
+  const newAccount = db
+    .insert(accounts)
+    .values({
+      companyId: parentAccount.companyId,
+      displayName: `${parentAccount.displayName} (${suffix})`,
+      accountNumber: cardNumber,
+      accountType: getAccountType(parentAccount.companyId as CompanyId),
+      credentialsRef: parentAccount.credentialsRef,
+    })
+    .returning()
+    .get();
 
   return newAccount;
 }
@@ -106,18 +118,43 @@ export interface ScrapeResult {
   errorType?: string;
 }
 
-export async function scrapeAccount(account: Account, sessionId?: number, signal?: AbortSignal): Promise<ScrapeResult[]> {
+export interface ScrapeAccountResult {
+  results: ScrapeResult[];
+  /** Background categorization promise — await before reading categories. */
+  categorizePending: Promise<void> | null;
+}
+
+export async function scrapeAccount(
+  account: Account,
+  sessionId?: number,
+  signal?: AbortSignal,
+): Promise<ScrapeAccountResult> {
   const startedAt = new Date().toISOString();
   const startMs = Date.now();
 
   if (signal?.aborted) {
-    return [{ success: false, accountId: account.id, transactionsFound: 0, transactionsNew: 0, durationMs: 0, error: 'Cancelled', errorType: 'CANCELLED' }];
+    return {
+      results: [
+        {
+          success: false,
+          accountId: account.id,
+          transactionsFound: 0,
+          transactionsNew: 0,
+          durationMs: 0,
+          error: 'Cancelled',
+          errorType: 'CANCELLED',
+        },
+      ],
+      categorizePending: null,
+    };
   }
 
   const credentials = getCredentials(account.credentialsRef);
   if (!credentials) {
     const durationMs = Date.now() - startMs;
-    console.error(`[Scrape] ${account.displayName}: No credentials found (ref: ${account.credentialsRef})`);
+    console.error(
+      `[Scrape] ${account.displayName}: No credentials found (ref: ${account.credentialsRef})`,
+    );
     const errorResult = {
       success: false,
       accountId: account.id,
@@ -127,19 +164,21 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
       error: 'No credentials found for this account',
       errorType: 'MISSING_CREDENTIALS',
     };
-    db.insert(scrapeLogs).values({
-      accountId: account.id,
-      sessionId: sessionId ?? null,
-      status: 'error',
-      errorType: 'MISSING_CREDENTIALS',
-      errorMessage: errorResult.error,
-      transactionsFound: 0,
-      transactionsNew: 0,
-      durationMs,
-      startedAt,
-      completedAt: new Date().toISOString(),
-    }).run();
-    return [errorResult];
+    db.insert(scrapeLogs)
+      .values({
+        accountId: account.id,
+        sessionId: sessionId ?? null,
+        status: 'error',
+        errorType: 'MISSING_CREDENTIALS',
+        errorMessage: errorResult.error,
+        transactionsFound: 0,
+        transactionsNew: 0,
+        durationMs,
+        startedAt,
+        completedAt: new Date().toISOString(),
+      })
+      .run();
+    return { results: [errorResult], categorizePending: null };
   }
 
   const startDate = new Date();
@@ -162,7 +201,6 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
     // For manual login: override login() to open the page and wait for user
     if (account.manualLogin) {
       (scraper as any).login = async () => {
-
         // Ask the user to log in manually via the dashboard
         await waitForManualAction(account.id, () => {
           broadcastSseEvent({
@@ -188,33 +226,42 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
 
     // Cast to any since credential shape varies by company
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await scraper.scrape({ ...credentials as any, otpCodeRetriever });
+    const result = await scraper.scrape({ ...(credentials as any), otpCodeRetriever });
 
     if (!result.success) {
-      console.error(`[Scrape] ${account.displayName} (${account.companyId}) failed: ${result.errorType} — ${result.errorMessage}`);
+      console.error(
+        `[Scrape] ${account.displayName} (${account.companyId}) failed: ${result.errorType} — ${result.errorMessage}`,
+      );
       const durationMs = Date.now() - startMs;
-      db.insert(scrapeLogs).values({
-        accountId: account.id,
-        sessionId: sessionId ?? null,
-        status: 'error',
-        errorType: result.errorType ?? 'UNKNOWN_ERROR',
-        errorMessage: result.errorMessage ?? 'Scrape failed',
-        transactionsFound: 0,
-        transactionsNew: 0,
-        durationMs,
-        startedAt,
-        completedAt: new Date().toISOString(),
-      }).run();
+      db.insert(scrapeLogs)
+        .values({
+          accountId: account.id,
+          sessionId: sessionId ?? null,
+          status: 'error',
+          errorType: result.errorType ?? 'UNKNOWN_ERROR',
+          errorMessage: result.errorMessage ?? 'Scrape failed',
+          transactionsFound: 0,
+          transactionsNew: 0,
+          durationMs,
+          startedAt,
+          completedAt: new Date().toISOString(),
+        })
+        .run();
 
-      return [{
-        success: false,
-        accountId: account.id,
-        transactionsFound: 0,
-        transactionsNew: 0,
-        durationMs,
-        error: result.errorMessage,
-        errorType: result.errorType,
-      }];
+      return {
+        results: [
+          {
+            success: false,
+            accountId: account.id,
+            transactionsFound: 0,
+            transactionsNew: 0,
+            durationMs,
+            error: result.errorMessage,
+            errorType: result.errorType,
+          },
+        ],
+        categorizePending: null,
+      };
     }
 
     const allResults: ScrapeResult[] = [];
@@ -258,7 +305,8 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
 
         const mapped = mapTransaction(targetAccount.id, txn);
         try {
-          const insertResult = db.insert(transactions)
+          const insertResult = db
+            .insert(transactions)
             .values(mapped)
             .onConflictDoNothing({ target: transactions.hash })
             .run();
@@ -267,21 +315,26 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
             newIds.push(Number(insertResult.lastInsertRowid));
           }
         } catch (dbErr) {
-          console.error(`[Scrape] DB insert failed for txn "${txn.description}":`, dbErr instanceof Error ? dbErr.message : dbErr);
+          console.error(
+            `[Scrape] DB insert failed for txn "${txn.description}":`,
+            dbErr instanceof Error ? dbErr.message : dbErr,
+          );
         }
       }
 
       const durationMs = Date.now() - startMs;
-      db.insert(scrapeLogs).values({
-        accountId: targetAccount.id,
-        sessionId: sessionId ?? null,
-        status: 'success',
-        transactionsFound: accountFound,
-        transactionsNew: accountNew,
-        durationMs,
-        startedAt,
-        completedAt: new Date().toISOString(),
-      }).run();
+      db.insert(scrapeLogs)
+        .values({
+          accountId: targetAccount.id,
+          sessionId: sessionId ?? null,
+          status: 'success',
+          transactionsFound: accountFound,
+          transactionsNew: accountNew,
+          durationMs,
+          startedAt,
+          completedAt: new Date().toISOString(),
+        })
+        .run();
 
       allResults.push({
         success: true,
@@ -298,40 +351,55 @@ export async function scrapeAccount(account: Account, sessionId?: number, signal
       .where(eq(accounts.credentialsRef, account.credentialsRef))
       .run();
 
-    // Best-effort: categorize newly imported transactions in background
-    if (newIds.length > 0) {
-      batchCategorize(newIds.length, newIds).catch((err) => {
-        console.error('[Scrape] Background categorization failed:', err instanceof Error ? err.message : err);
-      });
-    }
+    // Fire categorization in background — caller can await if needed
+    const categorizePending: Promise<void> | null =
+      newIds.length > 0
+        ? batchCategorize(newIds.length, newIds)
+            .then(() => {})
+            .catch((err) => {
+              console.error(
+                '[Scrape] Background categorization failed:',
+                err instanceof Error ? err.message : err,
+              );
+            })
+        : null;
 
-    return allResults;
-
+    return { results: allResults, categorizePending };
   } catch (err) {
     const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
-    console.error(`[Scrape] ${account.displayName} (${account.companyId}) exception:`, errorMessage);
-    db.insert(scrapeLogs).values({
-      accountId: account.id,
-      sessionId: sessionId ?? null,
-      status: 'error',
-      errorType: 'EXCEPTION',
+    console.error(
+      `[Scrape] ${account.displayName} (${account.companyId}) exception:`,
       errorMessage,
-      transactionsFound: 0,
-      transactionsNew: 0,
-      durationMs,
-      startedAt,
-      completedAt: new Date().toISOString(),
-    }).run();
+    );
+    db.insert(scrapeLogs)
+      .values({
+        accountId: account.id,
+        sessionId: sessionId ?? null,
+        status: 'error',
+        errorType: 'EXCEPTION',
+        errorMessage,
+        transactionsFound: 0,
+        transactionsNew: 0,
+        durationMs,
+        startedAt,
+        completedAt: new Date().toISOString(),
+      })
+      .run();
 
-    return [{
-      success: false,
-      accountId: account.id,
-      transactionsFound: 0,
-      transactionsNew: 0,
-      durationMs,
-      error: errorMessage,
-      errorType: 'EXCEPTION',
-    }];
+    return {
+      results: [
+        {
+          success: false,
+          accountId: account.id,
+          transactionsFound: 0,
+          transactionsNew: 0,
+          durationMs,
+          error: errorMessage,
+          errorType: 'EXCEPTION',
+        },
+      ],
+      categorizePending: null,
+    };
   }
 }

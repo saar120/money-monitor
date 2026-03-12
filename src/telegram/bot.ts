@@ -3,16 +3,10 @@ import { config } from '../config.js';
 import { chat } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/agent.js';
 import { readMemory } from '../ai/memory.js';
-import {
-  createSession,
-  listSessions,
-  appendMessage,
-  getSessionMessages,
-} from '../ai/sessions.js';
-import { getSessionId, setSessionId, clearSessionId } from './session-map.js';
-import { markdownToTelegramHtml } from './format.js';
-
-const MAX_MESSAGE_LENGTH = 4096;
+import { createSession, listSessions, appendMessage, getSessionMessages } from '../ai/sessions.js';
+import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
+import { markdownToTelegramHtml, splitMessage } from './format.js';
+import { registerSendMessage, registerGetChatIds, registerOnAlertSent } from './alerts.js';
 
 let bot: Bot | null = null;
 
@@ -20,9 +14,9 @@ function parseAllowedUsers(): Set<number> {
   if (!config.TELEGRAM_ALLOWED_USERS) return new Set();
   return new Set(
     config.TELEGRAM_ALLOWED_USERS.split(',')
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean)
-      .map(Number)
+      .map(Number),
   );
 }
 
@@ -33,25 +27,6 @@ async function replyHtml(ctx: Context, html: string): Promise<void> {
   } catch {
     await ctx.reply(html.replace(/<[^>]+>/g, ''));
   }
-}
-
-/** Split text into chunks that fit Telegram's message limit. */
-function splitMessage(text: string): string[] {
-  if (text.length <= MAX_MESSAGE_LENGTH) return [text];
-  const chunks: string[] = [];
-  let remaining = text;
-  while (remaining.length > 0) {
-    if (remaining.length <= MAX_MESSAGE_LENGTH) {
-      chunks.push(remaining);
-      break;
-    }
-    // Try to split at last newline within limit
-    let splitAt = remaining.lastIndexOf('\n', MAX_MESSAGE_LENGTH);
-    if (splitAt <= 0) splitAt = MAX_MESSAGE_LENGTH;
-    chunks.push(remaining.slice(0, splitAt));
-    remaining = remaining.slice(splitAt).replace(/^\n/, '');
-  }
-  return chunks;
 }
 
 /** Resolve or create a session for a Telegram chat. */
@@ -71,7 +46,9 @@ function startTypingLoop(chatId: number, api: Bot['api']): () => void {
     timer = setTimeout(tick, 4000);
   };
   tick();
-  return () => { if (timer !== null) clearTimeout(timer); };
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+  };
 }
 
 export function startTelegramBot(): void {
@@ -79,6 +56,23 @@ export function startTelegramBot(): void {
 
   bot = new Bot(config.TELEGRAM_BOT_TOKEN);
   const allowedUsers = parseAllowedUsers();
+
+  // Register alert infrastructure so alerts.ts can send messages
+  const botRef = bot;
+  registerSendMessage(async (chatId: number, html: string) => {
+    try {
+      await botRef.api.sendMessage(chatId, html, { parse_mode: 'HTML' });
+    } catch {
+      await botRef.api.sendMessage(chatId, html.replace(/<[^>]+>/g, ''));
+    }
+  });
+  // Persist alert markdown into the user's active chat session so the
+  // financial advisor has context if the user replies about the alert.
+  registerOnAlertSent((chatId: number, markdown: string) => {
+    const sessionId = resolveSession(chatId);
+    appendMessage(sessionId, 'assistant', markdown);
+  });
+  registerGetChatIds(() => getAllChatIds());
 
   // ── Access control middleware ──
   if (allowedUsers.size === 0) {
@@ -120,7 +114,7 @@ export function startTelegramBot(): void {
       return;
     }
     const currentSessionId = getSessionId(ctx.chat.id);
-    const lines = sessions.slice(0, 20).map(s => {
+    const lines = sessions.slice(0, 20).map((s) => {
       const marker = s.id === currentSessionId ? ' (active)' : '';
       const shortId = s.id.slice(0, 8);
       return `${shortId}${marker} — ${s.title}`;
@@ -135,13 +129,28 @@ export function startTelegramBot(): void {
       return;
     }
     const sessions = listSessions();
-    const match = sessions.find(s => s.id.startsWith(partialId));
+    const match = sessions.find((s) => s.id.startsWith(partialId));
     if (!match) {
       await ctx.reply(`No session found starting with "${partialId}".`);
       return;
     }
     setSessionId(ctx.chat.id, match.id);
     await ctx.reply(`Switched to session: ${match.title}`);
+  });
+
+  bot.command('alerts', async (ctx) => {
+    const { loadAlertSettings } = await import('./alert-settings.js');
+    const s = loadAlertSettings();
+    const on = (v: boolean) => (v ? '✅' : '❌');
+    const lines = [
+      `**Alerts: ${on(s.enabled)}**`,
+      `• Large charge threshold: ₪${s.largeChargeThreshold}`,
+      `• Unusual spending threshold: ${s.unusualSpendingPercent}%`,
+      `${on(s.monthlySummary.enabled)} Monthly summary (day ${s.monthlySummary.dayOfMonth})`,
+      `${on(s.reportScrapeErrors)} Report scrape errors`,
+    ];
+    const html = markdownToTelegramHtml(lines.join('\n'));
+    await replyHtml(ctx, html);
   });
 
   // ── Message handler ──
@@ -158,10 +167,7 @@ export function startTelegramBot(): void {
     const history = getSessionMessages(sessionId) ?? [];
     appendMessage(sessionId, 'user', text);
 
-    const conversationHistory: ChatMessage[] = [
-      ...history,
-      { role: 'user', content: text },
-    ];
+    const conversationHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
 
     const stopTyping = startTypingLoop(chatId, bot!.api);
     let result = '';
@@ -193,12 +199,15 @@ export function startTelegramBot(): void {
   });
 
   // ── Register command menu in Telegram UI ──
-  bot.api.setMyCommands([
-    { command: 'new', description: 'Start a new conversation' },
-    { command: 'memory', description: 'View shared memory' },
-    { command: 'sessions', description: 'List recent sessions' },
-    { command: 'switch', description: 'Switch to a session by ID prefix' },
-  ]).catch(() => {});
+  bot.api
+    .setMyCommands([
+      { command: 'new', description: 'Start a new conversation' },
+      { command: 'memory', description: 'View shared memory' },
+      { command: 'sessions', description: 'List recent sessions' },
+      { command: 'switch', description: 'Switch to a session by ID prefix' },
+      { command: 'alerts', description: 'View alert settings' },
+    ])
+    .catch(() => {});
 
   // ── Catch unhandled errors so the polling loop keeps running ──
   bot.catch((err) => {

@@ -22,7 +22,7 @@ export function clearApiToken(): void {
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
-    ...options?.headers as Record<string, string>,
+    ...(options?.headers as Record<string, string>),
   };
 
   const token = getApiToken();
@@ -62,16 +62,34 @@ export function getAccounts() {
   return request<{ accounts: Account[] }>('/accounts');
 }
 
-export function createAccount(data: { companyId: string; displayName: string; credentials: Record<string, string> }) {
+export function createAccount(data: {
+  companyId: string;
+  displayName: string;
+  credentials: Record<string, string>;
+}) {
   return request<{ account: Account }>('/accounts', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAccount(id: number, data: { displayName?: string; isActive?: boolean; manualLogin?: boolean; showBrowser?: boolean; credentials?: Record<string, string> }) {
-  return request<{ account: Account }>(`/accounts/${id}`, { method: 'PUT', body: JSON.stringify(data) });
+export function updateAccount(
+  id: number,
+  data: {
+    displayName?: string;
+    isActive?: boolean;
+    manualLogin?: boolean;
+    showBrowser?: boolean;
+    credentials?: Record<string, string>;
+  },
+) {
+  return request<{ account: Account }>(`/accounts/${id}`, {
+    method: 'PUT',
+    body: JSON.stringify(data),
+  });
 }
 
 export function deleteAccount(id: number, deleteTransactions = false) {
-  return request<{ deleted: boolean }>(`/accounts/${id}?deleteTransactions=${deleteTransactions}`, { method: 'DELETE' });
+  return request<{ deleted: boolean }>(`/accounts/${id}?deleteTransactions=${deleteTransactions}`, {
+    method: 'DELETE',
+  });
 }
 
 // ─── Transactions ───
@@ -129,7 +147,9 @@ export function getTransactions(filters: TransactionFilters = {}) {
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
-  return request<{ transactions: Transaction[]; pagination: Pagination }>(`/transactions?${params}`);
+  return request<{ transactions: Transaction[]; pagination: Pagination }>(
+    `/transactions?${params}`,
+  );
 }
 
 export function ignoreTransaction(id: number, ignored: boolean) {
@@ -188,7 +208,9 @@ export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {})
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) query.set(key, String(value));
   });
-  return request<{ groupBy: 'cashflow'; summary: CashflowItem[] }>(`/transactions/summary?${query}`);
+  return request<{ groupBy: 'cashflow'; summary: CashflowItem[] }>(
+    `/transactions/summary?${query}`,
+  );
 }
 
 // ─── Scraping ───
@@ -253,7 +275,9 @@ export function getScrapeSessions(params: { limit?: number; offset?: number } = 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) query.set(key, String(value));
   });
-  return request<{ sessions: ScrapeSession[]; activeSessions: ScrapeSession[] }>(`/scrape/sessions?${query}`);
+  return request<{ sessions: ScrapeSession[]; activeSessions: ScrapeSession[] }>(
+    `/scrape/sessions?${query}`,
+  );
 }
 
 export function cancelScrapeSession(sessionId: number) {
@@ -276,14 +300,22 @@ export function getCategories() {
   return request<{ categories: Category[] }>('/categories');
 }
 
-export function createCategory(data: { name: string; label: string; color?: string; rules?: string }) {
+export function createCategory(data: {
+  name: string;
+  label: string;
+  color?: string;
+  rules?: string;
+}) {
   return request<{ category: Category }>('/categories', {
     method: 'POST',
     body: JSON.stringify(data),
   });
 }
 
-export function updateCategory(id: number, data: { label?: string; color?: string; rules?: string | null; ignoredFromStats?: boolean }) {
+export function updateCategory(
+  id: number,
+  data: { label?: string; color?: string; rules?: string | null; ignoredFromStats?: boolean },
+) {
   return request<{ category: Category }>(`/categories/${id}`, {
     method: 'PATCH',
     body: JSON.stringify(data),
@@ -450,11 +482,32 @@ export function getAsset(id: number) {
   return request<Asset>(`/assets/${id}`);
 }
 
-export function createAsset(data: { name: string; type: string; currency?: string; institution?: string; liquidity?: string; linkedAccountId?: number; notes?: string; initialValue?: number; initialCostBasis?: number }) {
+export function createAsset(data: {
+  name: string;
+  type: string;
+  currency?: string;
+  institution?: string;
+  liquidity?: string;
+  linkedAccountId?: number;
+  notes?: string;
+  initialValue?: number;
+  initialCostBasis?: number;
+}) {
   return request<Asset>('/assets', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateAsset(id: number, data: { name?: string; type?: string; currency?: string; institution?: string | null; liquidity?: string; linkedAccountId?: number | null; notes?: string | null }) {
+export function updateAsset(
+  id: number,
+  data: {
+    name?: string;
+    type?: string;
+    currency?: string;
+    institution?: string | null;
+    liquidity?: string;
+    linkedAccountId?: number | null;
+    notes?: string | null;
+  },
+) {
   return request<Asset>(`/assets/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
@@ -473,18 +526,40 @@ export function recordRentIncome(
   assetId: number,
   data: { amount: number; date?: string; notes?: string },
 ): Promise<{ success: boolean }> {
-  return request<{ success: boolean }>(`/assets/${assetId}/rent`, { method: 'POST', body: JSON.stringify(data) });
+  return request<{ success: boolean }>(`/assets/${assetId}/rent`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export function getExchangeRates() {
-  return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>('/exchange-rates');
+  return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>(
+    '/exchange-rates',
+  );
 }
 
-export function createHolding(assetId: number, data: { name: string; type: string; currency: string; quantity: number; costBasis?: number; lastPrice?: number; notes?: string }) {
-  return request<Holding>(`/assets/${assetId}/holdings`, { method: 'POST', body: JSON.stringify(data) });
+export function createHolding(
+  assetId: number,
+  data: {
+    name: string;
+    type: string;
+    currency: string;
+    quantity: number;
+    costBasis?: number;
+    lastPrice?: number;
+    notes?: string;
+  },
+) {
+  return request<Holding>(`/assets/${assetId}/holdings`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
-export function updateHolding(id: number, data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null }) {
+export function updateHolding(
+  id: number,
+  data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null },
+) {
   return request<Holding>(`/holdings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
@@ -533,21 +608,29 @@ export function getMovements(assetId: number, filters: MovementFilters = {}) {
     if (value !== undefined) params.set(key, String(value));
   });
   const qs = params.toString();
-  return request<{ movements: Movement[]; total: number }>(`/assets/${assetId}/movements${qs ? `?${qs}` : ''}`);
+  return request<{ movements: Movement[]; total: number }>(
+    `/assets/${assetId}/movements${qs ? `?${qs}` : ''}`,
+  );
 }
 
-export function createMovement(assetId: number, data: {
-  holdingId?: number;
-  date: string;
-  type: string;
-  quantity: number;
-  currency: string;
-  pricePerUnit?: number;
-  sourceAmount?: number;
-  sourceCurrency?: string;
-  notes?: string;
-}) {
-  return request<Movement>(`/assets/${assetId}/movements`, { method: 'POST', body: JSON.stringify(data) });
+export function createMovement(
+  assetId: number,
+  data: {
+    holdingId?: number;
+    date: string;
+    type: string;
+    quantity: number;
+    currency: string;
+    pricePerUnit?: number;
+    sourceAmount?: number;
+    sourceCurrency?: string;
+    notes?: string;
+  },
+) {
+  return request<Movement>(`/assets/${assetId}/movements`, {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
 }
 
 export function deleteMovement(id: number) {
@@ -575,11 +658,32 @@ export function getLiabilities(includeInactive = false) {
   return request<Liability[]>(`/liabilities${params}`);
 }
 
-export function createLiability(data: { name: string; type: string; currency?: string; originalAmount: number; currentBalance: number; interestRate?: number; startDate?: string; notes?: string }) {
+export function createLiability(data: {
+  name: string;
+  type: string;
+  currency?: string;
+  originalAmount: number;
+  currentBalance: number;
+  interestRate?: number;
+  startDate?: string;
+  notes?: string;
+}) {
   return request<Liability>('/liabilities', { method: 'POST', body: JSON.stringify(data) });
 }
 
-export function updateLiability(id: number, data: { name?: string; type?: string; currency?: string; originalAmount?: number; currentBalance?: number; interestRate?: number | null; startDate?: string | null; notes?: string | null }) {
+export function updateLiability(
+  id: number,
+  data: {
+    name?: string;
+    type?: string;
+    currency?: string;
+    originalAmount?: number;
+    currentBalance?: number;
+    interestRate?: number | null;
+    startDate?: string | null;
+    notes?: string | null;
+  },
+) {
   return request<Liability>(`/liabilities/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
@@ -649,7 +753,11 @@ export function getNetWorth() {
   return request<NetWorth>('/net-worth');
 }
 
-export function getNetWorthHistory(params?: { startDate?: string; endDate?: string; granularity?: 'daily' | 'weekly' | 'monthly' }) {
+export function getNetWorthHistory(params?: {
+  startDate?: string;
+  endDate?: string;
+  granularity?: 'daily' | 'weekly' | 'monthly';
+}) {
   const query = new URLSearchParams();
   if (params) {
     Object.entries(params).forEach(([key, value]) => {
@@ -663,7 +771,10 @@ export function getNetWorthHistory(params?: { startDate?: string; endDate?: stri
 // ─── AI ───
 
 export function aiCategorize(batchSize = 50) {
-  return request<{ categorized: number }>('/ai/categorize', { method: 'POST', body: JSON.stringify({ batchSize }) });
+  return request<{ categorized: number }>('/ai/categorize', {
+    method: 'POST',
+    body: JSON.stringify({ batchSize }),
+  });
 }
 
 export function aiRecategorize(startDate?: string, endDate?: string) {
@@ -742,4 +853,36 @@ export function toggleDemoMode(enabled: boolean) {
     method: 'POST',
     body: JSON.stringify({ enabled }),
   });
+}
+
+// ─── Alert Settings ───
+
+export interface AlertSettings {
+  enabled: boolean;
+  largeChargeThreshold: number;
+  unusualSpendingPercent: number;
+  monthlySummary: {
+    enabled: boolean;
+    dayOfMonth: number;
+  };
+  reportScrapeErrors: boolean;
+}
+
+export function getAlertSettings() {
+  return request<AlertSettings>('/alerts/settings');
+}
+
+export function updateAlertSettings(settings: Partial<AlertSettings>) {
+  return request<AlertSettings>('/alerts/settings', {
+    method: 'PATCH',
+    body: JSON.stringify(settings),
+  });
+}
+
+export function resetAlertSettings() {
+  return request<AlertSettings>('/alerts/settings/reset', { method: 'POST' });
+}
+
+export function sendTestAlert() {
+  return request<{ success: boolean; message: string }>('/alerts/test', { method: 'POST' });
 }

@@ -3,7 +3,9 @@ import { db } from '../db/connection.js';
 import { accounts, scrapeSessions } from '../db/schema.js';
 import type { Account, ScrapeSession } from '../shared/types.js';
 import { scrapeAccount } from './scraper.service.js';
+import type { ScrapeResult } from './scraper.service.js';
 import { broadcastSseEvent } from '../api/sse.js';
+import { runPostScrapeAlerts } from '../telegram/alerts.js';
 
 interface ActiveSession {
   session: ScrapeSession;
@@ -22,23 +24,37 @@ export function getActiveSession(sessionId: number): ActiveSession | undefined {
   return activeSessions.get(sessionId);
 }
 
-export function createSession(trigger: 'manual' | 'scheduled' | 'single', accountIds: number[]): { session: ScrapeSession; abortController: AbortController } {
-  const session = db.insert(scrapeSessions).values({
-    trigger,
-    status: 'running',
-    accountIds: JSON.stringify(accountIds),
-    startedAt: new Date().toISOString(),
-  }).returning().get();
+export function createSession(
+  trigger: 'manual' | 'scheduled' | 'single',
+  accountIds: number[],
+): { session: ScrapeSession; abortController: AbortController } {
+  const session = db
+    .insert(scrapeSessions)
+    .values({
+      trigger,
+      status: 'running',
+      accountIds: JSON.stringify(accountIds),
+      startedAt: new Date().toISOString(),
+    })
+    .returning()
+    .get();
 
   const abortController = new AbortController();
   return { session, abortController };
 }
 
-export function registerActiveSession(session: ScrapeSession, abortController: AbortController, promise: Promise<void>): void {
+export function registerActiveSession(
+  session: ScrapeSession,
+  abortController: AbortController,
+  promise: Promise<void>,
+): void {
   activeSessions.set(session.id, { session, abortController, promise });
 }
 
-export function completeSession(sessionId: number, status: 'completed' | 'error' | 'cancelled'): void {
+export function completeSession(
+  sessionId: number,
+  status: 'completed' | 'error' | 'cancelled',
+): void {
   db.update(scrapeSessions)
     .set({ status, completedAt: new Date().toISOString() })
     .where(eq(scrapeSessions.id, sessionId))
@@ -80,18 +96,30 @@ export function runScrapeSession(
   trigger: 'manual' | 'scheduled' | 'single',
   accountsToScrape: Account[],
 ): { session: ScrapeSession } {
-  const accountIds = accountsToScrape.map(a => a.id);
+  const accountIds = accountsToScrape.map((a) => a.id);
   const { session, abortController } = createSession(trigger, accountIds);
   broadcastSseEvent({ type: 'session-started', sessionId: session.id, accountIds, trigger });
 
   const promise = (async () => {
+    const allResults: ScrapeResult[] = [];
+    const categorizePending: Promise<void>[] = [];
     try {
       let hasError = false;
       for (const account of accountsToScrape) {
         if (abortController.signal.aborted) break;
-        broadcastSseEvent({ type: 'account-scrape-started', sessionId: session.id, accountId: account.id });
-        const results = await scrapeAccount(account, session.id, abortController.signal);
+        broadcastSseEvent({
+          type: 'account-scrape-started',
+          sessionId: session.id,
+          accountId: account.id,
+        });
+        const { results, categorizePending: pending } = await scrapeAccount(
+          account,
+          session.id,
+          abortController.signal,
+        );
+        if (pending) categorizePending.push(pending);
         for (const result of results) {
+          allResults.push(result);
           if (!result.success) hasError = true;
           broadcastSseEvent({
             type: result.success ? 'account-scrape-done' : 'account-scrape-error',
@@ -105,14 +133,32 @@ export function runScrapeSession(
           });
         }
       }
-      const finalStatus = abortController.signal.aborted ? 'cancelled' : hasError ? 'error' : 'completed';
+      const finalStatus = abortController.signal.aborted
+        ? 'cancelled'
+        : hasError
+          ? 'error'
+          : 'completed';
       completeSession(session.id, finalStatus);
       broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: finalStatus });
     } catch (err) {
       const errorMessage = err instanceof Error ? err.message : String(err);
       console.error(`[Scrape] Session ${session.id} failed:`, errorMessage);
       completeSession(session.id, 'error');
-      broadcastSseEvent({ type: 'session-completed', sessionId: session.id, status: 'error', error: errorMessage });
+      broadcastSseEvent({
+        type: 'session-completed',
+        sessionId: session.id,
+        status: 'error',
+        error: errorMessage,
+      });
+    } finally {
+      // Wait for all background categorizations to finish, then send alerts
+      await Promise.allSettled(categorizePending);
+      runPostScrapeAlerts(allResults).catch((err) => {
+        console.error(
+          '[Scrape] Post-scrape alerts failed:',
+          err instanceof Error ? err.message : err,
+        );
+      });
     }
   })();
 
