@@ -99,7 +99,8 @@ export function loadAlertSettings(): AlertSettings {
     const raw = JSON.parse(readFileSync(SETTINGS_PATH, 'utf-8'));
     cache = deepMerge(DEFAULT_SETTINGS, raw);
   } catch (err: unknown) {
-    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code !== 'ENOENT') throw err;
+    if (err instanceof Error && 'code' in err && (err as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw err;
     cache = { ...DEFAULT_SETTINGS };
   }
   return cache;
@@ -124,24 +125,30 @@ export function getDefaultSettings(): AlertSettings {
 
 /** Return settings stripped of internal tracking fields (safe for API responses). */
 export function getPublicSettings(): AlertPublicSettings {
-  const { _lastNetWorthTotal, _knownRecurring, ...pub } = loadAlertSettings();
-  return pub;
+  const settings = loadAlertSettings();
+  delete settings._lastNetWorthTotal;
+  delete settings._knownRecurring;
+  return settings;
 }
 
 /** Deep merge, preserving nested objects. */
 function deepMerge(target: AlertSettings, source: Partial<AlertSettings>): AlertSettings {
-  const result: Record<string, unknown> = { ...target };
+  const result = { ...target };
   for (const key of Object.keys(source) as Array<keyof AlertSettings>) {
     const sv = source[key];
     const tv = target[key];
     if (
-      sv && typeof sv === 'object' && !Array.isArray(sv) &&
-      tv && typeof tv === 'object' && !Array.isArray(tv)
+      sv &&
+      typeof sv === 'object' &&
+      !Array.isArray(sv) &&
+      tv &&
+      typeof tv === 'object' &&
+      !Array.isArray(tv)
     ) {
-      result[key] = { ...tv as Record<string, unknown>, ...sv as Record<string, unknown> };
+      Object.assign(result, { [key]: { ...tv, ...sv } });
     } else if (sv !== undefined) {
-      result[key] = sv;
+      Object.assign(result, { [key]: sv });
     }
   }
-  return result as AlertSettings;
+  return result;
 }
