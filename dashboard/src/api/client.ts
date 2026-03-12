@@ -857,29 +857,15 @@ export function toggleDemoMode(enabled: boolean) {
 
 // ─── Alert Settings ───
 
-export interface AlertSettingSection {
-  enabled: boolean;
-}
-
 export interface AlertSettings {
   enabled: boolean;
-  dailyDigest: {
+  largeChargeThreshold: number;
+  unusualSpendingPercent: number;
+  monthlySummary: {
     enabled: boolean;
-    largeChargeThreshold: number;
-    reportErrors: boolean;
+    dayOfMonth: number;
   };
-  unusualSpending: {
-    enabled: boolean;
-    percentThreshold: number;
-  };
-  newRecurring: AlertSettingSection;
-  reviewReminder: AlertSettingSection;
-  monthlySummary: AlertSettingSection & { dayOfMonth: number };
-  netWorthChange: {
-    enabled: boolean;
-    changeThreshold: number;
-    milestoneInterval: number;
-  };
+  reportScrapeErrors: boolean;
 }
 
 export function getAlertSettings() {
