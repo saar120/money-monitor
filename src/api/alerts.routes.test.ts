@@ -41,18 +41,15 @@ vi.mock('../services/exchange-rates.js', () => ({
 }));
 
 // ── Mock alert-settings ──
-// We use an in-memory store to simulate real behavior
 let settingsStore = getDefaults();
 
 function getDefaults() {
   return {
     enabled: true,
-    dailyDigest: { enabled: true, largeChargeThreshold: 500, reportErrors: true },
-    unusualSpending: { enabled: true, percentThreshold: 30 },
-    newRecurring: { enabled: true },
-    reviewReminder: { enabled: true },
-    monthlySummary: { enabled: true },
-    netWorthChange: { enabled: true, changeThreshold: 10000, milestoneInterval: 100000 },
+    largeChargeThreshold: 500,
+    unusualSpendingPercent: 30,
+    monthlySummary: { enabled: true, dayOfMonth: 1 },
+    reportScrapeErrors: true,
     _lastNetWorthTotal: 400000,
     _knownRecurring: ['Netflix'],
   };
@@ -66,12 +63,10 @@ vi.mock('../telegram/alert-settings.js', () => ({
   },
   getDefaultSettings: () => ({
     enabled: true,
-    dailyDigest: { enabled: true, largeChargeThreshold: 500, reportErrors: true },
-    unusualSpending: { enabled: true, percentThreshold: 30 },
-    newRecurring: { enabled: true },
-    reviewReminder: { enabled: true },
-    monthlySummary: { enabled: true },
-    netWorthChange: { enabled: true, changeThreshold: 10000, milestoneInterval: 100000 },
+    largeChargeThreshold: 500,
+    unusualSpendingPercent: 30,
+    monthlySummary: { enabled: true, dayOfMonth: 1 },
+    reportScrapeErrors: true,
   }),
   getPublicSettings: () => {
     // eslint-disable-next-line @typescript-eslint/no-unused-vars
@@ -81,7 +76,7 @@ vi.mock('../telegram/alert-settings.js', () => ({
 }));
 
 vi.mock('../telegram/alerts.js', () => ({
-  sendPostScrapeDigest: vi.fn().mockResolvedValue(undefined),
+  runPostScrapeAlerts: vi.fn().mockResolvedValue(undefined),
   registerSendMessage: vi.fn(),
   registerGetChatIds: vi.fn(),
 }));
@@ -120,7 +115,7 @@ describe('alerts routes', () => {
   // ── GET /api/alerts/settings ──
 
   describe('GET /api/alerts/settings', () => {
-    it('returns current alert settings', async () => {
+    it('returns current alert settings with new flat shape', async () => {
       const res = await server.inject({
         method: 'GET',
         url: '/api/alerts/settings',
@@ -130,9 +125,10 @@ describe('alerts routes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.enabled).toBe(true);
-      expect(body.dailyDigest.enabled).toBe(true);
-      expect(body.dailyDigest.largeChargeThreshold).toBe(500);
-      expect(body.unusualSpending.percentThreshold).toBe(30);
+      expect(body.largeChargeThreshold).toBe(500);
+      expect(body.unusualSpendingPercent).toBe(30);
+      expect(body.monthlySummary.enabled).toBe(true);
+      expect(body.reportScrapeErrors).toBe(true);
     });
 
     it('strips internal tracking fields from response', async () => {
@@ -163,22 +159,21 @@ describe('alerts routes', () => {
       const body = JSON.parse(res.body);
       expect(body.enabled).toBe(false);
       // Other settings preserved
-      expect(body.dailyDigest.enabled).toBe(true);
+      expect(body.largeChargeThreshold).toBe(500);
     });
 
-    it('deep merges nested settings', async () => {
+    it('deep merges nested monthlySummary settings', async () => {
       const res = await server.inject({
         method: 'PATCH',
         url: '/api/alerts/settings',
         headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { dailyDigest: { largeChargeThreshold: 1000 } },
+        payload: { monthlySummary: { dayOfMonth: 15 } },
       });
 
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.dailyDigest.largeChargeThreshold).toBe(1000);
-      expect(body.dailyDigest.enabled).toBe(true);
-      expect(body.dailyDigest.reportErrors).toBe(true);
+      expect(body.monthlySummary.dayOfMonth).toBe(15);
+      expect(body.monthlySummary.enabled).toBe(true);
     });
 
     it('strips internal fields from response', async () => {
@@ -199,9 +194,8 @@ describe('alerts routes', () => {
 
   describe('POST /api/alerts/settings/reset', () => {
     it('resets settings to defaults', async () => {
-      // First, change some settings
       settingsStore.enabled = false;
-      settingsStore.dailyDigest.largeChargeThreshold = 9999;
+      settingsStore.largeChargeThreshold = 9999;
 
       const res = await server.inject({
         method: 'POST',
@@ -212,7 +206,7 @@ describe('alerts routes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.enabled).toBe(true);
-      expect(body.dailyDigest.largeChargeThreshold).toBe(500);
+      expect(body.largeChargeThreshold).toBe(500);
     });
 
     it('strips internal fields from reset response', async () => {

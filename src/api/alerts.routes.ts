@@ -27,9 +27,9 @@ export async function alertsRoutes(app: FastifyInstance) {
 
   /** Send a test alert to all connected Telegram chats */
   app.post('/api/alerts/test', async (_request, reply) => {
-    const { sendPostScrapeDigest } = await import('../telegram/alerts.js');
+    const { runPostScrapeAlerts } = await import('../telegram/alerts.js');
     try {
-      await sendPostScrapeDigest([]);
+      await runPostScrapeAlerts([]);
       return reply.send({ success: true, message: 'Test alert sent' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);
