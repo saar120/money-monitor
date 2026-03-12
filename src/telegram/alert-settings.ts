@@ -42,9 +42,11 @@ export interface AlertPublicSettings {
     enabled: boolean;
   };
 
-  /** Monthly summary (1st of month) */
+  /** Monthly summary */
   monthlySummary: {
     enabled: boolean;
+    /** Day of month to send the summary (1–28, default 1) */
+    dayOfMonth: number;
   };
 
   /** Net worth milestone / change */
@@ -79,6 +81,7 @@ const DEFAULT_SETTINGS: AlertSettings = {
   },
   monthlySummary: {
     enabled: true,
+    dayOfMonth: 1,
   },
   netWorthChange: {
     enabled: true,
@@ -125,10 +128,10 @@ export function getDefaultSettings(): AlertSettings {
 
 /** Return settings stripped of internal tracking fields (safe for API responses). */
 export function getPublicSettings(): AlertPublicSettings {
-  const settings = loadAlertSettings();
-  delete settings._lastNetWorthTotal;
-  delete settings._knownRecurring;
-  return settings;
+  const copy = { ...loadAlertSettings() };
+  delete copy._lastNetWorthTotal;
+  delete copy._knownRecurring;
+  return copy;
 }
 
 /** Deep merge, preserving nested objects. */

@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, sql, isNull, inArray } from 'drizzle-orm';
+import { and, eq, gte, lte, sql, inArray } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { transactions, accounts, categories } from '../db/schema.js';
 import { loadAlertSettings, saveAlertSettings } from './alert-settings.js';
@@ -10,6 +10,7 @@ import {
 import { getNetWorth } from '../services/net-worth.js';
 import { todayInIsrael } from '../shared/dates.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
+import { MONTH_NAMES, MSG } from './alert-constants.js';
 import type { ScrapeResult } from '../scraper/scraper.service.js';
 
 // ── Telegram send helper ──────────────────────────────────────────────────────
@@ -28,7 +29,10 @@ async function sendAlert(chatIds: number[], markdown: string): Promise<void> {
       try {
         await _sendMessage(chatId, chunk);
       } catch (err) {
-        console.error(`[Alerts] Failed to send to chat ${chatId}:`, err instanceof Error ? err.message : err);
+        console.error(
+          `[Alerts] Failed to send to chat ${chatId}:`,
+          err instanceof Error ? err.message : err,
+        );
       }
     }
   }
@@ -58,9 +62,8 @@ const fmt = (n: number): string => {
 
 /** Get category name → label map from DB. */
 function getCategoryLabelMap(): Map<string, string> {
-  const rows = db.select({ name: categories.name, label: categories.label })
-    .from(categories).all();
-  return new Map(rows.map(c => [c.name, c.label]));
+  const rows = db.select({ name: categories.name, label: categories.label }).from(categories).all();
+  return new Map(rows.map((c) => [c.name, c.label]));
 }
 
 /** Compute month offset from a [year, month] pair. Returns { year, month (1-12), start, end }. */
@@ -94,32 +97,36 @@ export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promi
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
 
-  const lines: string[] = ['**📊 Scrape Complete**', ''];
+  const lines: string[] = [MSG.digestHeader, ''];
 
   const totalNew = scrapeResults.reduce((s, r) => s + r.transactionsNew, 0);
   const totalFound = scrapeResults.reduce((s, r) => s + r.transactionsFound, 0);
-  const failures = scrapeResults.filter(r => !r.success);
+  const failures = scrapeResults.filter((r) => !r.success);
 
   if (totalNew > 0) {
     const today = todayInIsrael();
     const yesterday = yesterdayInIsrael();
 
-    const recentTxns = db.select({
-      chargedAmount: transactions.chargedAmount,
-      description: transactions.description,
-    }).from(transactions)
-      .where(and(
-        gte(transactions.date, yesterday),
-        lte(transactions.date, today),
-        eq(transactions.ignored, false),
-      ))
+    const recentTxns = db
+      .select({
+        chargedAmount: transactions.chargedAmount,
+        description: transactions.description,
+      })
+      .from(transactions)
+      .where(
+        and(
+          gte(transactions.date, yesterday),
+          lte(transactions.date, today),
+          eq(transactions.ignored, false),
+        ),
+      )
       .all();
 
     const totalSpent = recentTxns
-      .filter(t => t.chargedAmount < 0)
+      .filter((t) => t.chargedAmount < 0)
       .reduce((s, t) => s + Math.abs(t.chargedAmount), 0);
     const totalIncome = recentTxns
-      .filter(t => t.chargedAmount > 0)
+      .filter((t) => t.chargedAmount > 0)
       .reduce((s, t) => s + t.chargedAmount, 0);
 
     lines.push(`**${totalNew}** new transactions found (${totalFound} total scanned)`);
@@ -129,32 +136,36 @@ export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promi
     // Flag large charges
     const threshold = settings.dailyDigest.largeChargeThreshold;
     const largeCharges = recentTxns
-      .filter(t => Math.abs(t.chargedAmount) >= threshold)
+      .filter((t) => Math.abs(t.chargedAmount) >= threshold)
       .sort((a, b) => Math.abs(b.chargedAmount) - Math.abs(a.chargedAmount));
 
     if (largeCharges.length > 0) {
       lines.push('');
-      lines.push(`**⚠️ Large charges (≥₪${fmt(threshold)}):**`);
+      lines.push(MSG.largeChargesHeader(fmt(threshold)));
       for (const tx of largeCharges.slice(0, 5)) {
         const dir = tx.chargedAmount < 0 ? '−' : '+';
         lines.push(`• ${dir}₪${fmt(Math.abs(tx.chargedAmount))} — ${tx.description}`);
       }
     }
   } else {
-    lines.push('No new transactions found.');
+    lines.push(MSG.noTransactions);
   }
 
   // Report failures — batch account name lookup
   if (settings.dailyDigest.reportErrors && failures.length > 0) {
-    const failedIds = failures.map(f => f.accountId);
-    const acctRows = failedIds.length > 0
-      ? db.select({ id: accounts.id, displayName: accounts.displayName })
-          .from(accounts).where(inArray(accounts.id, failedIds)).all()
-      : [];
-    const nameMap = new Map(acctRows.map(a => [a.id, a.displayName]));
+    const failedIds = failures.map((f) => f.accountId);
+    const acctRows =
+      failedIds.length > 0
+        ? db
+            .select({ id: accounts.id, displayName: accounts.displayName })
+            .from(accounts)
+            .where(inArray(accounts.id, failedIds))
+            .all()
+        : [];
+    const nameMap = new Map(acctRows.map((a) => [a.id, a.displayName]));
 
     lines.push('');
-    lines.push(`**❌ ${failures.length} scrape error(s):**`);
+    lines.push(MSG.scrapeErrorsHeader(failures.length));
     for (const f of failures) {
       const name = nameMap.get(f.accountId) ?? `Account #${f.accountId}`;
       lines.push(`• ${name}: ${f.error ?? f.errorType ?? 'Unknown error'}`);
@@ -189,7 +200,7 @@ export async function checkUnusualSpending(): Promise<void> {
     period2End: today,
   });
 
-  const spikes = result.comparison.filter(c => {
+  const spikes = result.comparison.filter((c) => {
     if (c.change_percent === null) return false;
     return c.period2_total < 0 && c.change_percent < -threshold;
   });
@@ -197,14 +208,14 @@ export async function checkUnusualSpending(): Promise<void> {
   if (spikes.length === 0) return;
 
   const labelMap = getCategoryLabelMap();
-  const lines: string[] = ['**📈 Unusual Spending Alert**', ''];
+  const lines: string[] = [MSG.unusualSpendingHeader, ''];
 
   for (const spike of spikes.slice(0, 5)) {
     const label = labelMap.get(spike.category) ?? spike.category;
     const pct = Math.abs(spike.change_percent!);
     lines.push(
       `• **${label}**: ₪${fmt(Math.abs(spike.period2_total))} this month — ` +
-      `**${Math.round(pct)}% higher** than the same point last month`
+        `**${Math.round(pct)}% higher** than the same point last month`,
     );
   }
 
@@ -221,18 +232,18 @@ export async function checkNewRecurring(): Promise<void> {
   if (chatIds.length === 0) return;
 
   const { recurring } = detectRecurringTransactions({ monthsBack: 6, minOccurrences: 2 });
-  const currentDescriptions = recurring.map(r => r.description);
+  const currentDescriptions = recurring.map((r) => r.description);
   const known = new Set(settings._knownRecurring ?? []);
 
-  const newOnes = recurring.filter(r => !known.has(r.description));
+  const newOnes = recurring.filter((r) => !known.has(r.description));
 
   if (newOnes.length > 0) {
-    const lines: string[] = ['**🔄 New Recurring Charges Detected**', ''];
+    const lines: string[] = [MSG.newRecurringHeader, ''];
     for (const r of newOnes.slice(0, 5)) {
       const amt = r.avg_amount < 0 ? `₪${fmt(Math.abs(r.avg_amount))}` : `+₪${fmt(r.avg_amount)}`;
       lines.push(
         `• **${r.description}**: ${amt}/${r.frequency}` +
-        ` (est. annual: ₪${fmt(Math.abs(r.estimated_annual_cost))})`
+          ` (est. annual: ₪${fmt(Math.abs(r.estimated_annual_cost))})`,
       );
     }
     await sendAlert(chatIds, lines.join('\n'));
@@ -253,31 +264,34 @@ export async function checkReviewNeeded(): Promise<void> {
   if (chatIds.length === 0) return;
 
   // Single query for both counts
-  const counts = db.select({
-    reviewCount: sql<number>`SUM(CASE WHEN ${transactions.needsReview} = 1 THEN 1 ELSE 0 END)`,
-    uncatCount: sql<number>`SUM(CASE WHEN ${transactions.category} IS NULL THEN 1 ELSE 0 END)`,
-  }).from(transactions).get();
+  const counts = db
+    .select({
+      reviewCount: sql<number>`SUM(CASE WHEN ${transactions.needsReview} = 1 THEN 1 ELSE 0 END)`,
+      uncatCount: sql<number>`SUM(CASE WHEN ${transactions.category} IS NULL THEN 1 ELSE 0 END)`,
+    })
+    .from(transactions)
+    .get();
 
   const reviewCount = counts?.reviewCount ?? 0;
   const uncatCount = counts?.uncatCount ?? 0;
   if (reviewCount === 0 && uncatCount === 0) return;
 
-  const lines: string[] = ['**🔍 Transactions Need Review**', ''];
+  const lines: string[] = [MSG.reviewHeader, ''];
   if (reviewCount > 0) {
-    lines.push(`**${reviewCount}** transaction(s) flagged for review (low confidence categorization)`);
+    lines.push(
+      `**${reviewCount}** transaction(s) flagged for review (low confidence categorization)`,
+    );
   }
   if (uncatCount > 0) {
     lines.push(`**${uncatCount}** transaction(s) still uncategorized`);
   }
   lines.push('');
-  lines.push('Open the Insights page to review them.');
+  lines.push(MSG.reviewCta);
 
   await sendAlert(chatIds, lines.join('\n'));
 }
 
 // ── 5. Monthly Summary ────────────────────────────────────────────────────────
-
-const MONTH_NAMES = ['Jan', 'Feb', 'Mar', 'Apr', 'May', 'Jun', 'Jul', 'Aug', 'Sep', 'Oct', 'Nov', 'Dec'];
 
 export async function sendMonthlySummary(): Promise<void> {
   const settings = loadAlertSettings();
@@ -293,10 +307,7 @@ export async function sendMonthlySummary(): Promise<void> {
   const prev2 = monthOffset(year, month, -2);
 
   // Get cashflow for last month
-  const cashflow = getSpendingSummary(
-    { startDate: prev.start, endDate: prev.end },
-    'cashflow',
-  );
+  const cashflow = getSpendingSummary({ startDate: prev.start, endDate: prev.end }, 'cashflow');
   const cfRow = cashflow.summary[0] as { income?: number; expense?: number } | undefined;
   const income = cfRow?.income ?? 0;
   const expense = cfRow?.expense ?? 0;
@@ -304,12 +315,9 @@ export async function sendMonthlySummary(): Promise<void> {
   const savingsRate = income > 0 ? (savings / income) * 100 : 0;
 
   // Top spending categories
-  const catSummary = getSpendingSummary(
-    { startDate: prev.start, endDate: prev.end },
-    'category',
-  );
+  const catSummary = getSpendingSummary({ startDate: prev.start, endDate: prev.end }, 'category');
   const topCats = (catSummary.summary as Array<{ category?: string; totalAmount: number }>)
-    .filter(s => s.totalAmount < 0)
+    .filter((s) => s.totalAmount < 0)
     .sort((a, b) => a.totalAmount - b.totalAmount)
     .slice(0, 3);
 
@@ -326,7 +334,7 @@ export async function sendMonthlySummary(): Promise<void> {
   const monthLabel = MONTH_NAMES[prev.month - 1];
 
   const lines: string[] = [
-    `**📅 Monthly Summary — ${monthLabel} ${prev.year}**`,
+    MSG.monthlySummaryHeader(monthLabel, prev.year),
     '',
     `💰 Income: ₪${fmt(income)}`,
     `💸 Spending: ₪${fmt(expense)}`,
@@ -337,7 +345,8 @@ export async function sendMonthlySummary(): Promise<void> {
     lines.push('');
     lines.push('**Top spending categories:**');
     for (const cat of topCats) {
-      const label = labelMap.get(cat.category ?? 'uncategorized') ?? cat.category ?? 'uncategorized';
+      const label =
+        labelMap.get(cat.category ?? 'uncategorized') ?? cat.category ?? 'uncategorized';
       lines.push(`• ${label}: ₪${fmt(Math.abs(cat.totalAmount))}`);
     }
   }
@@ -346,7 +355,9 @@ export async function sendMonthlySummary(): Promise<void> {
     const pct = comparison.summary.change_percent;
     const dir = pct < 0 ? 'less' : 'more';
     lines.push('');
-    lines.push(`vs. ${MONTH_NAMES[prev2.month - 1]}: You spent **${Math.abs(Math.round(pct))}% ${dir}**`);
+    lines.push(
+      `vs. ${MONTH_NAMES[prev2.month - 1]}: You spent **${Math.abs(Math.round(pct))}% ${dir}**`,
+    );
   }
 
   await sendAlert(chatIds, lines.join('\n'));
@@ -382,12 +393,12 @@ export async function checkNetWorthChanges(): Promise<void> {
       const prevMilestone = Math.floor(last / interval) * interval;
       const currMilestone = Math.floor(current / interval) * interval;
       if (currMilestone > prevMilestone) {
-        lines.push(`**🎉 Net Worth Milestone!**`);
+        lines.push(MSG.netWorthMilestone);
         lines.push('');
         lines.push(`Your net worth crossed **₪${fmt(currMilestone)}**!`);
         lines.push(`Current: ₪${fmt(current)}`);
       } else if (currMilestone < prevMilestone) {
-        lines.push(`**📉 Net Worth Alert**`);
+        lines.push(MSG.netWorthDrop);
         lines.push('');
         lines.push(`Your net worth dropped below ₪${fmt(prevMilestone + interval)}`);
         lines.push(`Current: ₪${fmt(current)}`);
@@ -398,7 +409,7 @@ export async function checkNetWorthChanges(): Promise<void> {
     if (lines.length === 0 && absChange >= settings.netWorthChange.changeThreshold) {
       const emoji = change > 0 ? '📈' : '📉';
       const dir = change > 0 ? 'increased' : 'decreased';
-      lines.push(`**${emoji} Net Worth ${dir} by ₪${fmt(absChange)}**`);
+      lines.push(MSG.netWorthChange(emoji, dir, fmt(absChange)));
       lines.push('');
       lines.push(`Current: ₪${fmt(current)} (was ₪${fmt(last)})`);
     }
