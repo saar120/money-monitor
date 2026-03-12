@@ -71,7 +71,10 @@ export const summaryQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
   groupBy: z.enum(['category', 'month', 'account', 'cashflow']).default('category'),
-  expensesOnly: z.coerce.boolean().optional(),
+  expensesOnly: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // ─── AI ───

@@ -7,11 +7,8 @@ export async function summaryRoutes(app: FastifyInstance) {
   app.get('/api/transactions/summary', async (request, reply) => {
     const data = validateQuery(summaryQuerySchema, request.query, reply);
     if (!data) return;
-    const { accountType, accountId, startDate, endDate, groupBy, expensesOnly } = data;
-    const result = getSpendingSummary(
-      { accountType, accountId, startDate, endDate, expensesOnly },
-      groupBy,
-    );
+    const { groupBy, ...filters } = data;
+    const result = getSpendingSummary(filters, groupBy);
     return reply.send(result);
   });
 }

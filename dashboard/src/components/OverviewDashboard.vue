@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, onUnmounted, computed } from 'vue';
+import { onMounted, computed, watch } from 'vue';
 import { Doughnut, Bar } from 'vue-chartjs';
 import {
   Chart as ChartJS,
@@ -11,6 +11,7 @@ import {
   BarElement,
   Title,
 } from 'chart.js';
+import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
 import { getSummary, getCashflowSummary, getAccounts } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { useSseConnection } from '../composables/useSseConnection';
@@ -74,25 +75,23 @@ function refreshAll() {
   cashflowSummary.execute();
 }
 
+const throttledRefresh = useThrottleFn(refreshAll, 2000);
+
 // Refresh when scraping completes
 const { connect: connectSse } = useSseConnection({
-  'account-scrape-done': () => refreshAll(),
-  'session-completed': () => refreshAll(),
+  'account-scrape-done': throttledRefresh,
+  'session-completed': throttledRefresh,
 });
 
 // Refresh when window regains focus (catches any external data changes)
-function onVisibilityChange() {
-  if (document.visibilityState === 'visible') refreshAll();
-}
+const visibility = useDocumentVisibility();
+watch(visibility, (state) => {
+  if (state === 'visible') throttledRefresh();
+});
 
 onMounted(() => {
   refreshAll();
   connectSse();
-  document.addEventListener('visibilitychange', onVisibilityChange);
-});
-
-onUnmounted(() => {
-  document.removeEventListener('visibilitychange', onVisibilityChange);
 });
 
 const thisMonthTotal = computed(
