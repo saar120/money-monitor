@@ -147,6 +147,8 @@ function createWindow(port: number) {
   const windowOptions: BrowserWindowConstructorOptions = {
     width: 1200,
     height: 800,
+    minWidth: 800,
+    minHeight: 520,
     icon: join(__dirname, 'icons', isWin ? 'icon.ico' : 'icon-256.png'),
     webPreferences: {
       preload: join(__dirname, 'preload.mjs'),
