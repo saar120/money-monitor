@@ -63,7 +63,7 @@ async function save() {
     const data = await updateAlertSettings(settings.value);
     settings.value = data;
     success.value = 'Settings saved';
-    globalThis.setTimeout(() => {
+    setTimeout(() => {
       success.value = '';
     }, 3000);
   } catch (e: unknown) {
@@ -80,7 +80,7 @@ async function reset() {
     const data = await resetAlertSettings();
     settings.value = data;
     success.value = 'Reset to defaults';
-    globalThis.setTimeout(() => {
+    setTimeout(() => {
       success.value = '';
     }, 3000);
   } catch (e: unknown) {
@@ -96,7 +96,7 @@ async function testAlert() {
   try {
     await sendTestAlert();
     success.value = 'Test alert sent to Telegram';
-    globalThis.setTimeout(() => {
+    setTimeout(() => {
       success.value = '';
     }, 3000);
   } catch (e: unknown) {
