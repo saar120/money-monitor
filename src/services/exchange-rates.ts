@@ -1,4 +1,4 @@
-export interface ExchangeRateResult {
+interface ExchangeRateResult {
   rates: Record<string, number>;
   stale: boolean;
   fetchedAt: string;

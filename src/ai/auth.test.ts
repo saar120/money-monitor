@@ -26,7 +26,6 @@ const mockConfig: Record<string, any> = {};
 vi.mock('../config.js', () => ({
   get config() { return mockConfig; },
   isElectronMode: false,
-  loadConfigFile: () => null,
   saveConfigFile: vi.fn(),
 }));
 

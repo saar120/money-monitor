@@ -184,4 +184,3 @@ export async function createServer() {
   return { app, start, shutdown, onResume };
 }
 
-export { db };

@@ -118,7 +118,7 @@ export interface ScrapeResult {
   errorType?: string;
 }
 
-export interface ScrapeAccountResult {
+interface ScrapeAccountResult {
   results: ScrapeResult[];
   /** Background categorization promise — await before reading categories. */
   categorizePending: Promise<void> | null;

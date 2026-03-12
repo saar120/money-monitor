@@ -11,14 +11,6 @@ export function getApiToken(): string | null {
   return localStorage.getItem(API_TOKEN_KEY);
 }
 
-export function setApiToken(token: string): void {
-  localStorage.setItem(API_TOKEN_KEY, token);
-}
-
-export function clearApiToken(): void {
-  localStorage.removeItem(API_TOKEN_KEY);
-}
-
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -172,7 +164,7 @@ export function getNeedsReviewCount() {
 
 // ─── Summary ───
 
-export interface SummaryItem {
+interface SummaryItem {
   category?: string;
   month?: string;
   accountId?: number;
@@ -181,13 +173,13 @@ export interface SummaryItem {
   transactionCount: number;
 }
 
-export interface CashflowItem {
+interface CashflowItem {
   month: string;
   income: number;
   expense: number;
 }
 
-export interface SummaryFilters {
+interface SummaryFilters {
   groupBy?: string;
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
@@ -245,7 +237,7 @@ export function confirmManualLogin(accountId: number) {
 
 // ─── Scrape Sessions ───
 
-export interface ScrapeLogEntry {
+interface ScrapeLogEntry {
   id: number;
   accountId: number;
   sessionId: number | null;
@@ -343,14 +335,14 @@ export interface SessionMeta {
   updatedAt: string;
 }
 
-export interface SessionMessage {
+interface SessionMessage {
   type: 'message';
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
 }
 
-export interface SessionData {
+interface SessionData {
   meta: SessionMeta;
   messages: SessionMessage[];
 }
@@ -378,7 +370,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export interface ChatStreamEvent {
+interface ChatStreamEvent {
   type: 'text_delta' | 'status' | 'result' | 'error';
   text: string;
 }
@@ -533,12 +525,6 @@ export function recordRentIncome(
   });
 }
 
-export function getExchangeRates() {
-  return request<{ rates: Record<string, number>; source: string; fetchedAt: string }>(
-    '/exchange-rates',
-  );
-}
-
 export function createHolding(
   assetId: number,
   data: {
@@ -594,7 +580,7 @@ export interface Movement {
   createdAt: string;
 }
 
-export interface MovementFilters {
+interface MovementFilters {
   holdingId?: number;
   type?: string;
   startDate?: string;
@@ -694,20 +680,20 @@ export function deleteLiability(id: number) {
 
 // ─── Net Worth ───
 
-export interface NetWorthBank {
+interface NetWorthBank {
   id: number;
   name: string;
   balance: number;
   balanceIls: number;
 }
 
-export interface NetWorthAssetHolding {
+interface NetWorthAssetHolding {
   name: string;
   currency: string;
   valueIls: number;
 }
 
-export interface NetWorthAsset {
+interface NetWorthAsset {
   id: number;
   name: string;
   type: string;
@@ -717,7 +703,7 @@ export interface NetWorthAsset {
   holdings: NetWorthAssetHolding[];
 }
 
-export interface NetWorthLiability {
+interface NetWorthLiability {
   id: number;
   name: string;
   currentBalanceIls: number;
@@ -737,7 +723,7 @@ export interface NetWorth {
   calculatedAt: string;
 }
 
-export interface NetWorthHistoryPoint {
+interface NetWorthHistoryPoint {
   date: string;
   total: number;
   liquidTotal: number;
@@ -771,13 +757,6 @@ export function getNetWorthHistory(params?: {
 
 // ─── AI ───
 
-export function aiCategorize(batchSize = 50) {
-  return request<{ categorized: number }>('/ai/categorize', {
-    method: 'POST',
-    body: JSON.stringify({ batchSize }),
-  });
-}
-
 export function aiRecategorize(startDate?: string, endDate?: string) {
   return request<{ categorized: number }>('/ai/recategorize', {
     method: 'POST',
@@ -800,7 +779,7 @@ export function getSettings() {
   return request<SettingsResponse>('/settings');
 }
 
-export interface AIProviderModel {
+interface AIProviderModel {
   id: string;
   name: string;
   reasoning: boolean;
@@ -841,10 +820,6 @@ export function completeAnthropicOAuth(code: string) {
 
 export function cancelAnthropicOAuth() {
   return request<{ success: boolean }>('/settings/oauth/anthropic/cancel', { method: 'POST' });
-}
-
-export function getOAuthStatus() {
-  return request<{ anthropic: boolean }>('/settings/oauth/status');
 }
 
 // ─── Demo Mode ───

@@ -25,7 +25,7 @@ export function partitionCategories(cats: CategoryWithRules[]): {
 }
 
 /** Format category list for LLM prompt, including per-category rules when available. */
-export function formatCategoryList(cats: CategoryWithRules[]): string {
+function formatCategoryList(cats: CategoryWithRules[]): string {
   return cats.map((c) => (c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)).join('\n');
 }
 

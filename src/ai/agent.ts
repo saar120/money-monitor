@@ -97,7 +97,7 @@ export interface ChatMessage {
   content: string;
 }
 
-export type ChatEvent =
+type ChatEvent =
   | { type: 'text_delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'result'; text: string }

@@ -15,7 +15,7 @@ export interface TransactionFilterParams {
   expensesOnly?: boolean;
 }
 
-export interface TransactionFilterResult {
+interface TransactionFilterResult {
   conditions: SQL[];
   empty: boolean;
 }
@@ -56,14 +56,14 @@ function accountTypeCondition(accountType: string): SQL | null {
 
 // ── Reads ──
 
-export interface ListTransactionsOpts {
+interface ListTransactionsOpts {
   offset?: number;
   limit?: number;
   sortBy?: string;
   sortOrder?: 'asc' | 'desc';
 }
 
-export interface ListTransactionsFilters extends TransactionFilterParams {
+interface ListTransactionsFilters extends TransactionFilterParams {
   category?: string;
   status?: string;
   needsReview?: boolean;

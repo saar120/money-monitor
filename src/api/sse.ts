@@ -1,6 +1,6 @@
 import type { ServerResponse } from 'node:http';
 
-export type SseEventType =
+type SseEventType =
   | 'connected'
   | 'otp-required'
   | 'manual-action-required'
@@ -10,7 +10,7 @@ export type SseEventType =
   | 'account-scrape-done'
   | 'account-scrape-error';
 
-export interface SseEvent {
+interface SseEvent {
   type: SseEventType;
   sessionId?: number;
   accountId?: number;

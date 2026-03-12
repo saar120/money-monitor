@@ -4,7 +4,7 @@ interface PendingEntry<T> {
   timer: ReturnType<typeof setTimeout>;
 }
 
-export interface PendingBridge<T> {
+interface PendingBridge<T> {
   waitFor(accountId: number, onRequested: () => void): Promise<T>;
   confirm(accountId: number, value: T): boolean;
   cancel(accountId: number): void;

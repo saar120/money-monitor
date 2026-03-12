@@ -6,7 +6,7 @@ import { sessionsDir } from '../paths.js';
 const SESSIONS_DIR = sessionsDir;
 const DEFAULT_TITLE = 'New chat';
 
-export interface SessionMeta {
+interface SessionMeta {
   type: 'meta';
   id: string;
   title: string;
@@ -14,19 +14,19 @@ export interface SessionMeta {
   updatedAt: string;
 }
 
-export interface SessionMessage {
+interface SessionMessage {
   type: 'message';
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
 }
 
-export interface Session {
+interface Session {
   meta: SessionMeta;
   messages: SessionMessage[];
 }
 
-export interface SessionSummary {
+interface SessionSummary {
   id: string;
   title: string;
   createdAt: string;

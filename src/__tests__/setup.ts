@@ -25,7 +25,6 @@ vi.mock('../config.js', () => ({
     SCRAPE_SHOW_BROWSER: false,
   },
   isElectronMode: false,
-  loadConfigFile: () => null,
   saveConfigFile: vi.fn(),
 }));
 

@@ -6,7 +6,7 @@ const SETTINGS_DIR = join(dataDir, 'chat');
 const SETTINGS_PATH = join(SETTINGS_DIR, 'alert-settings.json');
 
 /** Internal tracking state (not exposed to clients). */
-export interface AlertInternalState {
+interface AlertInternalState {
   _lastNetWorthTotal?: number;
   _knownRecurring?: string[];
 }

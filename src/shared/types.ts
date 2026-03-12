@@ -3,13 +3,10 @@ import type { accounts, transactions, scrapeLogs, scrapeSessions } from '../db/s
 
 // DB row types
 export type Account = InferSelectModel<typeof accounts>;
-export type NewAccount = InferInsertModel<typeof accounts>;
 export type Transaction = InferSelectModel<typeof transactions>;
 export type NewTransaction = InferInsertModel<typeof transactions>;
 export type ScrapeLog = InferSelectModel<typeof scrapeLogs>;
-export type NewScrapeLog = InferInsertModel<typeof scrapeLogs>;
 export type ScrapeSession = InferSelectModel<typeof scrapeSessions>;
-export type NewScrapeSession = InferInsertModel<typeof scrapeSessions>;
 
 // Scraper result types (from israeli-bank-scrapers)
 export interface ScraperTransaction {
@@ -34,13 +31,6 @@ export interface ScraperAccountResult {
   accountNumber: string;
   balance?: number;
   txns: ScraperTransaction[];
-}
-
-export interface ScraperResult {
-  success: boolean;
-  accounts?: ScraperAccountResult[];
-  errorType?: string;
-  errorMessage?: string;
 }
 
 // Net worth type enums
@@ -119,7 +109,7 @@ export function getAccountType(companyId: CompanyId): AccountType {
   return ACCOUNT_TYPE_MAP[companyId];
 }
 
-export interface TransactionMeta {
+interface TransactionMeta {
   bankCategory?: string;
 }
 

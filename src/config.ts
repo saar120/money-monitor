@@ -37,7 +37,7 @@ function loadRawConfigFile(): Record<string, string> | null {
 }
 
 /** Load config.json, decrypting any safeStorage-encrypted secret values. */
-export function loadConfigFile(): Record<string, string> | null {
+function loadConfigFile(): Record<string, string> | null {
   const raw = loadRawConfigFile();
   if (!raw) return null;
   for (const key of SECRET_KEYS) {

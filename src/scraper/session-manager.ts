@@ -20,10 +20,6 @@ export function getActiveSessions(): ActiveSession[] {
   return Array.from(activeSessions.values());
 }
 
-export function getActiveSession(sessionId: number): ActiveSession | undefined {
-  return activeSessions.get(sessionId);
-}
-
 export function createSession(
   trigger: 'manual' | 'scheduled' | 'single',
   accountIds: number[],
