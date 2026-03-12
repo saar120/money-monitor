@@ -1,15 +1,21 @@
 import { z } from 'zod';
-import { COMPANY_IDS, ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, LIABILITY_TYPES, MOVEMENT_TYPES } from '../shared/types.js';
+import {
+  COMPANY_IDS,
+  ASSET_TYPES,
+  LIQUIDITY_TYPES,
+  HOLDING_TYPES,
+  LIABILITY_TYPES,
+  MOVEMENT_TYPES,
+} from '../shared/types.js';
 
 // ─── Accounts ───
 
 export const createAccountSchema = z.object({
   companyId: z.enum(COMPANY_IDS),
   displayName: z.string().min(1).max(100),
-  credentials: z.record(z.string().min(1), z.string()).refine(
-    obj => Object.keys(obj).length > 0,
-    'At least one credential field is required'
-  ),
+  credentials: z
+    .record(z.string().min(1), z.string())
+    .refine((obj) => Object.keys(obj).length > 0, 'At least one credential field is required'),
 });
 
 export const updateAccountSchema = z.object({
@@ -27,8 +33,14 @@ const accountTypeEnum = z.enum(['bank', 'credit_card']);
 export const transactionQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
   accountType: accountTypeEnum.optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
   category: z.string().optional(),
   status: z.enum(['completed', 'pending']).optional(),
   needsReview: z.coerce.boolean().optional(),
@@ -50,9 +62,19 @@ export const ignoreTransactionSchema = z.object({
 export const summaryQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
   accountType: accountTypeEnum.optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
   groupBy: z.enum(['category', 'month', 'account', 'cashflow']).default('category'),
+  expensesOnly: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // ─── AI ───
@@ -67,8 +89,14 @@ export const categorizeSchema = z.object({
 });
 
 export const recategorizeSchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 // ─── OTP ───
@@ -95,15 +123,25 @@ export const scrapeSessionsQuerySchema = z.object({
 // ─── Categories ───
 
 export const createCategorySchema = z.object({
-  name: z.string().min(1).max(50).regex(/^[a-z0-9_-]+$/, 'Name must be lowercase alphanumeric, dashes, or underscores'),
+  name: z
+    .string()
+    .min(1)
+    .max(50)
+    .regex(/^[a-z0-9_-]+$/, 'Name must be lowercase alphanumeric, dashes, or underscores'),
   label: z.string().min(1).max(100),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   rules: z.string().max(500).optional(),
 });
 
 export const updateCategorySchema = z.object({
   label: z.string().min(1).max(100).optional(),
-  color: z.string().regex(/^#[0-9a-fA-F]{6}$/).optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
   rules: z.string().max(500).nullable().optional(),
   ignoredFromStats: z.boolean().optional(),
 });
@@ -164,20 +202,32 @@ export const assetsQuerySchema = z.object({
 });
 
 export const snapshotsQuerySchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
 });
 
 export const updateAssetValueSchema = z.object({
   currentValue: z.number().min(0),
   contribution: z.number().min(0).optional(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   notes: z.string().max(500).optional(),
 });
 
 export const recordRentSchema = z.object({
   amount: z.number().positive(),
-  date: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  date: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -190,7 +240,10 @@ export const createLiabilitySchema = z.object({
   originalAmount: z.number().positive(),
   currentBalance: z.number().min(0),
   interestRate: z.number().optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -201,7 +254,11 @@ export const updateLiabilitySchema = z.object({
   originalAmount: z.number().positive().optional(),
   currentBalance: z.number().min(0).optional(),
   interestRate: z.number().nullable().optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).nullable().optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .nullable()
+    .optional(),
   notes: z.string().max(500).nullable().optional(),
 });
 
@@ -212,8 +269,14 @@ export const liabilitiesQuerySchema = z.object({
 // ─── Net Worth ───
 
 export const netWorthHistoryQuerySchema = z.object({
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
 });
 
@@ -234,8 +297,14 @@ export const createMovementSchema = z.object({
 export const movementQuerySchema = z.object({
   holdingId: z.coerce.number().int().positive().optional(),
   type: z.enum(MOVEMENT_TYPES).optional(),
-  startDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
-  endDate: z.string().regex(/^\d{4}-\d{2}-\d{2}$/).optional(),
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}$/)
+    .optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(500).default(50),
 });

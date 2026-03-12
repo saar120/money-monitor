@@ -1,4 +1,4 @@
-import { and, count, desc, eq, gte, inArray, lte, sql } from 'drizzle-orm';
+import { and, count, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions } from '../db/schema.js';
@@ -12,6 +12,7 @@ export interface TransactionFilterParams {
   accountId?: number;
   startDate?: string;
   endDate?: string;
+  expensesOnly?: boolean;
 }
 
 export interface TransactionFilterResult {
@@ -36,16 +37,20 @@ export function buildTransactionFilters(params: TransactionFilterParams): Transa
   if (params.endDate) {
     conditions.push(lte(transactions.date, params.endDate));
   }
+  if (params.expensesOnly) {
+    conditions.push(lt(transactions.chargedAmount, 0));
+  }
 
   return { conditions, empty: false };
 }
 
 function accountTypeCondition(accountType: string): SQL | null {
-  const ids = db.select({ id: accounts.id })
+  const ids = db
+    .select({ id: accounts.id })
     .from(accounts)
     .where(eq(accounts.accountType, accountType))
     .all()
-    .map(a => a.id);
+    .map((a) => a.id);
   return ids.length > 0 ? inArray(transactions.accountId, ids) : null;
 }
 
@@ -67,22 +72,35 @@ export interface ListTransactionsFilters extends TransactionFilterParams {
   search?: string;
 }
 
-export function listTransactions(filters: ListTransactionsFilters, opts: ListTransactionsOpts = {}) {
+export function listTransactions(
+  filters: ListTransactionsFilters,
+  opts: ListTransactionsOpts = {},
+) {
   const offset = opts.offset ?? 0;
   const limit = opts.limit ?? 50;
 
   const { conditions, empty } = buildTransactionFilters(filters);
-  if (empty) return { transactions: [] as typeof rows, pagination: { total: 0, offset, limit, hasMore: false } };
+  if (empty)
+    return {
+      transactions: [] as typeof rows,
+      pagination: { total: 0, offset, limit, hasMore: false },
+    };
 
   if (filters.category) conditions.push(eq(transactions.category, filters.category));
   if (filters.status) conditions.push(eq(transactions.status, filters.status));
-  if (filters.needsReview !== undefined) conditions.push(eq(transactions.needsReview, filters.needsReview));
-  if (filters.minAmount !== undefined) conditions.push(gte(transactions.chargedAmount, filters.minAmount));
-  if (filters.maxAmount !== undefined) conditions.push(lte(transactions.chargedAmount, filters.maxAmount));
+  if (filters.needsReview !== undefined)
+    conditions.push(eq(transactions.needsReview, filters.needsReview));
+  if (filters.minAmount !== undefined)
+    conditions.push(gte(transactions.chargedAmount, filters.minAmount));
+  if (filters.maxAmount !== undefined)
+    conditions.push(lte(transactions.chargedAmount, filters.maxAmount));
   if (filters.search) {
     const ftsIds = searchTransactionIds(filters.search);
     if (ftsIds.length === 0) {
-      return { transactions: [] as typeof rows, pagination: { total: 0, offset, limit, hasMore: false } };
+      return {
+        transactions: [] as typeof rows,
+        pagination: { total: 0, offset, limit, hasMore: false },
+      };
     }
     conditions.push(inArray(transactions.id, ftsIds));
   }
@@ -91,14 +109,20 @@ export function listTransactions(filters: ListTransactionsFilters, opts: ListTra
 
   const [{ total }] = db.select({ total: count() }).from(transactions).where(where).all();
 
-  const sortColumn = opts.sortBy === 'chargedAmount' ? transactions.chargedAmount
-    : opts.sortBy === 'description' ? transactions.description
-    : opts.sortBy === 'processedDate' ? transactions.processedDate
-    : transactions.date;
+  const sortColumn =
+    opts.sortBy === 'chargedAmount'
+      ? transactions.chargedAmount
+      : opts.sortBy === 'description'
+        ? transactions.description
+        : opts.sortBy === 'processedDate'
+          ? transactions.processedDate
+          : transactions.date;
 
   const orderFn = opts.sortOrder === 'asc' ? sql`${sortColumn} asc` : desc(sortColumn);
 
-  const rows = db.select().from(transactions)
+  const rows = db
+    .select()
+    .from(transactions)
     .where(where)
     .orderBy(orderFn)
     .limit(limit)
@@ -112,7 +136,8 @@ export function listTransactions(filters: ListTransactionsFilters, opts: ListTra
 }
 
 export function getNeedsReviewCount(): number {
-  const [{ total }] = db.select({ total: count() })
+  const [{ total }] = db
+    .select({ total: count() })
     .from(transactions)
     .where(eq(transactions.needsReview, true))
     .all();
@@ -122,7 +147,8 @@ export function getNeedsReviewCount(): number {
 // ── Writes ──
 
 export function resolveReview(id: number, category: string) {
-  const [updated] = db.update(transactions)
+  const [updated] = db
+    .update(transactions)
     .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
     .where(eq(transactions.id, id))
     .returning()
@@ -131,7 +157,8 @@ export function resolveReview(id: number, category: string) {
 }
 
 export function setTransactionIgnored(id: number, ignored: boolean) {
-  const [updated] = db.update(transactions)
+  const [updated] = db
+    .update(transactions)
     .set({ ignored })
     .where(eq(transactions.id, id))
     .returning()
@@ -140,7 +167,8 @@ export function setTransactionIgnored(id: number, ignored: boolean) {
 }
 
 export function updateTransactionCategory(id: number, category: string | null) {
-  const [updated] = db.update(transactions)
+  const [updated] = db
+    .update(transactions)
     .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
     .where(eq(transactions.id, id))
     .returning()
@@ -154,8 +182,11 @@ export function categorizeTransaction(input: {
   confidence?: number;
   reviewReason?: string;
 }) {
-  const existing = db.select({ id: transactions.id }).from(transactions)
-    .where(eq(transactions.id, input.transactionId)).get();
+  const existing = db
+    .select({ id: transactions.id })
+    .from(transactions)
+    .where(eq(transactions.id, input.transactionId))
+    .get();
   if (!existing) return { ok: false as const, error: 'Transaction not found', status: 404 };
 
   const needsReview = input.confidence !== undefined && input.confidence < 0.8;

@@ -193,6 +193,7 @@ export interface SummaryFilters {
   accountType?: 'bank' | 'credit_card';
   startDate?: string;
   endDate?: string;
+  expensesOnly?: boolean;
 }
 
 export function getSummary(params: SummaryFilters = {}) {
