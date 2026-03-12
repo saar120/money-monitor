@@ -1,4 +1,5 @@
 import { Bot, type Context } from 'grammy';
+import type { ImageContent } from '@mariozechner/pi-ai';
 import { config } from '../config.js';
 import { chat } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/agent.js';
@@ -36,6 +37,65 @@ function resolveSession(chatId: number): string {
   const meta = createSession();
   setSessionId(chatId, meta.id);
   return meta.id;
+}
+
+const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
+
+/** Download a file from Telegram's API and return it as a base64-encoded ImageContent. */
+async function downloadTelegramFile(fileId: string, mimeType: string): Promise<ImageContent> {
+  const file = await bot!.api.getFile(fileId);
+  const url = `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
+  const res = await fetch(url);
+  if (!res.ok) {
+    await res.body?.cancel();
+    throw new Error(`Failed to download file: ${res.statusText}`);
+  }
+  const buffer = Buffer.from(await res.arrayBuffer());
+  return { type: 'image', data: buffer.toString('base64'), mimeType };
+}
+
+/** Shared handler: send user text (+ optional images) to the AI agent and reply. */
+async function handleUserMessage(
+  ctx: Context,
+  text: string,
+  images?: ImageContent[],
+  historyText?: string,
+): Promise<void> {
+  const chatId = ctx.chat!.id;
+  const sessionId = resolveSession(chatId);
+
+  const history = getSessionMessages(sessionId) ?? [];
+  appendMessage(sessionId, 'user', historyText ?? text);
+
+  const conversationHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
+
+  const stopTyping = startTypingLoop(chatId, bot!.api);
+  let result = '';
+
+  try {
+    for await (const event of chat(conversationHistory, images)) {
+      if (event.type === 'result') {
+        result = event.text;
+      } else if (event.type === 'error') {
+        throw new Error(event.text);
+      }
+    }
+
+    if (result) {
+      appendMessage(sessionId, 'assistant', result);
+      const html = markdownToTelegramHtml(result);
+      for (const chunk of splitMessage(html)) {
+        await replyHtml(ctx, chunk);
+      }
+    } else {
+      await ctx.reply('No response generated. Please try again.');
+    }
+  } catch (err) {
+    const message = err instanceof Error ? err.message : 'An error occurred';
+    await ctx.reply(`Error: ${message}`);
+  } finally {
+    stopTyping();
+  }
 }
 
 /** Send a typing indicator at regular intervals until cancelled. */
@@ -153,48 +213,48 @@ export function startTelegramBot(): void {
     await replyHtml(ctx, html);
   });
 
-  // ── Message handler ──
+  // ── Message handlers ──
 
   bot.on('message:text', async (ctx) => {
     const text = ctx.message.text;
-    // Ignore messages that start with / (unrecognized commands)
     if (text.startsWith('/')) return;
+    await handleUserMessage(ctx, text);
+  });
 
-    const chatId = ctx.chat.id;
-    const sessionId = resolveSession(chatId);
-
-    // Load history and append user message
-    const history = getSessionMessages(sessionId) ?? [];
-    appendMessage(sessionId, 'user', text);
-
-    const conversationHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
-
-    const stopTyping = startTypingLoop(chatId, bot!.api);
-    let result = '';
+  bot.on('message:photo', async (ctx) => {
+    const photos = ctx.message.photo;
+    const largest = photos[photos.length - 1];
+    const caption = ctx.message.caption || "What's in this image?";
 
     try {
-      for await (const event of chat(conversationHistory)) {
-        if (event.type === 'result') {
-          result = event.text;
-        } else if (event.type === 'error') {
-          throw new Error(event.text);
-        }
-      }
-
-      if (result) {
-        appendMessage(sessionId, 'assistant', result);
-        const html = markdownToTelegramHtml(result);
-        for (const chunk of splitMessage(html)) {
-          await replyHtml(ctx, chunk);
-        }
-      } else {
-        await ctx.reply('No response generated. Please try again.');
-      }
+      const image = await downloadTelegramFile(largest.file_id, 'image/jpeg');
+      await handleUserMessage(ctx, caption, [image], `[Image] ${caption}`);
     } catch (err) {
-      const message = err instanceof Error ? err.message : 'An error occurred';
+      const message = err instanceof Error ? err.message : 'Failed to process image';
       await ctx.reply(`Error: ${message}`);
-    } finally {
-      stopTyping();
+    }
+  });
+
+  bot.on('message:document', async (ctx) => {
+    const doc = ctx.message.document;
+    const mime = doc.mime_type ?? '';
+    if (!IMAGE_MIME_TYPES.has(mime)) {
+      await ctx.reply('Unsupported file type. I can only process images (JPEG, PNG, WebP, GIF).');
+      return;
+    }
+
+    const caption = ctx.message.caption || "What's in this document?";
+    try {
+      const image = await downloadTelegramFile(doc.file_id, mime);
+      await handleUserMessage(
+        ctx,
+        caption,
+        [image],
+        `[Document: ${doc.file_name ?? 'image'}] ${caption}`,
+      );
+    } catch (err) {
+      const message = err instanceof Error ? err.message : 'Failed to process document';
+      await ctx.reply(`Error: ${message}`);
     }
   });
 

@@ -1,6 +1,6 @@
 import { Agent } from '@mariozechner/pi-agent-core';
 import { completeSimple } from '@mariozechner/pi-ai';
-import type { AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai';
+import type { AssistantMessage, UserMessage, Message, ImageContent } from '@mariozechner/pi-ai';
 import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, getBatchModelSpec } from '../config.js';
@@ -169,7 +169,10 @@ function getCategoriesWithRules(): CategoryWithRules[] {
     .all();
 }
 
-export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<ChatEvent> {
+export async function* chat(
+  conversationHistory: ChatMessage[],
+  images?: ImageContent[],
+): AsyncGenerator<ChatEvent> {
   const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map((c) => c.name);
@@ -286,7 +289,7 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   }
 
   const lastMsg = conversationHistory[conversationHistory.length - 1];
-  const promptPromise = agent.prompt(lastMsg.content).catch((err) => {
+  const promptPromise = agent.prompt(lastMsg.content, images).catch((err) => {
     push({ type: 'error', text: err instanceof Error ? err.message : String(err) });
     push({ done: true });
   });
