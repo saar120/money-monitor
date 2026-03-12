@@ -15,48 +15,18 @@ export interface AlertInternalState {
 export interface AlertPublicSettings {
   /** Master switch for all alerts */
   enabled: boolean;
-
-  /** Post-scrape daily digest */
-  dailyDigest: {
-    enabled: boolean;
-    /** Threshold (positive number) for flagging large charges */
-    largeChargeThreshold: number;
-    /** Report scrape failures */
-    reportErrors: boolean;
-  };
-
-  /** Unusual spending alert */
-  unusualSpending: {
-    enabled: boolean;
-    /** Percentage increase threshold to trigger alert (e.g. 30 = 30%) */
-    percentThreshold: number;
-  };
-
-  /** New recurring charge detected */
-  newRecurring: {
-    enabled: boolean;
-  };
-
-  /** Low-confidence categorization review */
-  reviewReminder: {
-    enabled: boolean;
-  };
-
-  /** Monthly summary */
+  /** Threshold (positive number) for flagging large charges */
+  largeChargeThreshold: number;
+  /** Percentage increase threshold for unusual spending (e.g. 30 = 30%) */
+  unusualSpendingPercent: number;
+  /** Monthly summary schedule */
   monthlySummary: {
     enabled: boolean;
     /** Day of month to send the summary (1–28, default 1) */
     dayOfMonth: number;
   };
-
-  /** Net worth milestone / change */
-  netWorthChange: {
-    enabled: boolean;
-    /** Minimum absolute change in ILS to trigger alert */
-    changeThreshold: number;
-    /** Track milestone crossings at these intervals */
-    milestoneInterval: number;
-  };
+  /** Report scrape failures in alerts */
+  reportScrapeErrors: boolean;
 }
 
 /** Full settings including internal tracking state. */
@@ -64,30 +34,13 @@ export type AlertSettings = AlertPublicSettings & AlertInternalState;
 
 const DEFAULT_SETTINGS: AlertSettings = {
   enabled: true,
-  dailyDigest: {
-    enabled: true,
-    largeChargeThreshold: 500,
-    reportErrors: true,
-  },
-  unusualSpending: {
-    enabled: true,
-    percentThreshold: 30,
-  },
-  newRecurring: {
-    enabled: true,
-  },
-  reviewReminder: {
-    enabled: true,
-  },
+  largeChargeThreshold: 500,
+  unusualSpendingPercent: 30,
   monthlySummary: {
     enabled: true,
     dayOfMonth: 1,
   },
-  netWorthChange: {
-    enabled: true,
-    changeThreshold: 10000,
-    milestoneInterval: 100000,
-  },
+  reportScrapeErrors: true,
 };
 
 let cache: AlertSettings | null = null;

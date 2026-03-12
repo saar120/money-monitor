@@ -34,23 +34,20 @@ describe('alert-settings', () => {
   });
 
   describe('getDefaultSettings', () => {
-    it('returns default settings with all sections enabled', () => {
+    it('default settings have simplified shape', () => {
       const defaults = getDefaultSettings();
+      // New flat structure
       expect(defaults.enabled).toBe(true);
-      expect(defaults.dailyDigest.enabled).toBe(true);
-      expect(defaults.unusualSpending.enabled).toBe(true);
-      expect(defaults.newRecurring.enabled).toBe(true);
-      expect(defaults.reviewReminder.enabled).toBe(true);
-      expect(defaults.monthlySummary.enabled).toBe(true);
-      expect(defaults.netWorthChange.enabled).toBe(true);
-    });
-
-    it('returns default threshold values', () => {
-      const defaults = getDefaultSettings();
-      expect(defaults.dailyDigest.largeChargeThreshold).toBe(500);
-      expect(defaults.unusualSpending.percentThreshold).toBe(30);
-      expect(defaults.netWorthChange.changeThreshold).toBe(10000);
-      expect(defaults.netWorthChange.milestoneInterval).toBe(100000);
+      expect(defaults.largeChargeThreshold).toBe(500);
+      expect(defaults.unusualSpendingPercent).toBe(30);
+      expect(defaults.monthlySummary).toEqual({ enabled: true, dayOfMonth: 1 });
+      expect(defaults.reportScrapeErrors).toBe(true);
+      // Old nested keys should not exist
+      expect(defaults).not.toHaveProperty('dailyDigest');
+      expect(defaults).not.toHaveProperty('unusualSpending');
+      expect(defaults).not.toHaveProperty('newRecurring');
+      expect(defaults).not.toHaveProperty('reviewReminder');
+      expect(defaults).not.toHaveProperty('netWorthChange');
     });
 
     it('returns a new object each time', () => {
@@ -65,8 +62,8 @@ describe('alert-settings', () => {
     it('returns defaults when no settings file exists', () => {
       const loaded = loadAlertSettings();
       expect(loaded.enabled).toBe(true);
-      expect(loaded.dailyDigest.enabled).toBe(true);
-      expect(loaded.dailyDigest.largeChargeThreshold).toBe(500);
+      expect(loaded.largeChargeThreshold).toBe(500);
+      expect(loaded.unusualSpendingPercent).toBe(30);
     });
 
     it('returns cached settings on subsequent calls', () => {
@@ -89,11 +86,11 @@ describe('alert-settings', () => {
 
     it('updates cache so load returns new values', () => {
       const settings = getDefaultSettings();
-      settings.dailyDigest.largeChargeThreshold = 1000;
+      settings.largeChargeThreshold = 1000;
       saveAlertSettings(settings);
 
       const loaded = loadAlertSettings();
-      expect(loaded.dailyDigest.largeChargeThreshold).toBe(1000);
+      expect(loaded.largeChargeThreshold).toBe(1000);
     });
   });
 
@@ -101,30 +98,17 @@ describe('alert-settings', () => {
     it('merges partial updates into existing settings', () => {
       const updated = updateAlertSettings({ enabled: false });
       expect(updated.enabled).toBe(false);
-      expect(updated.dailyDigest.enabled).toBe(true);
-      expect(updated.unusualSpending.percentThreshold).toBe(30);
+      expect(updated.largeChargeThreshold).toBe(500);
+      expect(updated.unusualSpendingPercent).toBe(30);
     });
 
-    it('deep merges nested objects (partial update preserves sibling keys)', () => {
+    it('deep merges nested monthlySummary (partial update preserves sibling keys)', () => {
       const updated = updateAlertSettings({
-        dailyDigest: { largeChargeThreshold: 1000 } as any,
+        monthlySummary: { dayOfMonth: 15 } as any,
       });
 
-      expect(updated.dailyDigest.largeChargeThreshold).toBe(1000);
-      expect(updated.dailyDigest.enabled).toBe(true);
-      expect(updated.dailyDigest.reportErrors).toBe(true);
-    });
-
-    it('deep merges multiple nested sections at once', () => {
-      const updated = updateAlertSettings({
-        unusualSpending: { percentThreshold: 50 } as any,
-        netWorthChange: { changeThreshold: 20000 } as any,
-      });
-
-      expect(updated.unusualSpending.percentThreshold).toBe(50);
-      expect(updated.unusualSpending.enabled).toBe(true);
-      expect(updated.netWorthChange.changeThreshold).toBe(20000);
-      expect(updated.netWorthChange.milestoneInterval).toBe(100000);
+      expect(updated.monthlySummary.dayOfMonth).toBe(15);
+      expect(updated.monthlySummary.enabled).toBe(true);
     });
 
     it('replaces array values instead of merging them', () => {

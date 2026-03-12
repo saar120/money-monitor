@@ -3,12 +3,7 @@ import { config } from '../config.js';
 import { chat } from '../ai/agent.js';
 import type { ChatMessage } from '../ai/agent.js';
 import { readMemory } from '../ai/memory.js';
-import {
-  createSession,
-  listSessions,
-  appendMessage,
-  getSessionMessages,
-} from '../ai/sessions.js';
+import { createSession, listSessions, appendMessage, getSessionMessages } from '../ai/sessions.js';
 import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
 import { registerSendMessage, registerGetChatIds } from './alerts.js';
@@ -19,9 +14,9 @@ function parseAllowedUsers(): Set<number> {
   if (!config.TELEGRAM_ALLOWED_USERS) return new Set();
   return new Set(
     config.TELEGRAM_ALLOWED_USERS.split(',')
-      .map(s => s.trim())
+      .map((s) => s.trim())
       .filter(Boolean)
-      .map(Number)
+      .map(Number),
   );
 }
 
@@ -51,7 +46,9 @@ function startTypingLoop(chatId: number, api: Bot['api']): () => void {
     timer = setTimeout(tick, 4000);
   };
   tick();
-  return () => { if (timer !== null) clearTimeout(timer); };
+  return () => {
+    if (timer !== null) clearTimeout(timer);
+  };
 }
 
 export function startTelegramBot(): void {
@@ -111,7 +108,7 @@ export function startTelegramBot(): void {
       return;
     }
     const currentSessionId = getSessionId(ctx.chat.id);
-    const lines = sessions.slice(0, 20).map(s => {
+    const lines = sessions.slice(0, 20).map((s) => {
       const marker = s.id === currentSessionId ? ' (active)' : '';
       const shortId = s.id.slice(0, 8);
       return `${shortId}${marker} — ${s.title}`;
@@ -126,7 +123,7 @@ export function startTelegramBot(): void {
       return;
     }
     const sessions = listSessions();
-    const match = sessions.find(s => s.id.startsWith(partialId));
+    const match = sessions.find((s) => s.id.startsWith(partialId));
     if (!match) {
       await ctx.reply(`No session found starting with "${partialId}".`);
       return;
@@ -138,15 +135,13 @@ export function startTelegramBot(): void {
   bot.command('alerts', async (ctx) => {
     const { loadAlertSettings } = await import('./alert-settings.js');
     const s = loadAlertSettings();
-    const on = (v: boolean) => v ? '✅' : '❌';
+    const on = (v: boolean) => (v ? '✅' : '❌');
     const lines = [
       `**Alerts: ${on(s.enabled)}**`,
-      `${on(s.dailyDigest.enabled)} Daily digest (large charge ≥₪${s.dailyDigest.largeChargeThreshold})`,
-      `${on(s.unusualSpending.enabled)} Unusual spending (≥${s.unusualSpending.percentThreshold}% spike)`,
-      `${on(s.newRecurring.enabled)} New recurring charges`,
-      `${on(s.reviewReminder.enabled)} Review reminders`,
-      `${on(s.monthlySummary.enabled)} Monthly summary`,
-      `${on(s.netWorthChange.enabled)} Net worth changes (≥₪${s.netWorthChange.changeThreshold})`,
+      `• Large charge threshold: ₪${s.largeChargeThreshold}`,
+      `• Unusual spending threshold: ${s.unusualSpendingPercent}%`,
+      `${on(s.monthlySummary.enabled)} Monthly summary (day ${s.monthlySummary.dayOfMonth})`,
+      `${on(s.reportScrapeErrors)} Report scrape errors`,
     ];
     const html = markdownToTelegramHtml(lines.join('\n'));
     await replyHtml(ctx, html);
@@ -166,10 +161,7 @@ export function startTelegramBot(): void {
     const history = getSessionMessages(sessionId) ?? [];
     appendMessage(sessionId, 'user', text);
 
-    const conversationHistory: ChatMessage[] = [
-      ...history,
-      { role: 'user', content: text },
-    ];
+    const conversationHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
 
     const stopTyping = startTypingLoop(chatId, bot!.api);
     let result = '';
@@ -201,13 +193,15 @@ export function startTelegramBot(): void {
   });
 
   // ── Register command menu in Telegram UI ──
-  bot.api.setMyCommands([
-    { command: 'new', description: 'Start a new conversation' },
-    { command: 'memory', description: 'View shared memory' },
-    { command: 'sessions', description: 'List recent sessions' },
-    { command: 'switch', description: 'Switch to a session by ID prefix' },
-    { command: 'alerts', description: 'View alert settings' },
-  ]).catch(() => {});
+  bot.api
+    .setMyCommands([
+      { command: 'new', description: 'Start a new conversation' },
+      { command: 'memory', description: 'View shared memory' },
+      { command: 'sessions', description: 'List recent sessions' },
+      { command: 'switch', description: 'Switch to a session by ID prefix' },
+      { command: 'alerts', description: 'View alert settings' },
+    ])
+    .catch(() => {});
 
   // ── Catch unhandled errors so the polling loop keeps running ──
   bot.catch((err) => {

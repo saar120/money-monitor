@@ -91,8 +91,8 @@ function yesterdayInIsrael(): string {
 // ── 1. Post-Scrape Daily Digest ───────────────────────────────────────────────
 
 export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promise<void> {
-  const settings = loadAlertSettings();
-  if (!settings.enabled || !settings.dailyDigest.enabled) return;
+  const settings = loadAlertSettings() as any; // TODO: Task 4 will rewrite this function
+  if (!settings.enabled || !settings.dailyDigest?.enabled) return;
 
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
@@ -178,8 +178,8 @@ export async function sendPostScrapeDigest(scrapeResults: ScrapeResult[]): Promi
 // ── 2. Unusual Spending Alert ─────────────────────────────────────────────────
 
 export async function checkUnusualSpending(): Promise<void> {
-  const settings = loadAlertSettings();
-  if (!settings.enabled || !settings.unusualSpending.enabled) return;
+  const settings = loadAlertSettings() as any; // TODO: Task 4 will rewrite this function
+  if (!settings.enabled || !settings.unusualSpending?.enabled) return;
 
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
@@ -225,8 +225,8 @@ export async function checkUnusualSpending(): Promise<void> {
 // ── 3. New Recurring Charge Detected ──────────────────────────────────────────
 
 export async function checkNewRecurring(): Promise<void> {
-  const settings = loadAlertSettings();
-  if (!settings.enabled || !settings.newRecurring.enabled) return;
+  const settings = loadAlertSettings() as any; // TODO: Task 4 will rewrite this function
+  if (!settings.enabled || !settings.newRecurring?.enabled) return;
 
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
@@ -257,8 +257,8 @@ export async function checkNewRecurring(): Promise<void> {
 // ── 4. Low-Confidence Categorization Review ───────────────────────────────────
 
 export async function checkReviewNeeded(): Promise<void> {
-  const settings = loadAlertSettings();
-  if (!settings.enabled || !settings.reviewReminder.enabled) return;
+  const settings = loadAlertSettings() as any; // TODO: Task 4 will rewrite this function
+  if (!settings.enabled || !settings.reviewReminder?.enabled) return;
 
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
@@ -366,8 +366,8 @@ export async function sendMonthlySummary(): Promise<void> {
 // ── 6. Net Worth Milestone / Change ───────────────────────────────────────────
 
 export async function checkNetWorthChanges(): Promise<void> {
-  const settings = loadAlertSettings();
-  if (!settings.enabled || !settings.netWorthChange.enabled) return;
+  const settings = loadAlertSettings() as any; // TODO: Task 4 will rewrite this function
+  if (!settings.enabled || !settings.netWorthChange?.enabled) return;
 
   const chatIds = getChatIds();
   if (chatIds.length === 0) return;
