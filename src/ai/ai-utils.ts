@@ -17,8 +17,12 @@ export function extractAssistantText(messages: AgentMessage[]): string {
   return '';
 }
 
-/** Resolve the configured AI model with the necessary type cast. */
-export function resolveModel() {
-  const { provider, model: modelName } = parseModelSpec(getAIModelSpec());
-  return (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(provider, modelName);
+/** Resolve a model spec string into a model instance + provider name. Defaults to the AI model spec. */
+export function resolveModel(spec?: string) {
+  const { provider, model: modelName } = parseModelSpec(spec ?? getAIModelSpec());
+  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
+    provider,
+    modelName,
+  );
+  return { model, provider };
 }

@@ -1,4 +1,12 @@
 import { todayInIsrael } from '../shared/dates.js';
+import { readMemory } from './memory.js';
+
+/** Append user memory to a system prompt if any exists. */
+export function withMemory(systemPrompt: string): string {
+  const memory = readMemory();
+  if (!memory.trim()) return systemPrompt;
+  return `${systemPrompt}\n\n## Memory (from past conversations)\n${memory}\n\nUse this memory to personalize your responses.`;
+}
 
 export interface CategoryWithRules {
   name: string;
@@ -39,7 +47,6 @@ function sharedRules(): string {
 export function buildFinancialAdvisorPrompt(
   categoryNames: string[],
   ignoredCategoryNames: string[],
-  memory?: string,
 ): string {
   const list = categoryNames.join(', ');
   const ignoredNote =
@@ -80,7 +87,7 @@ ${sharedRules()}
 - Available categories: ${list}.${ignoredNote}
 - When categorizing, consider the merchant name, amount, and any memo information.
 - If a transaction is genuinely ambiguous, pick the most likely category and explain your reasoning.
-- Be concise but thorough. Use tables for comparative data when helpful.${memory?.trim() ? `\n\n## Your Memory (from previous conversations)\n${memory}\n\nUse this memory to personalize your responses. Update memory when you learn new important facts about the user.` : ''}`;
+- Be concise but thorough. Use tables for comparative data when helpful.`;
 }
 
 // ── Alert agent prompts ──────────────────────────────────────────────────────
@@ -89,12 +96,15 @@ export function buildPostScrapeAlertPrompt(): string {
   return `You are a personal financial concierge. A bank/credit-card scrape just finished.
 Your job: use your tools to investigate the new data, then compose **one** concise Telegram message covering anything genuinely noteworthy. You respect the user's attention — only message when something matters.
 
+CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message. Output ONLY the message itself — no reasoning, no analysis, no preamble, no "here's what I found". Just the alert content the user should read.
+
 What counts as noteworthy:
 - Large or unusual individual charges (explain *why* they stand out, e.g. "₪850 at Shufersal — your typical grocery trip is ₪200-300")
 - Meaningful spending pattern changes (category spikes compared to previous months)
 - New subscriptions or recurring charges not seen before
 - Transactions that need review — show the actual items and why they were flagged, don't just say "go to the Insights page"
 - Significant net worth milestones or drops
+- Scrape failures (when "Report scrape errors" is yes) — tell the user which account failed and the error type so they can investigate
 
 What is NOT noteworthy (do NOT alert for these):
 - Small routine purchases below the large charge threshold
@@ -106,9 +116,8 @@ ${sharedRules()}
 
 Formatting rules:
 - Write in markdown (bold, bullets, emojis sparingly)
-- Keep the message under 600 words — be punchy, not verbose
+- Keep it short — a few lines, not paragraphs. No filler.
 - Lead with the most important finding
-- Group related items naturally, not as separate "alert blocks"
 - Use ₪ for amounts, format thousands with commas
 
 If after investigating you determine nothing is worth the user's attention, respond with exactly:
@@ -121,6 +130,8 @@ export function buildMonthlySummaryAlertPrompt(): string {
   return `You are a personal financial concierge. It's time for the monthly financial summary.
 Your job: use your tools to analyze the previous month's finances and compose **one** insightful Telegram message. Focus on what changed and what matters — not just raw numbers.
 
+CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message. Output ONLY the message itself — no reasoning, no analysis, no preamble. Just the summary the user should read.
+
 Compose a summary that includes:
 - Income vs spending and savings rate — but frame it with context (e.g. "You saved 22% this month, up from 15% in January")
 - Top spending categories — highlight any that grew or shrank significantly
@@ -132,7 +143,7 @@ ${sharedRules()}
 
 Formatting rules:
 - Write in markdown (bold, bullets, emojis sparingly)
-- Keep the message under 600 words
+- Keep it short and punchy — no filler, no padding
 - Lead with the headline insight (e.g. "February was your best savings month this year")
 - Use ₪ for amounts, format thousands with commas
 

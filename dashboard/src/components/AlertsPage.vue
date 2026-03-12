@@ -23,7 +23,12 @@ import {
   Info,
   Sparkles,
 } from 'lucide-vue-next';
-import { ALERT_HINTS } from '../constants/alert-hints';
+const ALERT_HINTS = {
+  postScrape:
+    'Runs after each scrape. An AI agent analyzes new transactions and spending patterns, alerting only when something noteworthy is found.',
+  monthlySummary:
+    "Sent once a month at 9:00 AM on your configured day. An AI agent summarizes last month's finances with contextual insights.",
+} as const;
 
 const loading = ref(true);
 const saving = ref(false);

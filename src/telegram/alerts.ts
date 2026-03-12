@@ -1,25 +1,34 @@
-import { loadAlertSettings, saveAlertSettings } from './alert-settings.js';
+import { loadAlertSettings, saveAlertSettings, type AlertSettings } from './alert-settings.js';
 import { detectRecurringTransactions } from '../services/summary.js';
 import { getNetWorth } from '../services/net-worth.js';
 import { todayInIsrael } from '../shared/dates.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
-import { buildPostScrapeAlertPrompt, buildMonthlySummaryAlertPrompt } from '../ai/prompts.js';
+import {
+  buildPostScrapeAlertPrompt,
+  buildMonthlySummaryAlertPrompt,
+  withMemory,
+} from '../ai/prompts.js';
 import { runAlertAgent } from '../ai/alert-agent.js';
-import { MONTH_NAMES } from './alert-constants.js';
 import type { ScrapeResult } from '../scraper/scraper.service.js';
 
 // ── Telegram send helper ──────────────────────────────────────────────────────
 
 let _sendMessage: ((chatId: number, html: string) => Promise<void>) | null = null;
+let _onAlertSent: ((chatId: number, markdown: string) => void) | null = null;
 
 export function registerSendMessage(fn: (chatId: number, html: string) => Promise<void>) {
   _sendMessage = fn;
+}
+
+export function registerOnAlertSent(fn: (chatId: number, markdown: string) => void) {
+  _onAlertSent = fn;
 }
 
 async function sendAlert(chatIds: number[], markdown: string): Promise<void> {
   if (!_sendMessage || chatIds.length === 0) return;
   const html = markdownToTelegramHtml(markdown);
   for (const chatId of chatIds) {
+    _onAlertSent?.(chatId, markdown);
     for (const chunk of splitMessage(html)) {
       try {
         await _sendMessage(chatId, chunk);
@@ -58,8 +67,10 @@ const fmt = (n: number): string => {
 // ── Post-Scrape Agent Alert ─────────────────────────────────────────────────
 
 /** Build the seed user message with scrape context for the alert agent. */
-function buildPostScrapeUserMessage(scrapeResults: ScrapeResult[]): string {
-  const settings = loadAlertSettings();
+function buildPostScrapeUserMessage(
+  scrapeResults: ScrapeResult[],
+  settings: AlertSettings,
+): string {
   const today = todayInIsrael();
 
   const totalNew = scrapeResults.reduce((s, r) => s + r.transactionsNew, 0);
@@ -116,6 +127,14 @@ async function updateInternalState(): Promise<void> {
   saveAlertSettings(settings);
 }
 
+/** Send a deterministic test message to verify Telegram delivery works. */
+export async function sendTestAlertMessage(): Promise<void> {
+  if (!_sendMessage) throw new Error('Telegram bot not initialized');
+  const chatIds = getChatIds();
+  if (chatIds.length === 0) throw new Error('No Telegram chats registered — message the bot first');
+  await sendAlert(chatIds, '**Test alert** — Telegram alerts are working correctly.');
+}
+
 /** Run all post-scrape alerts. Called after a scrape session completes. */
 export async function runPostScrapeAlerts(scrapeResults: ScrapeResult[]): Promise<void> {
   const settings = loadAlertSettings();
@@ -125,8 +144,8 @@ export async function runPostScrapeAlerts(scrapeResults: ScrapeResult[]): Promis
   if (chatIds.length === 0) return;
 
   try {
-    const systemPrompt = buildPostScrapeAlertPrompt();
-    const userMessage = buildPostScrapeUserMessage(scrapeResults);
+    const systemPrompt = withMemory(buildPostScrapeAlertPrompt());
+    const userMessage = buildPostScrapeUserMessage(scrapeResults, settings);
     const message = await runAlertAgent({ systemPrompt, userMessage });
 
     if (message) {
@@ -153,10 +172,10 @@ export async function sendMonthlySummary(): Promise<void> {
   const [year, month] = today.split('-').map(Number);
   const prevMonth = month === 1 ? 12 : month - 1;
   const prevYear = month === 1 ? year - 1 : year;
-  const monthLabel = MONTH_NAMES[prevMonth - 1];
+  const monthLabel = new Date(prevYear, prevMonth - 1).toLocaleString('en-US', { month: 'short' });
 
   try {
-    const systemPrompt = buildMonthlySummaryAlertPrompt();
+    const systemPrompt = withMemory(buildMonthlySummaryAlertPrompt());
     const userMessage = `Today is ${today}. Please analyze the finances for ${monthLabel} ${prevYear} and compose the monthly summary.`;
     const message = await runAlertAgent({ systemPrompt, userMessage });
 

@@ -5,7 +5,7 @@ import {
   getPublicSettings,
   type AlertPublicSettings,
 } from '../telegram/alert-settings.js';
-import { runPostScrapeAlerts } from '../telegram/alerts.js';
+import { sendTestAlertMessage } from '../telegram/alerts.js';
 
 /** Pick only known public keys from an untrusted body. */
 function pickPublicFields(body: Record<string, unknown>): Partial<AlertPublicSettings> {
@@ -50,7 +50,7 @@ export async function alertsRoutes(app: FastifyInstance) {
   /** Send a test alert to all connected Telegram chats */
   app.post('/api/alerts/test', async (_request, reply) => {
     try {
-      await runPostScrapeAlerts([]);
+      await sendTestAlertMessage();
       return reply.send({ success: true, message: 'Test alert sent' });
     } catch (err) {
       const msg = err instanceof Error ? err.message : String(err);

@@ -6,7 +6,7 @@ import { readMemory } from '../ai/memory.js';
 import { createSession, listSessions, appendMessage, getSessionMessages } from '../ai/sessions.js';
 import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
-import { registerSendMessage, registerGetChatIds } from './alerts.js';
+import { registerSendMessage, registerGetChatIds, registerOnAlertSent } from './alerts.js';
 
 let bot: Bot | null = null;
 
@@ -65,6 +65,12 @@ export function startTelegramBot(): void {
     } catch {
       await botRef.api.sendMessage(chatId, html.replace(/<[^>]+>/g, ''));
     }
+  });
+  // Persist alert markdown into the user's active chat session so the
+  // financial advisor has context if the user replies about the alert.
+  registerOnAlertSent((chatId: number, markdown: string) => {
+    const sessionId = resolveSession(chatId);
+    appendMessage(sessionId, 'assistant', markdown);
   });
   registerGetChatIds(() => getAllChatIds());
 

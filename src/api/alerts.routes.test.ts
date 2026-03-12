@@ -76,7 +76,7 @@ vi.mock('../telegram/alert-settings.js', () => ({
 }));
 
 vi.mock('../telegram/alerts.js', () => ({
-  runPostScrapeAlerts: vi.fn().mockResolvedValue(undefined),
+  sendTestAlertMessage: vi.fn().mockResolvedValue(undefined),
   registerSendMessage: vi.fn(),
   registerGetChatIds: vi.fn(),
 }));

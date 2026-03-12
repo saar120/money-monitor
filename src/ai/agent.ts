@@ -1,16 +1,17 @@
 import { Agent } from '@mariozechner/pi-agent-core';
-import { getModel, completeSimple } from '@mariozechner/pi-ai';
+import { completeSimple } from '@mariozechner/pi-ai';
 import type { AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai';
 import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import { config, parseModelSpec, getAIModelSpec, getBatchModelSpec } from '../config.js';
-import { extractAssistantText } from './ai-utils.js';
+import { config, getBatchModelSpec } from '../config.js';
+import { extractAssistantText, resolveModel } from './ai-utils.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
 import {
   buildBatchCategorizerPrompt,
   buildFinancialAdvisorPrompt,
   partitionCategories,
+  withMemory,
 } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
@@ -38,7 +39,6 @@ import {
   buildManageLiabilityTool,
 } from './asset-tools.js';
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
-import { readMemory } from './memory.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
 
 // Load OAuth credentials at module init
@@ -175,10 +175,9 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
   const categoryNames = cats.map((c) => c.name);
   const ignoredCategoryNames = ignored.map((c) => c.name);
 
-  const memory = readMemory();
-  const systemPrompt = buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames, memory);
+  const systemPrompt = withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames));
 
-  const { provider, model: modelName } = parseModelSpec(getAIModelSpec());
+  const { model, provider } = resolveModel();
 
   // Pre-validate auth before entering the agent loop.
   // The pi-agent-core library uses a fire-and-forget async IIFE internally,
@@ -192,12 +191,6 @@ export async function* chat(conversationHistory: ChatMessage[]): AsyncGenerator<
     };
     return;
   }
-
-  // getModel is strictly typed; dynamic strings from config need a cast on the result
-  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
-    provider,
-    modelName,
-  );
 
   const tools = [
     buildQueryTransactionsTool(),
@@ -326,12 +319,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   const validCategories = new Set(categoryNames);
   const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
-  const { provider, model: modelName } = parseModelSpec(getBatchModelSpec());
-  // getModel is strictly typed; dynamic strings from config need a cast on the result
-  const model = (getModel as (p: string, m: string) => ReturnType<typeof getModel>)(
-    provider,
-    modelName,
-  );
+  const { model, provider } = resolveModel(getBatchModelSpec());
 
   // Resolve OAuth key if available
   const oauthKey = await resolveApiKey(provider);

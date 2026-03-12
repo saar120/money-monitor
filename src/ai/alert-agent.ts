@@ -43,7 +43,7 @@ export async function runAlertAgent(opts: {
   systemPrompt: string;
   userMessage: string;
 }): Promise<string | null> {
-  const model = resolveModel();
+  const { model } = resolveModel();
   const tools = buildAlertTools();
 
   const agent = new Agent({

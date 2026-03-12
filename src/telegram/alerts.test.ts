@@ -10,6 +10,7 @@ vi.mock('../ai/alert-agent.js', () => ({
 vi.mock('../ai/prompts.js', () => ({
   buildPostScrapeAlertPrompt: () => 'mock post-scrape prompt',
   buildMonthlySummaryAlertPrompt: () => 'mock monthly prompt',
+  withMemory: (prompt: string) => prompt,
 }));
 
 // ── Mock alert-settings ──
@@ -69,8 +70,13 @@ vi.mock('../scraper/scraper.service.js', () => ({
   startScraping: vi.fn(),
 }));
 
-const { registerSendMessage, registerGetChatIds, runPostScrapeAlerts, sendMonthlySummary } =
-  await import('./alerts.js');
+const {
+  registerSendMessage,
+  registerGetChatIds,
+  registerOnAlertSent,
+  runPostScrapeAlerts,
+  sendMonthlySummary,
+} = await import('./alerts.js');
 
 // ── Test setup ──
 
@@ -78,15 +84,22 @@ let sentMessages: Array<{ chatId: number; html: string }> = [];
 const mockSendMessage = vi.fn(async (chatId: number, html: string) => {
   sentMessages.push({ chatId, html });
 });
+let alertsSent: Array<{ chatId: number; markdown: string }> = [];
+const mockOnAlertSent = vi.fn((chatId: number, markdown: string) => {
+  alertsSent.push({ chatId, markdown });
+});
 const mockGetChatIds = vi.fn(() => [12345]);
 
 registerSendMessage(mockSendMessage);
 registerGetChatIds(mockGetChatIds);
+registerOnAlertSent(mockOnAlertSent);
 
 describe('alerts', () => {
   beforeEach(() => {
     sentMessages = [];
+    alertsSent = [];
     mockSendMessage.mockClear();
+    mockOnAlertSent.mockClear();
     mockGetChatIds.mockClear();
     mockRunAlertAgent.mockClear();
     mockDetectRecurring.mockClear();
@@ -141,6 +154,8 @@ describe('alerts', () => {
       ]);
       expect(mockSendMessage).toHaveBeenCalledTimes(1);
       expect(sentMessages[0].html).toContain('Big charge detected');
+      // Alert hook receives the original markdown for session persistence
+      expect(alertsSent[0].markdown).toBe('**📊 Big charge detected**\n₪850 at Shufersal');
     });
 
     it('sends nothing when agent returns null (SILENT)', async () => {
