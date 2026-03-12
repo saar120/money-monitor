@@ -4,6 +4,7 @@ import type { AssistantMessage, UserMessage, Message } from '@mariozechner/pi-ai
 import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, parseModelSpec, getAIModelSpec, getBatchModelSpec } from '../config.js';
+import { extractAssistantText } from './ai-utils.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
 import {
@@ -36,10 +37,7 @@ import {
   buildRecordMovementTool,
   buildManageLiabilityTool,
 } from './asset-tools.js';
-import {
-  buildGetAlertSettingsTool,
-  buildUpdateAlertSettingsTool,
-} from './alert-tools.js';
+import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
 import { readMemory } from './memory.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
 
@@ -135,21 +133,6 @@ const TOOL_STATUS: Record<string, string> = {
 /** Read at call time so settings changes take effect without restart. */
 function getMaxTurns() {
   return config.AI_MAX_TURNS;
-}
-
-/** Extract text from the last assistant message in a list. */
-function extractAssistantText(messages: AgentMessage[]): string {
-  for (let i = messages.length - 1; i >= 0; i--) {
-    const msg = messages[i];
-    if (msg && 'role' in msg && msg.role === 'assistant') {
-      const assistantMsg = msg as AssistantMessage;
-      return assistantMsg.content
-        .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-        .map((b) => b.text)
-        .join('');
-    }
-  }
-  return '';
 }
 
 /** Convert ChatMessage history to Pi Message objects for multi-turn context. */

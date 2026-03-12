@@ -68,6 +68,7 @@ describe('runAlertAgent', () => {
           ],
         });
       }, 0);
+      return vi.fn(); // unsubscribe
     });
     mockPrompt.mockResolvedValue(undefined);
 
@@ -94,6 +95,7 @@ describe('runAlertAgent', () => {
           ],
         });
       }, 0);
+      return vi.fn(); // unsubscribe
     });
     mockPrompt.mockResolvedValue(undefined);
 
