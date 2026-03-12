@@ -7,17 +7,18 @@ export interface CategoryWithRules {
 }
 
 /** Split categories into active and ignored lists for prompt building. */
-export function partitionCategories(cats: CategoryWithRules[]): { active: CategoryWithRules[]; ignored: CategoryWithRules[] } {
-  const active = cats.filter(c => !c.ignoredFromStats);
-  const ignored = cats.filter(c => c.ignoredFromStats);
+export function partitionCategories(cats: CategoryWithRules[]): {
+  active: CategoryWithRules[];
+  ignored: CategoryWithRules[];
+} {
+  const active = cats.filter((c) => !c.ignoredFromStats);
+  const ignored = cats.filter((c) => c.ignoredFromStats);
   return { active, ignored };
 }
 
 /** Format category list for LLM prompt, including per-category rules when available. */
 export function formatCategoryList(cats: CategoryWithRules[]): string {
-  return cats
-    .map(c => c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)
-    .join('\n');
+  return cats.map((c) => (c.rules ? `- ${c.name}: ${c.rules}` : `- ${c.name}`)).join('\n');
 }
 
 // ── Shared rules for all agents ─────────────────────────────────────────────────
@@ -35,11 +36,16 @@ function sharedRules(): string {
 
 // ── Financial Advisor prompt (combined) ─────────────────────────────────────────
 
-export function buildFinancialAdvisorPrompt(categoryNames: string[], ignoredCategoryNames: string[], memory?: string): string {
+export function buildFinancialAdvisorPrompt(
+  categoryNames: string[],
+  ignoredCategoryNames: string[],
+  memory?: string,
+): string {
   const list = categoryNames.join(', ');
-  const ignoredNote = ignoredCategoryNames.length > 0
-    ? `\n- Ignored categories (excluded from statistics): ${ignoredCategoryNames.join(', ')}. Do NOT include these in your analysis or summaries unless the user explicitly asks about them.`
-    : '';
+  const ignoredNote =
+    ignoredCategoryNames.length > 0
+      ? `\n- Ignored categories (excluded from statistics): ${ignoredCategoryNames.join(', ')}. Do NOT include these in your analysis or summaries unless the user explicitly asks about them.`
+      : '';
   return `You are a personal financial advisor with direct access to the user's bank and credit card transaction data from Israeli financial institutions.
 
 You have expertise in all areas of personal finance:
@@ -77,13 +83,71 @@ ${sharedRules()}
 - Be concise but thorough. Use tables for comparative data when helpful.${memory?.trim() ? `\n\n## Your Memory (from previous conversations)\n${memory}\n\nUse this memory to personalize your responses. Update memory when you learn new important facts about the user.` : ''}`;
 }
 
+// ── Alert agent prompts ──────────────────────────────────────────────────────
+
+export function buildPostScrapeAlertPrompt(): string {
+  return `You are a personal financial concierge. A bank/credit-card scrape just finished.
+Your job: use your tools to investigate the new data, then compose **one** concise Telegram message covering anything genuinely noteworthy. You respect the user's attention — only message when something matters.
+
+What counts as noteworthy:
+- Large or unusual individual charges (explain *why* they stand out, e.g. "₪850 at Shufersal — your typical grocery trip is ₪200-300")
+- Meaningful spending pattern changes (category spikes compared to previous months)
+- New subscriptions or recurring charges not seen before
+- Transactions that need review — show the actual items and why they were flagged, don't just say "go to the Insights page"
+- Significant net worth milestones or drops
+
+What is NOT noteworthy (do NOT alert for these):
+- Small routine purchases below the large charge threshold
+- Normal day-to-day spending that follows historical patterns
+- Transactions that were already categorized with high confidence
+- Data that hasn't meaningfully changed since the last alert
+
+${sharedRules()}
+
+Formatting rules:
+- Write in markdown (bold, bullets, emojis sparingly)
+- Keep the message under 600 words — be punchy, not verbose
+- Lead with the most important finding
+- Group related items naturally, not as separate "alert blocks"
+- Use ₪ for amounts, format thousands with commas
+
+If after investigating you determine nothing is worth the user's attention, respond with exactly:
+[SILENT]
+
+Do NOT explain why you're being silent. Just output [SILENT] and nothing else.`;
+}
+
+export function buildMonthlySummaryAlertPrompt(): string {
+  return `You are a personal financial concierge. It's time for the monthly financial summary.
+Your job: use your tools to analyze the previous month's finances and compose **one** insightful Telegram message. Focus on what changed and what matters — not just raw numbers.
+
+Compose a summary that includes:
+- Income vs spending and savings rate — but frame it with context (e.g. "You saved 22% this month, up from 15% in January")
+- Top spending categories — highlight any that grew or shrank significantly
+- Month-over-month trends worth noting
+- Any subscriptions or recurring charges that changed
+- Net worth movement if significant
+
+${sharedRules()}
+
+Formatting rules:
+- Write in markdown (bold, bullets, emojis sparingly)
+- Keep the message under 600 words
+- Lead with the headline insight (e.g. "February was your best savings month this year")
+- Use ₪ for amounts, format thousands with commas
+
+If the month had genuinely nothing interesting to report (e.g. stable income, stable spending, no changes), respond with exactly:
+[SILENT]`;
+}
+
 // ── Batch categorizer prompt (used by batchCategorize / recategorize) ────────────
 
 export function buildBatchCategorizerPrompt(cats: CategoryWithRules[]): string {
   const { active, ignored } = partitionCategories(cats);
-  const ignoredNote = ignored.length > 0
-    ? `\n\nIgnored categories (still valid for assignment, but excluded from user statistics):\n${ignored.map(c => `- ${c.name}`).join('\n')}`
-    : '';
+  const ignoredNote =
+    ignored.length > 0
+      ? `\n\nIgnored categories (still valid for assignment, but excluded from user statistics):\n${ignored.map((c) => `- ${c.name}`).join('\n')}`
+      : '';
 
   return `You are a transaction categorizer for an Israeli user's bank transactions. Assign each transaction one of these categories:
 
