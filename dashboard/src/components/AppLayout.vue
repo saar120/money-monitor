@@ -211,9 +211,11 @@ const pageTitle = computed(() => {
           <h2 class="text-[15px] font-semibold text-text-primary">
             {{ pageTitle }}
           </h2>
-          <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
-            <slot name="toolbar-actions" />
-          </div>
+          <div
+            id="toolbar-actions"
+            class="ml-auto flex items-center gap-2"
+            style="-webkit-app-region: no-drag"
+          />
         </div>
         <div class="p-6 flex-1 flex flex-col">
           <slot />
