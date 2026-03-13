@@ -174,6 +174,11 @@ function createWindow(port: number) {
     windowOptions.visualEffectState = 'followWindow';
     windowOptions.backgroundColor = '#00000000';
     windowOptions.acceptFirstMouse = true; // respond to first click on unfocused window
+  } else {
+    // Windows/Linux: set background to match theme to prevent white flash
+    // and provide correct backdrop for glass compositing in dark mode
+    windowOptions.backgroundColor = nativeTheme.shouldUseDarkColors ? '#1c1c1e' : '#ffffff';
+    windowOptions.autoHideMenuBar = true;
   }
 
   mainWindow = new BrowserWindow(windowOptions);
