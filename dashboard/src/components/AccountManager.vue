@@ -233,13 +233,12 @@ onMounted(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <!-- Header -->
-    <div class="flex items-center justify-end flex-shrink-0 mb-5">
-      <Button @click="showAddDialog = true">
-        <Plus class="h-4 w-4 mr-2" />
+    <Teleport to="#toolbar-actions">
+      <Button size="sm" @click="showAddDialog = true">
+        <Plus class="h-4 w-4 mr-1" />
         Add Account
       </Button>
-    </div>
+    </Teleport>
 
     <!-- Loading skeletons -->
     <div v-if="loading" class="space-y-4 flex-1 min-h-0 overflow-y-auto">
