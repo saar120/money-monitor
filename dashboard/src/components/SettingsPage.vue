@@ -160,7 +160,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-8 space-y-5 animate-fade-in-up">
+  <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-20 space-y-5 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
       <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
@@ -484,7 +484,7 @@ async function save() {
       </Card>
 
       <!-- Save -->
-      <div class="flex items-center gap-3 pt-2">
+      <div class="sticky bottom-0 bg-bg-primary/80 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 border-t border-separator/40 flex items-center gap-3">
         <Button :disabled="saving" @click="save">
           <Save class="h-4 w-4 mr-1" />
           {{ saving ? 'Saving...' : 'Save Settings' }}

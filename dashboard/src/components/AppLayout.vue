@@ -89,7 +89,7 @@ function isActive(path: string): boolean {
     <!-- Sidebar — Liquid Glass in Electron, solid bg in browser -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary/80 border-r border-separator/40'"
+      :class="isElectron ? 'glass' : 'bg-bg-secondary/80 border-r border-separator/40'"
       :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
@@ -164,31 +164,27 @@ function isActive(path: string): boolean {
 
     <!-- Main content — card floating over vibrancy in Electron -->
     <div
-      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden relative"
+      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden"
       :class="{ 'rounded-xl shadow-[var(--shadow-md)] border border-separator/40': isElectron }"
     >
-      <!-- Toolbar — glass overlay, content scrolls underneath -->
+      <!-- Toolbar / header area — drag region -->
       <div
         v-if="isElectron"
-        class="absolute top-0 left-0 right-0 z-10 pointer-events-none"
+        class="h-[44px] flex-shrink-0 flex items-center px-6 border-b border-separator/50"
+        style="-webkit-app-region: drag"
       >
-        <div
-          class="h-[44px] flex items-center px-6 glass-toolbar pointer-events-auto"
-          style="-webkit-app-region: drag"
-        >
-          <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
-            <slot name="toolbar-actions" />
-          </div>
+        <h2 class="text-[17px] font-semibold text-text-primary">
+          {{ route.meta?.title ?? '' }}
+        </h2>
+        <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
+          <slot name="toolbar-actions" />
         </div>
-        <!-- Fade gradient below toolbar -->
-        <div class="h-5 bg-gradient-to-b from-[var(--bg-primary)] to-transparent" />
       </div>
 
       <!-- Demo mode banner -->
       <div
         v-if="demoMode"
         class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-bg-secondary border-b border-separator/50 text-[12px] text-text-secondary"
-        :class="{ 'mt-[44px]': isElectron }"
       >
         <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] mr-1" />
         <span>Demo Mode — Viewing sample data</span>
@@ -197,11 +193,7 @@ function isActive(path: string): boolean {
         </button>
       </div>
 
-      <main
-        ref="mainEl"
-        class="flex-1 flex flex-col overflow-y-auto p-6 min-w-0"
-        :class="{ 'pt-[56px]': isElectron }"
-      >
+      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto p-6 min-w-0">
         <slot />
       </main>
     </div>
