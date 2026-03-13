@@ -746,6 +746,19 @@ const fullLiabilityMap = computed(() => {
 
 <template>
   <div class="space-y-5 animate-fade-in-up">
+    <Teleport to="#toolbar-actions">
+      <div class="flex items-center gap-2">
+        <Button size="sm" variant="outline" @click="openAddLiability">
+          <Plus class="h-4 w-4 mr-1" />
+          Add Liability
+        </Button>
+        <Button size="sm" @click="openAddAsset">
+          <Plus class="h-4 w-4 mr-1" />
+          Add Asset
+        </Button>
+      </div>
+    </Teleport>
+
     <!-- Stale rates warning -->
     <div
       v-if="nw?.ratesStale"
@@ -865,13 +878,7 @@ const fullLiabilityMap = computed(() => {
     <div class="space-y-5">
       <!-- Assets Section -->
       <div class="space-y-5 animate-fade-in-up stagger-3">
-        <div class="flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold">Assets</h2>
-          <Button size="sm" @click="openAddAsset">
-            <Plus class="h-4 w-4 mr-1" />
-            Add Asset
-          </Button>
-        </div>
+        <h2 class="text-[15px] font-semibold">Assets</h2>
 
         <Card v-if="assets.length > 0">
           <div
@@ -1170,13 +1177,7 @@ const fullLiabilityMap = computed(() => {
 
       <!-- Liabilities Section -->
       <div class="space-y-5 animate-fade-in-up stagger-5">
-        <div class="flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold">Liabilities</h2>
-          <Button size="sm" @click="openAddLiability">
-            <Plus class="h-4 w-4 mr-1" />
-            Add Liability
-          </Button>
-        </div>
+        <h2 class="text-[15px] font-semibold">Liabilities</h2>
 
         <Card v-if="liabilities.length > 0">
           <template v-for="(liab, idx) in liabilities" :key="liab.id">
