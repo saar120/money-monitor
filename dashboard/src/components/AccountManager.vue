@@ -227,7 +227,6 @@ onMounted(() => {
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <!-- Header -->
     <div class="flex items-center justify-between flex-shrink-0 mb-5">
-      <h1 class="text-[22px] font-semibold text-text-primary">Accounts</h1>
       <Button @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-2" />
         Add Account

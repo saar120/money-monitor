@@ -135,7 +135,6 @@ onMounted(load);
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <div class="flex items-center justify-between flex-shrink-0 mb-5">
-      <h1 class="text-[22px] font-semibold text-text-primary">Categories</h1>
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" /> Add category
       </Button>

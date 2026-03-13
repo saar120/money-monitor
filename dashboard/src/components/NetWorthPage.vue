@@ -746,8 +746,6 @@ const fullLiabilityMap = computed(() => {
 
 <template>
   <div class="space-y-5 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary">Net Worth</h1>
-
     <!-- Stale rates warning -->
     <div
       v-if="nw?.ratesStale"
