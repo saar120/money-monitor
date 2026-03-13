@@ -305,13 +305,11 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <!-- Header -->
-    <div class="flex items-center justify-between flex-shrink-0 mb-5">
-      <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
+    <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
         <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
-          <SelectTrigger class="w-[200px]">
-            <SelectValue placeholder="Scrape account..." />
+          <SelectTrigger class="w-[180px] h-8">
+            <SelectValue placeholder="Scrape account…" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem
@@ -323,13 +321,13 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
             </SelectItem>
           </SelectContent>
         </Select>
-        <Button :disabled="triggerLoading || !!liveSession" @click="handleScrapeAll">
-          <Loader2 v-if="triggerLoading" class="mr-2 h-4 w-4 animate-spin" />
-          <Play v-else class="mr-2 h-4 w-4" />
+        <Button size="sm" :disabled="triggerLoading || !!liveSession" @click="handleScrapeAll">
+          <Loader2 v-if="triggerLoading" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Play v-else class="mr-1.5 h-3.5 w-3.5" />
           Scrape All
         </Button>
       </div>
-    </div>
+    </Teleport>
 
     <div class="flex-1 min-h-0 overflow-y-auto space-y-4">
       <!-- Error Banner -->
