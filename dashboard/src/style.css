@@ -201,7 +201,7 @@
     text-rendering: optimizeLegibility;
     user-select: none;
   }
-  .electron body {
+  .electron.platform-darwin body {
     background: transparent;
   }
 
