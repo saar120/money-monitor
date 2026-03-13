@@ -318,6 +318,14 @@
   background: var(--glass-bg);
 }
 
+/* Apple-style translucent toolbar — fades content underneath */
+.glass-toolbar {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: var(--glass-bg-heavy);
+  border-bottom: 0.5px solid var(--glass-border);
+}
+
 /* ─── Page transitions ─── */
 .page-enter-active {
   animation: fade-in-up 0.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;
