@@ -413,7 +413,7 @@ onMounted(() => {
         </DialogHeader>
 
         <div class="space-y-5 py-2">
-          <div class="space-y-1.5">
+          <div class="flex flex-col gap-2">
             <label class="text-[13px] font-medium">Provider</label>
             <Select v-model="newCompanyId">
               <SelectTrigger>
@@ -440,7 +440,7 @@ onMounted(() => {
             </Select>
           </div>
 
-          <div class="space-y-1.5">
+          <div class="flex flex-col gap-2">
             <label class="text-[13px] font-medium">Display Name</label>
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
@@ -456,7 +456,11 @@ onMounted(() => {
 
             <!-- Known provider: render labeled fields -->
             <template v-if="selectedProvider && selectedProvider.fields.length > 0">
-              <div v-for="field in selectedProvider.fields" :key="field.key" class="space-y-1.5">
+              <div
+                v-for="field in selectedProvider.fields"
+                :key="field.key"
+                class="flex flex-col gap-2"
+              >
                 <label class="text-[13px] font-medium">{{ field.label }}</label>
                 <Input
                   v-model="credentialValues[field.key]"
