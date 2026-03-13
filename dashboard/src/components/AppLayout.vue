@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   LayoutDashboard,
@@ -82,32 +82,14 @@ function isActive(path: string): boolean {
   if (path === '/') return route.path === '/';
   return route.path.startsWith(path);
 }
-
-const pageTitles: Record<string, string> = {
-  '/': 'Overview',
-  '/net-worth': 'Net Worth',
-  '/transactions': 'Transactions',
-  '/insights': 'Insights',
-  '/chat': 'AI Chat',
-  '/accounts': 'Accounts',
-  '/categories': 'Categories',
-  '/alerts': 'Alerts',
-  '/scraping': 'Scraping',
-  '/settings': 'Settings',
-};
-
-const currentPageTitle = computed(() => {
-  const path = route.path;
-  return pageTitles[path] ?? '';
-});
 </script>
 
 <template>
-  <div class="flex h-screen" :class="{ 'p-2 gap-2': isElectron, 'p-1.5 gap-1.5 bg-black/10 dark:bg-black/30': !isElectron }">
-    <!-- Sidebar — glass panel, rounded like Apple Settings -->
+  <div class="flex h-screen" :class="{ 'p-2 gap-2': isElectron }">
+    <!-- Sidebar — Liquid Glass in Electron, solid bg in browser -->
     <aside
-      class="flex-shrink-0 flex flex-col overflow-hidden rounded-xl"
-      :class="isElectron ? 'glass' : 'bg-bg-secondary/95 border border-separator/30 shadow-[var(--shadow-sm)]'"
+      class="flex-shrink-0 flex flex-col overflow-hidden"
+      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary/80 border-r border-separator/40'"
       :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
@@ -180,27 +162,33 @@ const currentPageTitle = computed(() => {
       </div>
     </aside>
 
-    <!-- Main content panel -->
+    <!-- Main content — card floating over vibrancy in Electron -->
     <div
-      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden relative rounded-xl shadow-[var(--shadow-md)] border border-separator/30"
+      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden relative"
+      :class="{ 'rounded-xl shadow-[var(--shadow-md)] border border-separator/40': isElectron }"
     >
-      <!-- Glass toolbar — content scrolls behind this with blur fade -->
+      <!-- Toolbar — glass overlay, content scrolls underneath -->
       <div
-        class="content-toolbar absolute top-0 left-0 right-0 z-10 flex items-center px-6"
-        :style="isElectron ? '-webkit-app-region: drag' : ''"
+        v-if="isElectron"
+        class="absolute top-0 left-0 right-0 z-10 pointer-events-none"
       >
-        <h2 class="text-[15px] font-semibold text-text-primary">
-          {{ currentPageTitle }}
-        </h2>
-        <div class="ml-auto flex items-center gap-2" :style="isElectron ? '-webkit-app-region: no-drag' : ''">
-          <slot name="toolbar-actions" />
+        <div
+          class="h-[44px] flex items-center px-6 glass-toolbar pointer-events-auto"
+          style="-webkit-app-region: drag"
+        >
+          <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
+            <slot name="toolbar-actions" />
+          </div>
         </div>
+        <!-- Fade gradient below toolbar -->
+        <div class="h-5 bg-gradient-to-b from-[var(--bg-primary)] to-transparent" />
       </div>
 
       <!-- Demo mode banner -->
       <div
         v-if="demoMode"
-        class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-bg-secondary border-b border-separator/50 text-[12px] text-text-secondary mt-[44px]"
+        class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-bg-secondary border-b border-separator/50 text-[12px] text-text-secondary"
+        :class="{ 'mt-[44px]': isElectron }"
       >
         <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] mr-1" />
         <span>Demo Mode — Viewing sample data</span>
@@ -211,7 +199,8 @@ const currentPageTitle = computed(() => {
 
       <main
         ref="mainEl"
-        class="flex-1 flex flex-col overflow-y-auto px-6 pb-6 pt-[52px] min-w-0"
+        class="flex-1 flex flex-col overflow-y-auto p-6 min-w-0"
+        :class="{ 'pt-[56px]': isElectron }"
       >
         <slot />
       </main>

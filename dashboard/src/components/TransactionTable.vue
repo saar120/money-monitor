@@ -173,6 +173,8 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Transactions</h1>
+
     <!-- Filters -->
     <div class="flex-shrink-0 mb-4 space-y-2.5">
       <div class="flex items-center gap-2.5">

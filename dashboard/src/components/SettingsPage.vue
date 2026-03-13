@@ -163,6 +163,7 @@ async function save() {
   <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-8 space-y-5 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
+      <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
     </div>
 
     <div v-if="loading" class="text-text-secondary">Loading settings...</div>

@@ -197,6 +197,8 @@ const cashflowChartData = computed(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Overview</h1>
+
     <div class="flex-1 min-h-0 overflow-y-auto space-y-5">
       <!-- Bank Balances + Spending — compact top row -->
       <div class="grid grid-cols-[auto_1fr] gap-4 items-end">
