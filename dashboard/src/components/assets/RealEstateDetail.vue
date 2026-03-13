@@ -300,7 +300,7 @@ const chartOptions = computed(() => ({
           <div v-else-if="rentMovements.length === 0" class="text-center py-8">
             <p class="text-text-secondary text-[13px]">No rent income recorded yet</p>
           </div>
-          <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
+          <div v-else class="space-y-0 border border-separator rounded-lg divide-y divide-separator">
             <div v-for="m in rentMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
               <div>
                 <div class="text-[13px] font-medium tabular-nums">

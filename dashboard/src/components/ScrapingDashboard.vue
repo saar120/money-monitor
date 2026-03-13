@@ -299,7 +299,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <!-- Header -->
-    <div class="flex items-center justify-between flex-shrink-0 mb-4">
+    <div class="flex items-center justify-between flex-shrink-0 mb-5">
       <div>
         <h1 class="text-[22px] font-semibold text-text-primary">Scraping</h1>
         <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
@@ -342,7 +342,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
     </div>
 
     <!-- Active Session Banner -->
-    <Card v-if="liveSession" class="border-primary/30 bg-primary/5">
+    <Card v-if="liveSession" class="border-primary/30 bg-primary/5 animate-fade-in-up">
       <CardHeader class="pb-3">
         <div class="flex items-center justify-between">
           <div class="flex items-center gap-3">
@@ -428,7 +428,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         <div
           v-for="session in sessions"
           :key="session.id"
-          class="border rounded-lg"
+          class="border rounded-lg hover:bg-bg-secondary/50 transition-colors duration-150"
         >
           <!-- Session header row (clickable) -->
           <button
@@ -437,11 +437,11 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
           >
             <ChevronDown
               v-if="expandedSessions.has(session.id)"
-              class="h-4 w-4 flex-shrink-0 text-text-secondary"
+              class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
             />
             <ChevronRight
               v-else
-              class="h-4 w-4 flex-shrink-0 text-text-secondary"
+              class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
             />
 
             <span class="text-text-secondary w-8 text-right">#{{ session.id }}</span>

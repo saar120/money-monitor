@@ -11,7 +11,7 @@ const props = defineProps<{
   <div
     :class="
       cn(
-        'rounded-[10px] border border-separator bg-bg-primary text-text-primary',
+        'rounded-xl border border-separator/60 bg-bg-primary text-text-primary shadow-[var(--shadow-sm)]',
         props.class,
       )
     "

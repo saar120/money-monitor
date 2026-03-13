@@ -134,7 +134,7 @@ onMounted(load);
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <div class="flex items-center justify-between flex-shrink-0 mb-4">
+    <div class="flex items-center justify-between flex-shrink-0 mb-5">
       <h1 class="text-[22px] font-semibold text-text-primary">Categories</h1>
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" /> Add category
@@ -149,7 +149,7 @@ onMounted(load);
         <CardTitle class="text-[13px] font-medium">New Category</CardTitle>
       </CardHeader>
       <CardContent>
-        <div class="flex gap-2 items-end flex-wrap">
+        <div class="grid grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
           <div class="space-y-1">
             <label class="text-[11px] text-text-secondary">Name (slug)</label>
             <Input v-model="newName" placeholder="e.g. groceries" class="w-36" />
@@ -160,7 +160,7 @@ onMounted(load);
           </div>
           <div class="space-y-1">
             <label class="text-[11px] text-text-secondary">Color</label>
-            <input type="color" v-model="newColor" class="h-9 w-14 rounded-lg overflow-hidden border cursor-pointer" />
+            <input type="color" v-model="newColor" class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer" />
           </div>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
             {{ saving ? 'Saving...' : 'Save' }}
@@ -244,15 +244,14 @@ onMounted(load);
                 <Switch
                   :model-value="cat.ignoredFromStats"
                   @update:model-value="toggleIgnored(cat)"
-                  class="scale-75"
                 />
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">
-                  <button @click="startEdit(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-text-primary">
+                  <button @click="startEdit(cat)" class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary">
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
-                  <button @click="remove(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-destructive">
+                  <button @click="remove(cat)" class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-destructive">
                     <Trash2 class="h-3.5 w-3.5" />
                   </button>
                 </div>

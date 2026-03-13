@@ -108,10 +108,10 @@ async function testAlert() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-4 overflow-y-auto flex-1">
+  <div class="max-w-2xl mx-auto space-y-5 overflow-y-auto flex-1">
     <div class="flex items-center justify-between">
       <div>
-        <h1 class="text-[20px] font-semibold text-text-primary">Alerts</h1>
+        <h1 class="text-[22px] font-semibold text-text-primary">Alerts</h1>
         <p class="text-[13px] text-text-secondary mt-0.5">
           AI-powered Telegram notifications about your finances
         </p>
@@ -170,7 +170,7 @@ async function testAlert() {
       <!-- AI approach description -->
       <div
         :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
-        class="flex items-start gap-2.5 text-[12px] text-text-secondary bg-primary/5 rounded-lg px-3 py-2.5"
+        class="flex items-start gap-2.5 text-[12px] text-text-secondary bg-primary/8 border border-primary/15 rounded-lg px-3 py-2.5"
       >
         <Sparkles class="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
         <span>
@@ -201,7 +201,7 @@ async function testAlert() {
             <Input
               v-model.number="settings.largeChargeThreshold"
               type="number"
-              class="w-24 h-8 text-[13px]"
+              class="w-28 h-8 text-[13px]"
               min="0"
             />
           </div>
@@ -210,7 +210,7 @@ async function testAlert() {
             <Input
               v-model.number="settings.unusualSpendingPercent"
               type="number"
-              class="w-24 h-8 text-[13px]"
+              class="w-28 h-8 text-[13px]"
               min="10"
               max="200"
             />
@@ -246,7 +246,7 @@ async function testAlert() {
             <Input
               v-model.number="settings.monthlySummary.dayOfMonth"
               type="number"
-              class="w-24 h-8 text-[13px]"
+              class="w-28 h-8 text-[13px]"
               min="1"
               max="28"
             />

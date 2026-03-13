@@ -113,13 +113,13 @@ async function finish() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-secondary flex items-center justify-center p-8">
+  <div class="min-h-screen bg-bg-secondary flex items-center justify-center p-8" style="background-image: radial-gradient(ellipse at 50% 0%, var(--accent-15), transparent 70%)">
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
     <div class="w-full max-w-lg">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/20 mb-4">
+        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-4">
           <Wallet class="h-7 w-7 text-primary" />
         </div>
         <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
@@ -130,8 +130,8 @@ async function finish() {
       <div class="flex items-center justify-center gap-2 mb-8">
         <div
           v-for="s in 3" :key="s"
-          class="h-1.5 w-12 rounded-full transition-colors duration-200"
-          :class="s <= step ? 'bg-primary' : 'bg-bg-tertiary'"
+          class="h-2 w-2 rounded-full transition-all duration-200"
+          :class="[s <= step ? 'bg-primary' : 'bg-bg-tertiary', s === step ? 'scale-110' : '']"
         />
       </div>
 

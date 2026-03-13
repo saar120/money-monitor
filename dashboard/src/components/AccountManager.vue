@@ -43,7 +43,7 @@ import {
 } from '@/components/ui/alert-dialog';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
-import { Loader2, Plus, Trash2, RefreshCw, Power, Pencil, Check, X } from 'lucide-vue-next';
+import { Loader2, Plus, Trash2, RefreshCw, Power, Pencil, Check, X, Building2 } from 'lucide-vue-next';
 
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
@@ -226,7 +226,7 @@ onMounted(() => {
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <!-- Header -->
-    <div class="flex items-center justify-between flex-shrink-0 mb-4">
+    <div class="flex items-center justify-between flex-shrink-0 mb-5">
       <h1 class="text-[22px] font-semibold text-text-primary">Accounts</h1>
       <Button @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-2" />
@@ -235,23 +235,31 @@ onMounted(() => {
     </div>
 
     <!-- Loading skeletons -->
-    <div v-if="loading" class="space-y-3 flex-1 min-h-0 overflow-y-auto">
-      <Skeleton v-for="i in 3" :key="i" class="h-24 w-full rounded-lg" />
+    <div v-if="loading" class="space-y-4 flex-1 min-h-0 overflow-y-auto">
+      <Skeleton v-for="i in 3" :key="i" class="h-28 w-full rounded-xl" />
     </div>
 
     <!-- Account cards -->
     <div v-else class="space-y-6 flex-1 min-h-0 overflow-y-auto">
-      <p v-if="accounts.length === 0" class="text-text-secondary text-[13px] text-center py-12">
-        No accounts configured. Add one to get started.
-      </p>
+      <!-- Empty state -->
+      <div v-if="accounts.length === 0" class="flex flex-col items-center justify-center py-20">
+        <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
+          <Building2 class="h-8 w-8 text-primary" />
+        </div>
+        <p class="text-[15px] font-medium text-text-primary mb-1">No Accounts</p>
+        <p class="text-text-secondary text-[13px] mb-5">Add a bank or credit card to start tracking</p>
+        <Button @click="showAddDialog = true">
+          <Plus class="h-4 w-4 mr-2" /> Add Account
+        </Button>
+      </div>
 
       <div v-for="section in accountSections" :key="section.type" class="space-y-3">
         <h2 class="text-[15px] font-semibold text-text-primary">{{ section.label }}</h2>
         <Card v-for="account in section.accounts" :key="account.id">
-          <CardContent class="pt-4">
+          <CardContent class="p-5">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2 mb-1">
+                <div class="flex items-center gap-2.5 mb-1">
                   <template v-if="editingNameId === account.id">
                     <div class="flex items-center gap-1.5">
                       <Input
@@ -260,10 +268,10 @@ onMounted(() => {
                         @keyup.enter="saveEditName(account)"
                         @keyup.escape="cancelEditName"
                       />
-                      <button @click="saveEditName(account)" class="text-success hover:text-success/80">
+                      <button @click="saveEditName(account)" class="p-1.5 rounded-lg text-success hover:bg-success/10 transition-colors">
                         <Check class="h-4 w-4" />
                       </button>
-                      <button @click="cancelEditName" class="text-text-secondary hover:text-text-primary">
+                      <button @click="cancelEditName" class="p-1.5 rounded-lg text-text-secondary hover:bg-bg-tertiary transition-colors">
                         <X class="h-4 w-4" />
                       </button>
                     </div>
@@ -272,7 +280,7 @@ onMounted(() => {
                     <CardTitle class="text-[15px]">{{ account.displayName }}</CardTitle>
                     <button
                       @click="startEditName(account)"
-                      class="p-0.5 rounded opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-opacity"
+                      class="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-all duration-150"
                     >
                       <Pencil class="h-3.5 w-3.5" />
                     </button>
@@ -289,21 +297,21 @@ onMounted(() => {
                   {{ PROVIDERS.find(p => p.id === account.companyId)?.name ?? account.companyId }}
                   <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
                 </CardDescription>
-                <p v-if="section.type === 'bank' && account.balance != null" class="text-lg font-semibold mt-1 tabular-nums">
+                <p v-if="section.type === 'bank' && account.balance != null" class="text-[18px] font-semibold mt-1.5 tabular-nums">
                   {{ account.balance.toLocaleString('he-IL', { style: 'currency', currency: 'ILS' }) }}
                 </p>
-                <p class="text-[11px] text-text-secondary mt-1">
+                <p class="text-[12px] text-text-tertiary mt-1.5">
                   <span v-if="account.lastScrapedAt">
                     Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
                   </span>
                   <span v-else>Never scraped</span>
                 </p>
-                <div class="flex items-center gap-4 mt-2">
-                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                <div class="flex items-center gap-5 mt-3">
+                  <label v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)" class="flex items-center gap-2 text-[12px] text-text-secondary">
                     <Switch :model-value="account.manualLogin" @update:model-value="patchAccount(account.id, { manualLogin: $event })" />
                     Manual login
                   </label>
-                  <label class="flex items-center gap-1.5 text-[11px] text-text-secondary">
+                  <label class="flex items-center gap-2 text-[12px] text-text-secondary">
                     <Switch :model-value="account.showBrowser" :disabled="account.manualLogin" @update:model-value="patchAccount(account.id, { showBrowser: $event })" />
                     Show browser
                   </label>
@@ -317,8 +325,8 @@ onMounted(() => {
                   :disabled="scrapingAccounts.has(account.id)"
                   @click="handleScrape(account)"
                 >
-                  <Loader2 v-if="scrapingAccounts.has(account.id)" class="h-3 w-3 mr-1 animate-spin" />
-                  <RefreshCw v-else class="h-3 w-3 mr-1" />
+                  <Loader2 v-if="scrapingAccounts.has(account.id)" class="h-3 w-3 mr-1.5 animate-spin" />
+                  <RefreshCw v-else class="h-3 w-3 mr-1.5" />
                   {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
                 </Button>
 
@@ -327,14 +335,14 @@ onMounted(() => {
                   size="sm"
                   @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
-                  <Power class="h-3 w-3 mr-1" />
+                  <Power class="h-3 w-3 mr-1.5" />
                   {{ account.isActive ? 'Disable' : 'Enable' }}
                 </Button>
 
                 <AlertDialog>
                   <AlertDialogTrigger as-child>
-                    <Button variant="destructive" size="sm">
-                      <Trash2 class="h-3 w-3" />
+                    <Button variant="ghost" size="icon-sm" class="text-text-tertiary hover:text-destructive">
+                      <Trash2 class="h-3.5 w-3.5" />
                     </Button>
                   </AlertDialogTrigger>
                   <AlertDialogContent>
@@ -369,7 +377,7 @@ onMounted(() => {
           <DialogTitle>Add New Account</DialogTitle>
         </DialogHeader>
 
-        <div class="space-y-4 py-2">
+        <div class="space-y-5 py-2">
           <div class="space-y-1.5">
             <label class="text-[13px] font-medium">Provider</label>
             <Select v-model="newCompanyId">
@@ -394,18 +402,18 @@ onMounted(() => {
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
 
-          <div v-if="newCompanyId" class="space-y-3">
+          <div v-if="newCompanyId" class="space-y-4">
             <!-- OTP note banner (e.g. OneZero) -->
             <div
               v-if="selectedProvider?.otpNote"
-              class="rounded-md border border-primary/20 bg-primary/5 px-3 py-2 text-[13px] text-primary"
+              class="rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-[13px] text-primary"
             >
               {{ selectedProvider.otpNote }}
             </div>
 
             <!-- Known provider: render labeled fields -->
             <template v-if="selectedProvider && selectedProvider.fields.length > 0">
-              <div v-for="field in selectedProvider.fields" :key="field.key" class="space-y-1">
+              <div v-for="field in selectedProvider.fields" :key="field.key" class="space-y-1.5">
                 <label class="text-[13px] font-medium">{{ field.label }}</label>
                 <Input
                   v-model="credentialValues[field.key]"
@@ -413,20 +421,20 @@ onMounted(() => {
                   :placeholder="field.placeholder ?? ''"
                   :autocomplete="field.type === 'password' ? 'current-password' : 'off'"
                 />
-                <p v-if="field.hint" class="text-[11px] text-text-secondary">{{ field.hint }}</p>
+                <p v-if="field.hint" class="text-[11px] text-text-tertiary">{{ field.hint }}</p>
               </div>
             </template>
 
             <!-- Unknown provider: generic key-value fallback -->
             <template v-else>
-              <div class="space-y-1.5">
+              <div class="space-y-2">
                 <label class="text-[13px] font-medium">Credentials</label>
                 <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
                   <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
                   <Input v-model="field.value" type="password" placeholder="Value" />
                 </div>
                 <Button variant="outline" size="sm" @click="addCredentialField">
-                  <Plus class="h-3 w-3 mr-1" />
+                  <Plus class="h-3 w-3 mr-1.5" />
                   Add Field
                 </Button>
               </div>

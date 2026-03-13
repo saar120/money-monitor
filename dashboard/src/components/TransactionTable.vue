@@ -21,7 +21,7 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
-import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle } from 'lucide-vue-next';
+import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle, Receipt } from 'lucide-vue-next';
 import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
 
 const transactions = ref<Transaction[]>([]);
@@ -173,72 +173,74 @@ onUnmounted(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-4">Transactions</h1>
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Transactions</h1>
 
     <!-- Filters -->
-    <div class="flex-shrink-0 mb-4">
-        <div class="flex flex-wrap gap-2">
-          <Input
-            v-model="search"
-            placeholder="Search description..."
-            class="w-48"
-            @keyup.enter="applyFilters"
-          />
+    <div class="flex-shrink-0 mb-4 space-y-2.5">
+      <div class="flex items-center gap-2.5">
+        <Input
+          v-model="search"
+          placeholder="Search description..."
+          class="w-60"
+          @keyup.enter="applyFilters"
+        />
 
-          <Select v-model="accountTypeFilter" @update:model-value="() => { selectedAccount = 'all'; applyFilters(); }">
-            <SelectTrigger class="w-40">
-              <SelectValue placeholder="All Types" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Types</SelectItem>
-              <SelectItem value="bank">Banks</SelectItem>
-              <SelectItem value="credit_card">Credit Cards</SelectItem>
-            </SelectContent>
-          </Select>
+        <Select v-model="accountTypeFilter" @update:model-value="() => { selectedAccount = 'all'; applyFilters(); }">
+          <SelectTrigger class="w-40">
+            <SelectValue placeholder="All Types" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Types</SelectItem>
+            <SelectItem value="bank">Banks</SelectItem>
+            <SelectItem value="credit_card">Credit Cards</SelectItem>
+          </SelectContent>
+        </Select>
 
-          <Select v-model="selectedAccount" @update:model-value="applyFilters">
-            <SelectTrigger class="w-44">
-              <SelectValue placeholder="All Accounts" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All Accounts</SelectItem>
-              <SelectItem
-                v-for="acc in filteredAccounts"
-                :key="acc.id"
-                :value="String(acc.id)"
-              >
-                {{ acc.displayName }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
+        <Select v-model="selectedAccount" @update:model-value="applyFilters">
+          <SelectTrigger class="w-44">
+            <SelectValue placeholder="All Accounts" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Accounts</SelectItem>
+            <SelectItem
+              v-for="acc in filteredAccounts"
+              :key="acc.id"
+              :value="String(acc.id)"
+            >
+              {{ acc.displayName }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
 
-          <Input
-            v-model="startDate"
-            type="date"
-            class="w-36"
-            @change="applyFilters"
-          />
-          <Input
-            v-model="endDate"
-            type="date"
-            class="w-36"
-            @change="applyFilters"
-          />
+        <Select v-model="selectedCategory" @update:model-value="applyFilters">
+          <SelectTrigger class="w-40">
+            <SelectValue placeholder="All categories" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All categories</SelectItem>
+            <SelectItem v-for="cat in availableCategories" :key="cat.name" :value="cat.name">
+              {{ cat.label }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </div>
 
-          <Select v-model="selectedCategory" @update:model-value="applyFilters">
-            <SelectTrigger class="w-36">
-              <SelectValue placeholder="All categories" />
-            </SelectTrigger>
-            <SelectContent>
-              <SelectItem value="all">All categories</SelectItem>
-              <SelectItem v-for="cat in availableCategories" :key="cat.name" :value="cat.name">
-                {{ cat.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-
-          <Button @click="applyFilters" variant="default" size="sm">Filter</Button>
-        </div>
+      <div class="flex items-center gap-2.5">
+        <Input
+          v-model="startDate"
+          type="date"
+          class="w-36"
+          @change="applyFilters"
+        />
+        <span class="text-[12px] text-text-tertiary">to</span>
+        <Input
+          v-model="endDate"
+          type="date"
+          class="w-36"
+          @change="applyFilters"
+        />
+        <Button @click="applyFilters" variant="outline" size="sm">Filter</Button>
+      </div>
     </div>
 
     <!-- Table -->
@@ -293,8 +295,12 @@ onUnmounted(() => {
                 </TableRow>
               </template>
               <TableRow v-else-if="transactions.length === 0">
-                <TableCell colspan="6" class="text-center text-text-secondary py-12">
-                  No transactions found
+                <TableCell colspan="6" class="text-center py-16">
+                  <div class="flex flex-col items-center">
+                    <Receipt class="h-10 w-10 text-text-tertiary mb-3" />
+                    <p class="text-text-primary text-[14px] font-medium mb-1">No transactions found</p>
+                    <p class="text-text-secondary text-[13px]">Try adjusting your filters</p>
+                  </div>
                 </TableCell>
               </TableRow>
               <TableRow
@@ -310,7 +316,7 @@ onUnmounted(() => {
                 </TableCell>
                 <TableCell class="max-w-xs truncate">
                   <span class="flex items-center gap-1.5">
-                    <AlertCircle v-if="txn.needsReview" class="h-3.5 w-3.5 text-amber-500 flex-shrink-0" />
+                    <AlertCircle v-if="txn.needsReview" class="h-3.5 w-3.5 text-[var(--warning)] flex-shrink-0" />
                     {{ txn.description }}
                   </span>
                 </TableCell>
@@ -339,7 +345,7 @@ onUnmounted(() => {
                         >
                           {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                         </Badge>
-                        <span v-else class="text-text-secondary">—</span>
+                        <span v-else class="text-text-tertiary">—</span>
                       </SelectValue>
                     </SelectTrigger>
                     <SelectContent @close-auto-focus="editingCategoryFor = null">
@@ -361,7 +367,7 @@ onUnmounted(() => {
                   <!-- Lightweight clickable display for all other rows -->
                   <button
                     v-else
-                    class="h-7 text-[11px] w-36 flex items-center px-1 rounded-md hover:bg-bg-tertiary transition-colors"
+                    class="h-7 text-[11px] w-36 flex items-center px-1 rounded-lg hover:bg-bg-tertiary transition-colors duration-150"
                     :class="updatingCategoryFor === txn.id ? 'opacity-50 pointer-events-none' : ''"
                     @click="editingCategoryFor = txn.id"
                   >
@@ -373,14 +379,14 @@ onUnmounted(() => {
                     >
                       {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                     </Badge>
-                    <span v-else class="text-text-secondary">—</span>
+                    <span v-else class="text-text-tertiary">—</span>
                   </button>
                 </TableCell>
                 <TableCell>
                   <Badge
                     :variant="txn.status === 'completed' ? 'default' : 'secondary'"
                     class="text-[11px]"
-                    :class="txn.status === 'pending' ? 'bg-amber-500/10 text-amber-400' : ''"
+                    :class="txn.status === 'pending' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : ''"
                   >
                     {{ txn.status }}
                   </Badge>
@@ -394,7 +400,7 @@ onUnmounted(() => {
     </Card>
 
     <!-- Pagination -->
-    <div class="flex items-center justify-between flex-shrink-0 pt-4">
+    <div class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40">
       <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
@@ -425,12 +431,13 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 min-w-[140px] border bg-bg-primary text-text-primary border-separator shadow-[0_4px_16px_rgba(0,0,0,0.12)] rounded-xl py-1"
+        class="fixed z-50 min-w-[160px] border border-separator/50 bg-bg-primary text-text-primary shadow-[var(--shadow-lg)] rounded-xl py-1 animate-scale-in backdrop-blur-xl"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
         @click.stop
       >
         <button
-          class="w-full px-3 py-1.5 text-[13px] text-left hover:bg-bg-tertiary hover:text-text-primary transition-colors"
+          class="w-full px-3.5 py-2 text-[13px] text-left hover:bg-primary/10 hover:text-primary rounded-lg mx-0.5 transition-colors duration-150"
+          style="width: calc(100% - 4px)"
           @click="toggleIgnore"
         >
           {{ contextMenu.txn.ignored ? 'Unignore transaction' : 'Ignore transaction' }}

@@ -136,7 +136,7 @@ const MOVEMENT_BADGE_CLASSES: Record<string, string> = {
   deposit: 'bg-success/10 text-success',
   withdrawal: 'bg-destructive/10 text-destructive',
   buy: 'bg-primary/10 text-primary',
-  sell: 'bg-amber-500/10 text-amber-500',
+  sell: 'bg-[var(--warning)]/10 text-[var(--warning)]',
   dividend: 'bg-cyan-500/10 text-cyan-500',
 };
 
@@ -574,7 +574,7 @@ async function confirmDeleteMovement() {
                   <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
-                      <AlertCircle class="h-3.5 w-3.5 text-amber-500" />
+                      <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
                       <span class="text-[11px]">No price data</span>
                     </div>
                   </TableCell>
@@ -643,7 +643,7 @@ async function confirmDeleteMovement() {
 
           <!-- Mobile cards -->
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
-            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-md">
+            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
               <div class="flex items-center justify-between">
                 <span class="font-medium text-[13px]">{{ h.name }}</span>
                 <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
@@ -705,7 +705,7 @@ async function confirmDeleteMovement() {
           </Button>
         </div>
 
-        <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
+        <div v-else class="space-y-0 border border-separator rounded-lg divide-y divide-separator">
           <div v-for="m in movementsList" :key="m.id" class="px-4 py-3 group">
             <div class="flex items-start justify-between">
               <div>
@@ -860,7 +860,7 @@ async function confirmDeleteMovement() {
           <div>
             <label class="text-[13px] font-medium">{{ quantityLabel }}</label>
             <Input v-model.number="movementForm.quantity" type="number" />
-            <p v-if="sellMaxWarning" class="text-[11px] text-amber-500 mt-1">{{ sellMaxWarning }}</p>
+            <p v-if="sellMaxWarning" class="text-[11px] text-[var(--warning)] mt-1">{{ sellMaxWarning }}</p>
           </div>
           <div>
             <label class="text-[13px] font-medium">Currency</label>

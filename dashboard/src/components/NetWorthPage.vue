@@ -745,13 +745,13 @@ const fullLiabilityMap = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-4 animate-fade-in-up">
+  <div class="space-y-5 animate-fade-in-up">
     <h1 class="text-[22px] font-semibold text-text-primary">Net Worth</h1>
 
     <!-- Stale rates warning -->
     <div
       v-if="nw?.ratesStale"
-      class="flex items-center gap-2 px-3 py-2 mb-3 rounded-md bg-amber-500/10 border border-amber-500/20 text-[12px] text-amber-600 dark:text-amber-400"
+      class="flex items-center gap-2 px-3 py-2 mb-5 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/20 text-[12px] text-[var(--warning)]"
     >
       <AlertCircle class="h-3.5 w-3.5 flex-shrink-0" />
       <span>Exchange rates unavailable — some values may be inaccurate</span>
@@ -769,7 +769,7 @@ const fullLiabilityMap = computed(() => {
         </div>
         <div v-else-if="nw" class="grid grid-cols-[1fr_auto] gap-6 items-start max-md:grid-cols-1">
           <div>
-            <p class="text-[11px] font-medium text-text-secondary uppercase tracking-widest mb-1">
+            <p class="text-[11px] font-semibold text-text-secondary mb-1">
               Total Net Worth
             </p>
             <p class="text-4xl font-semibold tabular-nums text-text-primary">
@@ -830,7 +830,7 @@ const fullLiabilityMap = computed(() => {
             :options="doughnutOptions"
             :plugins="[doughnutCenterTextPlugin]"
           />
-          <Skeleton v-else-if="netWorth.loading.value" class="h-48 w-full rounded-md" />
+          <Skeleton v-else-if="netWorth.loading.value" class="h-48 w-full rounded-lg" />
           <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
         </CardContent>
       </Card>
@@ -857,7 +857,7 @@ const fullLiabilityMap = computed(() => {
         </CardHeader>
         <CardContent>
           <Line v-if="trendData" :data="trendData" :options="lineOptions" />
-          <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-md" />
+          <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-lg" />
           <p v-else class="text-[13px] text-text-secondary text-center py-12">
             Start tracking your assets to see net worth history
           </p>
@@ -866,9 +866,9 @@ const fullLiabilityMap = computed(() => {
     </div>
 
     <!-- Lists section -->
-    <div class="space-y-4">
+    <div class="space-y-5">
       <!-- Assets Section -->
-      <div class="space-y-3 animate-fade-in-up stagger-3">
+      <div class="space-y-5 animate-fade-in-up stagger-3">
         <div class="flex items-center justify-between">
           <h2 class="text-[15px] font-semibold">Assets</h2>
           <Button size="sm" @click="openAddAsset">
@@ -1154,7 +1154,7 @@ const fullLiabilityMap = computed(() => {
       </div>
 
       <!-- Bank Balances -->
-      <div v-if="banks.length > 0" class="space-y-3 animate-fade-in-up stagger-4">
+      <div v-if="banks.length > 0" class="space-y-5 animate-fade-in-up stagger-4">
         <h2 class="text-[15px] font-semibold">Bank Balances</h2>
         <div
           class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"
@@ -1173,7 +1173,7 @@ const fullLiabilityMap = computed(() => {
       </div>
 
       <!-- Liabilities Section -->
-      <div class="space-y-3 animate-fade-in-up stagger-5">
+      <div class="space-y-5 animate-fade-in-up stagger-5">
         <div class="flex items-center justify-between">
           <h2 class="text-[15px] font-semibold">Liabilities</h2>
           <Button size="sm" @click="openAddLiability">

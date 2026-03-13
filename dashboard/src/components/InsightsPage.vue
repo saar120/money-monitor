@@ -85,7 +85,7 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-4">Insights</h1>
+    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Insights</h1>
 
     <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
       <CardHeader class="pb-2 flex-shrink-0">
@@ -121,8 +121,12 @@ onMounted(async () => {
                 </TableRow>
               </template>
               <TableRow v-else-if="items.length === 0">
-                <TableCell colspan="7" class="text-center text-text-secondary py-12">
-                  All clear! No transactions need review.
+                <TableCell colspan="7" class="text-center py-16">
+                  <div class="flex flex-col items-center">
+                    <Check class="h-10 w-10 text-success mb-3" />
+                    <p class="text-text-primary text-[14px] font-medium mb-1">All clear!</p>
+                    <p class="text-text-secondary text-[13px]">No transactions need review</p>
+                  </div>
                 </TableCell>
               </TableRow>
               <TableRow
@@ -151,7 +155,7 @@ onMounted(async () => {
                   </Badge>
                   <span v-else class="text-text-secondary">—</span>
                 </TableCell>
-                <TableCell class="max-w-xs text-[13px] text-text-secondary">
+                <TableCell class="max-w-sm text-[13px] text-text-secondary">
                   {{ txn.reviewReason }}
                 </TableCell>
                 <TableCell class="text-center">
@@ -165,7 +169,7 @@ onMounted(async () => {
                       'bg-success/15 text-success'
                     ]"
                   >
-                    {{ Math.round(txn.confidence * 100) }}%
+                    {{ txn.confidence < 0.5 ? '! ' : txn.confidence < 0.8 ? '~ ' : '' }}{{ Math.round(txn.confidence * 100) }}%
                   </Badge>
                   <span v-else class="text-text-secondary">—</span>
                 </TableCell>
@@ -213,7 +217,7 @@ onMounted(async () => {
     </Card>
 
     <!-- Pagination -->
-    <div v-if="total > 0" class="flex items-center justify-between flex-shrink-0 pt-4">
+    <div v-if="total > 0" class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40">
       <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;

@@ -160,7 +160,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto h-full overflow-y-auto space-y-6 animate-fade-in-up">
+  <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-20 space-y-5 animate-fade-in-up">
     <div class="flex items-center gap-3">
       <Settings class="h-6 w-6 text-primary" />
       <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
@@ -193,7 +193,7 @@ async function save() {
         </CardHeader>
         <CardContent class="space-y-4">
           <!-- Current status -->
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary bg-bg-secondary rounded-md px-3 py-2">
+          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary bg-bg-secondary rounded-lg px-3.5 py-2.5">
             <span>Provider: <strong class="text-text-primary">{{ currentProvider?.name ?? form.AI_PROVIDER }}</strong></span>
             <span>Model: <strong class="text-text-primary">{{ form.AI_CHAT_MODEL || form.ANTHROPIC_MODEL || 'default' }}</strong></span>
             <span v-if="form.AI_PROVIDER === 'anthropic'">
@@ -211,7 +211,7 @@ async function save() {
           </div>
 
           <!-- Provider -->
-          <div class="space-y-1">
+          <div class="space-y-1.5">
             <label class="text-[13px] font-medium text-text-primary block">Provider</label>
             <Select v-model="form.AI_PROVIDER">
               <SelectTrigger>
@@ -227,7 +227,7 @@ async function save() {
           </div>
 
           <!-- API Key (dynamic per provider) -->
-          <div class="space-y-1">
+          <div class="space-y-1.5">
             <label class="text-[13px] font-medium text-text-primary block">{{ currentProvider?.name ?? 'API' }} Key</label>
             <Input
               type="password"
@@ -283,7 +283,7 @@ async function save() {
             <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
 
             <!-- Manual OAuth token paste -->
-            <div class="space-y-1">
+            <div class="space-y-1.5">
               <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
               <Input
                 type="password"
@@ -296,7 +296,7 @@ async function save() {
           </template>
 
           <!-- Chat Model -->
-          <div class="space-y-1">
+          <div class="space-y-1.5">
             <label class="text-[13px] font-medium text-text-primary block">Chat Model</label>
             <Select v-model="form.AI_CHAT_MODEL">
               <SelectTrigger>
@@ -318,7 +318,7 @@ async function save() {
             </div>
 
             <template v-if="useSeparateBatch">
-              <div class="space-y-1">
+              <div class="space-y-1.5">
                 <label class="text-[13px] font-medium text-text-primary block">Batch Provider</label>
                 <Select v-model="form.AI_BATCH_PROVIDER">
                   <SelectTrigger>
@@ -333,7 +333,7 @@ async function save() {
               </div>
 
               <!-- Batch API Key (show if different from chat provider) -->
-              <div v-if="form.AI_BATCH_PROVIDER && form.AI_BATCH_PROVIDER !== form.AI_PROVIDER" class="space-y-1">
+              <div v-if="form.AI_BATCH_PROVIDER && form.AI_BATCH_PROVIDER !== form.AI_PROVIDER" class="space-y-1.5">
                 <label class="text-[13px] font-medium text-text-primary block">{{ batchProvider?.name ?? 'API' }} Key</label>
                 <Input
                   type="password"
@@ -343,7 +343,7 @@ async function save() {
                 />
               </div>
 
-              <div class="space-y-1">
+              <div class="space-y-1.5">
                 <label class="text-[13px] font-medium text-text-primary block">Batch Model</label>
                 <Select v-model="form.AI_BATCH_MODEL_ID">
                   <SelectTrigger>
@@ -360,7 +360,7 @@ async function save() {
           </div>
 
           <!-- Max Turns -->
-          <div class="border-t pt-4 space-y-1">
+          <div class="border-t pt-4 space-y-1.5">
             <label class="text-[13px] font-medium text-text-primary block">Max Tool Rounds</label>
             <Input v-model="form.AI_MAX_TURNS" type="number" min="1" max="20" />
             <p class="text-[11px] text-text-secondary mt-1">
@@ -484,7 +484,7 @@ async function save() {
       </Card>
 
       <!-- Save -->
-      <div class="flex items-center gap-3">
+      <div class="sticky bottom-0 bg-bg-primary/80 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 border-t border-separator/40 flex items-center gap-3">
         <Button :disabled="saving" @click="save">
           <Save class="h-4 w-4 mr-1" />
           {{ saving ? 'Saving...' : 'Save Settings' }}

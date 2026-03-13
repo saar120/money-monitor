@@ -259,7 +259,7 @@ function formatMovementDate(iso: string) {
           <p class="text-text-secondary text-[13px]">No contributions recorded yet.</p>
         </div>
 
-        <div v-else class="border border-separator rounded-md divide-y divide-separator">
+        <div v-else class="border border-separator rounded-lg divide-y divide-separator">
           <div v-for="m in contributionMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
             <span class="text-[13px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
             <span class="text-[13px] font-medium tabular-nums">{{ formatCurrency(Math.abs(m.quantity)) }}</span>
