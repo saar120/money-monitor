@@ -1,13 +1,26 @@
 <script setup lang="ts">
 import { ref, onMounted, computed } from 'vue';
-import { getSettings, updateSettings, toggleDemoMode, getAIProviders, type SettingsResponse, type AIProvider } from '../api/client';
+import {
+  getSettings,
+  updateSettings,
+  toggleDemoMode,
+  getAIProviders,
+  type SettingsResponse,
+  type AIProvider,
+} from '../api/client';
 import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
-import { Settings, Bot, Key, Clock, Send, FolderOpen, Save, CheckCircle, AlertCircle } from 'lucide-vue-next';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
+import { Bot, Key, Clock, Send, FolderOpen, Save, CheckCircle, AlertCircle } from 'lucide-vue-next';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -42,16 +55,16 @@ const form = ref({
 });
 
 const currentProvider = computed(() =>
-  providers.value.find(p => p.id === form.value.AI_PROVIDER)
+  providers.value.find((p) => p.id === form.value.AI_PROVIDER),
 );
 const batchProvider = computed(() =>
-  providers.value.find(p => p.id === (form.value.AI_BATCH_PROVIDER || form.value.AI_PROVIDER))
+  providers.value.find((p) => p.id === (form.value.AI_BATCH_PROVIDER || form.value.AI_PROVIDER)),
 );
-const currentApiKeyField = computed(() =>
-  (currentProvider.value?.apiKeyField ?? 'ANTHROPIC_API_KEY') as keyof typeof form.value
+const currentApiKeyField = computed(
+  () => (currentProvider.value?.apiKeyField ?? 'ANTHROPIC_API_KEY') as keyof typeof form.value,
 );
-const batchApiKeyField = computed(() =>
-  (batchProvider.value?.apiKeyField ?? 'ANTHROPIC_API_KEY') as keyof typeof form.value
+const batchApiKeyField = computed(
+  () => (batchProvider.value?.apiKeyField ?? 'ANTHROPIC_API_KEY') as keyof typeof form.value,
 );
 
 // Track which secret fields the user has modified
@@ -84,7 +97,8 @@ onMounted(async () => {
     form.value.SCRAPE_TIMEZONE = String(s.SCRAPE_TIMEZONE || 'Asia/Jerusalem');
     form.value.SCRAPE_START_DATE_MONTHS_BACK = String(s.SCRAPE_START_DATE_MONTHS_BACK || '3');
     form.value.SCRAPE_TIMEOUT = String(s.SCRAPE_TIMEOUT || '120000');
-    form.value.SCRAPE_SHOW_BROWSER = s.SCRAPE_SHOW_BROWSER === true || s.SCRAPE_SHOW_BROWSER === 'true';
+    form.value.SCRAPE_SHOW_BROWSER =
+      s.SCRAPE_SHOW_BROWSER === true || s.SCRAPE_SHOW_BROWSER === 'true';
     form.value.TELEGRAM_ALLOWED_USERS = String(s.TELEGRAM_ALLOWED_USERS || '');
     form.value.AI_MAX_TURNS = String(s.AI_MAX_TURNS || '8');
     // Secret fields show redacted placeholder — left empty until user types
@@ -113,9 +127,12 @@ async function handleDemoToggle(enabled: boolean) {
 // ── Anthropic OAuth ──────────────────────────────────────────────────────────
 
 const oauthConnected = computed(() => data.value?.oauth?.anthropic ?? false);
-const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useAnthropicOAuth({
-  onSuccess: () => { if (data.value) data.value.oauth.anthropic = true; },
-});
+const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } =
+  useAnthropicOAuth({
+    onSuccess: () => {
+      if (data.value) data.value.oauth.anthropic = true;
+    },
+  });
 
 // ── Save ─────────────────────────────────────────────────────────────────────
 
@@ -140,8 +157,13 @@ async function save() {
     };
     // Only include secrets that the user actually modified
     const secretKeys = [
-      'ANTHROPIC_API_KEY', 'ANTHROPIC_OAUTH_TOKEN', 'CREDENTIALS_MASTER_KEY',
-      'TELEGRAM_BOT_TOKEN', 'OPENAI_API_KEY', 'GEMINI_API_KEY', 'OPENROUTER_API_KEY',
+      'ANTHROPIC_API_KEY',
+      'ANTHROPIC_OAUTH_TOKEN',
+      'CREDENTIALS_MASTER_KEY',
+      'TELEGRAM_BOT_TOKEN',
+      'OPENAI_API_KEY',
+      'GEMINI_API_KEY',
+      'OPENROUTER_API_KEY',
     ] as const;
     for (const key of secretKeys) {
       if (dirtySecrets.value.has(key) && form.value[key]) {
@@ -161,19 +183,15 @@ async function save() {
 
 <template>
   <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-20 space-y-5 animate-fade-in-up">
-    <div class="flex items-center gap-3">
-      <Settings class="h-6 w-6 text-primary" />
-      <h1 class="text-[22px] font-semibold text-text-primary">Settings</h1>
-    </div>
-
     <div v-if="loading" class="text-text-secondary">Loading settings...</div>
 
     <template v-else-if="!isElectron">
       <Card>
         <CardContent class="pt-6">
           <p class="text-text-secondary">
-            Settings are managed via the <code class="text-text-primary">.env</code> file in standalone mode.
-            Edit <code class="text-text-primary">.env</code> and restart the server to apply changes.
+            Settings are managed via the <code class="text-text-primary">.env</code> file in
+            standalone mode. Edit <code class="text-text-primary">.env</code> and restart the server
+            to apply changes.
           </p>
         </CardContent>
       </Card>
@@ -193,20 +211,36 @@ async function save() {
         </CardHeader>
         <CardContent class="space-y-4">
           <!-- Current status -->
-          <div class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary bg-bg-secondary rounded-lg px-3.5 py-2.5">
-            <span>Provider: <strong class="text-text-primary">{{ currentProvider?.name ?? form.AI_PROVIDER }}</strong></span>
-            <span>Model: <strong class="text-text-primary">{{ form.AI_CHAT_MODEL || form.ANTHROPIC_MODEL || 'default' }}</strong></span>
+          <div
+            class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary bg-bg-secondary rounded-lg px-3.5 py-2.5"
+          >
+            <span
+              >Provider:
+              <strong class="text-text-primary">{{
+                currentProvider?.name ?? form.AI_PROVIDER
+              }}</strong></span
+            >
+            <span
+              >Model:
+              <strong class="text-text-primary">{{
+                form.AI_CHAT_MODEL || form.ANTHROPIC_MODEL || 'default'
+              }}</strong></span
+            >
             <span v-if="form.AI_PROVIDER === 'anthropic'">
               Auth:
-              <strong class="text-text-primary" v-if="oauthConnected">OAuth</strong>
-              <strong class="text-text-primary" v-else-if="data?.settings?.ANTHROPIC_OAUTH_TOKEN">Token</strong>
-              <strong class="text-text-primary" v-else-if="data?.settings?.ANTHROPIC_API_KEY">API Key</strong>
-              <strong class="text-destructive" v-else>Not set</strong>
+              <strong v-if="oauthConnected" class="text-text-primary">OAuth</strong>
+              <strong v-else-if="data?.settings?.ANTHROPIC_OAUTH_TOKEN" class="text-text-primary"
+                >Token</strong
+              >
+              <strong v-else-if="data?.settings?.ANTHROPIC_API_KEY" class="text-text-primary"
+                >API Key</strong
+              >
+              <strong v-else class="text-destructive">Not set</strong>
             </span>
             <span v-else>
               Auth:
-              <strong class="text-text-primary" v-if="currentProvider?.hasKey">API Key</strong>
-              <strong class="text-destructive" v-else>Not set</strong>
+              <strong v-if="currentProvider?.hasKey" class="text-text-primary">API Key</strong>
+              <strong v-else class="text-destructive">Not set</strong>
             </span>
           </div>
 
@@ -228,12 +262,23 @@ async function save() {
 
           <!-- API Key (dynamic per provider) -->
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium text-text-primary block">{{ currentProvider?.name ?? 'API' }} Key</label>
+            <label class="text-[13px] font-medium text-text-primary block"
+              >{{ currentProvider?.name ?? 'API' }} Key</label
+            >
             <Input
               type="password"
               :model-value="form[currentApiKeyField] as string"
-              @update:model-value="(v: string | number) => { (form[currentApiKeyField] as any) = String(v); markDirty(currentApiKeyField) }"
-              :placeholder="data?.settings?.[currentApiKeyField] ? String(data.settings[currentApiKeyField]) : 'Not set'"
+              :placeholder="
+                data?.settings?.[currentApiKeyField]
+                  ? String(data.settings[currentApiKeyField])
+                  : 'Not set'
+              "
+              @update:model-value="
+                (v: string | number) => {
+                  (form[currentApiKeyField] as any) = String(v);
+                  markDirty(currentApiKeyField);
+                }
+              "
             />
           </div>
 
@@ -244,13 +289,16 @@ async function save() {
               <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
             </div>
 
-            <div v-if="oauthConnected && oauthStep === 'idle'" class="flex items-center gap-2 text-[13px]">
+            <div
+              v-if="oauthConnected && oauthStep === 'idle'"
+              class="flex items-center gap-2 text-[13px]"
+            >
               <CheckCircle class="h-4 w-4 text-green-500" />
               <span class="text-text-secondary">Anthropic OAuth connected</span>
             </div>
 
             <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
-              <Button variant="outline" size="sm" @click="startOAuth" class="w-full">
+              <Button variant="outline" size="sm" class="w-full" @click="startOAuth">
                 Login with Anthropic
               </Button>
               <p class="text-[11px] text-text-secondary">
@@ -273,7 +321,9 @@ async function save() {
                   Submit
                 </Button>
               </div>
-              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">Cancel</button>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">
+                Cancel
+              </button>
             </div>
 
             <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
@@ -286,12 +336,18 @@ async function save() {
             <div class="space-y-1.5">
               <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
               <Input
-                type="password"
                 v-model="form.ANTHROPIC_OAUTH_TOKEN"
-                :placeholder="data?.settings?.ANTHROPIC_OAUTH_TOKEN ? String(data.settings.ANTHROPIC_OAUTH_TOKEN) : 'Not set'"
+                type="password"
+                :placeholder="
+                  data?.settings?.ANTHROPIC_OAUTH_TOKEN
+                    ? String(data.settings.ANTHROPIC_OAUTH_TOKEN)
+                    : 'Not set'
+                "
                 @input="markDirty('ANTHROPIC_OAUTH_TOKEN')"
               />
-              <p class="text-[11px] text-text-secondary mt-1">Paste an OAuth token directly (e.g. from Claude Code CLI)</p>
+              <p class="text-[11px] text-text-secondary mt-1">
+                Paste an OAuth token directly (e.g. from Claude Code CLI)
+              </p>
             </div>
           </template>
 
@@ -314,12 +370,16 @@ async function save() {
           <div class="border-t pt-4 space-y-3">
             <div class="flex items-center gap-2">
               <Switch v-model="useSeparateBatch" />
-              <label class="text-[13px] text-text-primary">Use different model for batch categorization</label>
+              <label class="text-[13px] text-text-primary"
+                >Use different model for batch categorization</label
+              >
             </div>
 
             <template v-if="useSeparateBatch">
               <div class="space-y-1.5">
-                <label class="text-[13px] font-medium text-text-primary block">Batch Provider</label>
+                <label class="text-[13px] font-medium text-text-primary block"
+                  >Batch Provider</label
+                >
                 <Select v-model="form.AI_BATCH_PROVIDER">
                   <SelectTrigger>
                     <SelectValue placeholder="Select provider" />
@@ -333,13 +393,27 @@ async function save() {
               </div>
 
               <!-- Batch API Key (show if different from chat provider) -->
-              <div v-if="form.AI_BATCH_PROVIDER && form.AI_BATCH_PROVIDER !== form.AI_PROVIDER" class="space-y-1.5">
-                <label class="text-[13px] font-medium text-text-primary block">{{ batchProvider?.name ?? 'API' }} Key</label>
+              <div
+                v-if="form.AI_BATCH_PROVIDER && form.AI_BATCH_PROVIDER !== form.AI_PROVIDER"
+                class="space-y-1.5"
+              >
+                <label class="text-[13px] font-medium text-text-primary block"
+                  >{{ batchProvider?.name ?? 'API' }} Key</label
+                >
                 <Input
                   type="password"
                   :model-value="form[batchApiKeyField] as string"
-                  @update:model-value="(v: string | number) => { (form[batchApiKeyField] as any) = String(v); markDirty(batchApiKeyField) }"
-                  :placeholder="data?.settings?.[batchApiKeyField] ? String(data.settings[batchApiKeyField]) : 'Not set'"
+                  :placeholder="
+                    data?.settings?.[batchApiKeyField]
+                      ? String(data.settings[batchApiKeyField])
+                      : 'Not set'
+                  "
+                  @update:model-value="
+                    (v: string | number) => {
+                      (form[batchApiKeyField] as any) = String(v);
+                      markDirty(batchApiKeyField);
+                    }
+                  "
                 />
               </div>
 
@@ -364,7 +438,8 @@ async function save() {
             <label class="text-[13px] font-medium text-text-primary block">Max Tool Rounds</label>
             <Input v-model="form.AI_MAX_TURNS" type="number" min="1" max="20" />
             <p class="text-[11px] text-text-secondary mt-1">
-              Maximum API calls per chat message (each tool use is one round). Lower values reduce rate-limit issues but may limit complex answers.
+              Maximum API calls per chat message (each tool use is one round). Lower values reduce
+              rate-limit issues but may limit complex answers.
             </p>
           </div>
         </CardContent>
@@ -387,7 +462,11 @@ async function save() {
             <Input
               v-model="form.CREDENTIALS_MASTER_KEY"
               type="password"
-              :placeholder="data?.settings.CREDENTIALS_MASTER_KEY ? String(data.settings.CREDENTIALS_MASTER_KEY) : 'Not set'"
+              :placeholder="
+                data?.settings.CREDENTIALS_MASTER_KEY
+                  ? String(data.settings.CREDENTIALS_MASTER_KEY)
+                  : 'Not set'
+              "
               @input="markDirty('CREDENTIALS_MASTER_KEY')"
             />
             <p class="text-[11px] text-text-secondary mt-1.5">
@@ -411,7 +490,9 @@ async function save() {
         <CardContent class="space-y-4">
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Cron Schedule</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+                >Cron Schedule</label
+              >
               <Input v-model="form.SCRAPE_CRON" placeholder="0 6 * * *" />
             </div>
             <div>
@@ -421,11 +502,15 @@ async function save() {
           </div>
           <div class="grid grid-cols-2 gap-4">
             <div>
-              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Months Back</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+                >Months Back</label
+              >
               <Input v-model="form.SCRAPE_START_DATE_MONTHS_BACK" type="number" />
             </div>
             <div>
-              <label class="text-[13px] font-medium text-text-primary block mb-1.5">Timeout (ms)</label>
+              <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+                >Timeout (ms)</label
+              >
               <Input v-model="form.SCRAPE_TIMEOUT" type="number" />
             </div>
           </div>
@@ -453,12 +538,18 @@ async function save() {
             <Input
               v-model="form.TELEGRAM_BOT_TOKEN"
               type="password"
-              :placeholder="data?.settings.TELEGRAM_BOT_TOKEN ? String(data.settings.TELEGRAM_BOT_TOKEN) : 'Not set'"
+              :placeholder="
+                data?.settings.TELEGRAM_BOT_TOKEN
+                  ? String(data.settings.TELEGRAM_BOT_TOKEN)
+                  : 'Not set'
+              "
               @input="markDirty('TELEGRAM_BOT_TOKEN')"
             />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Allowed User IDs</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+              >Allowed User IDs</label
+            >
             <Input v-model="form.TELEGRAM_ALLOWED_USERS" placeholder="Comma-separated user IDs" />
           </div>
         </CardContent>
@@ -478,13 +569,17 @@ async function save() {
         <CardContent class="space-y-3">
           <div class="flex items-center justify-between">
             <span class="text-[13px] text-text-secondary">Data Directory</span>
-            <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{ data?.dataDir }}</code>
+            <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{
+              data?.dataDir
+            }}</code>
           </div>
         </CardContent>
       </Card>
 
       <!-- Save -->
-      <div class="sticky bottom-0 bg-bg-primary/80 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 border-t border-separator/40 flex items-center gap-3">
+      <div
+        class="sticky bottom-0 bg-bg-primary/80 backdrop-blur-sm pt-4 pb-2 -mx-6 px-6 border-t border-separator/40 flex items-center gap-3"
+      >
         <Button :disabled="saving" @click="save">
           <Save class="h-4 w-4 mr-1" />
           {{ saving ? 'Saving...' : 'Save Settings' }}

@@ -110,12 +110,9 @@ async function testAlert() {
 <template>
   <div class="max-w-2xl mx-auto space-y-5 overflow-y-auto flex-1">
     <div class="flex items-center justify-between">
-      <div>
-        <h1 class="text-[22px] font-semibold text-text-primary">Alerts</h1>
-        <p class="text-[13px] text-text-secondary mt-0.5">
-          AI-powered Telegram notifications about your finances
-        </p>
-      </div>
+      <p class="text-[13px] text-text-secondary">
+        AI-powered Telegram notifications about your finances
+      </p>
       <div class="flex items-center gap-2">
         <Button variant="outline" size="sm" :disabled="saving" @click="reset">
           <RotateCcw class="h-3.5 w-3.5 mr-1.5" />

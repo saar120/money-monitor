@@ -1,6 +1,12 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
-import { getTransactions, getCategories, resolveTransaction, type Transaction, type Category } from '../api/client';
+import {
+  getTransactions,
+  getCategories,
+  resolveTransaction,
+  type Transaction,
+  type Category,
+} from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
 import { Button } from '@/components/ui/button';
 import {
@@ -22,7 +28,13 @@ import {
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check } from 'lucide-vue-next';
-import { formatCurrency, formatDate, DEFAULT_CATEGORY_COLOR, getCategoryStyle, buildCategoryMap } from '@/lib/format';
+import {
+  formatCurrency,
+  formatDate,
+  DEFAULT_CATEGORY_COLOR,
+  getCategoryStyle,
+  buildCategoryMap,
+} from '@/lib/format';
 
 const items = ref<Transaction[]>([]);
 const total = ref(0);
@@ -52,7 +64,7 @@ async function resolve(txn: Transaction, category: string) {
   resolvingId.value = txn.id;
   try {
     await resolveTransaction(txn.id, category);
-    items.value = items.value.filter(t => t.id !== txn.id);
+    items.value = items.value.filter((t) => t.id !== txn.id);
     total.value--;
     reviewCount.value = total.value;
   } catch (err) {
@@ -85,13 +97,12 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Insights</h1>
-
     <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
       <CardHeader class="pb-2 flex-shrink-0">
         <CardTitle class="text-[15px]">
           <template v-if="!loading">
-            {{ total }} transaction{{ total !== 1 ? 's' : '' }} need{{ total === 1 ? 's' : '' }} review
+            {{ total }} transaction{{ total !== 1 ? 's' : '' }} need{{ total === 1 ? 's' : '' }}
+            review
           </template>
         </CardTitle>
       </CardHeader>
@@ -129,11 +140,7 @@ onMounted(async () => {
                   </div>
                 </TableCell>
               </TableRow>
-              <TableRow
-                v-else
-                v-for="txn in items"
-                :key="txn.id"
-              >
+              <TableRow v-for="txn in items" v-else :key="txn.id">
                 <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
@@ -164,12 +171,15 @@ onMounted(async () => {
                     :variant="txn.confidence >= 0.8 ? 'default' : 'secondary'"
                     :class="[
                       'text-[11px] tabular-nums',
-                      txn.confidence < 0.5 ? 'bg-destructive/15 text-destructive' :
-                      txn.confidence < 0.8 ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400' :
-                      'bg-success/15 text-success'
+                      txn.confidence < 0.5
+                        ? 'bg-destructive/15 text-destructive'
+                        : txn.confidence < 0.8
+                          ? 'bg-yellow-500/15 text-yellow-700 dark:text-yellow-400'
+                          : 'bg-success/15 text-success',
                     ]"
                   >
-                    {{ txn.confidence < 0.5 ? '! ' : txn.confidence < 0.8 ? '~ ' : '' }}{{ Math.round(txn.confidence * 100) }}%
+                    {{ txn.confidence < 0.5 ? '! ' : txn.confidence < 0.8 ? '~ ' : ''
+                    }}{{ Math.round(txn.confidence * 100) }}%
                   </Badge>
                   <span v-else class="text-text-secondary">—</span>
                 </TableCell>
@@ -178,19 +188,25 @@ onMounted(async () => {
                     <Select
                       :model-value="txn.category ?? ''"
                       :disabled="resolvingId === txn.id"
-                      @update:model-value="(val) => { if (val && val !== txn.category) resolve(txn, String(val)); }"
+                      @update:model-value="
+                        (val) => {
+                          if (val && val !== txn.category) resolve(txn, String(val));
+                        }
+                      "
                     >
-                      <SelectTrigger class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1" :class="resolvingId === txn.id ? 'opacity-50' : ''">
+                      <SelectTrigger
+                        class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
+                        :class="resolvingId === txn.id ? 'opacity-50' : ''"
+                      >
                         <SelectValue placeholder="Re-categorize" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem
-                          v-for="cat in categories"
-                          :key="cat.name"
-                          :value="cat.name"
-                        >
+                        <SelectItem v-for="cat in categories" :key="cat.name" :value="cat.name">
                           <div class="flex items-center gap-2">
-                            <div class="w-2.5 h-2.5 rounded-full flex-shrink-0" :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }" />
+                            <div
+                              class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                              :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }"
+                            />
                             {{ cat.label }}
                           </div>
                         </SelectItem>
@@ -217,28 +233,20 @@ onMounted(async () => {
     </Card>
 
     <!-- Pagination -->
-    <div v-if="total > 0" class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40">
+    <div
+      v-if="total > 0"
+      class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40"
+    >
       <p class="text-[13px] text-text-secondary">
         Page {{ currentPage() }} of {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
-        {{ offset + 1 }}–{{ Math.min(offset + limit, total) }}
-        of {{ total }}
+        {{ offset + 1 }}–{{ Math.min(offset + limit, total) }} of {{ total }}
       </p>
       <div class="flex gap-2">
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="offset === 0"
-          @click="prevPage"
-        >
+        <Button variant="outline" size="sm" :disabled="offset === 0" @click="prevPage">
           Previous
         </Button>
-        <Button
-          variant="outline"
-          size="sm"
-          :disabled="offset + limit >= total"
-          @click="nextPage"
-        >
+        <Button variant="outline" size="sm" :disabled="offset + limit >= total" @click="nextPage">
           Next
         </Button>
       </div>

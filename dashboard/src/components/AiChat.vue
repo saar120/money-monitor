@@ -146,7 +146,6 @@ function handleKeydown(e: KeyboardEvent) {
           <PanelLeftClose v-if="sidebarOpen" class="h-4 w-4" />
           <PanelLeft v-else class="h-4 w-4" />
         </Button>
-        <h1 class="text-[22px] font-semibold text-text-primary">AI Financial Advisor</h1>
       </div>
 
       <Card class="flex-1 overflow-hidden flex flex-col min-h-0">
@@ -159,7 +158,9 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
               <Bot class="h-8 w-8 text-primary" />
             </div>
-            <p class="text-text-primary text-[15px] font-medium mb-1">Ask me anything about your finances</p>
+            <p class="text-text-primary text-[15px] font-medium mb-1">
+              Ask me anything about your finances
+            </p>
             <p class="text-text-secondary text-[12px] mb-6 max-w-sm">
               I can analyze spending, track subscriptions, categorize transactions, and give budget
               advice

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   LayoutDashboard,
@@ -16,7 +16,7 @@ import {
 import { getSettings, toggleDemoMode } from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
 
-const isElectron = !!(window as any).electronAPI;
+const isElectron = !!(window as unknown as Record<string, unknown>).electronAPI;
 
 const route = useRoute();
 const router = useRouter();
@@ -82,6 +82,23 @@ function isActive(path: string): boolean {
   if (path === '/') return route.path === '/';
   return route.path.startsWith(path);
 }
+
+const pageTitles: Record<string, string> = {
+  '/': 'Overview',
+  '/net-worth': 'Net Worth',
+  '/transactions': 'Transactions',
+  '/insights': 'Insights',
+  '/chat': 'AI Chat',
+  '/accounts': 'Accounts',
+  '/categories': 'Categories',
+  '/alerts': 'Alerts',
+  '/scraping': 'Scraping',
+  '/settings': 'Settings',
+};
+
+const pageTitle = computed(() => {
+  return pageTitles[route.path] ?? '';
+});
 </script>
 
 <template>
@@ -96,7 +113,10 @@ function isActive(path: string): boolean {
       <div v-if="isElectron" class="flex-shrink-0" style="height: 44px; -webkit-app-region: drag" />
 
       <!-- Logo area -->
-      <div class="flex items-center h-10 px-4 flex-shrink-0 gap-2.5" :class="{ 'mt-3': !isElectron }">
+      <div
+        class="flex items-center h-10 px-4 flex-shrink-0 gap-2.5"
+        :class="{ 'mt-3': !isElectron }"
+      >
         <img src="/icon-192.png" alt="" class="h-5 w-5 rounded" />
         <span class="text-[13px] font-semibold text-text-primary tracking-tight">
           Money Monitor
@@ -167,20 +187,6 @@ function isActive(path: string): boolean {
       class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden"
       :class="{ 'rounded-xl shadow-[var(--shadow-md)] border border-separator/40': isElectron }"
     >
-      <!-- Toolbar / header area — drag region -->
-      <div
-        v-if="isElectron"
-        class="h-[44px] flex-shrink-0 flex items-center px-6 border-b border-separator/50"
-        style="-webkit-app-region: drag"
-      >
-        <h2 class="text-[17px] font-semibold text-text-primary">
-          {{ route.meta?.title ?? '' }}
-        </h2>
-        <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
-          <slot name="toolbar-actions" />
-        </div>
-      </div>
-
       <!-- Demo mode banner -->
       <div
         v-if="demoMode"
@@ -188,13 +194,30 @@ function isActive(path: string): boolean {
       >
         <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] mr-1" />
         <span>Demo Mode — Viewing sample data</span>
-        <button class="underline hover:no-underline font-medium ml-1 text-primary" @click="exitDemo">
+        <button
+          class="underline hover:no-underline font-medium ml-1 text-primary"
+          @click="exitDemo"
+        >
           Exit
         </button>
       </div>
 
-      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto p-6 min-w-0">
-        <slot />
+      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto min-w-0">
+        <!-- Glass toolbar — sticky so content scrolls behind with blur -->
+        <div
+          class="content-toolbar sticky top-0 z-10 flex items-center px-6 flex-shrink-0"
+          :style="isElectron ? '-webkit-app-region: drag' : undefined"
+        >
+          <h2 class="text-[15px] font-semibold text-text-primary">
+            {{ pageTitle }}
+          </h2>
+          <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
+            <slot name="toolbar-actions" />
+          </div>
+        </div>
+        <div class="p-6 flex-1 flex flex-col">
+          <slot />
+        </div>
       </main>
     </div>
   </div>

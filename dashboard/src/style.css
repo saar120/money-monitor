@@ -318,6 +318,16 @@
   background: var(--glass-bg);
 }
 
+/* ─── Content Toolbar (macOS Settings-style glass header) ─── */
+.content-toolbar {
+  height: 52px;
+  min-height: 52px;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  border-bottom: 0.5px solid var(--separator);
+}
+
 /* ─── Page transitions ─── */
 .page-enter-active {
   animation: fade-in-up 0.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;

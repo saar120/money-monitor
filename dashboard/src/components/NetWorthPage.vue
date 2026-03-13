@@ -746,8 +746,6 @@ const fullLiabilityMap = computed(() => {
 
 <template>
   <div class="space-y-5 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary">Net Worth</h1>
-
     <!-- Stale rates warning -->
     <div
       v-if="nw?.ratesStale"
@@ -769,9 +767,7 @@ const fullLiabilityMap = computed(() => {
         </div>
         <div v-else-if="nw" class="grid grid-cols-[1fr_auto] gap-6 items-start max-md:grid-cols-1">
           <div>
-            <p class="text-[11px] font-semibold text-text-secondary mb-1">
-              Total Net Worth
-            </p>
+            <p class="text-[11px] font-semibold text-text-secondary mb-1">Total Net Worth</p>
             <p class="text-4xl font-semibold tabular-nums text-text-primary">
               {{
                 nw.total > 0 || nw.assets.length > 0 || nw.banks.length > 0

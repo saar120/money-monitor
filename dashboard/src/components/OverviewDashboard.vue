@@ -197,22 +197,15 @@ const cashflowChartData = computed(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Overview</h1>
-
     <div class="flex-1 min-h-0 overflow-y-auto space-y-5">
       <!-- Bank Balances + Spending — compact top row -->
       <div class="grid grid-cols-[auto_1fr] gap-4 items-end">
-        <h2
-          v-if="bankAccounts.length > 0"
-          class="text-[13px] font-semibold text-text-secondary"
-        >
+        <h2 v-if="bankAccounts.length > 0" class="text-[13px] font-semibold text-text-secondary">
           Bank Balances
         </h2>
         <div v-else-if="accountsData.loading.value" />
         <div v-else />
-        <h2 class="text-[13px] font-semibold text-text-secondary">
-          Spending
-        </h2>
+        <h2 class="text-[13px] font-semibold text-text-secondary">Spending</h2>
       </div>
       <!-- All cards in one flat flex row so they share the same height -->
       <div class="flex gap-3 items-stretch">
@@ -354,9 +347,7 @@ const cashflowChartData = computed(() => {
 
       <!-- Per Account -->
       <div v-if="accountSummary.loading.value" class="space-y-2">
-        <h2 class="text-[13px] font-semibold text-text-secondary">
-          Per Account (This Month)
-        </h2>
+        <h2 class="text-[13px] font-semibold text-text-secondary">Per Account (This Month)</h2>
         <div
           class="grid gap-3"
           style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))"
@@ -365,9 +356,7 @@ const cashflowChartData = computed(() => {
         </div>
       </div>
       <div v-else-if="accountSummary.data.value">
-        <h2 class="text-[13px] font-semibold text-text-secondary mb-3">
-          Per Account (This Month)
-        </h2>
+        <h2 class="text-[13px] font-semibold text-text-secondary mb-3">Per Account (This Month)</h2>
         <p
           v-if="accountSummary.data.value.summary.length === 0"
           class="text-text-tertiary text-[13px]"
@@ -383,8 +372,12 @@ const cashflowChartData = computed(() => {
               <p class="text-[12px] font-medium truncate text-text-secondary">
                 {{ acc.displayName }}
               </p>
-              <p class="text-[17px] font-semibold mt-1 tabular-nums">{{ formatCurrency(acc.totalAmount) }}</p>
-              <p class="text-[11px] text-text-tertiary mt-0.5">{{ acc.transactionCount }} transactions</p>
+              <p class="text-[17px] font-semibold mt-1 tabular-nums">
+                {{ formatCurrency(acc.totalAmount) }}
+              </p>
+              <p class="text-[11px] text-text-tertiary mt-0.5">
+                {{ acc.transactionCount }} transactions
+              </p>
             </CardContent>
           </Card>
         </div>
