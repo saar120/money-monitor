@@ -1,7 +1,0 @@
-{
-  "watch": ["electron/main.ts", "electron/preload.mts"],
-  "ext": "ts,mts",
-  "exec": "tsc -p electron/tsconfig.json && electron .",
-  "env": { "ELECTRON_DEV": "1" },
-  "delay": 500
-}
