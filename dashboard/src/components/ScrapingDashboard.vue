@@ -301,6 +301,7 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
     <!-- Header -->
     <div class="flex items-center justify-between flex-shrink-0 mb-5">
       <div>
+        <h1 class="text-[22px] font-semibold text-text-primary">Scraping</h1>
         <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
       </div>
       <div class="flex items-center gap-2">

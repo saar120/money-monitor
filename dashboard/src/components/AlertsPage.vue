@@ -111,6 +111,7 @@ async function testAlert() {
   <div class="max-w-2xl mx-auto space-y-5 overflow-y-auto flex-1">
     <div class="flex items-center justify-between">
       <div>
+        <h1 class="text-[22px] font-semibold text-text-primary">Alerts</h1>
         <p class="text-[13px] text-text-secondary mt-0.5">
           AI-powered Telegram notifications about your finances
         </p>
