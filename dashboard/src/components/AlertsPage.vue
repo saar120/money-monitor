@@ -7,15 +7,11 @@ import {
   sendTestAlert,
   type AlertSettings,
 } from '../api/client';
-import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
 import {
-  Bell,
-  BarChart3,
-  Calendar,
-  Save,
   CheckCircle,
   AlertCircle,
   RotateCcw,
@@ -109,60 +105,40 @@ async function testAlert() {
 
 <template>
   <div class="max-w-2xl mx-auto space-y-5 overflow-y-auto flex-1">
-    <div class="flex items-center justify-between">
-      <p class="text-[13px] text-text-secondary">
-        AI-powered Telegram notifications about your finances
-      </p>
+    <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
+        <div v-if="success" class="flex items-center gap-1.5 text-[13px] text-success">
+          <CheckCircle class="h-3.5 w-3.5" />
+          {{ success }}
+        </div>
+        <div v-if="error" class="flex items-center gap-1.5 text-[13px] text-destructive">
+          <AlertCircle class="h-3.5 w-3.5" />
+          {{ error }}
+        </div>
         <Button variant="outline" size="sm" :disabled="saving" @click="reset">
-          <RotateCcw class="h-3.5 w-3.5 mr-1.5" />
+          <RotateCcw class="h-3 w-3 mr-1.5" />
           Reset
         </Button>
         <Button variant="outline" size="sm" :disabled="testSending" @click="testAlert">
-          <SendHorizonal class="h-3.5 w-3.5 mr-1.5" />
+          <SendHorizonal class="h-3 w-3 mr-1.5" />
           {{ testSending ? 'Sending…' : 'Test' }}
         </Button>
         <Button size="sm" :disabled="saving" @click="save">
-          <Save class="h-3.5 w-3.5 mr-1.5" />
           {{ saving ? 'Saving…' : 'Save' }}
         </Button>
       </div>
-    </div>
-
-    <!-- Status messages -->
-    <div
-      v-if="error"
-      class="flex items-center gap-2 text-[13px] text-destructive bg-destructive/10 rounded-lg px-3 py-2"
-    >
-      <AlertCircle class="h-4 w-4 flex-shrink-0" />
-      {{ error }}
-    </div>
-    <div
-      v-if="success"
-      class="flex items-center gap-2 text-[13px] text-success bg-success/10 rounded-lg px-3 py-2"
-    >
-      <CheckCircle class="h-4 w-4 flex-shrink-0" />
-      {{ success }}
-    </div>
+    </Teleport>
 
     <template v-if="!loading">
       <!-- Master Switch -->
-      <Card>
-        <CardContent class="pt-4">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <Bell class="h-5 w-5 text-primary" />
-              <div>
-                <div class="text-[14px] font-medium text-text-primary">Enable Alerts</div>
-                <div class="text-[12px] text-text-secondary">
-                  Master switch for all Telegram notifications
-                </div>
-              </div>
-            </div>
-            <Switch v-model="settings.enabled" />
-          </div>
-        </CardContent>
-      </Card>
+      <SettingsGroup>
+        <SettingsRow
+          label="Enable Alerts"
+          description="Master switch for all Telegram notifications"
+        >
+          <Switch v-model="settings.enabled" />
+        </SettingsRow>
+      </SettingsGroup>
 
       <!-- AI approach description -->
       <div
@@ -178,78 +154,64 @@ async function testAlert() {
       </div>
 
       <!-- Post-Scrape Analysis -->
-      <Card :class="{ 'opacity-50 pointer-events-none': !settings.enabled }">
-        <CardHeader class="pb-2">
-          <div class="flex items-center gap-2">
-            <BarChart3 class="h-4 w-4 text-text-secondary" />
-            <CardTitle class="text-[14px]">Post-Scrape Analysis</CardTitle>
-          </div>
-          <CardDescription class="text-[12px]">
-            After each scrape, the agent reviews new transactions and spending patterns
-          </CardDescription>
-          <p class="flex items-start gap-1.5 text-[11px] text-text-tertiary mt-1">
+      <SettingsGroup
+        title="Post-Scrape Analysis"
+        description="After each scrape, the agent reviews new transactions and spending patterns"
+        :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
+      >
+        <SettingsRow class="bg-bg-secondary/30 text-[11px] text-text-tertiary">
+          <div class="flex items-start gap-1.5">
             <Info class="h-3 w-3 mt-0.5 flex-shrink-0" />
             {{ ALERT_HINTS.postScrape }}
-          </p>
-        </CardHeader>
-        <CardContent class="space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="text-[13px] text-text-primary">Large charge threshold (₪)</label>
-            <Input
-              v-model.number="settings.largeChargeThreshold"
-              type="number"
-              class="w-28 h-8 text-[13px]"
-              min="0"
-            />
           </div>
-          <div class="flex items-center justify-between">
-            <label class="text-[13px] text-text-primary">Unusual spending threshold (%)</label>
-            <Input
-              v-model.number="settings.unusualSpendingPercent"
-              type="number"
-              class="w-28 h-8 text-[13px]"
-              min="10"
-              max="200"
-            />
-          </div>
-          <div class="flex items-center justify-between">
-            <label class="text-[13px] text-text-primary">Report scrape errors</label>
-            <Switch v-model="settings.reportScrapeErrors" />
-          </div>
-        </CardContent>
-      </Card>
+        </SettingsRow>
+        <SettingsRow label="Large charge threshold (₪)">
+          <Input
+            v-model.number="settings.largeChargeThreshold"
+            type="number"
+            class="w-28 h-8 text-[13px]"
+            min="0"
+          />
+        </SettingsRow>
+        <SettingsRow label="Unusual spending threshold (%)">
+          <Input
+            v-model.number="settings.unusualSpendingPercent"
+            type="number"
+            class="w-28 h-8 text-[13px]"
+            min="10"
+            max="200"
+          />
+        </SettingsRow>
+        <SettingsRow label="Report scrape errors">
+          <Switch v-model="settings.reportScrapeErrors" />
+        </SettingsRow>
+      </SettingsGroup>
 
       <!-- Monthly Summary -->
-      <Card :class="{ 'opacity-50 pointer-events-none': !settings.enabled }">
-        <CardHeader class="pb-2">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-2">
-              <Calendar class="h-4 w-4 text-text-secondary" />
-              <CardTitle class="text-[14px]">Monthly Summary</CardTitle>
-            </div>
-            <Switch v-model="settings.monthlySummary.enabled" />
-          </div>
-          <CardDescription class="text-[12px]">
-            A comprehensive AI-generated review of last month's finances
-          </CardDescription>
-          <p class="flex items-start gap-1.5 text-[11px] text-text-tertiary mt-1">
+      <SettingsGroup
+        title="Monthly Summary"
+        description="A comprehensive AI-generated review of last month's finances"
+        :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
+      >
+        <SettingsRow class="bg-bg-secondary/30 text-[11px] text-text-tertiary">
+          <div class="flex items-start gap-1.5">
             <Info class="h-3 w-3 mt-0.5 flex-shrink-0" />
             {{ ALERT_HINTS.monthlySummary }}
-          </p>
-        </CardHeader>
-        <CardContent v-if="settings.monthlySummary.enabled" class="space-y-3">
-          <div class="flex items-center justify-between">
-            <label class="text-[13px] text-text-primary">Day of month to send</label>
-            <Input
-              v-model.number="settings.monthlySummary.dayOfMonth"
-              type="number"
-              class="w-28 h-8 text-[13px]"
-              min="1"
-              max="28"
-            />
           </div>
-        </CardContent>
-      </Card>
+        </SettingsRow>
+        <SettingsRow label="Enabled">
+          <Switch v-model="settings.monthlySummary.enabled" />
+        </SettingsRow>
+        <SettingsRow v-if="settings.monthlySummary.enabled" label="Day of month to send">
+          <Input
+            v-model.number="settings.monthlySummary.dayOfMonth"
+            type="number"
+            class="w-28 h-8 text-[13px]"
+            min="1"
+            max="28"
+          />
+        </SettingsRow>
+      </SettingsGroup>
     </template>
 
     <!-- Loading skeleton -->
