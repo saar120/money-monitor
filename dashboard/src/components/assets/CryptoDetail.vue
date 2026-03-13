@@ -81,7 +81,7 @@ const CRYPTO_MOVEMENT_TYPES = ['buy', 'sell'];
 
 const MOVEMENT_BADGE_CLASSES: Record<string, string> = {
   buy: 'bg-primary/10 text-primary',
-  sell: 'bg-amber-500/10 text-amber-500',
+  sell: 'bg-[var(--warning)]/10 text-[var(--warning)]',
 };
 
 const buySellMovements = computed(() =>
@@ -333,7 +333,7 @@ const chartOptions = computed(() => ({
       <div>
         <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-amber-500/10 text-amber-400">Crypto</span>
+          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]">Crypto</span>
           <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
         </div>
       </div>
@@ -439,7 +439,7 @@ const chartOptions = computed(() => ({
                   <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
-                      <AlertCircle class="h-3.5 w-3.5 text-amber-500" />
+                      <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
                       <span class="text-[11px]">No price data</span>
                     </div>
                   </TableCell>
@@ -495,7 +495,7 @@ const chartOptions = computed(() => ({
 
           <!-- Mobile cards -->
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
-            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-md">
+            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
               <div class="flex items-center justify-between">
                 <span class="font-medium text-[13px]">{{ h.name }}</span>
                 <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
@@ -552,7 +552,7 @@ const chartOptions = computed(() => ({
           <p class="text-text-secondary text-[13px]">No buy/sell movements recorded yet.</p>
         </div>
 
-        <div v-else class="space-y-0 border border-separator rounded-md divide-y divide-separator">
+        <div v-else class="space-y-0 border border-separator rounded-lg divide-y divide-separator">
           <div v-for="m in buySellMovements" :key="m.id" class="px-4 py-3 group">
             <div class="flex items-start justify-between">
               <div>

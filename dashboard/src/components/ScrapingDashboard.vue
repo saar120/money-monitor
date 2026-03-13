@@ -89,7 +89,7 @@ const {
 
 // ─── Helpers ───
 function getAccountName(id: number): string {
-  return accounts.value.find(a => a.id === id)?.displayName ?? `Account #${id}`;
+  return accounts.value.find((a) => a.id === id)?.displayName ?? `Account #${id}`;
 }
 
 function formatDuration(ms: number): string {
@@ -117,15 +117,15 @@ function statusVariant(status: string): 'default' | 'secondary' | 'destructive' 
 function sessionAccountNames(session: ScrapeSession): string {
   const logs = session.logs ?? [];
   if (logs.length === 0) return '';
-  const names = [...new Set(logs.map(l => l.accountName))];
+  const names = [...new Set(logs.map((l) => l.accountName))];
   return names.join(', ');
 }
 
 function sessionSummary(session: ScrapeSession): string {
   const logs = session.logs ?? [];
   if (logs.length === 0) return 'No results';
-  const ok = logs.filter(l => l.status === 'success').length;
-  const fail = logs.filter(l => l.status === 'error').length;
+  const ok = logs.filter((l) => l.status === 'success').length;
+  const fail = logs.filter((l) => l.status === 'error').length;
   const totalFound = logs.reduce((sum, l) => sum + (l.transactionsFound ?? 0), 0);
   const totalNew = logs.reduce((sum, l) => sum + (l.transactionsNew ?? 0), 0);
   const parts: string[] = [];
@@ -215,11 +215,16 @@ async function handleCancel() {
 function startElapsedTimer() {
   stopElapsedTimer();
   elapsedSeconds.value = 0;
-  elapsedTimer = setInterval(() => { elapsedSeconds.value++; }, 1000);
+  elapsedTimer = setInterval(() => {
+    elapsedSeconds.value++;
+  }, 1000);
 }
 
 function stopElapsedTimer() {
-  if (elapsedTimer) { clearInterval(elapsedTimer); elapsedTimer = null; }
+  if (elapsedTimer) {
+    clearInterval(elapsedTimer);
+    elapsedTimer = null;
+  }
 }
 
 const { connect: connectSse } = useSseConnection({
@@ -273,7 +278,9 @@ const { connect: connectSse } = useSseConnection({
       errorMessage.value = `Scrape session failed: ${data.error}`;
     }
     // Reload session history only (accounts don't change during scraping)
-    getScrapeSessions({ limit: 50 }).then(res => { sessions.value = res.sessions; });
+    getScrapeSessions({ limit: 50 }).then((res) => {
+      sessions.value = res.sessions;
+    });
   },
   'otp-required': (data) => {
     showOtpDialog(data.accountId as number, getAccountName(data.accountId as number));
@@ -293,21 +300,16 @@ onUnmounted(() => {
   stopElapsedTimer();
 });
 
-const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
+const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
 </script>
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <!-- Header -->
-    <div class="flex items-center justify-between flex-shrink-0 mb-4">
-      <div>
-        <h1 class="text-[22px] font-semibold text-text-primary">Scraping</h1>
-        <p class="text-[13px] text-text-secondary">Monitor and manage bank scrapes</p>
-      </div>
+    <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
         <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
-          <SelectTrigger class="w-[200px]">
-            <SelectValue placeholder="Scrape account..." />
+          <SelectTrigger class="w-[180px] h-8">
+            <SelectValue placeholder="Scrape account…" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem
@@ -319,176 +321,184 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
             </SelectItem>
           </SelectContent>
         </Select>
-        <Button
-          @click="handleScrapeAll"
-          :disabled="triggerLoading || !!liveSession"
-        >
-          <Loader2 v-if="triggerLoading" class="mr-2 h-4 w-4 animate-spin" />
-          <Play v-else class="mr-2 h-4 w-4" />
+        <Button size="sm" :disabled="triggerLoading || !!liveSession" @click="handleScrapeAll">
+          <Loader2 v-if="triggerLoading" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
+          <Play v-else class="mr-1.5 h-3.5 w-3.5" />
           Scrape All
         </Button>
       </div>
-    </div>
+    </Teleport>
 
     <div class="flex-1 min-h-0 overflow-y-auto space-y-4">
-    <!-- Error Banner -->
-    <div
-      v-if="errorMessage"
-      class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-[13px] text-destructive"
-    >
-      <XCircle class="h-4 w-4 flex-shrink-0" />
-      <span class="flex-1">{{ errorMessage }}</span>
-      <button class="text-destructive/70 hover:text-destructive" @click="errorMessage = null">&times;</button>
-    </div>
+      <!-- Error Banner -->
+      <div
+        v-if="errorMessage"
+        class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-[13px] text-destructive"
+      >
+        <XCircle class="h-4 w-4 flex-shrink-0" />
+        <span class="flex-1">{{ errorMessage }}</span>
+        <button class="text-destructive/70 hover:text-destructive" @click="errorMessage = null">
+          &times;
+        </button>
+      </div>
 
-    <!-- Active Session Banner -->
-    <Card v-if="liveSession" class="border-primary/30 bg-primary/5">
-      <CardHeader class="pb-3">
-        <div class="flex items-center justify-between">
-          <div class="flex items-center gap-3">
-            <Loader2 class="h-5 w-5 animate-spin text-primary" />
-            <CardTitle class="text-[15px]">
-              Active Scrape
-              <Badge variant="secondary" class="ml-2">{{ triggerLabel(liveSession.trigger) }}</Badge>
-            </CardTitle>
+      <!-- Active Session Banner -->
+      <Card v-if="liveSession" class="border-primary/30 bg-primary/5 animate-fade-in-up">
+        <CardHeader class="pb-3">
+          <div class="flex items-center justify-between">
+            <div class="flex items-center gap-3">
+              <Loader2 class="h-5 w-5 animate-spin text-primary" />
+              <CardTitle class="text-[15px]">
+                Active Scrape
+                <Badge variant="secondary" class="ml-2">{{
+                  triggerLabel(liveSession.trigger)
+                }}</Badge>
+              </CardTitle>
+            </div>
+            <div class="flex items-center gap-3">
+              <span class="text-[13px] text-text-secondary">
+                <Clock class="inline h-3.5 w-3.5 mr-1" />
+                {{ elapsedSeconds }}s
+              </span>
+              <Button variant="destructive" size="sm" @click="handleCancel">
+                <Square class="mr-1.5 h-3.5 w-3.5" />
+                Cancel
+              </Button>
+            </div>
           </div>
-          <div class="flex items-center gap-3">
-            <span class="text-[13px] text-text-secondary">
-              <Clock class="inline h-3.5 w-3.5 mr-1" />
-              {{ elapsedSeconds }}s
-            </span>
-            <Button variant="destructive" size="sm" @click="handleCancel">
-              <Square class="mr-1.5 h-3.5 w-3.5" />
-              Cancel
-            </Button>
-          </div>
-        </div>
-      </CardHeader>
-      <CardContent>
-        <div class="space-y-2">
-          <div
-            v-for="accountStatus in liveSession.accounts"
-            :key="accountStatus.accountId"
-            class="flex items-center gap-3 text-[13px]"
-          >
-            <!-- Status icon -->
-            <Loader2
-              v-if="accountStatus.status === 'scraping'"
-              class="h-4 w-4 animate-spin text-primary flex-shrink-0"
-            />
-            <CheckCircle2
-              v-else-if="accountStatus.status === 'done'"
-              class="h-4 w-4 text-success flex-shrink-0"
-            />
-            <XCircle
-              v-else-if="accountStatus.status === 'error'"
-              class="h-4 w-4 text-destructive flex-shrink-0"
-            />
+        </CardHeader>
+        <CardContent>
+          <div class="space-y-2">
             <div
-              v-else
-              class="h-4 w-4 rounded-full border-2 border-text-secondary/30 flex-shrink-0"
-            />
-
-            <!-- Account name -->
-            <span class="w-40 truncate font-medium">{{ getAccountName(accountStatus.accountId) }}</span>
-
-            <!-- Status text -->
-            <span class="text-text-secondary">
-              <template v-if="accountStatus.status === 'queued'">Queued</template>
-              <template v-else-if="accountStatus.status === 'scraping'">Scraping...</template>
-              <template v-else-if="accountStatus.status === 'done'">
-                {{ accountStatus.transactionsFound }} txns
-                <template v-if="accountStatus.transactionsNew">({{ accountStatus.transactionsNew }} new)</template>
-                <template v-if="accountStatus.durationMs"> &mdash; {{ formatDuration(accountStatus.durationMs) }}</template>
-              </template>
-              <template v-else-if="accountStatus.status === 'error'">
-                <span class="text-destructive">{{ accountStatus.error ?? 'Failed' }}</span>
-                <template v-if="accountStatus.durationMs"> &mdash; {{ formatDuration(accountStatus.durationMs) }}</template>
-              </template>
-            </span>
-          </div>
-        </div>
-      </CardContent>
-    </Card>
-
-    <!-- Loading skeleton -->
-    <div v-if="loading" class="space-y-3">
-      <Skeleton class="h-20 w-full" />
-      <Skeleton class="h-20 w-full" />
-      <Skeleton class="h-20 w-full" />
-    </div>
-
-    <!-- Session History -->
-    <div v-else class="space-y-2">
-      <h2 class="text-[15px] font-semibold">Session History</h2>
-      <p v-if="sessions.length === 0" class="text-[13px] text-text-secondary py-8 text-center">
-        No scrape sessions yet. Trigger a scrape to get started.
-      </p>
-      <div v-else class="space-y-1">
-        <div
-          v-for="session in sessions"
-          :key="session.id"
-          class="border rounded-lg"
-        >
-          <!-- Session header row (clickable) -->
-          <button
-            class="w-full flex items-center gap-3 px-4 py-3 text-[13px] hover:bg-bg-tertiary/50 transition-colors text-left"
-            @click="toggleExpand(session.id)"
-          >
-            <ChevronDown
-              v-if="expandedSessions.has(session.id)"
-              class="h-4 w-4 flex-shrink-0 text-text-secondary"
-            />
-            <ChevronRight
-              v-else
-              class="h-4 w-4 flex-shrink-0 text-text-secondary"
-            />
-
-            <span class="text-text-secondary w-8 text-right">#{{ session.id }}</span>
-            <span class="w-36">{{ formatDateTime(session.startedAt) }}</span>
-            <Badge :variant="statusVariant(session.status)" class="w-20 justify-center">
-              {{ session.status }}
-            </Badge>
-            <Badge variant="outline">{{ triggerLabel(session.trigger) }}</Badge>
-            <span class="truncate text-text-secondary">{{ sessionAccountNames(session) }}</span>
-            <span class="flex-shrink-0 text-text-secondary ml-auto">{{ sessionSummary(session) }}</span>
-          </button>
-
-          <!-- Expanded per-account logs -->
-          <div
-            v-if="expandedSessions.has(session.id) && session.logs.length > 0"
-            class="border-t px-4 py-2 bg-bg-secondary"
-          >
-            <div
-              v-for="log in session.logs"
-              :key="log.id"
-              class="flex items-center gap-3 py-1.5 text-[13px]"
+              v-for="accountStatus in liveSession.accounts"
+              :key="accountStatus.accountId"
+              class="flex items-center gap-3 text-[13px]"
             >
+              <!-- Status icon -->
+              <Loader2
+                v-if="accountStatus.status === 'scraping'"
+                class="h-4 w-4 animate-spin text-primary flex-shrink-0"
+              />
               <CheckCircle2
-                v-if="log.status === 'success'"
+                v-else-if="accountStatus.status === 'done'"
                 class="h-4 w-4 text-success flex-shrink-0"
               />
               <XCircle
-                v-else
+                v-else-if="accountStatus.status === 'error'"
                 class="h-4 w-4 text-destructive flex-shrink-0"
               />
-              <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
-              <span v-if="log.status === 'success'" class="text-text-secondary">
-                {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
+              <div
+                v-else
+                class="h-4 w-4 rounded-full border-2 border-text-secondary/30 flex-shrink-0"
+              />
+
+              <!-- Account name -->
+              <span class="w-40 truncate font-medium">{{
+                getAccountName(accountStatus.accountId)
+              }}</span>
+
+              <!-- Status text -->
+              <span class="text-text-secondary">
+                <template v-if="accountStatus.status === 'queued'">Queued</template>
+                <template v-else-if="accountStatus.status === 'scraping'">Scraping...</template>
+                <template v-else-if="accountStatus.status === 'done'">
+                  {{ accountStatus.transactionsFound }} txns
+                  <template v-if="accountStatus.transactionsNew"
+                    >({{ accountStatus.transactionsNew }} new)</template
+                  >
+                  <template v-if="accountStatus.durationMs">
+                    &mdash; {{ formatDuration(accountStatus.durationMs) }}</template
+                  >
+                </template>
+                <template v-else-if="accountStatus.status === 'error'">
+                  <span class="text-destructive">{{ accountStatus.error ?? 'Failed' }}</span>
+                  <template v-if="accountStatus.durationMs">
+                    &mdash; {{ formatDuration(accountStatus.durationMs) }}</template
+                  >
+                </template>
               </span>
-              <span v-else class="text-destructive truncate">
-                {{ log.errorMessage ?? log.errorType ?? 'Error' }}
-              </span>
-              <span v-if="log.durationMs" class="text-text-secondary ml-auto">
-                {{ formatDuration(log.durationMs) }}
-              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
+
+      <!-- Loading skeleton -->
+      <div v-if="loading" class="space-y-3">
+        <Skeleton class="h-20 w-full" />
+        <Skeleton class="h-20 w-full" />
+        <Skeleton class="h-20 w-full" />
+      </div>
+
+      <!-- Session History -->
+      <div v-else class="space-y-2">
+        <h2 class="text-[15px] font-semibold">Session History</h2>
+        <p v-if="sessions.length === 0" class="text-[13px] text-text-secondary py-8 text-center">
+          No scrape sessions yet. Trigger a scrape to get started.
+        </p>
+        <div v-else class="space-y-1">
+          <div
+            v-for="session in sessions"
+            :key="session.id"
+            class="border rounded-lg hover:bg-bg-secondary/50 transition-colors duration-150"
+          >
+            <!-- Session header row (clickable) -->
+            <button
+              class="w-full flex items-center gap-3 px-4 py-3 text-[13px] hover:bg-bg-tertiary/50 transition-colors text-left"
+              @click="toggleExpand(session.id)"
+            >
+              <ChevronDown
+                v-if="expandedSessions.has(session.id)"
+                class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
+              />
+              <ChevronRight
+                v-else
+                class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
+              />
+
+              <span class="text-text-secondary w-8 text-right">#{{ session.id }}</span>
+              <span class="w-36">{{ formatDateTime(session.startedAt) }}</span>
+              <Badge :variant="statusVariant(session.status)" class="w-20 justify-center">
+                {{ session.status }}
+              </Badge>
+              <Badge variant="outline">{{ triggerLabel(session.trigger) }}</Badge>
+              <span class="truncate text-text-secondary">{{ sessionAccountNames(session) }}</span>
+              <span class="flex-shrink-0 text-text-secondary ml-auto">{{
+                sessionSummary(session)
+              }}</span>
+            </button>
+
+            <!-- Expanded per-account logs -->
+            <div
+              v-if="expandedSessions.has(session.id) && session.logs.length > 0"
+              class="border-t px-4 py-2 bg-bg-secondary"
+            >
+              <div
+                v-for="log in session.logs"
+                :key="log.id"
+                class="flex items-center gap-3 py-1.5 text-[13px]"
+              >
+                <CheckCircle2
+                  v-if="log.status === 'success'"
+                  class="h-4 w-4 text-success flex-shrink-0"
+                />
+                <XCircle v-else class="h-4 w-4 text-destructive flex-shrink-0" />
+                <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
+                <span v-if="log.status === 'success'" class="text-text-secondary">
+                  {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
+                </span>
+                <span v-else class="text-destructive truncate">
+                  {{ log.errorMessage ?? log.errorType ?? 'Error' }}
+                </span>
+                <span v-if="log.durationMs" class="text-text-secondary ml-auto">
+                  {{ formatDuration(log.durationMs) }}
+                </span>
+              </div>
             </div>
           </div>
         </div>
       </div>
     </div>
-
-    </div><!-- end scrollable content -->
+    <!-- end scrollable content -->
 
     <!-- OTP Dialog -->
     <Dialog v-model:open="otpDialog">
@@ -498,14 +508,10 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         </DialogHeader>
         <div class="space-y-4 py-2">
           <p class="text-[13px] text-text-secondary">Enter the OTP code sent to your device.</p>
-          <Input
-            v-model="otpCode"
-            placeholder="Enter OTP code"
-            @keyup.enter="handleOtpSubmit"
-          />
+          <Input v-model="otpCode" placeholder="Enter OTP code" @keyup.enter="handleOtpSubmit" />
         </div>
         <DialogFooter>
-          <Button @click="handleOtpSubmit" :disabled="otpSubmitting || !otpCode">
+          <Button :disabled="otpSubmitting || !otpCode" @click="handleOtpSubmit">
             <Loader2 v-if="otpSubmitting" class="mr-2 h-4 w-4 animate-spin" />
             Submit
           </Button>
@@ -521,11 +527,12 @@ const activeAccounts = computed(() => accounts.value.filter(a => a.isActive));
         </DialogHeader>
         <div class="py-2">
           <p class="text-[13px] text-text-secondary">
-            A browser window should be open. Complete the login process there, then click "Done" below.
+            A browser window should be open. Complete the login process there, then click "Done"
+            below.
           </p>
         </div>
         <DialogFooter>
-          <Button @click="handleManualLoginConfirm" :disabled="manualLoginSubmitting">
+          <Button :disabled="manualLoginSubmitting" @click="handleManualLoginConfirm">
             <Loader2 v-if="manualLoginSubmitting" class="mr-2 h-4 w-4 animate-spin" />
             Done
           </Button>

@@ -146,21 +146,22 @@ function handleKeydown(e: KeyboardEvent) {
           <PanelLeftClose v-if="sidebarOpen" class="h-4 w-4" />
           <PanelLeft v-else class="h-4 w-4" />
         </Button>
-        <h1 class="text-[22px] font-semibold text-text-primary">AI Financial Advisor</h1>
       </div>
 
       <Card class="flex-1 overflow-hidden flex flex-col min-h-0">
-        <div ref="chatContainer" class="chat-messages flex-1 overflow-y-auto p-4 space-y-4">
+        <div ref="chatContainer" class="chat-messages flex-1 overflow-y-auto p-5 space-y-5">
           <!-- Empty state with suggestions -->
           <div
             v-if="messages.length === 0"
             class="flex flex-col items-center justify-center h-full text-center py-8"
           >
-            <div class="w-14 h-14 rounded-full bg-primary/15 flex items-center justify-center mb-4">
-              <Bot class="h-7 w-7 text-primary" />
+            <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-5">
+              <Bot class="h-8 w-8 text-primary" />
             </div>
-            <p class="text-text-secondary text-[13px] mb-2">Ask me anything about your finances</p>
-            <p class="text-text-secondary text-[11px] mb-4 max-w-sm">
+            <p class="text-text-primary text-[15px] font-medium mb-1">
+              Ask me anything about your finances
+            </p>
+            <p class="text-text-secondary text-[12px] mb-6 max-w-sm">
               I can analyze spending, track subscriptions, categorize transactions, and give budget
               advice
             </p>
@@ -170,7 +171,7 @@ function handleKeydown(e: KeyboardEvent) {
                 :key="s"
                 variant="outline"
                 size="sm"
-                class="rounded-full border-separator text-primary hover:bg-primary/10 text-[11px] h-auto py-1.5 px-3"
+                class="rounded-xl border-separator/70 text-primary hover:bg-primary/8 text-[12px] h-auto py-2 px-4 shadow-[var(--shadow-sm)]"
                 @click="sendMessage(s)"
               >
                 {{ s }}
@@ -193,18 +194,13 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
 
             <div
-              class="max-w-[75%] rounded-md px-4 py-2.5 text-[13px] leading-relaxed"
+              class="max-w-[75%] px-4 py-2.5 text-[13px] leading-relaxed"
               :class="
                 msg.role === 'user'
-                  ? 'bg-primary text-primary-foreground rounded-br-md'
-                  : 'bg-bg-secondary text-text-primary rounded-bl-md'
+                  ? 'bg-primary text-primary-foreground rounded-2xl rounded-br-md'
+                  : 'bg-bg-secondary text-text-primary rounded-2xl rounded-bl-md'
               "
             >
-              <div class="flex items-center gap-1.5 mb-1">
-                <span class="text-[10px] font-semibold opacity-60">
-                  {{ msg.role === 'user' ? 'You' : 'AI Advisor' }}
-                </span>
-              </div>
               <MarkdownContent
                 v-if="msg.role === 'assistant'"
                 :content="msg.content"
@@ -222,14 +218,14 @@ function handleKeydown(e: KeyboardEvent) {
           </div>
 
           <!-- Typing indicator (before text starts streaming) -->
-          <div v-if="isWaiting" class="flex gap-3 justify-start">
+          <div v-if="isWaiting" class="flex gap-3 justify-start animate-scale-in">
             <div
               class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"
             >
               <Bot class="h-4 w-4 text-primary" />
             </div>
-            <div class="bg-bg-secondary rounded-md rounded-bl-md px-4 py-3">
-              <div class="flex items-center gap-2">
+            <div class="bg-bg-secondary rounded-2xl rounded-bl-md px-4 py-3">
+              <div class="flex items-center gap-2.5">
                 <div class="flex gap-1 items-center h-4">
                   <span
                     class="w-1.5 h-1.5 rounded-full bg-text-tertiary animate-bounce [animation-delay:-0.3s]"
@@ -252,12 +248,12 @@ function handleKeydown(e: KeyboardEvent) {
 
         <!-- Input area -->
         <div
-          class="border-t border-separator p-4 flex gap-3 items-end flex-shrink-0 bg-bg-secondary/50"
+          class="border-t border-separator/50 p-4 flex gap-3 items-end flex-shrink-0 bg-bg-primary"
         >
           <Textarea
             v-model="input"
             placeholder="Ask about your finances... (Enter to send, Shift+Enter for newline)"
-            class="resize-none min-h-[40px] max-h-32 text-[13px]"
+            class="resize-none min-h-[44px] max-h-32 text-[13px]"
             rows="1"
             :disabled="loading"
             @keydown="handleKeydown"

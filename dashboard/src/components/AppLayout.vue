@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, onUnmounted } from 'vue';
+import { ref, computed, onMounted, onUnmounted } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   LayoutDashboard,
@@ -16,7 +16,7 @@ import {
 import { getSettings, toggleDemoMode } from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
 
-const isElectron = !!(window as any).electronAPI;
+const isElectron = !!(window as unknown as Record<string, unknown>).electronAPI;
 
 const route = useRoute();
 const router = useRouter();
@@ -53,13 +53,24 @@ async function exitDemo() {
 
 const navSections = [
   {
+    label: null,
     items: [
       { path: '/', label: 'Overview', icon: LayoutDashboard },
       { path: '/net-worth', label: 'Net Worth', icon: TrendingUp },
-      { path: '/insights', label: 'Insights', icon: Lightbulb },
       { path: '/transactions', label: 'Transactions', icon: Receipt },
-      { path: '/accounts', label: 'Accounts', icon: Building2 },
+    ],
+  },
+  {
+    label: 'Intelligence',
+    items: [
+      { path: '/insights', label: 'Insights', icon: Lightbulb },
       { path: '/chat', label: 'AI Chat', icon: Bot },
+    ],
+  },
+  {
+    label: 'Management',
+    items: [
+      { path: '/accounts', label: 'Accounts', icon: Building2 },
       { path: '/categories', label: 'Categories', icon: Tag },
       { path: '/alerts', label: 'Alerts', icon: Bell },
       { path: '/scraping', label: 'Scraping', icon: Activity },
@@ -71,73 +82,100 @@ function isActive(path: string): boolean {
   if (path === '/') return route.path === '/';
   return route.path.startsWith(path);
 }
+
+const pageTitles: Record<string, string> = {
+  '/': 'Overview',
+  '/net-worth': 'Net Worth',
+  '/transactions': 'Transactions',
+  '/insights': 'Insights',
+  '/chat': 'AI Chat',
+  '/accounts': 'Accounts',
+  '/categories': 'Categories',
+  '/alerts': 'Alerts',
+  '/scraping': 'Scraping',
+  '/settings': 'Settings',
+};
+
+const pageTitle = computed(() => {
+  return pageTitles[route.path] ?? '';
+});
 </script>
 
 <template>
   <div class="flex h-screen" :class="{ 'p-2 gap-2': isElectron }">
-    <!-- Sidebar — transparent in Electron for vibrancy, has bg in browser -->
+    <!-- Sidebar — Liquid Glass in Electron, solid bg in browser -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      :class="{ 'bg-bg-secondary border-r border-separator': !isElectron }"
+      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary/80 border-r border-separator/40'"
       :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
       <div v-if="isElectron" class="flex-shrink-0" style="height: 44px; -webkit-app-region: drag" />
 
       <!-- Logo area -->
-      <div class="flex items-center h-10 px-4 flex-shrink-0 gap-2" :class="{ 'mt-3': !isElectron }">
+      <div
+        class="flex items-center h-10 px-4 flex-shrink-0 gap-2.5"
+        :class="{ 'mt-3': !isElectron }"
+      >
         <img src="/icon-192.png" alt="" class="h-5 w-5 rounded" />
         <span class="text-[13px] font-semibold text-text-primary tracking-tight">
           Money Monitor
         </span>
       </div>
 
-      <!-- Nav -->
-      <nav class="flex-1 px-3 py-2 space-y-0.5">
-        <template v-for="section in navSections" :key="section.items[0]?.path">
-          <RouterLink
-            v-for="item in section.items"
-            :key="item.path"
-            :to="item.path"
-            class="group relative flex items-center h-7 rounded-md px-3 gap-2 text-[13px] no-underline transition-colors duration-100"
-            :class="
-              isActive(item.path)
-                ? 'bg-primary text-white font-medium'
-                : 'text-text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
-            "
+      <!-- Nav with section grouping -->
+      <nav class="flex-1 px-3 py-2 overflow-y-auto">
+        <template v-for="section in navSections" :key="section.label ?? 'primary'">
+          <p
+            v-if="section.label"
+            class="text-[11px] font-medium text-text-tertiary px-3 pt-4 pb-1.5 select-none"
           >
-            <component
-              :is="item.icon"
-              class="h-4 w-4 flex-shrink-0"
-              :class="isActive(item.path) ? 'text-white' : 'text-text-secondary'"
-            />
-            <span>{{ item.label }}</span>
-            <span
-              v-if="item.path === '/insights' && reviewCount > 0"
-              class="ml-auto inline-flex items-center justify-center rounded-full text-[10px] font-bold h-4 min-w-4 px-1"
-              :class="isActive(item.path) ? 'bg-white/25 text-white' : 'bg-destructive text-white'"
+            {{ section.label }}
+          </p>
+          <div class="space-y-0.5">
+            <RouterLink
+              v-for="item in section.items"
+              :key="item.path"
+              :to="item.path"
+              class="group relative flex items-center h-[30px] rounded-lg px-3 gap-2.5 text-[13px] no-underline transition-all duration-150"
+              :class="
+                isActive(item.path)
+                  ? 'bg-primary/12 text-primary font-medium'
+                  : 'text-text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
+              "
             >
-              {{ reviewCount }}
-            </span>
-          </RouterLink>
+              <component
+                :is="item.icon"
+                class="h-4 w-4 flex-shrink-0 transition-colors duration-150"
+                :class="isActive(item.path) ? 'text-primary' : 'text-text-secondary'"
+              />
+              <span>{{ item.label }}</span>
+              <span
+                v-if="item.path === '/insights' && reviewCount > 0"
+                class="ml-auto inline-flex items-center justify-center rounded-full text-[10px] font-bold h-4 min-w-4 px-1 bg-destructive text-white"
+              >
+                {{ reviewCount }}
+              </span>
+            </RouterLink>
+          </div>
         </template>
       </nav>
 
       <!-- Bottom: Settings -->
       <div class="px-3 pb-3 mt-auto">
-        <div class="h-px bg-separator mx-1 mb-2" />
+        <div class="h-px bg-separator/50 mx-1 mb-2" />
         <RouterLink
           to="/settings"
-          class="flex items-center h-7 rounded-md px-3 gap-2 text-[13px] no-underline transition-colors duration-100"
+          class="flex items-center h-[30px] rounded-lg px-3 gap-2.5 text-[13px] no-underline transition-all duration-150"
           :class="
             isActive('/settings')
-              ? 'bg-primary text-white font-medium'
+              ? 'bg-primary/12 text-primary font-medium'
               : 'text-text-primary hover:bg-black/[0.04] dark:hover:bg-white/[0.06]'
           "
         >
           <Settings
-            class="h-4 w-4 flex-shrink-0"
-            :class="isActive('/settings') ? 'text-white' : 'text-text-secondary'"
+            class="h-4 w-4 flex-shrink-0 transition-colors duration-150"
+            :class="isActive('/settings') ? 'text-primary' : 'text-text-secondary'"
           />
           <span>Settings</span>
         </RouterLink>
@@ -147,35 +185,41 @@ function isActive(path: string): boolean {
     <!-- Main content — card floating over vibrancy in Electron -->
     <div
       class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden"
-      :class="{ 'rounded-[10px] shadow-sm border border-separator/50': isElectron }"
+      :class="{ 'rounded-xl shadow-[var(--shadow-md)] border border-separator/40': isElectron }"
     >
-      <!-- Toolbar / header area — drag region -->
-      <div
-        v-if="isElectron"
-        class="h-[44px] flex-shrink-0 flex items-center px-6 border-b border-separator"
-        style="-webkit-app-region: drag"
-      >
-        <h2 class="text-[17px] font-semibold text-text-primary">
-          {{ route.meta?.title ?? '' }}
-        </h2>
-        <div class="ml-auto flex items-center gap-2" style="-webkit-app-region: no-drag">
-          <slot name="toolbar-actions" />
-        </div>
-      </div>
-
       <!-- Demo mode banner -->
       <div
         v-if="demoMode"
-        class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-amber-500/10 border-b border-amber-500/20 text-[12px] text-amber-600 dark:text-amber-400"
+        class="flex-shrink-0 flex items-center justify-center gap-2 px-4 py-1.5 bg-bg-secondary border-b border-separator/50 text-[12px] text-text-secondary"
       >
+        <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] mr-1" />
         <span>Demo Mode — Viewing sample data</span>
-        <button class="underline hover:no-underline font-medium ml-1" @click="exitDemo">
+        <button
+          class="underline hover:no-underline font-medium ml-1 text-primary"
+          @click="exitDemo"
+        >
           Exit
         </button>
       </div>
 
-      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto p-6 min-w-0">
-        <slot />
+      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto min-w-0">
+        <!-- Glass toolbar — sticky so content scrolls behind with blur -->
+        <div
+          class="content-toolbar sticky top-0 z-10 flex items-center px-6 flex-shrink-0"
+          :style="isElectron ? '-webkit-app-region: drag' : undefined"
+        >
+          <h2 class="text-[15px] font-semibold text-text-primary">
+            {{ pageTitle }}
+          </h2>
+          <div
+            id="toolbar-actions"
+            class="ml-auto flex items-center gap-2"
+            style="-webkit-app-region: no-drag"
+          />
+        </div>
+        <div class="p-6 flex-1 flex flex-col">
+          <slot />
+        </div>
       </main>
     </div>
   </div>

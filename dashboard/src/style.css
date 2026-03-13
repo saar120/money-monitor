@@ -1,6 +1,6 @@
 @import 'tailwindcss';
 
-/* ─── macOS Native Design Tokens ─── */
+/* ─── Apple HIG Design Tokens ─── */
 
 /* Light mode */
 :root {
@@ -17,6 +17,24 @@
   --accent-30: color-mix(in srgb, var(--accent) 30%, transparent);
   --success: #34c759;
   --destructive: #ff3b30;
+  --warning: #ff9500;
+  --info: #5ac8fa;
+
+  /* Fills */
+  --fill-primary: rgba(0, 0, 0, 0.05);
+  --fill-secondary: rgba(0, 0, 0, 0.03);
+
+  /* Liquid Glass */
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-heavy: rgba(255, 255, 255, 0.78);
+  --glass-border: rgba(255, 255, 255, 0.5);
+  --glass-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
+
+  /* Shadow scale */
+  --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.04), 0 1px 2px rgba(0, 0, 0, 0.02);
+  --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.08), 0 1px 3px rgba(0, 0, 0, 0.04);
+  --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.12), 0 2px 8px rgba(0, 0, 0, 0.04);
+  --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.16), 0 4px 16px rgba(0, 0, 0, 0.06);
 
   /* Compatibility aliases for existing Tailwind classes */
   --background: var(--bg-primary);
@@ -59,6 +77,24 @@
     --accent-hover: color-mix(in srgb, var(--accent) 85%, white);
     --success: #32d74b;
     --destructive: #ff453a;
+    --warning: #ff9f0a;
+    --info: #64d2ff;
+
+    /* Fills */
+    --fill-primary: rgba(255, 255, 255, 0.06);
+    --fill-secondary: rgba(255, 255, 255, 0.03);
+
+    /* Liquid Glass */
+    --glass-bg: rgba(44, 44, 46, 0.55);
+    --glass-bg-heavy: rgba(44, 44, 46, 0.8);
+    --glass-border: rgba(255, 255, 255, 0.08);
+    --glass-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
+
+    /* Shadow scale (stronger for dark) */
+    --shadow-sm: 0 1px 3px rgba(0, 0, 0, 0.12), 0 1px 2px rgba(0, 0, 0, 0.06);
+    --shadow-md: 0 2px 8px rgba(0, 0, 0, 0.2), 0 1px 3px rgba(0, 0, 0, 0.1);
+    --shadow-lg: 0 8px 24px rgba(0, 0, 0, 0.3), 0 2px 8px rgba(0, 0, 0, 0.1);
+    --shadow-xl: 0 16px 48px rgba(0, 0, 0, 0.4), 0 4px 16px rgba(0, 0, 0, 0.15);
 
     --background: var(--bg-primary);
     --foreground: var(--text-primary);
@@ -107,6 +143,7 @@
   --color-accent: var(--accent-ui);
   --color-accent-foreground: var(--accent-foreground);
   --color-destructive: var(--destructive);
+  --color-warning: var(--warning);
   --color-border: var(--border);
   --color-input: var(--input);
   --color-ring: var(--ring);
@@ -258,7 +295,49 @@
   }
 }
 
-/* ─── Animation utilities ─── */
+/* ─── Liquid Glass ─── */
+.glass {
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: var(--glass-bg);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-heavy {
+  backdrop-filter: blur(40px) saturate(200%);
+  -webkit-backdrop-filter: blur(40px) saturate(200%);
+  background: var(--glass-bg-heavy);
+  border: 1px solid var(--glass-border);
+  box-shadow: var(--glass-shadow);
+}
+
+.glass-subtle {
+  backdrop-filter: blur(12px) saturate(150%);
+  -webkit-backdrop-filter: blur(12px) saturate(150%);
+  background: var(--glass-bg);
+}
+
+/* ─── Content Toolbar (macOS Settings-style glass header) ─── */
+.content-toolbar {
+  height: 52px;
+  min-height: 52px;
+  backdrop-filter: blur(20px) saturate(180%);
+  -webkit-backdrop-filter: blur(20px) saturate(180%);
+  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  border-bottom: 0.5px solid var(--separator);
+}
+
+/* ─── Page transitions ─── */
+.page-enter-active {
+  animation: fade-in-up 0.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+}
+.page-leave-active {
+  transition: opacity 0.1s ease;
+  opacity: 0;
+}
+
+/* ─── Animation keyframes ─── */
 @keyframes fade-in-up {
   from {
     opacity: 0;
@@ -267,6 +346,39 @@
   to {
     opacity: 1;
     transform: translateY(0);
+  }
+}
+
+@keyframes scale-in {
+  from {
+    opacity: 0;
+    transform: scale(0.97);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1);
+  }
+}
+
+@keyframes slide-down {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+@keyframes slide-in-right {
+  from {
+    opacity: 0;
+    transform: translateX(12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateX(0);
   }
 }
 
@@ -284,7 +396,19 @@
 
 @layer utilities {
   .animate-fade-in-up {
-    animation: fade-in-up 0.3s ease-out both;
+    animation: fade-in-up 0.25s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+
+  .animate-scale-in {
+    animation: scale-in 0.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+
+  .animate-slide-down {
+    animation: slide-down 0.2s cubic-bezier(0.2, 0.9, 0.3, 1) both;
+  }
+
+  .animate-slide-in-right {
+    animation: slide-in-right 0.25s cubic-bezier(0.2, 0.9, 0.3, 1) both;
   }
 
   .stagger-1 {

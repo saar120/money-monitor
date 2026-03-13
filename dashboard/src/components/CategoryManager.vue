@@ -1,12 +1,25 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { getCategories, createCategory, updateCategory, deleteCategory, aiRecategorize, type Category } from '../api/client';
+import {
+  getCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+  aiRecategorize,
+  type Category,
+} from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import { Badge } from '@/components/ui/badge';
 import { Switch } from '@/components/ui/switch';
@@ -44,7 +57,10 @@ async function runRecategorize() {
   recatResult.value = '';
   recatError.value = '';
   try {
-    const res = await aiRecategorize(recatStartDate.value || undefined, recatEndDate.value || undefined);
+    const res = await aiRecategorize(
+      recatStartDate.value || undefined,
+      recatEndDate.value || undefined,
+    );
     recatResult.value = `${res.categorized} transactions categorized`;
   } catch (e: unknown) {
     recatError.value = e instanceof Error ? e.message : 'Recategorization failed';
@@ -58,7 +74,7 @@ async function load() {
   try {
     const res = await getCategories();
     categories.value = res.categories;
-  } catch (e) {
+  } catch {
     error.value = 'Failed to load categories';
   } finally {
     loading.value = false;
@@ -83,7 +99,7 @@ async function saveEdit(cat: Category) {
       color: editColor.value,
       rules: editRules.value || null,
     });
-    const idx = categories.value.findIndex(c => c.id === cat.id);
+    const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
     editingId.value = null;
   } catch {
@@ -92,10 +108,15 @@ async function saveEdit(cat: Category) {
 }
 
 async function remove(cat: Category) {
-  if (!confirm(`Delete category "${cat.label}"? Transactions with this category will keep the label but it won't appear in dropdowns.`)) return;
+  if (
+    !window.confirm(
+      `Delete category "${cat.label}"? Transactions with this category will keep the label but it won't appear in dropdowns.`,
+    )
+  )
+    return;
   try {
     await deleteCategory(cat.id);
-    categories.value = categories.value.filter(c => c.id !== cat.id);
+    categories.value = categories.value.filter((c) => c.id !== cat.id);
   } catch {
     error.value = 'Failed to delete';
   }
@@ -105,7 +126,12 @@ async function addCategory() {
   if (!newName.value || !newLabel.value) return;
   saving.value = true;
   try {
-    const res = await createCategory({ name: newName.value, label: newLabel.value, color: newColor.value, rules: newRules.value || undefined });
+    const res = await createCategory({
+      name: newName.value,
+      label: newLabel.value,
+      color: newColor.value,
+      rules: newRules.value || undefined,
+    });
     categories.value.push(res.category);
     newName.value = '';
     newLabel.value = '';
@@ -122,7 +148,7 @@ async function addCategory() {
 async function toggleIgnored(cat: Category) {
   try {
     const res = await updateCategory(cat.id, { ignoredFromStats: !cat.ignoredFromStats });
-    const idx = categories.value.findIndex(c => c.id === cat.id);
+    const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
   } catch {
     error.value = 'Failed to update';
@@ -134,50 +160,46 @@ onMounted(load);
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <div class="flex items-center justify-between flex-shrink-0 mb-4">
-      <h1 class="text-[22px] font-semibold text-text-primary">Categories</h1>
+    <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showNewForm = !showNewForm">
-        <Plus class="h-4 w-4 mr-1" /> Add category
+        <Plus class="h-4 w-4 mr-1" />
+        Add Category
       </Button>
-    </div>
+    </Teleport>
 
     <p v-if="error" class="text-[13px] text-destructive">{{ error }}</p>
 
     <!-- New category form -->
-    <Card v-if="showNewForm">
-      <CardHeader class="pb-2">
-        <CardTitle class="text-[13px] font-medium">New Category</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div class="flex gap-2 items-end flex-wrap">
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Name (slug)</label>
-            <Input v-model="newName" placeholder="e.g. groceries" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Label</label>
-            <Input v-model="newLabel" placeholder="e.g. Groceries" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Color</label>
-            <input type="color" v-model="newColor" class="h-9 w-14 rounded-lg overflow-hidden border cursor-pointer" />
-          </div>
+    <SettingsGroup v-if="showNewForm" title="New Category" class="mb-5">
+      <SettingsRow label="Name (slug)">
+        <Input v-model="newName" placeholder="e.g. groceries" class="w-44" />
+      </SettingsRow>
+      <SettingsRow label="Label">
+        <Input v-model="newLabel" placeholder="e.g. Groceries" class="w-44" />
+      </SettingsRow>
+      <SettingsRow label="Color">
+        <input
+          v-model="newColor"
+          type="color"
+          class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer"
+        />
+      </SettingsRow>
+      <SettingsRow label="Rules (LLM hint)" vertical>
+        <Textarea
+          v-model="newRules"
+          placeholder="Describe what transactions belong here..."
+          class="min-h-[60px] resize-y"
+        />
+      </SettingsRow>
+      <SettingsRow>
+        <div class="flex items-center gap-2 ml-auto">
+          <Button size="sm" variant="outline" @click="showNewForm = false">Cancel</Button>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
-            {{ saving ? 'Saving...' : 'Save' }}
+            {{ saving ? 'Saving…' : 'Save' }}
           </Button>
-          <Button size="sm" variant="ghost" @click="showNewForm = false">Cancel</Button>
         </div>
-        <div class="space-y-1 w-full mt-2">
-          <label class="text-[11px] text-text-secondary">Rules (LLM hint)</label>
-          <Textarea
-            v-model="newRules"
-            placeholder="Describe what transactions belong here. Include Hebrew merchant names if relevant."
-            class="min-h-[60px] resize-y"
-          />
-        </div>
-        <p class="text-[11px] text-text-secondary mt-1">Name must be lowercase letters, numbers, dashes, or underscores.</p>
-      </CardContent>
-    </Card>
+      </SettingsRow>
+    </SettingsGroup>
 
     <!-- Table -->
     <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -203,7 +225,11 @@ onMounted(load);
                 <TableCell class="text-right"><Skeleton class="h-4 w-14 ml-auto" /></TableCell>
               </TableRow>
             </template>
-            <TableRow v-for="cat in categories" :key="cat.id" :class="{ 'opacity-50': cat.ignoredFromStats }">
+            <TableRow
+              v-for="cat in categories"
+              :key="cat.id"
+              :class="{ 'opacity-50': cat.ignoredFromStats }"
+            >
               <TableCell>
                 <div
                   class="w-5 h-5 rounded-full border"
@@ -216,11 +242,18 @@ onMounted(load);
                   <div class="space-y-2">
                     <div class="flex gap-2 items-center">
                       <Input v-model="editLabel" class="w-32 h-7 text-[13px]" />
-                      <input type="color" v-model="editColor" class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer" />
-                      <button @click="saveEdit(cat)" class="text-success hover:text-success/80">
+                      <input
+                        v-model="editColor"
+                        type="color"
+                        class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer"
+                      />
+                      <button class="text-success hover:text-success/80" @click="saveEdit(cat)">
                         <Check class="h-4 w-4" />
                       </button>
-                      <button @click="cancelEdit" class="text-text-secondary hover:text-text-primary">
+                      <button
+                        class="text-text-secondary hover:text-text-primary"
+                        @click="cancelEdit"
+                      >
                         <X class="h-4 w-4" />
                       </button>
                     </div>
@@ -237,22 +270,30 @@ onMounted(load);
                   </Badge>
                 </template>
               </TableCell>
-              <TableCell class="text-[11px] text-text-secondary max-w-[200px] truncate" :title="cat.rules ?? ''">
+              <TableCell
+                class="text-[11px] text-text-secondary max-w-[200px] truncate"
+                :title="cat.rules ?? ''"
+              >
                 {{ cat.rules ?? '—' }}
               </TableCell>
               <TableCell>
                 <Switch
                   :model-value="cat.ignoredFromStats"
                   @update:model-value="toggleIgnored(cat)"
-                  class="scale-75"
                 />
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">
-                  <button @click="startEdit(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-text-primary">
+                  <button
+                    class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary"
+                    @click="startEdit(cat)"
+                  >
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
-                  <button @click="remove(cat)" class="p-1 rounded hover:bg-bg-tertiary text-text-secondary hover:text-destructive">
+                  <button
+                    class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-destructive"
+                    @click="remove(cat)"
+                  >
                     <Trash2 class="h-3.5 w-3.5" />
                   </button>
                 </div>
@@ -264,30 +305,25 @@ onMounted(load);
     </Card>
 
     <!-- Re-categorize section -->
-    <Card>
-      <CardHeader class="pb-2">
-        <CardTitle class="text-[13px] font-medium">Re-categorize Transactions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p class="text-[11px] text-text-secondary mb-3">
-          Re-run AI categorization over all transactions in a date range, overwriting existing categories. Leave dates empty to process all transactions.
-        </p>
-        <div class="flex gap-2 items-end flex-wrap">
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Start Date</label>
-            <Input v-model="recatStartDate" type="date" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">End Date</label>
-            <Input v-model="recatEndDate" type="date" class="w-36" />
-          </div>
+    <SettingsGroup
+      title="Re-categorize Transactions"
+      description="Re-run AI categorization over a date range, overwriting existing categories"
+    >
+      <SettingsRow label="Start Date">
+        <Input v-model="recatStartDate" type="date" class="w-36" />
+      </SettingsRow>
+      <SettingsRow label="End Date">
+        <Input v-model="recatEndDate" type="date" class="w-36" />
+      </SettingsRow>
+      <SettingsRow>
+        <div class="flex items-center gap-2">
           <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
-            {{ recatLoading ? 'Running...' : 'Re-categorize All' }}
+            {{ recatLoading ? 'Running…' : 'Re-categorize All' }}
           </Button>
+          <span v-if="recatResult" class="text-[13px] text-success">{{ recatResult }}</span>
+          <span v-if="recatError" class="text-[13px] text-destructive">{{ recatError }}</span>
         </div>
-        <p v-if="recatResult" class="text-[13px] text-success mt-2">{{ recatResult }}</p>
-        <p v-if="recatError" class="text-[13px] text-destructive mt-2">{{ recatError }}</p>
-      </CardContent>
-    </Card>
+      </SettingsRow>
+    </SettingsGroup>
   </div>
 </template>

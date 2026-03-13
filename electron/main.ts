@@ -22,6 +22,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
+const isDev = process.env.ELECTRON_DEV === '1';
 
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
 if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
@@ -44,8 +45,9 @@ const dataDir = app.getPath('userData');
 process.env.MONEY_MONITOR_DATA_DIR = dataDir;
 
 // ── 2. Auto-generate auth token for this session ────────────────────────────
-const authToken = randomBytes(32).toString('hex');
-process.env.API_TOKEN = authToken;
+// In dev mode the backend runs standalone without API_TOKEN, so auth is disabled.
+const authToken = isDev ? '' : randomBytes(32).toString('hex');
+if (authToken) process.env.API_TOKEN = authToken;
 
 // ── Expose app version for preload ───────────────────────────────────────────
 process.env.MM_APP_VERSION = app.getVersion();
@@ -303,31 +305,54 @@ app.whenReady().then(async () => {
 
     buildMenu();
 
-    // ── Register OS-level safe storage for secrets ────────────────────────────
-    // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
-    // encrypt/decrypt strings.  Registration must happen before the backend
-    // import so config.ts can use it when loading secrets from config.json.
-    if (safeStorage.isEncryptionAvailable()) {
-      const { registerSafeStorage } = await import('../dist/safe-storage.js');
-      registerSafeStorage({
-        encrypt: (plaintext: string) => safeStorage.encryptString(plaintext),
-        decrypt: (encrypted: Buffer) => safeStorage.decryptString(encrypted),
-      });
-      console.log(
-        '[Electron] Safe storage registered (backend:',
-        safeStorage.getSelectedStorageBackend?.() ?? 'unknown',
-        ')',
-      );
+    let port: number;
+    let shutdown: (() => Promise<void>) | null = null;
+    let onResume: (() => void) | null = null;
+
+    if (isDev) {
+      // Dev mode: backend runs externally via `tsx watch` on port 3000,
+      // frontend served by Vite dev server on port 5173.
+      port = 5173;
+      console.log('[Electron] Dev mode — waiting for Vite dev server...');
+      for (let i = 0; i < 30; i++) {
+        try {
+          await fetch(`http://localhost:${port}`);
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      console.log('[Electron] Vite dev server ready');
     } else {
-      console.warn('[Electron] Safe storage not available — secrets will be stored in plaintext');
+      // ── Register OS-level safe storage for secrets ──────────────────────────
+      // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
+      // encrypt/decrypt strings.  Registration must happen before the backend
+      // import so config.ts can use it when loading secrets from config.json.
+      if (safeStorage.isEncryptionAvailable()) {
+        const { registerSafeStorage } = await import('../dist/safe-storage.js');
+        registerSafeStorage({
+          encrypt: (plaintext: string) => safeStorage.encryptString(plaintext),
+          decrypt: (encrypted: Buffer) => safeStorage.decryptString(encrypted),
+        });
+        console.log(
+          '[Electron] Safe storage registered (backend:',
+          safeStorage.getSelectedStorageBackend?.() ?? 'unknown',
+          ')',
+        );
+      } else {
+        console.warn('[Electron] Safe storage not available — secrets will be stored in plaintext');
+      }
+
+      // Start server import
+      const { createServer } = await import('../dist/server.js');
+      const { start, shutdown: _shutdown, onResume: _onResume } = await createServer();
+      port = await start({ port: 0 });
+      shutdown = _shutdown;
+      onResume = _onResume;
+
+      console.log(`[Electron] Server started on port ${port}`);
     }
 
-    // Start server import
-    const { createServer } = await import('../dist/server.js');
-    const { start, shutdown, onResume } = await createServer();
-    const port = await start({ port: 0 });
-
-    console.log(`[Electron] Server started on port ${port}`);
     console.log(`[Electron] Data directory: ${dataDir}`);
 
     createWindow(port);
@@ -351,8 +376,8 @@ app.whenReady().then(async () => {
     // polling connection will have dropped, and SSE streams will be stale.
     // Restart all background services and reload the page.
     powerMonitor.on('resume', () => {
-      console.log('[Electron] System resumed from sleep — restarting background services');
-      onResume();
+      console.log('[Electron] System resumed from sleep');
+      if (onResume) onResume();
       mainWindow?.webContents.reload();
     });
 
@@ -362,7 +387,7 @@ app.whenReady().then(async () => {
 
     let quitting = false;
     app.on('will-quit', (e) => {
-      if (quitting) return;
+      if (quitting || !shutdown) return;
       quitting = true;
       e.preventDefault();
       shutdown()
