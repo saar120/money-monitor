@@ -11,7 +11,8 @@ import {
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
+import { Card, CardContent } from '@/components/ui/card';
+import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import {
   Table,
   TableBody,
@@ -159,55 +160,46 @@ onMounted(load);
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <div class="flex items-center justify-end flex-shrink-0 mb-5">
+    <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showNewForm = !showNewForm">
-        <Plus class="h-4 w-4 mr-1" /> Add category
+        <Plus class="h-4 w-4 mr-1" />
+        Add Category
       </Button>
-    </div>
+    </Teleport>
 
     <p v-if="error" class="text-[13px] text-destructive">{{ error }}</p>
 
     <!-- New category form -->
-    <Card v-if="showNewForm">
-      <CardHeader class="pb-2">
-        <CardTitle class="text-[13px] font-medium">New Category</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <div class="grid grid-cols-[1fr_1fr_auto_auto] gap-3 items-end">
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Name (slug)</label>
-            <Input v-model="newName" placeholder="e.g. groceries" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Label</label>
-            <Input v-model="newLabel" placeholder="e.g. Groceries" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Color</label>
-            <input
-              v-model="newColor"
-              type="color"
-              class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer"
-            />
-          </div>
+    <SettingsGroup v-if="showNewForm" title="New Category" class="mb-5">
+      <SettingsRow label="Name (slug)">
+        <Input v-model="newName" placeholder="e.g. groceries" class="w-44" />
+      </SettingsRow>
+      <SettingsRow label="Label">
+        <Input v-model="newLabel" placeholder="e.g. Groceries" class="w-44" />
+      </SettingsRow>
+      <SettingsRow label="Color">
+        <input
+          v-model="newColor"
+          type="color"
+          class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer"
+        />
+      </SettingsRow>
+      <SettingsRow label="Rules (LLM hint)" vertical>
+        <Textarea
+          v-model="newRules"
+          placeholder="Describe what transactions belong here..."
+          class="min-h-[60px] resize-y"
+        />
+      </SettingsRow>
+      <SettingsRow>
+        <div class="flex items-center gap-2 ml-auto">
+          <Button size="sm" variant="outline" @click="showNewForm = false">Cancel</Button>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
-            {{ saving ? 'Saving...' : 'Save' }}
+            {{ saving ? 'Saving…' : 'Save' }}
           </Button>
-          <Button size="sm" variant="ghost" @click="showNewForm = false">Cancel</Button>
         </div>
-        <div class="space-y-1 w-full mt-2">
-          <label class="text-[11px] text-text-secondary">Rules (LLM hint)</label>
-          <Textarea
-            v-model="newRules"
-            placeholder="Describe what transactions belong here. Include Hebrew merchant names if relevant."
-            class="min-h-[60px] resize-y"
-          />
-        </div>
-        <p class="text-[11px] text-text-secondary mt-1">
-          Name must be lowercase letters, numbers, dashes, or underscores.
-        </p>
-      </CardContent>
-    </Card>
+      </SettingsRow>
+    </SettingsGroup>
 
     <!-- Table -->
     <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
@@ -313,31 +305,25 @@ onMounted(load);
     </Card>
 
     <!-- Re-categorize section -->
-    <Card>
-      <CardHeader class="pb-2">
-        <CardTitle class="text-[13px] font-medium">Re-categorize Transactions</CardTitle>
-      </CardHeader>
-      <CardContent>
-        <p class="text-[11px] text-text-secondary mb-3">
-          Re-run AI categorization over all transactions in a date range, overwriting existing
-          categories. Leave dates empty to process all transactions.
-        </p>
-        <div class="flex gap-2 items-end flex-wrap">
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">Start Date</label>
-            <Input v-model="recatStartDate" type="date" class="w-36" />
-          </div>
-          <div class="space-y-1">
-            <label class="text-[11px] text-text-secondary">End Date</label>
-            <Input v-model="recatEndDate" type="date" class="w-36" />
-          </div>
+    <SettingsGroup
+      title="Re-categorize Transactions"
+      description="Re-run AI categorization over a date range, overwriting existing categories"
+    >
+      <SettingsRow label="Start Date">
+        <Input v-model="recatStartDate" type="date" class="w-36" />
+      </SettingsRow>
+      <SettingsRow label="End Date">
+        <Input v-model="recatEndDate" type="date" class="w-36" />
+      </SettingsRow>
+      <SettingsRow>
+        <div class="flex items-center gap-2">
           <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
-            {{ recatLoading ? 'Running...' : 'Re-categorize All' }}
+            {{ recatLoading ? 'Running…' : 'Re-categorize All' }}
           </Button>
+          <span v-if="recatResult" class="text-[13px] text-success">{{ recatResult }}</span>
+          <span v-if="recatError" class="text-[13px] text-destructive">{{ recatError }}</span>
         </div>
-        <p v-if="recatResult" class="text-[13px] text-success mt-2">{{ recatResult }}</p>
-        <p v-if="recatError" class="text-[13px] text-destructive mt-2">{{ recatError }}</p>
-      </CardContent>
-    </Card>
+      </SettingsRow>
+    </SettingsGroup>
   </div>
 </template>
