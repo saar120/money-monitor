@@ -318,12 +318,20 @@
   background: var(--glass-bg);
 }
 
-/* Apple-style translucent toolbar — fades content underneath */
-.glass-toolbar {
+/* Apple-style content toolbar — glass header that content scrolls behind.
+   The background fades from solid at top → transparent at bottom, so content
+   smoothly blurs into view (like macOS Settings / Finder toolbar). */
+.content-toolbar {
+  height: 52px;
+  background: linear-gradient(
+    to bottom,
+    var(--bg-primary) 0%,
+    var(--bg-primary) 60%,
+    color-mix(in srgb, var(--bg-primary) 50%, transparent) 85%,
+    transparent 100%
+  );
   backdrop-filter: blur(20px) saturate(180%);
   -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: var(--glass-bg-heavy);
-  border-bottom: 0.5px solid var(--glass-border);
 }
 
 /* ─── Page transitions ─── */

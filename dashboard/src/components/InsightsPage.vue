@@ -85,8 +85,6 @@ onMounted(async () => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <h1 class="text-[22px] font-semibold text-text-primary flex-shrink-0 mb-5">Insights</h1>
-
     <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
       <CardHeader class="pb-2 flex-shrink-0">
         <CardTitle class="text-[15px]">

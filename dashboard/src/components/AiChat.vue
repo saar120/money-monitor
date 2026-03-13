@@ -146,7 +146,6 @@ function handleKeydown(e: KeyboardEvent) {
           <PanelLeftClose v-if="sidebarOpen" class="h-4 w-4" />
           <PanelLeft v-else class="h-4 w-4" />
         </Button>
-        <h1 class="text-[22px] font-semibold text-text-primary">AI Financial Advisor</h1>
       </div>
 
       <Card class="flex-1 overflow-hidden flex flex-col min-h-0">
