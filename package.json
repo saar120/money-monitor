@@ -18,7 +18,7 @@
     "backup": "node scripts/backup.mjs",
     "restore": "node scripts/restore.mjs",
     "electron:dev": "npm rebuild better-sqlite3 && concurrently -k -n backend,vite,electron -c blue,green,magenta \"npm run dev\" \"npm run dashboard:dev\" \"nodemon --config nodemon.electron.json\"",
-    "electron:dev:app-db": "npm rebuild better-sqlite3 && MM_DATA_DIR=\"$HOME/Library/Application Support/Money Monitor\" concurrently -k -n backend,vite,electron -c blue,green,magenta \"npm run dev\" \"npm run dashboard:dev\" \"nodemon --config nodemon.electron.json\"",
+    "electron:dev:app-db": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && concurrently -k -n vite,electron -c green,magenta \"npm run dashboard:dev\" \"nodemon --config nodemon.electron-hmr.json\"",
     "electron:build": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron-builder --mac",
     "electron:build:win": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron-builder --win",
     "electron:build:linux": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild && electron-builder --linux",

@@ -318,13 +318,11 @@
   background: var(--glass-bg);
 }
 
-/* ─── Content Toolbar (macOS Settings-style glass header) ─── */
+/* ─── Content Toolbar (macOS Settings-style header) ─── */
 .content-toolbar {
   height: 52px;
   min-height: 52px;
-  backdrop-filter: blur(20px) saturate(180%);
-  -webkit-backdrop-filter: blur(20px) saturate(180%);
-  background: color-mix(in srgb, var(--bg-primary) 80%, transparent);
+  background: var(--bg-primary);
   border-bottom: 0.5px solid var(--separator);
 }
 

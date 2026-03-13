@@ -4,11 +4,9 @@ import { mkdirSync } from 'node:fs';
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
-// Electron sets MONEY_MONITOR_DATA_DIR before importing the backend.
-// MM_DATA_DIR overrides the data path without triggering Electron config mode.
-// Standalone mode leaves both unset -> falls back to PROJECT_ROOT/data.
-const DATA_DIR =
-  process.env.MONEY_MONITOR_DATA_DIR || process.env.MM_DATA_DIR || join(__dirname, '..', 'data');
+// Electron sets this before importing the backend.
+// Standalone mode leaves it unset -> falls back to PROJECT_ROOT/data.
+const DATA_DIR = process.env.MONEY_MONITOR_DATA_DIR || join(__dirname, '..', 'data');
 
 mkdirSync(DATA_DIR, { recursive: true });
 

@@ -102,11 +102,11 @@ const pageTitle = computed(() => {
 </script>
 
 <template>
-  <div class="flex h-screen" :class="{ 'p-2 gap-2': isElectron }">
+  <div class="flex h-screen overflow-hidden" :class="{ 'p-2 gap-2': isElectron }">
     <!-- Sidebar — Liquid Glass in Electron, solid bg in browser -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary/80 border-r border-separator/40'"
+      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary border-r border-separator/40'"
       :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->
@@ -184,7 +184,7 @@ const pageTitle = computed(() => {
 
     <!-- Main content — card floating over vibrancy in Electron -->
     <div
-      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden"
+      class="flex-1 flex flex-col min-w-0 bg-bg-primary overflow-hidden [contain:paint]"
       :class="{ 'rounded-xl shadow-[var(--shadow-md)] border border-separator/40': isElectron }"
     >
       <!-- Demo mode banner -->
@@ -202,7 +202,7 @@ const pageTitle = computed(() => {
         </button>
       </div>
 
-      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto min-w-0">
+      <main ref="mainEl" class="flex-1 flex flex-col overflow-y-auto overscroll-contain min-w-0">
         <!-- Glass toolbar — sticky so content scrolls behind with blur -->
         <div
           class="content-toolbar sticky top-0 z-10 flex items-center px-6 flex-shrink-0"

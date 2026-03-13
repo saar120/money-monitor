@@ -23,6 +23,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 const isDev = process.env.ELECTRON_DEV === '1';
+const isDevHmr = process.env.ELECTRON_DEV === 'hmr';
 
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
 if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
@@ -313,16 +314,6 @@ app.whenReady().then(async () => {
       // Dev mode: backend runs externally via `tsx watch` on port 3000,
       // frontend served by Vite dev server on port 5173.
       port = 5173;
-      console.log('[Electron] Dev mode — waiting for Vite dev server...');
-      for (let i = 0; i < 30; i++) {
-        try {
-          await fetch(`http://localhost:${port}`);
-          break;
-        } catch {
-          await new Promise((r) => setTimeout(r, 1000));
-        }
-      }
-      console.log('[Electron] Vite dev server ready');
     } else {
       // ── Register OS-level safe storage for secrets ──────────────────────────
       // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
@@ -346,11 +337,30 @@ app.whenReady().then(async () => {
       // Start server import
       const { createServer } = await import('../dist/server.js');
       const { start, shutdown: _shutdown, onResume: _onResume } = await createServer();
-      port = await start({ port: 0 });
+      // In HMR mode, use port 3000 so Vite's proxy can reach the backend.
+      port = await start({ port: isDevHmr ? 3000 : 0 });
       shutdown = _shutdown;
       onResume = _onResume;
 
       console.log(`[Electron] Server started on port ${port}`);
+
+      // HMR mode: backend runs inside Electron (with safe storage + config),
+      // but the window loads from Vite dev server for hot module replacement.
+      if (isDevHmr) port = 5173;
+    }
+
+    // Wait for Vite dev server before creating the window
+    if (isDev || isDevHmr) {
+      console.log('[Electron] Waiting for Vite dev server...');
+      for (let i = 0; i < 30; i++) {
+        try {
+          await fetch('http://localhost:5173');
+          break;
+        } catch {
+          await new Promise((r) => setTimeout(r, 1000));
+        }
+      }
+      console.log('[Electron] Vite dev server ready');
     }
 
     console.log(`[Electron] Data directory: ${dataDir}`);
