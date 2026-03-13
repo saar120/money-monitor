@@ -106,7 +106,7 @@ const pageTitle = computed(() => {
     <!-- Sidebar — Liquid Glass in Electron, solid bg in browser -->
     <aside
       class="flex-shrink-0 flex flex-col overflow-hidden"
-      :class="isElectron ? 'glass' : 'bg-bg-secondary/80 border-r border-separator/40'"
+      :class="isElectron ? 'glass rounded-xl' : 'bg-bg-secondary/80 border-r border-separator/40'"
       :style="{ width: isElectron ? '208px' : '220px' }"
     >
       <!-- macOS traffic light spacing + drag region -->

@@ -25,8 +25,8 @@
   --fill-secondary: rgba(0, 0, 0, 0.03);
 
   /* Liquid Glass */
-  --glass-bg: rgba(255, 255, 255, 0.72);
-  --glass-bg-heavy: rgba(255, 255, 255, 0.85);
+  --glass-bg: rgba(255, 255, 255, 0.55);
+  --glass-bg-heavy: rgba(255, 255, 255, 0.78);
   --glass-border: rgba(255, 255, 255, 0.5);
   --glass-shadow: 0 2px 20px rgba(0, 0, 0, 0.06);
 
@@ -85,8 +85,8 @@
     --fill-secondary: rgba(255, 255, 255, 0.03);
 
     /* Liquid Glass */
-    --glass-bg: rgba(44, 44, 46, 0.72);
-    --glass-bg-heavy: rgba(44, 44, 46, 0.88);
+    --glass-bg: rgba(44, 44, 46, 0.55);
+    --glass-bg-heavy: rgba(44, 44, 46, 0.8);
     --glass-border: rgba(255, 255, 255, 0.08);
     --glass-shadow: 0 2px 20px rgba(0, 0, 0, 0.2);
 
