@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, appendFileSync, statSync } from 'node:fs';
+import { existsSync, mkdirSync, readFileSync, appendFileSync, writeFileSync, statSync } from 'node:fs';
 import { join } from 'node:path';
 import { chatDir } from '../paths.js';
 
@@ -23,4 +23,9 @@ export function appendMemory(entry: string): void {
   if (!trimmed) return;
   const prefix = existsSync(MEMORY_PATH) && statSync(MEMORY_PATH).size > 0 ? '\n' : '';
   appendFileSync(MEMORY_PATH, `${prefix}- ${trimmed}\n`);
+}
+
+export function writeMemory(content: string): void {
+  ensureDir();
+  writeFileSync(MEMORY_PATH, content, 'utf-8');
 }
