@@ -3,7 +3,7 @@ import { StringEnum } from '@mariozechner/pi-ai';
 import { sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts } from '../db/schema.js';
-import { appendMemory } from './memory.js';
+import { appendMemory, readMemory, writeMemory } from './memory.js';
 import {
   listTransactions,
   categorizeTransaction as categorizeTx,
@@ -221,6 +221,26 @@ export function buildSaveMemoryTool() {
     execute: async (args) => {
       appendMemory(args.entry);
       return 'Saved to memory.';
+    },
+  });
+}
+
+export function buildUpdateMemoryTool() {
+  return createAgentTool({
+    name: 'update_memory',
+    description:
+      'Replace your entire long-term memory with updated content. Use this when you need to correct, consolidate, or remove outdated memory entries. Read your current memory first, then provide the full updated version.',
+    label: 'Updating memory',
+    parameters: Type.Object({
+      content: Type.String({
+        minLength: 1,
+        description:
+          'The full updated memory content. This replaces all existing memory, so include everything you want to keep.',
+      }),
+    }),
+    execute: async (args) => {
+      writeMemory(args.content);
+      return 'Memory updated.';
     },
   });
 }
