@@ -37,6 +37,7 @@ import {
   buildManageHoldingTool,
   buildRecordMovementTool,
   buildManageLiabilityTool,
+  buildRefreshStockPricesTool,
 } from './asset-tools.js';
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
@@ -214,6 +215,7 @@ export async function* chat(
     buildManageHoldingTool(),
     buildRecordMovementTool(),
     buildManageLiabilityTool(),
+    buildRefreshStockPricesTool(),
     buildGetAlertSettingsTool(),
     buildUpdateAlertSettingsTool(),
   ];

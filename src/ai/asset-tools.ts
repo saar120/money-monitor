@@ -1,11 +1,16 @@
 import { Type } from '@sinclair/typebox';
 import { StringEnum } from '@mariozechner/pi-ai';
 import {
-  ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, MOVEMENT_TYPES, LIABILITY_TYPES,
+  ASSET_TYPES,
+  LIQUIDITY_TYPES,
+  HOLDING_TYPES,
+  MOVEMENT_TYPES,
+  LIABILITY_TYPES,
 } from '../shared/types.js';
 import * as assetService from '../services/assets.js';
 import * as liabilityService from '../services/liabilities.js';
 import * as netWorthService from '../services/net-worth.js';
+import { refreshHoldingPrices } from '../services/stock-prices.js';
 import { createAgentTool } from './tool-adapter.js';
 
 // ── Read tool builders ──────────────────────────────────────────────────────────
@@ -13,7 +18,8 @@ import { createAgentTool } from './tool-adapter.js';
 export function buildGetNetWorthTool() {
   return createAgentTool({
     name: 'get_net_worth',
-    description: 'Get a complete net worth summary: bank balances, investment assets, liabilities, and totals. Use this when the user asks about their overall financial picture, net worth, or total assets.',
+    description:
+      'Get a complete net worth summary: bank balances, investment assets, liabilities, and totals. Use this when the user asks about their overall financial picture, net worth, or total assets.',
     label: 'Calculating net worth',
     parameters: Type.Object({}),
     execute: async () => getNetWorth(),
@@ -23,13 +29,22 @@ export function buildGetNetWorthTool() {
 export function buildGetAssetDetailsTool() {
   return createAgentTool({
     name: 'get_asset_details',
-    description: 'Get detailed information about a specific asset including holdings, P&L, and optionally movements and value history. Search by name (fuzzy match) or ID.',
+    description:
+      'Get detailed information about a specific asset including holdings, P&L, and optionally movements and value history. Search by name (fuzzy match) or ID.',
     label: 'Looking up asset details',
     parameters: Type.Object({
-      asset_id: Type.Optional(Type.Number({ description: 'Asset ID (use this if you know the exact ID)' })),
-      asset_name: Type.Optional(Type.String({ description: 'Asset name to search for (case-insensitive fuzzy match)' })),
-      include_movements: Type.Optional(Type.Boolean({ description: 'Include recent movements/transactions (default false)' })),
-      include_snapshots: Type.Optional(Type.Boolean({ description: 'Include value history snapshots (default false)' })),
+      asset_id: Type.Optional(
+        Type.Number({ description: 'Asset ID (use this if you know the exact ID)' }),
+      ),
+      asset_name: Type.Optional(
+        Type.String({ description: 'Asset name to search for (case-insensitive fuzzy match)' }),
+      ),
+      include_movements: Type.Optional(
+        Type.Boolean({ description: 'Include recent movements/transactions (default false)' }),
+      ),
+      include_snapshots: Type.Optional(
+        Type.Boolean({ description: 'Include value history snapshots (default false)' }),
+      ),
     }),
     execute: async (args) => getAssetDetails(args),
   });
@@ -38,10 +53,13 @@ export function buildGetAssetDetailsTool() {
 export function buildGetLiabilitiesTool() {
   return createAgentTool({
     name: 'get_liabilities',
-    description: 'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
+    description:
+      'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
     label: 'Checking liabilities',
     parameters: Type.Object({
-      include_inactive: Type.Optional(Type.Boolean({ description: 'Include deactivated liabilities (default false)' })),
+      include_inactive: Type.Optional(
+        Type.Boolean({ description: 'Include deactivated liabilities (default false)' }),
+      ),
     }),
     execute: async (args) => getLiabilities(args),
   });
@@ -50,12 +68,23 @@ export function buildGetLiabilitiesTool() {
 export function buildGetNetWorthHistoryTool() {
   return createAgentTool({
     name: 'get_net_worth_history',
-    description: 'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. Use this when the user asks how their net worth has changed.',
+    description:
+      'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. Use this when the user asks how their net worth has changed.',
     label: 'Loading net worth history',
     parameters: Type.Object({
-      start_date: Type.Optional(Type.String({ description: 'Start date (ISO, e.g. "2025-01-01"). Defaults to 1 year ago.' })),
-      end_date: Type.Optional(Type.String({ description: 'End date (ISO, e.g. "2026-03-01"). Defaults to today.' })),
-      granularity: Type.Optional(StringEnum(['daily', 'weekly', 'monthly'], { description: 'Data point frequency (default: monthly)' })),
+      start_date: Type.Optional(
+        Type.String({
+          description: 'Start date (ISO, e.g. "2025-01-01"). Defaults to 1 year ago.',
+        }),
+      ),
+      end_date: Type.Optional(
+        Type.String({ description: 'End date (ISO, e.g. "2026-03-01"). Defaults to today.' }),
+      ),
+      granularity: Type.Optional(
+        StringEnum(['daily', 'weekly', 'monthly'], {
+          description: 'Data point frequency (default: monthly)',
+        }),
+      ),
     }),
     execute: async (args) => getNetWorthHistory(args as Parameters<typeof getNetWorthHistory>[0]),
   });
@@ -74,21 +103,37 @@ export function buildManageAssetTool() {
 Before calling, confirm the details with the user if there is any ambiguity.`,
     label: 'Updating asset',
     parameters: Type.Object({
-      action: StringEnum(['create', 'update', 'update_value', 'record_rent'], { description: 'The action to perform' }),
+      action: StringEnum(['create', 'update', 'update_value', 'record_rent'], {
+        description: 'The action to perform',
+      }),
       // For create
       name: Type.Optional(Type.String({ description: 'Asset name (required for create)' })),
-      type: Type.Optional(StringEnum(ASSET_TYPES as unknown as string[], { description: 'Asset type (required for create)' })),
+      type: Type.Optional(
+        StringEnum(ASSET_TYPES as unknown as string[], {
+          description: 'Asset type (required for create)',
+        }),
+      ),
       institution: Type.Optional(Type.String({ description: 'Financial institution name' })),
       currency: Type.Optional(Type.String({ description: 'Currency code (default: ILS)' })),
-      liquidity: Type.Optional(StringEnum(LIQUIDITY_TYPES as unknown as string[], { description: 'Liquidity level' })),
+      liquidity: Type.Optional(
+        StringEnum(LIQUIDITY_TYPES as unknown as string[], { description: 'Liquidity level' }),
+      ),
       initial_value: Type.Optional(Type.Number({ description: 'Initial value for create' })),
-      initial_cost_basis: Type.Optional(Type.Number({ description: 'Initial cost basis for create' })),
+      initial_cost_basis: Type.Optional(
+        Type.Number({ description: 'Initial cost basis for create' }),
+      ),
       notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update, update_value, record_rent
-      asset_id: Type.Optional(Type.Number({ description: 'Asset ID (required for update/update_value/record_rent)' })),
+      asset_id: Type.Optional(
+        Type.Number({ description: 'Asset ID (required for update/update_value/record_rent)' }),
+      ),
       // For update_value
-      current_value: Type.Optional(Type.Number({ description: 'New current value (required for update_value)' })),
-      contribution: Type.Optional(Type.Number({ description: 'Contribution amount to add to cost basis' })),
+      current_value: Type.Optional(
+        Type.Number({ description: 'New current value (required for update_value)' }),
+      ),
+      contribution: Type.Optional(
+        Type.Number({ description: 'Contribution amount to add to cost basis' }),
+      ),
       date: Type.Optional(Type.String({ description: 'Date (ISO, defaults to today)' })),
       // For record_rent
       amount: Type.Optional(Type.Number({ description: 'Rent amount (required for record_rent)' })),
@@ -110,15 +155,29 @@ Before calling, confirm the details with the user if there is any ambiguity.`,
       action: StringEnum(['create', 'update', 'delete'], { description: 'The action to perform' }),
       // For create
       asset_id: Type.Optional(Type.Number({ description: 'Asset ID (required for create)' })),
-      name: Type.Optional(Type.String({ description: 'Holding name, e.g. "AAPL", "BTC" (required for create)' })),
-      type: Type.Optional(StringEnum(HOLDING_TYPES as unknown as string[], { description: 'Holding type (required for create)' })),
+      name: Type.Optional(
+        Type.String({ description: 'Holding name, e.g. "Apple", "Bitcoin" (required for create)' }),
+      ),
+      type: Type.Optional(
+        StringEnum(HOLDING_TYPES as unknown as string[], {
+          description: 'Holding type (required for create)',
+        }),
+      ),
       currency: Type.Optional(Type.String({ description: 'Currency code (required for create)' })),
       quantity: Type.Optional(Type.Number({ description: 'Quantity/amount' })),
       cost_basis: Type.Optional(Type.Number({ description: 'Total cost basis' })),
       last_price: Type.Optional(Type.Number({ description: 'Last known price per unit' })),
+      ticker: Type.Optional(
+        Type.String({
+          description:
+            'Stock ticker symbol for auto price updates, e.g. "AAPL" (US), "TEVA.TA" (TASE)',
+        }),
+      ),
       notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update/delete
-      holding_id: Type.Optional(Type.Number({ description: 'Holding ID (required for update/delete)' })),
+      holding_id: Type.Optional(
+        Type.Number({ description: 'Holding ID (required for update/delete)' }),
+      ),
     }),
     execute: async (args) => manageHolding(args),
   });
@@ -139,15 +198,47 @@ Before calling, confirm the details with the user. Quantity must be positive for
       asset_id: Type.Number({ description: 'Asset ID' }),
       holding_id: Type.Optional(Type.Number({ description: 'Holding ID (required for buy/sell)' })),
       type: StringEnum(MOVEMENT_TYPES as unknown as string[], { description: 'Movement type' }),
-      quantity: Type.Number({ description: 'Amount (positive for buy/deposit/dividend, negative for sell/withdrawal)' }),
+      quantity: Type.Number({
+        description: 'Amount (positive for buy/deposit/dividend, negative for sell/withdrawal)',
+      }),
       currency: Type.String({ description: 'Currency code' }),
-      price_per_unit: Type.Optional(Type.Number({ description: 'Price per unit (required for buy/sell on stock/etf/crypto holdings)' })),
-      source_amount: Type.Optional(Type.Number({ description: 'Amount in source currency (e.g. ILS amount for foreign currency deposits)' })),
-      source_currency: Type.Optional(Type.String({ description: 'Source currency code (e.g. "ILS")' })),
+      price_per_unit: Type.Optional(
+        Type.Number({
+          description: 'Price per unit (required for buy/sell on stock/etf/crypto holdings)',
+        }),
+      ),
+      source_amount: Type.Optional(
+        Type.Number({
+          description: 'Amount in source currency (e.g. ILS amount for foreign currency deposits)',
+        }),
+      ),
+      source_currency: Type.Optional(
+        Type.String({ description: 'Source currency code (e.g. "ILS")' }),
+      ),
       date: Type.String({ description: 'Date (ISO, e.g. "2026-03-07")' }),
       notes: Type.Optional(Type.String({ description: 'Notes' })),
     }),
     execute: async (args) => recordMovement(args),
+  });
+}
+
+export function buildRefreshStockPricesTool() {
+  return createAgentTool({
+    name: 'refresh_stock_prices',
+    description:
+      'Fetch latest stock prices from the market for holdings that have a ticker symbol configured. Supports US stocks (e.g. AAPL) and Israeli TASE stocks (e.g. TEVA.TA). Optionally refresh a single asset.',
+    label: 'Refreshing stock prices',
+    parameters: Type.Object({
+      asset_id: Type.Optional(
+        Type.Number({
+          description: 'Optional asset ID to refresh prices for a specific asset only',
+        }),
+      ),
+    }),
+    execute: async (args) => {
+      const result = await refreshHoldingPrices(args.asset_id);
+      return JSON.stringify(result);
+    },
   });
 }
 
@@ -161,18 +252,32 @@ export function buildManageLiabilityTool() {
 Before calling, confirm the details with the user if there is any ambiguity.`,
     label: 'Updating liability',
     parameters: Type.Object({
-      action: StringEnum(['create', 'update', 'deactivate'], { description: 'The action to perform' }),
+      action: StringEnum(['create', 'update', 'deactivate'], {
+        description: 'The action to perform',
+      }),
       // For create
       name: Type.Optional(Type.String({ description: 'Liability name (required for create)' })),
-      type: Type.Optional(StringEnum(LIABILITY_TYPES as unknown as string[], { description: 'Liability type (required for create)' })),
+      type: Type.Optional(
+        StringEnum(LIABILITY_TYPES as unknown as string[], {
+          description: 'Liability type (required for create)',
+        }),
+      ),
       currency: Type.Optional(Type.String({ description: 'Currency code (default: ILS)' })),
-      original_amount: Type.Optional(Type.Number({ description: 'Original loan amount (required for create)' })),
-      current_balance: Type.Optional(Type.Number({ description: 'Current outstanding balance (required for create)' })),
-      interest_rate: Type.Optional(Type.Number({ description: 'Annual interest rate (percentage)' })),
+      original_amount: Type.Optional(
+        Type.Number({ description: 'Original loan amount (required for create)' }),
+      ),
+      current_balance: Type.Optional(
+        Type.Number({ description: 'Current outstanding balance (required for create)' }),
+      ),
+      interest_rate: Type.Optional(
+        Type.Number({ description: 'Annual interest rate (percentage)' }),
+      ),
       start_date: Type.Optional(Type.String({ description: 'Start date (ISO)' })),
       notes: Type.Optional(Type.String({ description: 'Notes' })),
       // For update/deactivate
-      liability_id: Type.Optional(Type.Number({ description: 'Liability ID (required for update/deactivate)' })),
+      liability_id: Type.Optional(
+        Type.Number({ description: 'Liability ID (required for update/deactivate)' }),
+      ),
     }),
     execute: async (args) => manageLiability(args),
   });
@@ -223,7 +328,9 @@ async function getAssetDetails(input: {
 }
 
 async function getLiabilities(input: { include_inactive?: boolean }): Promise<string> {
-  const result = await liabilityService.listLiabilities({ includeInactive: input.include_inactive });
+  const result = await liabilityService.listLiabilities({
+    includeInactive: input.include_inactive,
+  });
   return JSON.stringify({ liabilities: result });
 }
 
@@ -245,10 +352,19 @@ async function getNetWorthHistory(input: {
 
 async function manageAsset(input: {
   action: string;
-  name?: string; type?: string; institution?: string; currency?: string;
-  liquidity?: string; initial_value?: number; initial_cost_basis?: number;
-  notes?: string; asset_id?: number; current_value?: number;
-  contribution?: number; date?: string; amount?: number;
+  name?: string;
+  type?: string;
+  institution?: string;
+  currency?: string;
+  liquidity?: string;
+  initial_value?: number;
+  initial_cost_basis?: number;
+  notes?: string;
+  asset_id?: number;
+  current_value?: number;
+  contribution?: number;
+  date?: string;
+  amount?: number;
 }): Promise<string> {
   if (input.action === 'create') {
     if (!input.name) return JSON.stringify({ error: 'name is required for create' });
@@ -283,7 +399,8 @@ async function manageAsset(input: {
 
   if (input.action === 'update_value') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for update_value' });
-    if (input.current_value === undefined) return JSON.stringify({ error: 'current_value is required for update_value' });
+    if (input.current_value === undefined)
+      return JSON.stringify({ error: 'current_value is required for update_value' });
 
     const result = await assetService.updateAssetValue(input.asset_id, {
       currentValue: input.current_value,
@@ -297,7 +414,8 @@ async function manageAsset(input: {
 
   if (input.action === 'record_rent') {
     if (!input.asset_id) return JSON.stringify({ error: 'asset_id is required for record_rent' });
-    if (!input.amount || input.amount <= 0) return JSON.stringify({ error: 'amount must be positive for record_rent' });
+    if (!input.amount || input.amount <= 0)
+      return JSON.stringify({ error: 'amount must be positive for record_rent' });
 
     const result = await assetService.recordRent(input.asset_id, {
       amount: input.amount,
@@ -316,8 +434,15 @@ async function manageAsset(input: {
 
 async function manageHolding(input: {
   action: string;
-  asset_id?: number; name?: string; type?: string; currency?: string;
-  quantity?: number; cost_basis?: number; last_price?: number; notes?: string;
+  asset_id?: number;
+  name?: string;
+  type?: string;
+  currency?: string;
+  quantity?: number;
+  cost_basis?: number;
+  last_price?: number;
+  ticker?: string;
+  notes?: string;
   holding_id?: number;
 }): Promise<string> {
   if (input.action === 'create') {
@@ -333,6 +458,7 @@ async function manageHolding(input: {
       quantity: input.quantity ?? 0,
       costBasis: input.cost_basis,
       lastPrice: input.last_price,
+      ticker: input.ticker,
       notes: input.notes,
     });
     if (!result.ok) return JSON.stringify({ error: result.error });
@@ -349,6 +475,7 @@ async function manageHolding(input: {
       quantity: input.quantity,
       costBasis: input.cost_basis,
       lastPrice: input.last_price,
+      ticker: input.ticker,
       notes: input.notes,
     });
     if (!result.ok) return JSON.stringify({ error: result.error });
@@ -399,15 +526,23 @@ async function recordMovement(input: {
 
 async function manageLiability(input: {
   action: string;
-  name?: string; type?: string; currency?: string;
-  original_amount?: number; current_balance?: number; interest_rate?: number;
-  start_date?: string; notes?: string; liability_id?: number;
+  name?: string;
+  type?: string;
+  currency?: string;
+  original_amount?: number;
+  current_balance?: number;
+  interest_rate?: number;
+  start_date?: string;
+  notes?: string;
+  liability_id?: number;
 }): Promise<string> {
   if (input.action === 'create') {
     if (!input.name) return JSON.stringify({ error: 'name is required for create' });
     if (!input.type) return JSON.stringify({ error: 'type is required for create' });
-    if (input.original_amount === undefined) return JSON.stringify({ error: 'original_amount is required for create' });
-    if (input.current_balance === undefined) return JSON.stringify({ error: 'current_balance is required for create' });
+    if (input.original_amount === undefined)
+      return JSON.stringify({ error: 'original_amount is required for create' });
+    if (input.current_balance === undefined)
+      return JSON.stringify({ error: 'current_balance is required for create' });
 
     const result = await liabilityService.createLiability({
       name: input.name,
@@ -424,7 +559,8 @@ async function manageLiability(input: {
   }
 
   if (input.action === 'update') {
-    if (!input.liability_id) return JSON.stringify({ error: 'liability_id is required for update' });
+    if (!input.liability_id)
+      return JSON.stringify({ error: 'liability_id is required for update' });
 
     const result = await liabilityService.updateLiability(input.liability_id, {
       name: input.name,
@@ -437,7 +573,8 @@ async function manageLiability(input: {
   }
 
   if (input.action === 'deactivate') {
-    if (!input.liability_id) return JSON.stringify({ error: 'liability_id is required for deactivate' });
+    if (!input.liability_id)
+      return JSON.stringify({ error: 'liability_id is required for deactivate' });
 
     const result = await liabilityService.deactivateLiability(input.liability_id);
     if (!result.ok) return JSON.stringify({ error: result.error });

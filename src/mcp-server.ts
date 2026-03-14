@@ -502,6 +502,10 @@ server.registerTool(
       quantity: z.number().optional(),
       cost_basis: z.number().optional(),
       last_price: z.number().optional(),
+      ticker: z
+        .string()
+        .optional()
+        .describe('Stock ticker for auto price updates, e.g. "AAPL", "TEVA.TA"'),
       notes: z.string().optional(),
       holding_id: z.number().optional(),
     },
@@ -582,6 +586,37 @@ server.registerTool(
   async (args) => {
     try {
       return { content: [{ type: 'text', text: await manageLiability(args) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+    }
+  },
+);
+
+const { refreshHoldingPrices } = await import('./services/stock-prices.js');
+
+server.registerTool(
+  'refresh_stock_prices',
+  {
+    title: 'Refresh Stock Prices',
+    description:
+      'Fetch latest market prices for holdings with ticker symbols. Supports US (AAPL) and TASE (TEVA.TA) stocks.',
+    inputSchema: {
+      asset_id: z
+        .number()
+        .optional()
+        .describe('Optional asset ID to refresh a specific asset only'),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: true,
+    },
+  },
+  async (args) => {
+    try {
+      const result = await refreshHoldingPrices(args.asset_id);
+      return { content: [{ type: 'text', text: JSON.stringify(result) }] };
     } catch (e) {
       return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
     }

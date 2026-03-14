@@ -2,20 +2,38 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import { Line } from 'vue-chartjs';
 import {
-  Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip,
+  Chart as ChartJS,
+  CategoryScale,
+  LinearScale,
+  LineElement,
+  PointElement,
+  Filler,
+  Tooltip,
 } from 'chart.js';
 import {
-  getAsset, getMovements, getAssetSnapshots,
-  createMovement, deleteMovement,
-  createHolding, updateHolding, deleteHolding,
-  type Asset, type Holding, type Movement, type AssetSnapshot,
+  getAsset,
+  getMovements,
+  getAssetSnapshots,
+  createMovement,
+  deleteMovement,
+  createHolding,
+  updateHolding,
+  deleteHolding,
+  refreshPrices,
+  type Asset,
+  type Holding,
+  type Movement,
+  type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
-  ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
-  LIQUIDITY_LABELS, LIQUIDITY_STYLES,
+  ASSET_TYPE_COLORS,
+  ASSET_TYPE_LABELS,
+  HOLDING_TYPE_LABELS,
+  LIQUIDITY_LABELS,
+  LIQUIDITY_STYLES,
 } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -24,23 +42,46 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import {
-  Plus, Trash2, TrendingUp, TrendingDown,
-  AlertCircle, Loader2, Pencil, RefreshCw,
+  Plus,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  Loader2,
+  Pencil,
+  RefreshCw,
 } from 'lucide-vue-next';
 
 ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
@@ -52,11 +93,9 @@ const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 // ─── Data fetching ───
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
 const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 })
+  getMovements(props.assetId, { limit: 50 }),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
-  getAssetSnapshots(props.assetId)
-);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
 
 onMounted(() => {
   movementsApi.execute();
@@ -70,7 +109,7 @@ async function refreshAll() {
 // ─── Currency toggle ───
 const CURRENCY_PREF_KEY = 'asset_display_currency';
 const displayCurrency = ref<'native' | 'ILS'>(
-  (localStorage.getItem(CURRENCY_PREF_KEY) as 'native' | 'ILS') ?? 'native'
+  (localStorage.getItem(CURRENCY_PREF_KEY) as 'native' | 'ILS') ?? 'native',
 );
 watch(displayCurrency, (val) => {
   localStorage.setItem(CURRENCY_PREF_KEY, val);
@@ -86,50 +125,64 @@ const movementsTotal = ref(0);
 const movementOffset = ref(0);
 const hasMoreMovements = computed(() => movementsList.value.length < movementsTotal.value);
 
-watch(() => movementsApi.data.value, (data) => {
-  if (data) {
-    movementsList.value = data.movements;
-    movementsTotal.value = data.total;
-    movementOffset.value = data.movements.length;
-  }
-});
+watch(
+  () => movementsApi.data.value,
+  (data) => {
+    if (data) {
+      movementsList.value = data.movements;
+      movementsTotal.value = data.total;
+      movementOffset.value = data.movements.length;
+    }
+  },
+);
 
 async function loadMoreMovements() {
   try {
     const data = await getMovements(props.assetId, { limit: 50, offset: movementOffset.value });
     movementsList.value = [...movementsList.value, ...data.movements];
     movementOffset.value = movementsList.value.length;
-  } catch { /* noop */ }
+  } catch {
+    /* noop */
+  }
 }
 
 const snapshots = computed(() => snapshotsApi.data.value?.snapshots ?? []);
 
 // ─── Performance calculations ───
 const currentValueNative = computed(() =>
-  holdings.value.reduce((sum, h) => sum + h.currentValue, 0)
+  holdings.value.reduce((sum, h) => sum + h.currentValue, 0),
 );
 
 const displayCurrentValue = computed(() =>
-  showingIls.value ? asset.value?.totalValueIls ?? 0 : currentValueNative.value
+  showingIls.value ? (asset.value?.totalValueIls ?? 0) : currentValueNative.value,
 );
 
 // Account-level P&L from backend (always ILS)
 const totalReturnIls = computed(() => asset.value?.totalReturnIls);
 const totalInvestedIls = computed(() => asset.value?.totalInvestedIls);
 const returnPct = computed(() => {
-  if (totalInvestedIls.value == null || totalInvestedIls.value === 0 || totalReturnIls.value == null) return null;
+  if (
+    totalInvestedIls.value == null ||
+    totalInvestedIls.value === 0 ||
+    totalReturnIls.value == null
+  )
+    return null;
   return (totalReturnIls.value / totalInvestedIls.value) * 100;
 });
 
 // ─── Asset type styling ───
 const typeColor = computed(() => ASSET_TYPE_COLORS[asset.value?.type ?? ''] ?? '#71717a');
-const typeLabel = computed(() => ASSET_TYPE_LABELS[asset.value?.type ?? ''] ?? asset.value?.type ?? '');
+const typeLabel = computed(
+  () => ASSET_TYPE_LABELS[asset.value?.type ?? ''] ?? asset.value?.type ?? '',
+);
 const typeBadgeStyle = computed(() => ({
   backgroundColor: typeColor.value + '1a',
   color: typeColor.value,
 }));
 const liquidityClass = computed(() => LIQUIDITY_STYLES[asset.value?.liquidity ?? ''] ?? '');
-const liquidityLabel = computed(() => LIQUIDITY_LABELS[asset.value?.liquidity ?? ''] ?? asset.value?.liquidity ?? '');
+const liquidityLabel = computed(
+  () => LIQUIDITY_LABELS[asset.value?.liquidity ?? ''] ?? asset.value?.liquidity ?? '',
+);
 
 // ─── Movement type badge classes ───
 const MOVEMENT_BADGE_CLASSES: Record<string, string> = {
@@ -147,31 +200,39 @@ function movementBadgeClass(type: string) {
 }
 
 function formatMovementDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 // ─── Chart ───
 const chartData = computed(() => {
   if (snapshots.value.length === 0) return null;
   return {
-    labels: snapshots.value.map(s => {
+    labels: snapshots.value.map((s) => {
       const d = new Date(s.date);
       return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
     }),
-    datasets: [{
-      label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
-      data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
-      borderColor: '#007AFF',
-      backgroundColor: 'rgba(0, 122, 255, 0.15)',
-      fill: true,
-      tension: 0.4,
-      borderWidth: 2.5,
-      borderCapStyle: 'round' as const,
-      borderJoinStyle: 'round' as const,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-    }],
+    datasets: [
+      {
+        label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
+        data: snapshots.value.map((s) =>
+          showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls),
+        ),
+        borderColor: '#007AFF',
+        backgroundColor: 'rgba(0, 122, 255, 0.15)',
+        fill: true,
+        tension: 0.4,
+        borderWidth: 2.5,
+        borderCapStyle: 'round' as const,
+        borderJoinStyle: 'round' as const,
+        pointRadius: 3,
+        pointHoverRadius: 5,
+        spanGaps: true,
+      },
+    ],
   };
 });
 
@@ -214,18 +275,45 @@ const chartOptions = computed(() => ({
 // ─── Holding Dialog ───
 const showHoldingDialog = ref(false);
 const editingHolding = ref<Holding | null>(null);
-const holdingForm = ref({ name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null as number | null, notes: '' });
+const holdingForm = ref({
+  name: '',
+  type: 'stock',
+  currency: 'ILS',
+  quantity: 0,
+  costBasis: 0,
+  lastPrice: null as number | null,
+  ticker: '',
+  notes: '',
+});
 const holdingSaving = ref(false);
 
 function openAddHolding() {
   editingHolding.value = null;
-  holdingForm.value = { name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null, notes: '' };
+  holdingForm.value = {
+    name: '',
+    type: 'stock',
+    currency: 'ILS',
+    quantity: 0,
+    costBasis: 0,
+    lastPrice: null,
+    ticker: '',
+    notes: '',
+  };
   showHoldingDialog.value = true;
 }
 
 function openEditHolding(h: Holding) {
   editingHolding.value = h;
-  holdingForm.value = { name: h.name, type: h.type, currency: h.currency, quantity: h.quantity, costBasis: h.costBasis, lastPrice: h.lastPrice, notes: h.notes ?? '' };
+  holdingForm.value = {
+    name: h.name,
+    type: h.type,
+    currency: h.currency,
+    quantity: h.quantity,
+    costBasis: h.costBasis,
+    lastPrice: h.lastPrice,
+    ticker: h.ticker ?? '',
+    notes: h.notes ?? '',
+  };
   showHoldingDialog.value = true;
 }
 
@@ -237,6 +325,7 @@ async function saveHolding() {
         quantity: holdingForm.value.quantity,
         costBasis: holdingForm.value.costBasis,
         lastPrice: holdingForm.value.lastPrice,
+        ticker: holdingForm.value.ticker || null,
         notes: holdingForm.value.notes || null,
       });
     } else {
@@ -247,12 +336,15 @@ async function saveHolding() {
         quantity: holdingForm.value.quantity,
         costBasis: holdingForm.value.costBasis,
         lastPrice: holdingForm.value.lastPrice ?? undefined,
+        ticker: holdingForm.value.ticker || undefined,
         notes: holdingForm.value.notes || undefined,
       });
     }
     showHoldingDialog.value = false;
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     holdingSaving.value = false;
   }
 }
@@ -269,7 +361,9 @@ async function confirmDeleteHolding() {
   try {
     await deleteHolding(target.id);
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     deletingHolding.value = false;
   }
 }
@@ -315,6 +409,33 @@ async function saveQuickUpdate() {
   }
 }
 
+// ─── Refresh Prices ───
+const refreshingPrices = ref(false);
+const hasTickers = computed(() => holdings.value.some((h) => h.ticker));
+
+async function handleRefreshPrices() {
+  refreshingPrices.value = true;
+  try {
+    await refreshPrices(props.assetId);
+    await refreshAll();
+  } catch {
+    /* noop */
+  } finally {
+    refreshingPrices.value = false;
+  }
+}
+
+function relativeTime(dateStr: string | null): string {
+  if (!dateStr) return '';
+  const now = new Date();
+  const then = new Date(dateStr);
+  const diffMs = now.getTime() - then.getTime();
+  const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+  if (diffDays === 0) return 'today';
+  if (diffDays === 1) return '1d ago';
+  return `${diffDays}d ago`;
+}
+
 // ─── Movement Dialog ───
 const showMovementDialog = ref(false);
 const movementForm = ref({
@@ -349,14 +470,16 @@ function openAddMovement() {
 
 const selectedHolding = computed(() => {
   if (movementForm.value.holdingId === 'none') return null;
-  return holdings.value.find(h => h.id === Number(movementForm.value.holdingId)) ?? null;
+  return holdings.value.find((h) => h.id === Number(movementForm.value.holdingId)) ?? null;
 });
 
 const showPricePerUnit = computed(() => {
   const h = selectedHolding.value;
   if (!h) return false;
-  return (movementForm.value.type === 'buy' || movementForm.value.type === 'sell') &&
-    ['stock', 'etf', 'crypto'].includes(h.type);
+  return (
+    (movementForm.value.type === 'buy' || movementForm.value.type === 'sell') &&
+    ['stock', 'etf', 'crypto'].includes(h.type)
+  );
 });
 
 const quantityLabel = computed(() => {
@@ -377,19 +500,25 @@ const sellMaxWarning = computed(() => {
 });
 
 // Auto-fill currency when holding changes
-watch(() => movementForm.value.holdingId, (val) => {
-  if (val !== 'none') {
-    const h = holdings.value.find(x => x.id === Number(val));
-    if (h) movementForm.value.currency = h.currency;
-  }
-});
+watch(
+  () => movementForm.value.holdingId,
+  (val) => {
+    if (val !== 'none') {
+      const h = holdings.value.find((x) => x.id === Number(val));
+      if (h) movementForm.value.currency = h.currency;
+    }
+  },
+);
 
 async function saveMovement() {
   movementSaving.value = true;
   movementError.value = null;
   try {
-    const isNegativeType = movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal';
-    const quantity = isNegativeType ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
+    const isNegativeType =
+      movementForm.value.type === 'sell' || movementForm.value.type === 'withdrawal';
+    const quantity = isNegativeType
+      ? -Math.abs(movementForm.value.quantity)
+      : Math.abs(movementForm.value.quantity);
 
     let sourceAmount = movementForm.value.sourceAmount ?? undefined;
     let sourceCurrency = movementForm.value.sourceCurrency || undefined;
@@ -398,12 +527,16 @@ async function saveMovement() {
     }
 
     await createMovement(props.assetId, {
-      holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
+      holdingId:
+        movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
       date: movementForm.value.date,
       type: movementForm.value.type,
       quantity,
       currency: movementForm.value.currency,
-      pricePerUnit: showPricePerUnit.value && movementForm.value.pricePerUnit != null ? movementForm.value.pricePerUnit : undefined,
+      pricePerUnit:
+        showPricePerUnit.value && movementForm.value.pricePerUnit != null
+          ? movementForm.value.pricePerUnit
+          : undefined,
       sourceAmount,
       sourceCurrency,
       notes: movementForm.value.notes || undefined,
@@ -460,11 +593,18 @@ async function confirmDeleteMovement() {
           <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
           <div class="flex items-center gap-2 mt-1">
             <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
-            <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
+            <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+              asset.institution
+            }}</span>
             <Badge :class="liquidityClass">{{ liquidityLabel }}</Badge>
           </div>
         </div>
-        <Button v-if="isNonIls" variant="outline" size="sm" @click="displayCurrency = displayCurrency === 'native' ? 'ILS' : 'native'">
+        <Button
+          v-if="isNonIls"
+          variant="outline"
+          size="sm"
+          @click="displayCurrency = displayCurrency === 'native' ? 'ILS' : 'native'"
+        >
           {{ showingIls ? assetCurrency : 'ILS' }}
         </Button>
       </div>
@@ -476,32 +616,50 @@ async function confirmDeleteMovement() {
             <CardTitle class="text-[13px] font-medium text-text-secondary">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-[22px] font-semibold tabular-nums">{{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">
+              {{ formatAmount(displayCurrentValue, showingIls ? 'ILS' : assetCurrency) }}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Invested (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Invested (ILS)</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div v-if="totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">{{ formatAmount(totalInvestedIls, 'ILS') }}</div>
+            <div v-if="totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">
+              {{ formatAmount(totalInvestedIls, 'ILS') }}
+            </div>
             <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Return (ILS)</CardTitle
+            >
           </CardHeader>
           <CardContent>
             <template v-if="totalReturnIls != null">
-              <div :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
+              <div
+                :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'"
+                class="text-[22px] font-semibold tabular-nums"
+              >
                 {{ totalReturnIls >= 0 ? '+' : '' }}{{ formatAmount(totalReturnIls, 'ILS') }}
               </div>
               <div v-if="returnPct != null" class="flex items-center gap-1 mt-0.5">
-                <component :is="totalReturnIls >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
+                <component
+                  :is="totalReturnIls >= 0 ? TrendingUp : TrendingDown"
+                  class="h-3.5 w-3.5"
+                  :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'"
+                />
+                <span
+                  :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[13px]"
+                >
                   {{ returnPct >= 0 ? '+' : '' }}{{ returnPct.toFixed(1) }}%
                 </span>
               </div>
@@ -525,7 +683,23 @@ async function confirmDeleteMovement() {
                 </Button>
               </template>
               <template v-else>
-                <Button v-if="holdings.length > 0" variant="outline" size="sm" @click="startQuickUpdate">
+                <Button
+                  v-if="hasTickers"
+                  variant="outline"
+                  size="sm"
+                  :disabled="refreshingPrices"
+                  @click="handleRefreshPrices"
+                >
+                  <Loader2 v-if="refreshingPrices" class="h-3.5 w-3.5 mr-1 animate-spin" />
+                  <RefreshCw v-else class="h-3.5 w-3.5 mr-1" />
+                  Refresh Prices
+                </Button>
+                <Button
+                  v-if="holdings.length > 0"
+                  variant="outline"
+                  size="sm"
+                  @click="startQuickUpdate"
+                >
                   <RefreshCw class="h-3.5 w-3.5 mr-1" />
                   Update Values
                 </Button>
@@ -573,13 +747,18 @@ async function confirmDeleteMovement() {
                 <TableRow v-for="h in holdings" :key="h.id" class="group">
                   <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
+                    <span v-if="h.ticker" class="text-[11px] text-text-secondary ml-1"
+                      >({{ h.ticker }})</span
+                    >
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
                       <span class="text-[11px]">No price data</span>
                     </div>
                   </TableCell>
                   <TableCell class="hidden md:table-cell">
-                    <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                    <Badge variant="outline" class="text-[11px]">{{
+                      HOLDING_TYPE_LABELS[h.type] ?? h.type
+                    }}</Badge>
                   </TableCell>
                   <TableCell class="text-right tabular-nums text-[13px]">
                     <template v-if="quickUpdateMode">
@@ -587,7 +766,12 @@ async function confirmDeleteMovement() {
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.quantity"
-                        @update:model-value="(v: string | number) => { const m = editedHoldings.get(h.id); if (m) m.quantity = Number(v); }"
+                        @update:model-value="
+                          (v: string | number) => {
+                            const m = editedHoldings.get(h.id);
+                            if (m) m.quantity = Number(v);
+                          }
+                        "
                       />
                     </template>
                     <template v-else>{{ h.quantity.toLocaleString() }}</template>
@@ -598,40 +782,78 @@ async function confirmDeleteMovement() {
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.lastPrice ?? ''"
-                        @update:model-value="(v: string | number) => { const m = editedHoldings.get(h.id); if (m) m.lastPrice = v === '' ? null : Number(v); }"
+                        @update:model-value="
+                          (v: string | number) => {
+                            const m = editedHoldings.get(h.id);
+                            if (m) m.lastPrice = v === '' ? null : Number(v);
+                          }
+                        "
                       />
                     </template>
                     <template v-else>
                       <span v-if="h.type === 'cash' || h.type === 'balance'">-</span>
-                      <span v-else-if="h.lastPrice != null">{{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
+                      <template v-else-if="h.lastPrice != null">
+                        <span>{{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
+                        <span
+                          v-if="h.lastPriceDate"
+                          class="text-[11px] text-text-secondary block"
+                          >{{ relativeTime(h.lastPriceDate) }}</span
+                        >
+                      </template>
                       <span v-else>-</span>
                     </template>
                   </TableCell>
                   <TableCell class="text-right tabular-nums text-[13px] font-medium">
-                    {{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}
+                    {{
+                      showingIls
+                        ? formatCurrency(h.currentValueIls)
+                        : formatAmount(h.currentValue, h.currency)
+                    }}
                   </TableCell>
                   <!-- Cost basis — always native currency -->
-                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell">
+                  <TableCell
+                    class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell"
+                  >
                     {{ formatAmount(h.costBasis, h.currency) }}
                   </TableCell>
                   <!-- P&L — always native currency, never ILS -->
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
-                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px] tabular-nums font-medium">
+                      <span
+                        :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'"
+                        class="text-[13px] tabular-nums font-medium"
+                      >
                         {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatAmount(h.gainLoss, h.currency) }}
                       </span>
-                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px] block">
+                      <span
+                        v-if="h.gainLossPercent != null"
+                        :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
+                        class="text-[11px] block"
+                      >
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                     </div>
                     <span v-else class="text-text-secondary text-[13px]">-</span>
                   </TableCell>
                   <TableCell>
-                    <div v-if="!quickUpdateMode" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" class="h-7 w-7" @click="openEditHolding(h)">
+                    <div
+                      v-if="!quickUpdateMode"
+                      class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7"
+                        @click="openEditHolding(h)"
+                      >
                         <Pencil class="h-3.5 w-3.5" />
                       </Button>
-                      <Button variant="ghost" size="icon" class="h-7 w-7" @click="holdingToDelete = h">
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7"
+                        @click="holdingToDelete = h"
+                      >
                         <Trash2 class="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     </div>
@@ -645,16 +867,34 @@ async function confirmDeleteMovement() {
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
             <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
               <div class="flex items-center justify-between">
-                <span class="font-medium text-[13px]">{{ h.name }}</span>
-                <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                <span class="font-medium text-[13px]"
+                  >{{ h.name
+                  }}<span v-if="h.ticker" class="text-text-secondary ml-1"
+                    >({{ h.ticker }})</span
+                  ></span
+                >
+                <Badge variant="outline" class="text-[11px]">{{
+                  HOLDING_TYPE_LABELS[h.type] ?? h.type
+                }}</Badge>
               </div>
               <div v-if="h.quantity" class="text-[11px] text-text-secondary mt-1">
-                {{ h.quantity.toLocaleString() }} {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : 'units' }}
-                <span v-if="h.lastPrice"> @ {{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span>
+                {{ h.quantity.toLocaleString() }}
+                {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : 'units' }}
+                <span v-if="h.lastPrice">
+                  @ {{ h.currency }} {{ h.lastPrice.toLocaleString() }}</span
+                >
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-[13px] font-medium">{{ showingIls ? formatCurrency(h.currentValueIls) : formatAmount(h.currentValue, h.currency) }}</span>
-                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px]">
+                <span class="text-[13px] font-medium">{{
+                  showingIls
+                    ? formatCurrency(h.currentValueIls)
+                    : formatAmount(h.currentValue, h.currency)
+                }}</span>
+                <span
+                  v-if="h.gainLossPercent != null"
+                  :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[11px]"
+                >
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
               </div>
@@ -698,7 +938,9 @@ async function confirmDeleteMovement() {
         </div>
 
         <div v-else-if="movementsList.length === 0" class="text-center py-8">
-          <p class="text-text-secondary text-[13px]">No movements recorded yet. Add a movement to track your investment history.</p>
+          <p class="text-text-secondary text-[13px]">
+            No movements recorded yet. Add a movement to track your investment history.
+          </p>
           <Button size="sm" class="mt-2" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
             Add Movement
@@ -711,7 +953,9 @@ async function confirmDeleteMovement() {
               <div>
                 <div class="flex items-center gap-2">
                   <Badge :class="movementBadgeClass(m.type)">{{ m.type }}</Badge>
-                  <span class="text-[13px] text-text-secondary">{{ m.holdingName ?? 'General' }}</span>
+                  <span class="text-[13px] text-text-secondary">{{
+                    m.holdingName ?? 'General'
+                  }}</span>
                 </div>
                 <div class="text-[13px] font-medium mt-1 tabular-nums">
                   {{ m.quantity > 0 ? '+' : '' }}{{ m.quantity.toLocaleString() }} {{ m.currency }}
@@ -722,10 +966,14 @@ async function confirmDeleteMovement() {
                 <div v-if="m.sourceAmount" class="text-[11px] text-text-secondary mt-0.5">
                   Source: {{ formatCurrency(m.sourceAmount) }} {{ m.sourceCurrency }}
                 </div>
-                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">
+                  {{ m.notes }}
+                </p>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
+                <span class="text-[11px] text-text-secondary">{{
+                  formatMovementDate(m.date)
+                }}</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -739,12 +987,7 @@ async function confirmDeleteMovement() {
           </div>
         </div>
 
-        <Button
-          v-if="hasMoreMovements"
-          variant="outline"
-          class="w-full"
-          @click="loadMoreMovements"
-        >
+        <Button v-if="hasMoreMovements" variant="outline" class="w-full" @click="loadMoreMovements">
           Load More
         </Button>
       </div>
@@ -766,7 +1009,9 @@ async function confirmDeleteMovement() {
             <Select v-model="holdingForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="(label, key) in HOLDING_TYPE_LABELS" :key="key" :value="key">{{ label }}</SelectItem>
+                <SelectItem v-for="(label, key) in HOLDING_TYPE_LABELS" :key="key" :value="key">{{
+                  label
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -783,8 +1028,21 @@ async function confirmDeleteMovement() {
             <Input v-model.number="holdingForm.costBasis" type="number" />
           </div>
           <div>
+            <label class="text-[13px] font-medium">Ticker Symbol</label>
+            <Input v-model="holdingForm.ticker" placeholder="e.g. AAPL, TEVA.TA" />
+            <p class="text-[11px] text-text-secondary mt-1">
+              For auto price updates. Use .TA suffix for TASE stocks.
+            </p>
+          </div>
+          <div>
             <label class="text-[13px] font-medium">Last Price</label>
-            <Input :model-value="holdingForm.lastPrice ?? ''" @update:model-value="(v: string | number) => holdingForm.lastPrice = v === '' ? null : Number(v)" type="number" />
+            <Input
+              :model-value="holdingForm.lastPrice ?? ''"
+              type="number"
+              @update:model-value="
+                (v: string | number) => (holdingForm.lastPrice = v === '' ? null : Number(v))
+              "
+            />
           </div>
           <div>
             <label class="text-[13px] font-medium">Notes</label>
@@ -795,7 +1053,10 @@ async function confirmDeleteMovement() {
           <DialogClose as-child>
             <Button variant="outline">Cancel</Button>
           </DialogClose>
-          <Button :disabled="holdingSaving || (!editingHolding && !holdingForm.name)" @click="saveHolding">
+          <Button
+            :disabled="holdingSaving || (!editingHolding && !holdingForm.name)"
+            @click="saveHolding"
+          >
             <Loader2 v-if="holdingSaving" class="h-4 w-4 mr-1 animate-spin" />
             {{ editingHolding ? 'Save' : 'Add Holding' }}
           </Button>
@@ -804,13 +1065,20 @@ async function confirmDeleteMovement() {
     </Dialog>
 
     <!-- Delete Holding Confirm -->
-    <AlertDialog :open="!!holdingToDelete" @update:open="(v: boolean) => { if (!v) holdingToDelete = null }">
+    <AlertDialog
+      :open="!!holdingToDelete"
+      @update:open="
+        (v: boolean) => {
+          if (!v) holdingToDelete = null;
+        }
+      "
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete holding?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently remove "{{ holdingToDelete?.name }}" from this asset.
-            Related movement records will be preserved.
+            This will permanently remove "{{ holdingToDelete?.name }}" from this asset. Related
+            movement records will be preserved.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
@@ -843,7 +1111,9 @@ async function confirmDeleteMovement() {
             <Select v-model="movementForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="t in BROKERAGE_MOVEMENT_TYPES" :key="t" :value="t">{{ t }}</SelectItem>
+                <SelectItem v-for="t in BROKERAGE_MOVEMENT_TYPES" :key="t" :value="t">{{
+                  t
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -853,14 +1123,18 @@ async function confirmDeleteMovement() {
               <SelectTrigger><SelectValue placeholder="General (no holding)" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">General (no holding)</SelectItem>
-                <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{ h.name }}</SelectItem>
+                <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{
+                  h.name
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
           <div>
             <label class="text-[13px] font-medium">{{ quantityLabel }}</label>
             <Input v-model.number="movementForm.quantity" type="number" />
-            <p v-if="sellMaxWarning" class="text-[11px] text-[var(--warning)] mt-1">{{ sellMaxWarning }}</p>
+            <p v-if="sellMaxWarning" class="text-[11px] text-[var(--warning)] mt-1">
+              {{ sellMaxWarning }}
+            </p>
           </div>
           <div>
             <label class="text-[13px] font-medium">Currency</label>
@@ -868,19 +1142,40 @@ async function confirmDeleteMovement() {
           </div>
           <div v-if="showPricePerUnit">
             <label class="text-[13px] font-medium">Price per Unit</label>
-            <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
+            <Input
+              :model-value="movementForm.pricePerUnit ?? ''"
+              type="number"
+              @update:model-value="
+                (v: string | number) => (movementForm.pricePerUnit = v === '' ? null : Number(v))
+              "
+            />
           </div>
           <template v-if="isNonIls">
             <div>
               <label class="text-[13px] font-medium">ILS Cost Basis (optional)</label>
-              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" placeholder="What you paid in ILS" />
-              <p class="text-[11px] text-text-secondary mt-1">Leave empty if unknown or paid in {{ assetCurrency }}</p>
+              <Input
+                :model-value="movementForm.sourceAmount ?? ''"
+                type="number"
+                placeholder="What you paid in ILS"
+                @update:model-value="
+                  (v: string | number) => (movementForm.sourceAmount = v === '' ? null : Number(v))
+                "
+              />
+              <p class="text-[11px] text-text-secondary mt-1">
+                Leave empty if unknown or paid in {{ assetCurrency }}
+              </p>
             </div>
           </template>
           <template v-else>
             <div>
               <label class="text-[13px] font-medium">Source Amount (what you paid)</label>
-              <Input :model-value="movementForm.sourceAmount ?? ''" @update:model-value="(v: string | number) => movementForm.sourceAmount = v === '' ? null : Number(v)" type="number" />
+              <Input
+                :model-value="movementForm.sourceAmount ?? ''"
+                type="number"
+                @update:model-value="
+                  (v: string | number) => (movementForm.sourceAmount = v === '' ? null : Number(v))
+                "
+              />
             </div>
             <div>
               <label class="text-[13px] font-medium">Source Currency</label>
@@ -906,17 +1201,36 @@ async function confirmDeleteMovement() {
     </Dialog>
 
     <!-- Delete Movement Confirm -->
-    <AlertDialog :open="!!movementToDelete" @update:open="(v: boolean) => { if (!v) { movementToDelete = null; deleteMovementError = null; } }">
+    <AlertDialog
+      :open="!!movementToDelete"
+      @update:open="
+        (v: boolean) => {
+          if (!v) {
+            movementToDelete = null;
+            deleteMovementError = null;
+          }
+        }
+      "
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete movement?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will remove the {{ movementToDelete?.type }} movement from {{ formatMovementDate(movementToDelete?.date ?? '') }}.
+            This will remove the {{ movementToDelete?.type }} movement from
+            {{ formatMovementDate(movementToDelete?.date ?? '') }}.
           </AlertDialogDescription>
         </AlertDialogHeader>
-        <p v-if="deleteMovementError" class="text-[13px] text-destructive px-6">{{ deleteMovementError }}</p>
+        <p v-if="deleteMovementError" class="text-[13px] text-destructive px-6">
+          {{ deleteMovementError }}
+        </p>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="movementToDelete = null; deleteMovementError = null">Cancel</AlertDialogCancel>
+          <AlertDialogCancel
+            @click="
+              movementToDelete = null;
+              deleteMovementError = null;
+            "
+            >Cancel</AlertDialogCancel
+          >
           <Button
             :disabled="deletingMovement"
             class="bg-destructive text-destructive-foreground hover:bg-destructive/90"

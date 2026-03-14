@@ -3,9 +3,11 @@ import { config } from '../config.js';
 import { hasActiveSessions, getUniqueActiveAccounts, runScrapeSession } from './session-manager.js';
 import { sendMonthlySummary } from '../telegram/alerts.js';
 import { loadAlertSettings } from '../telegram/alert-settings.js';
+import { refreshAllStockPrices } from '../services/stock-prices.js';
 
 let scheduledTask: ScheduledTask | null = null;
 let monthlyTask: ScheduledTask | null = null;
+let stockPriceTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -40,6 +42,26 @@ export function startScheduler(): void {
     { timezone },
   );
 
+  // Stock prices: refresh daily at 17:00 Israel time (covers TASE close + US pre-market)
+  stockPriceTask = cron.schedule(
+    '0 17 * * 1-5',
+    async () => {
+      console.log(`[Scheduler] Stock price refresh triggered at ${new Date().toISOString()}`);
+      try {
+        const result = await refreshAllStockPrices();
+        console.log(
+          `[Scheduler] Stock prices updated: ${result.updated} holding(s), ${result.errors.length} error(s)`,
+        );
+      } catch (err) {
+        console.error(
+          '[Scheduler] Stock price refresh failed:',
+          err instanceof Error ? err.message : err,
+        );
+      }
+    },
+    { timezone },
+  );
+
   // Monthly summary: runs daily at 9 AM, sends only on the configured day
   monthlyTask = cron.schedule(
     '0 9 * * *',
@@ -65,7 +87,7 @@ export function startScheduler(): void {
 }
 
 export function stopScheduler(): void {
-  const hadTasks = scheduledTask || monthlyTask;
+  const hadTasks = scheduledTask || monthlyTask || stockPriceTask;
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
@@ -73,6 +95,10 @@ export function stopScheduler(): void {
   if (monthlyTask) {
     monthlyTask.stop();
     monthlyTask = null;
+  }
+  if (stockPriceTask) {
+    stockPriceTask.stop();
+    stockPriceTask = null;
   }
   if (hadTasks) {
     console.log('[Scheduler] Stopped');

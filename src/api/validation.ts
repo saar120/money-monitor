@@ -187,6 +187,7 @@ export const createHoldingSchema = z.object({
   quantity: z.number().min(0),
   costBasis: z.number().min(0).default(0),
   lastPrice: z.number().optional(),
+  ticker: z.string().max(20).optional(),
   notes: z.string().max(500).optional(),
 });
 
@@ -194,6 +195,7 @@ export const updateHoldingSchema = z.object({
   quantity: z.number().min(0).optional(),
   costBasis: z.number().min(0).optional(),
   lastPrice: z.number().nullable().optional(),
+  ticker: z.string().max(20).nullable().optional(),
   notes: z.string().max(500).nullable().optional(),
 });
 

@@ -438,6 +438,7 @@ export interface Holding {
   name: string;
   type: string;
   currency: string;
+  ticker: string | null;
   quantity: number;
   costBasis: number;
   lastPrice: number | null;
@@ -548,6 +549,7 @@ export function createHolding(
     quantity: number;
     costBasis?: number;
     lastPrice?: number;
+    ticker?: string;
     notes?: string;
   },
 ) {
@@ -559,13 +561,24 @@ export function createHolding(
 
 export function updateHolding(
   id: number,
-  data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null },
+  data: {
+    quantity?: number;
+    costBasis?: number;
+    lastPrice?: number | null;
+    ticker?: string | null;
+    notes?: string | null;
+  },
 ) {
   return request<Holding>(`/holdings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
 
 export function deleteHolding(id: number) {
   return request<void>(`/holdings/${id}`, { method: 'DELETE' });
+}
+
+export function refreshPrices(assetId?: number) {
+  const path = assetId ? `/assets/${assetId}/refresh-prices` : '/assets/refresh-prices';
+  return request<{ updated: number; errors: string[] }>(path, { method: 'POST' });
 }
 
 export function getAssetSnapshots(id: number, startDate?: string, endDate?: string) {

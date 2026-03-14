@@ -58,6 +58,7 @@ export default tseslint.config(
         HTMLElement: 'readonly',
         KeyboardEvent: 'readonly',
         requestAnimationFrame: 'readonly',
+        localStorage: 'readonly',
       },
     },
     rules: {
