@@ -106,6 +106,7 @@ export const holdings = sqliteTable('holdings', {
   costBasis: real('cost_basis').notNull().default(0),
   lastPrice: real('last_price'),
   lastPriceDate: text('last_price_date'),
+  ticker: text('ticker'),
   notes: text('notes'),
   updatedAt: text('updated_at').notNull().default(sql`(datetime('now'))`),
 }, (table) => [

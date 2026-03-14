@@ -40,6 +40,7 @@ export function computeHoldingValues(h: HoldingRow, rates: Record<string, number
     id: h.id, name: h.name, type: h.type, currency: h.currency,
     quantity: h.quantity, costBasis: h.costBasis,
     lastPrice: h.lastPrice, lastPriceDate: h.lastPriceDate,
+    ticker: h.ticker,
     currentValue, currentValueIls, gainLoss, gainLossPercent,
     stale, notes: h.notes,
   };
@@ -289,6 +290,19 @@ async function replayMovementSnapshots(assetId: number, excludeMovementId?: numb
       const lastMovementDate = allMovements.length > 0 ? allMovements[allMovements.length - 1].date : '';
       if (snap.date > lastMovementDate) continue;
       db.delete(assetSnapshots).where(eq(assetSnapshots.id, snap.id)).run();
+    }
+  }
+}
+
+// ── Snapshot (public) ──
+
+export async function generateAllAssetSnapshots(): Promise<void> {
+  const allAssets = db.select({ id: assets.id }).from(assets).where(eq(assets.isActive, true)).all();
+  for (const a of allAssets) {
+    try {
+      await generateAssetSnapshot(a.id);
+    } catch (err) {
+      console.error(`[assets] Snapshot error for asset ${a.id}:`, err);
     }
   }
 }
@@ -544,7 +558,7 @@ export async function deactivateAsset(id: number) {
 
 export async function createHolding(assetId: number, data: {
   name: string; type: string; currency: string;
-  quantity: number; costBasis?: number; lastPrice?: number; notes?: string;
+  quantity: number; costBasis?: number; lastPrice?: number; ticker?: string; notes?: string;
 }) {
   const asset = db.select().from(assets).where(eq(assets.id, assetId)).get();
   if (!asset) return { ok: false as const, error: 'Asset not found', status: 404 };
@@ -560,7 +574,7 @@ export async function createHolding(assetId: number, data: {
   const result = db.insert(holdings).values({
     assetId, name: data.name, type: data.type, currency: data.currency,
     quantity: data.quantity, costBasis: data.costBasis ?? 0,
-    lastPrice: data.lastPrice, notes: data.notes,
+    lastPrice: data.lastPrice, ticker: data.ticker, notes: data.notes,
   }).returning().get();
 
   try { await generateAssetSnapshot(assetId); } catch (err) { console.error(`[assets] Snapshot error for asset ${assetId}:`, err); }
@@ -570,7 +584,7 @@ export async function createHolding(assetId: number, data: {
 }
 
 export async function updateHolding(holdingId: number, data: {
-  quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null;
+  quantity?: number; costBasis?: number; lastPrice?: number | null; ticker?: string | null; notes?: string | null;
 }) {
   const holding = db.select().from(holdings).where(eq(holdings.id, holdingId)).get();
   if (!holding) return { ok: false as const, error: 'Holding not found', status: 404 };
@@ -579,6 +593,7 @@ export async function updateHolding(holdingId: number, data: {
   if (data.quantity !== undefined) updateSet.quantity = data.quantity;
   if (data.costBasis !== undefined) updateSet.costBasis = data.costBasis;
   if (data.lastPrice !== undefined) updateSet.lastPrice = data.lastPrice;
+  if (data.ticker !== undefined) updateSet.ticker = data.ticker;
   if (data.notes !== undefined) updateSet.notes = data.notes;
 
   db.update(holdings).set(updateSet).where(eq(holdings.id, holdingId)).run();

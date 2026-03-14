@@ -3,9 +3,12 @@ import { config } from '../config.js';
 import { hasActiveSessions, getUniqueActiveAccounts, runScrapeSession } from './session-manager.js';
 import { sendMonthlySummary } from '../telegram/alerts.js';
 import { loadAlertSettings } from '../telegram/alert-settings.js';
+import { updateAllStockPrices } from '../services/stock-prices.js';
+import { generateAllAssetSnapshots } from '../services/assets.js';
 
 let scheduledTask: ScheduledTask | null = null;
 let monthlyTask: ScheduledTask | null = null;
+let stockPriceTask: ScheduledTask | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -40,6 +43,25 @@ export function startScheduler(): void {
     { timezone },
   );
 
+  // Stock price updates: runs at 18:00 Sun-Thu (after both TASE and US market hours)
+  stockPriceTask = cron.schedule(
+    '0 18 * * 0-4',
+    async () => {
+      console.log(`[Scheduler] Stock price update triggered at ${new Date().toISOString()}`);
+      try {
+        const result = await updateAllStockPrices();
+        if (result.updated > 0) {
+          await generateAllAssetSnapshots();
+        }
+        console.log(`[Scheduler] Stock prices: updated ${result.updated}/${result.total}` +
+          (result.failed.length > 0 ? `, failed: ${result.failed.join(', ')}` : ''));
+      } catch (err) {
+        console.error('[Scheduler] Stock price update failed:', err instanceof Error ? err.message : err);
+      }
+    },
+    { timezone },
+  );
+
   // Monthly summary: runs daily at 9 AM, sends only on the configured day
   monthlyTask = cron.schedule(
     '0 9 * * *',
@@ -65,7 +87,7 @@ export function startScheduler(): void {
 }
 
 export function stopScheduler(): void {
-  const hadTasks = scheduledTask || monthlyTask;
+  const hadTasks = scheduledTask || monthlyTask || stockPriceTask;
   if (scheduledTask) {
     scheduledTask.stop();
     scheduledTask = null;
@@ -73,6 +95,10 @@ export function stopScheduler(): void {
   if (monthlyTask) {
     monthlyTask.stop();
     monthlyTask = null;
+  }
+  if (stockPriceTask) {
+    stockPriceTask.stop();
+    stockPriceTask = null;
   }
   if (hadTasks) {
     console.log('[Scheduler] Stopped');

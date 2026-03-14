@@ -120,6 +120,13 @@
       "when": 1772999128488,
       "tag": "0016_spicy_toxin",
       "breakpoints": true
+    },
+    {
+      "idx": 17,
+      "version": "6",
+      "when": 1773590400000,
+      "tag": "0017_add_holdings_ticker",
+      "breakpoints": true
     }
   ]
 }

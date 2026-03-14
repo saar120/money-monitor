@@ -8,6 +8,7 @@ import {
   getAsset, getMovements, getAssetSnapshots,
   createMovement, deleteMovement,
   createHolding, updateHolding, deleteHolding,
+  updateStockPrices,
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
@@ -214,18 +215,18 @@ const chartOptions = computed(() => ({
 // ─── Holding Dialog ───
 const showHoldingDialog = ref(false);
 const editingHolding = ref<Holding | null>(null);
-const holdingForm = ref({ name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null as number | null, notes: '' });
+const holdingForm = ref({ name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null as number | null, ticker: '', notes: '' });
 const holdingSaving = ref(false);
 
 function openAddHolding() {
   editingHolding.value = null;
-  holdingForm.value = { name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null, notes: '' };
+  holdingForm.value = { name: '', type: 'stock', currency: 'ILS', quantity: 0, costBasis: 0, lastPrice: null, ticker: '', notes: '' };
   showHoldingDialog.value = true;
 }
 
 function openEditHolding(h: Holding) {
   editingHolding.value = h;
-  holdingForm.value = { name: h.name, type: h.type, currency: h.currency, quantity: h.quantity, costBasis: h.costBasis, lastPrice: h.lastPrice, notes: h.notes ?? '' };
+  holdingForm.value = { name: h.name, type: h.type, currency: h.currency, quantity: h.quantity, costBasis: h.costBasis, lastPrice: h.lastPrice, ticker: h.ticker ?? '', notes: h.notes ?? '' };
   showHoldingDialog.value = true;
 }
 
@@ -237,6 +238,7 @@ async function saveHolding() {
         quantity: holdingForm.value.quantity,
         costBasis: holdingForm.value.costBasis,
         lastPrice: holdingForm.value.lastPrice,
+        ticker: holdingForm.value.ticker || null,
         notes: holdingForm.value.notes || null,
       });
     } else {
@@ -247,6 +249,7 @@ async function saveHolding() {
         quantity: holdingForm.value.quantity,
         costBasis: holdingForm.value.costBasis,
         lastPrice: holdingForm.value.lastPrice ?? undefined,
+        ticker: holdingForm.value.ticker || undefined,
         notes: holdingForm.value.notes || undefined,
       });
     }
@@ -312,6 +315,24 @@ async function saveQuickUpdate() {
     await refreshAll();
   } finally {
     savingQuick.value = false;
+  }
+}
+
+// ─── Refresh Stock Prices ───
+const refreshingPrices = ref(false);
+const refreshPriceResult = ref<{ updated: number; failed: string[] } | null>(null);
+
+async function refreshStockPrices() {
+  refreshingPrices.value = true;
+  refreshPriceResult.value = null;
+  try {
+    const result = await updateStockPrices();
+    refreshPriceResult.value = result;
+    await refreshAll();
+  } catch { /* noop */ } finally {
+    refreshingPrices.value = false;
+    // Clear the result after 5 seconds
+    setTimeout(() => { refreshPriceResult.value = null; }, 5000);
   }
 }
 
@@ -525,8 +546,13 @@ async function confirmDeleteMovement() {
                 </Button>
               </template>
               <template v-else>
+                <Button v-if="holdings.some(h => h.ticker)" variant="outline" size="sm" :disabled="refreshingPrices" @click="refreshStockPrices">
+                  <Loader2 v-if="refreshingPrices" class="h-3.5 w-3.5 mr-1 animate-spin" />
+                  <RefreshCw v-else class="h-3.5 w-3.5 mr-1" />
+                  Refresh Prices
+                </Button>
                 <Button v-if="holdings.length > 0" variant="outline" size="sm" @click="startQuickUpdate">
-                  <RefreshCw class="h-3.5 w-3.5 mr-1" />
+                  <Pencil class="h-3.5 w-3.5 mr-1" />
                   Update Values
                 </Button>
                 <Button size="sm" @click="openAddHolding">
@@ -538,6 +564,11 @@ async function confirmDeleteMovement() {
           </div>
         </CardHeader>
         <CardContent>
+          <!-- Refresh price result -->
+          <div v-if="refreshPriceResult" class="mb-3 text-[13px] p-2 rounded-md" :class="refreshPriceResult.failed.length ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : 'bg-success/10 text-success'">
+            Updated {{ refreshPriceResult.updated }} prices<span v-if="refreshPriceResult.failed.length"> &middot; Failed: {{ refreshPriceResult.failed.join(', ') }}</span>
+          </div>
+
           <!-- Loading -->
           <div v-if="assetApi.loading.value && holdings.length === 0" class="space-y-3">
             <Skeleton class="h-10 w-full" />
@@ -573,6 +604,7 @@ async function confirmDeleteMovement() {
                 <TableRow v-for="h in holdings" :key="h.id" class="group">
                   <TableCell class="font-medium text-[13px]">
                     {{ h.name }}
+                    <span v-if="h.ticker" class="text-[11px] text-text-secondary ml-1">({{ h.ticker }})</span>
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
                       <span class="text-[11px]">No price data</span>
@@ -645,7 +677,7 @@ async function confirmDeleteMovement() {
           <div v-if="holdings.length > 0" class="md:hidden space-y-2">
             <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
               <div class="flex items-center justify-between">
-                <span class="font-medium text-[13px]">{{ h.name }}</span>
+                <span class="font-medium text-[13px]">{{ h.name }}<span v-if="h.ticker" class="text-text-secondary ml-1">({{ h.ticker }})</span></span>
                 <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
               </div>
               <div v-if="h.quantity" class="text-[11px] text-text-secondary mt-1">
@@ -785,6 +817,11 @@ async function confirmDeleteMovement() {
           <div>
             <label class="text-[13px] font-medium">Last Price</label>
             <Input :model-value="holdingForm.lastPrice ?? ''" @update:model-value="(v: string | number) => holdingForm.lastPrice = v === '' ? null : Number(v)" type="number" />
+          </div>
+          <div v-if="holdingForm.type === 'stock' || holdingForm.type === 'etf'">
+            <label class="text-[13px] font-medium">Ticker Symbol</label>
+            <Input v-model="holdingForm.ticker" placeholder="e.g. AAPL, 137.TA" />
+            <p class="text-[11px] text-text-secondary mt-1">For TASE stocks use .TA suffix (e.g. 137.TA). Leave empty for manual price updates.</p>
           </div>
           <div>
             <label class="text-[13px] font-medium">Notes</label>

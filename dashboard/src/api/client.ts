@@ -442,6 +442,7 @@ export interface Holding {
   costBasis: number;
   lastPrice: number | null;
   lastPriceDate: string | null;
+  ticker: string | null;
   currentValue: number;
   currentValueIls: number;
   gainLoss: number | null;
@@ -548,6 +549,7 @@ export function createHolding(
     quantity: number;
     costBasis?: number;
     lastPrice?: number;
+    ticker?: string;
     notes?: string;
   },
 ) {
@@ -559,7 +561,7 @@ export function createHolding(
 
 export function updateHolding(
   id: number,
-  data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null },
+  data: { quantity?: number; costBasis?: number; lastPrice?: number | null; ticker?: string | null; notes?: string | null },
 ) {
   return request<Holding>(`/holdings/${id}`, { method: 'PUT', body: JSON.stringify(data) });
 }
@@ -853,6 +855,27 @@ export function toggleDemoMode(enabled: boolean) {
   return request<{ success: boolean; demoMode: boolean }>('/demo/toggle', {
     method: 'POST',
     body: JSON.stringify({ enabled }),
+  });
+}
+
+// ─── Stock Prices ───
+
+export interface StockQuote {
+  symbol: string;
+  price: number;
+  currency: string;
+  name?: string;
+  exchange?: string;
+}
+
+export function getStockQuote(symbol: string) {
+  return request<StockQuote>(`/stock-prices/quote?symbol=${encodeURIComponent(symbol)}`);
+}
+
+export function updateStockPrices(generateSnapshots = true) {
+  return request<{ updated: number; failed: string[]; total: number }>('/stock-prices/update', {
+    method: 'POST',
+    body: JSON.stringify({ generateSnapshots }),
   });
 }
 
