@@ -1,12 +1,10 @@
-import { createScraper, CompanyTypes } from 'israeli-bank-scrapers';
+import { createScraper, CompanyTypes } from 'israeli-bank-scrapers-core';
 import { createHash } from 'node:crypto';
-import { join } from 'node:path';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
-import { dataDir } from '../paths.js';
 import type {
   Account,
   ScraperTransaction,
@@ -20,11 +18,7 @@ import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
-
-// In Electron mode, store Puppeteer's Chromium download inside the data directory
-if (process.env.MONEY_MONITOR_DATA_DIR) {
-  process.env.PUPPETEER_CACHE_DIR ??= join(dataDir, 'puppeteer-cache');
-}
+import { ensureChromium } from './chromium.js';
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
@@ -186,6 +180,7 @@ export async function scrapeAccount(
 
   try {
     const accountType = getAccountType(account.companyId as CompanyId);
+    const executablePath = await ensureChromium();
 
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
@@ -194,6 +189,7 @@ export async function scrapeAccount(
       showBrowser: account.manualLogin || account.showBrowser,
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
+      executablePath,
       args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
       ...(accountType === 'credit_card' ? { futureMonthsToScrape: 1 } : {}),
     });
