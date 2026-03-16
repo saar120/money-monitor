@@ -1,4 +1,5 @@
 import cron, { type ScheduledTask } from 'node-cron';
+import { CronExpressionParser } from 'cron-parser';
 import { config } from '../config.js';
 import { hasActiveSessions, getUniqueActiveAccounts, runScrapeSession } from './session-manager.js';
 import { sendMonthlySummary } from '../telegram/alerts.js';
@@ -6,6 +7,9 @@ import { loadAlertSettings } from '../telegram/alert-settings.js';
 
 let scheduledTask: ScheduledTask | null = null;
 let monthlyTask: ScheduledTask | null = null;
+
+/** Tracks the last time the cron callback fired (or when the scheduler started). */
+let lastCronFireTime: Date | null = null;
 
 export function startScheduler(): void {
   if (scheduledTask) {
@@ -23,10 +27,15 @@ export function startScheduler(): void {
 
   console.log(`[Scheduler] Starting with schedule "${cronExpression}" (timezone: ${timezone})`);
 
+  if (!lastCronFireTime) {
+    lastCronFireTime = new Date();
+  }
+
   scheduledTask = cron.schedule(
     cronExpression,
     async () => {
-      console.log(`[Scheduler] Triggered at ${new Date().toISOString()}`);
+      lastCronFireTime = new Date();
+      console.log(`[Scheduler] Triggered at ${lastCronFireTime.toISOString()}`);
 
       if (hasActiveSessions()) {
         console.log('[Scheduler] Skipping — a scrape is already in progress');
@@ -76,5 +85,50 @@ export function stopScheduler(): void {
   }
   if (hadTasks) {
     console.log('[Scheduler] Stopped');
+  }
+}
+
+/**
+ * Check if a scheduled scrape was missed during system sleep and run it if so.
+ * Uses cron-parser to find the most recent occurrence of the cron schedule.
+ * If that occurrence is after the last time the cron actually fired, we missed it.
+ */
+export function checkAndRunMissedScrape(): void {
+  if (!lastCronFireTime) return;
+
+  const cronExpression = config.SCRAPE_CRON;
+  const timezone = config.SCRAPE_TIMEZONE;
+
+  try {
+    const interval = CronExpressionParser.parse(cronExpression, { tz: timezone });
+    const prevOccurrence = interval.prev().toDate();
+
+    if (prevOccurrence > lastCronFireTime) {
+      console.log(
+        `[Scheduler] Missed scrape detected — last fired: ${lastCronFireTime.toISOString()}, ` +
+          `should have fired: ${prevOccurrence.toISOString()}`,
+      );
+
+      if (hasActiveSessions()) {
+        console.log('[Scheduler] Skipping missed scrape — a scrape is already in progress');
+        return;
+      }
+
+      const uniqueAccounts = getUniqueActiveAccounts();
+      if (uniqueAccounts.length === 0) {
+        console.log('[Scheduler] Skipping missed scrape — no active accounts');
+        return;
+      }
+
+      const { session } = runScrapeSession('scheduled', uniqueAccounts);
+      console.log(`[Scheduler] Started catch-up session ${session.id}`);
+    } else {
+      console.log('[Scheduler] No missed scrapes detected');
+    }
+  } catch (err) {
+    console.error(
+      '[Scheduler] Failed to check for missed scrapes:',
+      err instanceof Error ? err.message : err,
+    );
   }
 }

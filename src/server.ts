@@ -5,7 +5,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { db, sqlite, closeAll } from './db/connection.js';
+import { db, closeAll } from './db/connection.js';
 import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
@@ -19,7 +19,7 @@ import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { alertsRoutes } from './api/alerts.routes.js';
-import { startScheduler, stopScheduler } from './scraper/scheduler.js';
+import { startScheduler, stopScheduler, checkAndRunMissedScrape } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
 
 export async function createServer() {
@@ -62,15 +62,20 @@ export async function createServer() {
   app.addHook('onResponse', (request, reply, done) => {
     request.log.info(
       { responseTime: reply.elapsedTime, statusCode: reply.statusCode },
-      `${request.method} ${request.url}`
+      `${request.method} ${request.url}`,
     );
     done();
   });
 
   // CORS: restrict to known origins only
   const allowedOrigins = config.CORS_ORIGIN
-    ? config.CORS_ORIGIN.split(',').map(o => o.trim())
-    : [`http://localhost:${config.PORT}`, `http://127.0.0.1:${config.PORT}`, 'http://localhost:5173', 'http://127.0.0.1:5173'];
+    ? config.CORS_ORIGIN.split(',').map((o) => o.trim())
+    : [
+        `http://localhost:${config.PORT}`,
+        `http://127.0.0.1:${config.PORT}`,
+        'http://localhost:5173',
+        'http://127.0.0.1:5173',
+      ];
 
   await app.register(cors, {
     origin: (origin, cb) => {
@@ -102,7 +107,9 @@ export async function createServer() {
       }
     });
   } else {
-    app.log.warn('API_TOKEN is not set — API endpoints have no authentication. Set API_TOKEN in .env for security.');
+    app.log.warn(
+      'API_TOKEN is not set — API endpoints have no authentication. Set API_TOKEN in .env for security.',
+    );
   }
 
   // Health check
@@ -138,7 +145,9 @@ export async function createServer() {
 
     app.setNotFoundHandler((request, reply) => {
       if (request.url.startsWith('/api/')) {
-        return reply.status(404).send({ error: `Route ${request.method} ${request.url} not found` });
+        return reply
+          .status(404)
+          .send({ error: `Route ${request.method} ${request.url} not found` });
       }
       return reply.sendFile('index.html');
     });
@@ -176,6 +185,7 @@ export async function createServer() {
 
   /** Restart background services after system sleep/wake. */
   function onResume() {
+    checkAndRunMissedScrape();
     stopScheduler();
     startScheduler();
     restartTelegramBot();
