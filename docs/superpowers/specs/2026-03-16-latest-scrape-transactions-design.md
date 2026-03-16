@@ -16,6 +16,7 @@ Add a nullable integer column `scrape_session_id` to the `transactions` table, r
 
 - **Nullable** because existing transactions predate this feature and manual/imported transactions have no scrape session.
 - Populated at insert time during `scrapeAccount()` when a `sessionId` is provided.
+- **Add an index** on `scrape_session_id` (following the existing pattern of indexing FK columns that are queried — see `idx_transactions_account_id` etc.).
 
 **Migration:** Generated via `drizzle-kit generate` (per project convention — never hand-write migrations).
 
@@ -25,9 +26,8 @@ In `src/scraper/scraper.service.ts`, the `mapTransaction()` helper and the inser
 
 Specifically:
 
-- Add `scrapeSessionId` to the `NewTransaction` type in `src/shared/types.ts`
-- Pass `sessionId` into `mapTransaction()` (or set it directly at the insert site)
-- The `.values(mapped)` call will then include the session FK
+- `NewTransaction` is `InferInsertModel<typeof transactions>` — it auto-infers from the Drizzle schema, so adding the column to `schema.ts` is sufficient. **No manual change to `types.ts` is needed.**
+- Set `scrapeSessionId` at the insert callsite (spreading `{ ...mapped, scrapeSessionId: sessionId ?? null }`) rather than threading it through `mapTransaction()`, since the session ID is a session-level concern.
 
 ### 3. New tool: `get_latest_scrape_transactions`
 
@@ -36,9 +36,9 @@ A zero-parameter read-only tool for the chat agent.
 **Implementation (in `src/ai/tools.ts`):**
 
 1. Query `scrapeSessions` for the latest completed session: `SELECT * FROM scrape_sessions WHERE status = 'completed' ORDER BY completed_at DESC LIMIT 1`
-2. Query all transactions where `scrape_session_id = <that session ID>`
+2. Query transactions where `scrape_session_id = <that session ID>`, joined with `accounts` to get `displayName`. Cap at 200 transactions; if more exist, include a `"truncated": true` flag and the total count.
 3. Also pull the associated `scrapeLogs` for that session to include per-account stats (found/new counts, errors)
-4. Return a JSON object:
+4. Return a `JSON.stringify(result)` string (matching existing tool conventions):
 
 ```json
 {
@@ -85,8 +85,7 @@ This goes in the spending analysis section since it's most closely related.
 
 | File                             | Change                                                                           |
 | -------------------------------- | -------------------------------------------------------------------------------- |
-| `src/db/schema.ts`               | Add `scrapeSessionId` column to `transactions`                                   |
-| `src/shared/types.ts`            | Add `scrapeSessionId` to `NewTransaction` type                                   |
+| `src/db/schema.ts`               | Add `scrapeSessionId` column + index to `transactions`                           |
 | `src/scraper/scraper.service.ts` | Populate `scrapeSessionId` during insert                                         |
 | `src/ai/tools.ts`                | Add `buildGetLatestScrapeTransactionsTool()` and `getLatestScrapeTransactions()` |
 | `src/ai/agent.ts`                | Register tool in chat agent + tool status map                                    |
@@ -104,4 +103,6 @@ This goes in the spending analysis section since it's most closely related.
 - Verify the migration generates correctly via `npm run db:generate`
 - Scrape an account and confirm `scrape_session_id` is set on new transactions
 - Ask the bot "what was scraped?" and verify it uses the tool and returns accurate results
-- Verify the tool returns a clear message when no scrape sessions exist
+- Verify the tool returns a clear message when no completed scrape sessions exist
+- Verify the tool handles a session where all transactions were duplicates (zero new) — should return session info with `totalNew: 0` and empty `newTransactions`
+- Verify multi-account sessions show per-account breakdowns correctly, including any failed accounts from `scrapeLogs`
