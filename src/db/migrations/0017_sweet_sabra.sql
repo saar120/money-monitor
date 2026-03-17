@@ -1,0 +1,2 @@
+ALTER TABLE `transactions` ADD `scrape_session_id` integer REFERENCES scrape_sessions(id);--> statement-breakpoint
+CREATE INDEX `idx_transactions_scrape_session_id` ON `transactions` (`scrape_session_id`);

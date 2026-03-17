@@ -1,7 +1,14 @@
 import { describe, it, expect, beforeEach, afterAll } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
-import { insertAccount, insertTransaction, insertCategory, insertAsset, insertHolding, insertLiability } from '../__tests__/helpers/fixtures.js';
+import {
+  insertAccount,
+  insertTransaction,
+  insertCategory,
+  insertAsset,
+  insertHolding,
+  insertLiability,
+} from '../__tests__/helpers/fixtures.js';
 import * as schema from './schema.js';
 
 describe('database schema', () => {
@@ -71,30 +78,39 @@ describe('database schema', () => {
 
     it('rejects balance history with non-existent accountId', () => {
       expect(() => {
-        testDb.db.insert(schema.accountBalanceHistory).values({
-          accountId: 999999,
-          date: '2026-01-01',
-          balance: 5000,
-        }).run();
+        testDb.db
+          .insert(schema.accountBalanceHistory)
+          .values({
+            accountId: 999999,
+            date: '2026-01-01',
+            balance: 5000,
+          })
+          .run();
       }).toThrow();
     });
 
     it('rejects asset snapshot with non-existent assetId', () => {
       expect(() => {
-        testDb.db.insert(schema.assetSnapshots).values({
-          assetId: 999999,
-          date: '2026-01-01',
-          totalValueIls: 10000,
-        }).run();
+        testDb.db
+          .insert(schema.assetSnapshots)
+          .values({
+            assetId: 999999,
+            date: '2026-01-01',
+            totalValueIls: 10000,
+          })
+          .run();
       }).toThrow();
     });
 
     it('rejects scrape log with non-existent accountId', () => {
       expect(() => {
-        testDb.db.insert(schema.scrapeLogs).values({
-          accountId: 999999,
-          status: 'success',
-        }).run();
+        testDb.db
+          .insert(schema.scrapeLogs)
+          .values({
+            accountId: 999999,
+            status: 'success',
+          })
+          .run();
       }).toThrow();
     });
   });
@@ -149,25 +165,45 @@ describe('database schema', () => {
 
     it('enforces unique asset snapshot per asset+date', () => {
       const asset = insertAsset(testDb.db);
-      testDb.db.insert(schema.assetSnapshots).values({
-        assetId: asset.id, date: '2026-01-01', totalValueIls: 10000,
-      }).run();
+      testDb.db
+        .insert(schema.assetSnapshots)
+        .values({
+          assetId: asset.id,
+          date: '2026-01-01',
+          totalValueIls: 10000,
+        })
+        .run();
       expect(() => {
-        testDb.db.insert(schema.assetSnapshots).values({
-          assetId: asset.id, date: '2026-01-01', totalValueIls: 20000,
-        }).run();
+        testDb.db
+          .insert(schema.assetSnapshots)
+          .values({
+            assetId: asset.id,
+            date: '2026-01-01',
+            totalValueIls: 20000,
+          })
+          .run();
       }).toThrow();
     });
 
     it('enforces unique balance history per account+date', () => {
       const account = insertAccount(testDb.db);
-      testDb.db.insert(schema.accountBalanceHistory).values({
-        accountId: account.id, date: '2026-01-01', balance: 5000,
-      }).run();
+      testDb.db
+        .insert(schema.accountBalanceHistory)
+        .values({
+          accountId: account.id,
+          date: '2026-01-01',
+          balance: 5000,
+        })
+        .run();
       expect(() => {
-        testDb.db.insert(schema.accountBalanceHistory).values({
-          accountId: account.id, date: '2026-01-01', balance: 6000,
-        }).run();
+        testDb.db
+          .insert(schema.accountBalanceHistory)
+          .values({
+            accountId: account.id,
+            date: '2026-01-01',
+            balance: 6000,
+          })
+          .run();
       }).toThrow();
     });
   });
@@ -180,41 +216,64 @@ describe('database schema', () => {
       insertHolding(testDb.db, asset.id, { name: 'Holding 1' });
       insertHolding(testDb.db, asset.id, { name: 'Holding 2' });
 
-      const holdingsBefore = testDb.db.select().from(schema.holdings)
-        .where(eq(schema.holdings.assetId, asset.id)).all();
+      const holdingsBefore = testDb.db
+        .select()
+        .from(schema.holdings)
+        .where(eq(schema.holdings.assetId, asset.id))
+        .all();
       expect(holdingsBefore).toHaveLength(2);
 
       testDb.db.delete(schema.assets).where(eq(schema.assets.id, asset.id)).run();
 
-      const holdingsAfter = testDb.db.select().from(schema.holdings)
-        .where(eq(schema.holdings.assetId, asset.id)).all();
+      const holdingsAfter = testDb.db
+        .select()
+        .from(schema.holdings)
+        .where(eq(schema.holdings.assetId, asset.id))
+        .all();
       expect(holdingsAfter).toHaveLength(0);
     });
 
     it('deletes asset snapshots when asset is deleted', () => {
       const asset = insertAsset(testDb.db);
-      testDb.db.insert(schema.assetSnapshots).values({
-        assetId: asset.id, date: '2026-01-01', totalValueIls: 10000,
-      }).run();
+      testDb.db
+        .insert(schema.assetSnapshots)
+        .values({
+          assetId: asset.id,
+          date: '2026-01-01',
+          totalValueIls: 10000,
+        })
+        .run();
 
       testDb.db.delete(schema.assets).where(eq(schema.assets.id, asset.id)).run();
 
-      const snapshots = testDb.db.select().from(schema.assetSnapshots)
-        .where(eq(schema.assetSnapshots.assetId, asset.id)).all();
+      const snapshots = testDb.db
+        .select()
+        .from(schema.assetSnapshots)
+        .where(eq(schema.assetSnapshots.assetId, asset.id))
+        .all();
       expect(snapshots).toHaveLength(0);
     });
 
     it('deletes asset movements when asset is deleted', () => {
       const asset = insertAsset(testDb.db);
-      testDb.db.insert(schema.assetMovements).values({
-        assetId: asset.id, date: '2026-01-01', type: 'deposit',
-        quantity: 100, currency: 'ILS',
-      }).run();
+      testDb.db
+        .insert(schema.assetMovements)
+        .values({
+          assetId: asset.id,
+          date: '2026-01-01',
+          type: 'deposit',
+          quantity: 100,
+          currency: 'ILS',
+        })
+        .run();
 
       testDb.db.delete(schema.assets).where(eq(schema.assets.id, asset.id)).run();
 
-      const movements = testDb.db.select().from(schema.assetMovements)
-        .where(eq(schema.assetMovements.assetId, asset.id)).all();
+      const movements = testDb.db
+        .select()
+        .from(schema.assetMovements)
+        .where(eq(schema.assetMovements.assetId, asset.id))
+        .all();
       expect(movements).toHaveLength(0);
     });
 
@@ -225,8 +284,11 @@ describe('database schema', () => {
 
       testDb.db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
 
-      const updated = testDb.db.select().from(schema.assets)
-        .where(eq(schema.assets.id, asset.id)).get();
+      const updated = testDb.db
+        .select()
+        .from(schema.assets)
+        .where(eq(schema.assets.id, asset.id))
+        .get();
       expect(updated!.linkedAccountId).toBeNull();
     });
   });
@@ -268,21 +330,29 @@ describe('database schema', () => {
     });
 
     it('sets accountType to bank by default', () => {
-      const account = testDb.db.insert(schema.accounts).values({
-        companyId: 'hapoalim',
-        displayName: 'Test',
-        credentialsRef: 'ref',
-      }).returning().get();
+      const account = testDb.db
+        .insert(schema.accounts)
+        .values({
+          companyId: 'hapoalim',
+          displayName: 'Test',
+          credentialsRef: 'ref',
+        })
+        .returning()
+        .get();
       expect(account.accountType).toBe('bank');
     });
 
     it('sets currency to ILS by default for liabilities', () => {
-      const liability = testDb.db.insert(schema.liabilities).values({
-        name: 'Test Liability',
-        type: 'loan',
-        originalAmount: 10000,
-        currentBalance: 8000,
-      }).returning().get();
+      const liability = testDb.db
+        .insert(schema.liabilities)
+        .values({
+          name: 'Test Liability',
+          type: 'loan',
+          originalAmount: 10000,
+          currentBalance: 8000,
+        })
+        .returning()
+        .get();
       expect(liability.currency).toBe('ILS');
     });
 
@@ -300,6 +370,12 @@ describe('database schema', () => {
       const account = insertAccount(testDb.db);
       const tx = insertTransaction(testDb.db, account.id);
       expect(tx.status).toBe('completed');
+    });
+
+    it('sets scrapeSessionId to null by default for transactions', () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id);
+      expect(tx.scrapeSessionId).toBeNull();
     });
   });
 });
