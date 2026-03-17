@@ -1,9 +1,9 @@
 import { Type } from '@sinclair/typebox';
 import { StringEnum } from '@mariozechner/pi-ai';
-import { sql } from 'drizzle-orm';
+import { sql, eq, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { accounts } from '../db/schema.js';
-import { appendMemory, readMemory, writeMemory } from './memory.js';
+import { accounts, transactions, scrapeSessions, scrapeLogs } from '../db/schema.js';
+import { appendMemory, writeMemory } from './memory.js';
 import {
   listTransactions,
   categorizeTransaction as categorizeTx,
@@ -270,6 +270,17 @@ export function buildAddCategoryTool() {
   });
 }
 
+export function buildGetLatestScrapeTransactionsTool() {
+  return createAgentTool({
+    name: 'get_latest_scrape_transactions',
+    description:
+      "Get all transactions that were newly found in the latest scrape session. Use this when the user asks what was scraped, what's new, or what transactions were found.",
+    label: 'Looking up latest scrape results',
+    parameters: Type.Object({}),
+    execute: async () => getLatestScrapeTransactions(),
+  });
+}
+
 // ── Thin wrappers that delegate to service layer ────────────────────────────────
 
 export function queryTransactions(input: {
@@ -432,4 +443,86 @@ export function getAccountBalances(): string {
     .all();
 
   return JSON.stringify({ accounts: rows });
+}
+
+export function getLatestScrapeTransactions(): string {
+  // 1. Find latest completed session
+  const session = db
+    .select()
+    .from(scrapeSessions)
+    .where(eq(scrapeSessions.status, 'completed'))
+    .orderBy(desc(scrapeSessions.completedAt))
+    .limit(1)
+    .get();
+
+  if (!session) {
+    return JSON.stringify({ error: 'No completed scrape sessions found' });
+  }
+
+  // 2. Get per-account stats from scrape logs
+  const logs = db
+    .select({
+      accountId: scrapeLogs.accountId,
+      displayName: accounts.displayName,
+      status: scrapeLogs.status,
+      transactionsFound: scrapeLogs.transactionsFound,
+      transactionsNew: scrapeLogs.transactionsNew,
+      errorType: scrapeLogs.errorType,
+      errorMessage: scrapeLogs.errorMessage,
+    })
+    .from(scrapeLogs)
+    .leftJoin(accounts, eq(scrapeLogs.accountId, accounts.id))
+    .where(eq(scrapeLogs.sessionId, session.id))
+    .all();
+
+  // 3. Get new transactions from this session (with account name)
+  const MAX_TRANSACTIONS = 200;
+  const newTxns = db
+    .select({
+      id: transactions.id,
+      date: transactions.date,
+      chargedAmount: transactions.chargedAmount,
+      description: transactions.description,
+      category: transactions.category,
+      memo: transactions.memo,
+      accountName: accounts.displayName,
+    })
+    .from(transactions)
+    .leftJoin(accounts, eq(transactions.accountId, accounts.id))
+    .where(eq(transactions.scrapeSessionId, session.id))
+    .orderBy(desc(transactions.date))
+    .limit(MAX_TRANSACTIONS + 1)
+    .all();
+
+  const truncated = newTxns.length > MAX_TRANSACTIONS;
+  const txnsToReturn = truncated ? newTxns.slice(0, MAX_TRANSACTIONS) : newTxns;
+
+  // 4. Count total if truncated
+  const totalNew = truncated
+    ? db
+        .select({ count: sql<number>`count(*)` })
+        .from(transactions)
+        .where(eq(transactions.scrapeSessionId, session.id))
+        .get()!.count
+    : newTxns.length;
+
+  return JSON.stringify({
+    session: {
+      id: session.id,
+      trigger: session.trigger,
+      startedAt: session.startedAt,
+      completedAt: session.completedAt,
+    },
+    accounts: logs.map((l) => ({
+      accountId: l.accountId,
+      displayName: l.displayName,
+      status: l.status,
+      transactionsFound: l.transactionsFound,
+      transactionsNew: l.transactionsNew,
+      ...(l.errorType ? { errorType: l.errorType, errorMessage: l.errorMessage } : {}),
+    })),
+    newTransactions: txnsToReturn,
+    totalNew,
+    ...(truncated ? { truncated: true } : {}),
+  });
 }
