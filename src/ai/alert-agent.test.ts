@@ -40,6 +40,7 @@ vi.mock('./tools.js', () => ({
   buildGetSpendingTrendsTool: vi.fn().mockReturnValue({}),
   buildDetectRecurringTransactionsTool: vi.fn().mockReturnValue({}),
   buildGetTopMerchantsTool: vi.fn().mockReturnValue({}),
+  buildGetLatestScrapeTransactionsTool: vi.fn().mockReturnValue({}),
 }));
 
 vi.mock('./asset-tools.js', () => ({

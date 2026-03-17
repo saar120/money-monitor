@@ -28,6 +28,7 @@ import {
   buildSaveMemoryTool,
   buildUpdateMemoryTool,
   buildAddCategoryTool,
+  buildGetLatestScrapeTransactionsTool,
 } from './tools.js';
 import {
   buildGetNetWorthTool,
@@ -128,6 +129,7 @@ const TOOL_STATUS: Record<string, string> = {
   manage_liability: 'Updating liability...',
   get_alert_settings: 'Checking alert settings...',
   update_alert_settings: 'Updating alert settings...',
+  get_latest_scrape_transactions: 'Looking up latest scrape results...',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
@@ -219,6 +221,7 @@ export async function* chat(
     buildManageLiabilityTool(),
     buildGetAlertSettingsTool(),
     buildUpdateAlertSettingsTool(),
+    buildGetLatestScrapeTransactionsTool(),
   ];
 
   const agent = new Agent({

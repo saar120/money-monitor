@@ -303,7 +303,7 @@ export async function scrapeAccount(
         try {
           const insertResult = db
             .insert(transactions)
-            .values(mapped)
+            .values({ ...mapped, scrapeSessionId: sessionId ?? null })
             .onConflictDoNothing({ target: transactions.hash })
             .run();
           if (insertResult.changes > 0) {
