@@ -10,6 +10,7 @@ import {
   buildGetSpendingTrendsTool,
   buildDetectRecurringTransactionsTool,
   buildGetTopMerchantsTool,
+  buildGetLatestScrapeTransactionsTool,
 } from './tools.js';
 import {
   buildGetNetWorthTool,
@@ -32,6 +33,7 @@ function buildAlertTools() {
     buildGetNetWorthTool(),
     buildGetLiabilitiesTool(),
     buildGetNetWorthHistoryTool(),
+    buildGetLatestScrapeTransactionsTool(),
   ];
 }
 
