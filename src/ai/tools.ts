@@ -8,7 +8,11 @@ import {
   listTransactions,
   categorizeTransaction as categorizeTx,
 } from '../services/transactions.js';
-import { createCategory as createCategoryService } from '../services/categories.js';
+import {
+  createCategory as createCategoryService,
+  updateCategory as updateCategoryService,
+  listCategories,
+} from '../services/categories.js';
 import {
   getSpendingSummary as getSpendingSummaryService,
   comparePeriods as comparePeriodsService,
@@ -24,7 +28,7 @@ export function buildQueryTransactionsTool() {
   return createAgentTool({
     name: 'query_transactions',
     description:
-      'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending.',
+      'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending. Each transaction includes needsReview (true if low-confidence categorization needing user review), confidence (0-1 score), and reviewReason fields.',
     label: 'Searching transactions',
     parameters: Type.Object({
       account_id: Type.Optional(Type.Number({ description: 'Filter by account ID' })),
@@ -43,6 +47,12 @@ export function buildQueryTransactionsTool() {
       search: Type.Optional(
         Type.String({
           description: 'Full-text search across description and memo (supports multiple words)',
+        }),
+      ),
+      needs_review: Type.Optional(
+        Type.Boolean({
+          description:
+            'Filter by review status. true = transactions needing review (low confidence), false = already reviewed/confirmed transactions',
         }),
       ),
       limit: Type.Optional(
@@ -270,6 +280,25 @@ export function buildAddCategoryTool() {
   });
 }
 
+export function buildUpdateCategoryRulesTool() {
+  return createAgentTool({
+    name: 'update_category_rules',
+    description:
+      'Update the categorization rules for an existing category. Rules are hints that guide AI categorization (e.g. "Supermarkets, markets, food delivery"). Use this to refine how transactions get auto-categorized. Returns the current rules before updating so you can see what exists.',
+    label: 'Updating category rules',
+    parameters: Type.Object({
+      category_name: Type.String({
+        description: 'The machine name of the category to update (e.g. "groceries", "eating-out")',
+      }),
+      rules: Type.String({
+        description:
+          'New categorization rules/hints for the AI (e.g. "Supermarkets, grocery stores, food delivery apps like Wolt")',
+      }),
+    }),
+    execute: async (args) => updateCategoryRules(args),
+  });
+}
+
 export function buildGetLatestScrapeTransactionsTool() {
   return createAgentTool({
     name: 'get_latest_scrape_transactions',
@@ -292,6 +321,7 @@ export function queryTransactions(input: {
   min_amount?: number;
   max_amount?: number;
   search?: string;
+  needs_review?: boolean;
   limit?: number;
 }): string {
   const limit = Math.min(input.limit ?? 50, 200);
@@ -305,6 +335,7 @@ export function queryTransactions(input: {
       minAmount: input.min_amount,
       maxAmount: input.max_amount,
       search: input.search,
+      needsReview: input.needs_review,
     },
     { limit, sortBy: 'date', sortOrder: 'desc' },
   );
@@ -324,6 +355,25 @@ export function addCategory(input: {
   const result = createCategoryService(input);
   if (!result.ok) return JSON.stringify({ error: result.error });
   return JSON.stringify({ success: true, category: result.category });
+}
+
+export function updateCategoryRules(input: {
+  category_name: string;
+  rules: string;
+}): string {
+  const allCats = listCategories();
+  const cat = allCats.find((c) => c.name === input.category_name);
+  if (!cat) return JSON.stringify({ error: `Category "${input.category_name}" not found` });
+
+  const previousRules = cat.rules ?? null;
+  const result = updateCategoryService(cat.id, { rules: input.rules });
+  if (!result.ok) return JSON.stringify({ error: result.error });
+  return JSON.stringify({
+    success: true,
+    category: input.category_name,
+    previousRules,
+    newRules: input.rules,
+  });
 }
 
 export function getSpendingSummary(input: {
@@ -485,6 +535,9 @@ export function getLatestScrapeTransactions(): string {
       description: transactions.description,
       category: transactions.category,
       memo: transactions.memo,
+      needsReview: transactions.needsReview,
+      confidence: transactions.confidence,
+      reviewReason: transactions.reviewReason,
       accountName: accounts.displayName,
     })
     .from(transactions)

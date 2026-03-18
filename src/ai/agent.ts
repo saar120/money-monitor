@@ -28,6 +28,7 @@ import {
   buildSaveMemoryTool,
   buildUpdateMemoryTool,
   buildAddCategoryTool,
+  buildUpdateCategoryRulesTool,
   buildGetLatestScrapeTransactionsTool,
 } from './tools.js';
 import {
@@ -117,6 +118,7 @@ const TOOL_STATUS: Record<string, string> = {
   get_top_merchants: 'Finding top merchants...',
   categorize_transaction: 'Categorizing transaction...',
   add_category: 'Adding category...',
+  update_category_rules: 'Updating category rules...',
   save_memory: 'Saving to memory...',
   update_memory: 'Updating memory...',
   get_net_worth: 'Calculating net worth...',
@@ -209,6 +211,7 @@ export async function* chat(
     buildGetTopMerchantsTool(),
     buildCategorizeTransactionTool(categoryNames),
     buildAddCategoryTool(),
+    buildUpdateCategoryRulesTool(),
     buildSaveMemoryTool(),
     buildUpdateMemoryTool(),
     buildGetNetWorthTool(),

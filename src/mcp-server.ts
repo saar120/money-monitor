@@ -22,6 +22,7 @@ const {
   getTopMerchants,
   categorizeTransaction,
   addCategory,
+  updateCategoryRules,
 } = await import('./ai/tools.js');
 
 const {
@@ -62,6 +63,10 @@ server.registerTool(
       min_amount: z.number().optional().describe('Minimum charged amount'),
       max_amount: z.number().optional().describe('Maximum charged amount'),
       search: z.string().optional().describe('Full-text search in description and memo'),
+      needs_review: z
+        .boolean()
+        .optional()
+        .describe('Filter by review status (true = needs review, false = reviewed)'),
       limit: z.number().optional().describe('Max results (default 50, max 200)'),
     },
     annotations: {
@@ -324,6 +329,39 @@ server.registerTool(
   async (args) => {
     try {
       return { content: [{ type: 'text', text: addCategory(args) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+    }
+  },
+);
+
+server.registerTool(
+  'update_category_rules',
+  {
+    title: 'Update Category Rules',
+    description:
+      'Update the categorization rules/hints for an existing category. Rules guide AI auto-categorization ' +
+      '(e.g. "Supermarkets, markets, food delivery"). Returns previous and new rules.',
+    inputSchema: {
+      category_name: z
+        .string()
+        .describe('Machine name of the category to update (e.g. "groceries", "eating-out")'),
+      rules: z
+        .string()
+        .describe(
+          'New categorization rules/hints (e.g. "Supermarkets, grocery stores, food delivery apps")',
+        ),
+    },
+    annotations: {
+      readOnlyHint: false,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      return { content: [{ type: 'text', text: updateCategoryRules(args) }] };
     } catch (e) {
       return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
     }
