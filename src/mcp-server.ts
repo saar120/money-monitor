@@ -22,6 +22,7 @@ const {
   getTopMerchants,
   categorizeTransaction,
   addCategory,
+  getCategoryRules,
   updateCategoryRules,
 } = await import('./ai/tools.js');
 
@@ -336,12 +337,44 @@ server.registerTool(
 );
 
 server.registerTool(
+  'get_category_rules',
+  {
+    title: 'Get Category Rules',
+    description:
+      'Get the current categorization rules for one or all categories. ' +
+      'Use this BEFORE updating rules to understand what already exists.',
+    inputSchema: {
+      category_name: z
+        .string()
+        .optional()
+        .describe(
+          'Machine name of a specific category (e.g. "groceries"). Omit for all categories.',
+        ),
+    },
+    annotations: {
+      readOnlyHint: true,
+      destructiveHint: false,
+      idempotentHint: true,
+      openWorldHint: false,
+    },
+  },
+  async (args) => {
+    try {
+      return { content: [{ type: 'text', text: getCategoryRules(args) }] };
+    } catch (e) {
+      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
+    }
+  },
+);
+
+server.registerTool(
   'update_category_rules',
   {
     title: 'Update Category Rules',
     description:
-      'Update the categorization rules/hints for an existing category. Rules guide AI auto-categorization ' +
-      '(e.g. "Supermarkets, markets, food delivery"). Returns previous and new rules.',
+      'Update the categorization rules/hints for an existing category. ' +
+      'IMPORTANT: Always call get_category_rules first to see existing rules before updating. ' +
+      'Rules guide AI auto-categorization (e.g. "Supermarkets, markets, food delivery").',
     inputSchema: {
       category_name: z
         .string()

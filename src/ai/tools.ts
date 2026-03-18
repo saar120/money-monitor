@@ -280,11 +280,29 @@ export function buildAddCategoryTool() {
   });
 }
 
+export function buildGetCategoryRulesTool() {
+  return createAgentTool({
+    name: 'get_category_rules',
+    description:
+      'Get the current categorization rules for one or all categories. Use this BEFORE updating rules to understand what already exists and avoid overriding useful rules.',
+    label: 'Reading category rules',
+    parameters: Type.Object({
+      category_name: Type.Optional(
+        Type.String({
+          description:
+            'Machine name of a specific category (e.g. "groceries"). Omit to get rules for all categories.',
+        }),
+      ),
+    }),
+    execute: async (args) => getCategoryRules(args),
+  });
+}
+
 export function buildUpdateCategoryRulesTool() {
   return createAgentTool({
     name: 'update_category_rules',
     description:
-      'Update the categorization rules for an existing category. Rules are hints that guide AI categorization (e.g. "Supermarkets, markets, food delivery"). Use this to refine how transactions get auto-categorized. Returns the current rules before updating so you can see what exists.',
+      'Update the categorization rules for an existing category. IMPORTANT: Always call get_category_rules first to see existing rules before updating — do not blindly overwrite. Rules are hints that guide AI categorization (e.g. "Supermarkets, markets, food delivery").',
     label: 'Updating category rules',
     parameters: Type.Object({
       category_name: Type.String({
@@ -357,10 +375,17 @@ export function addCategory(input: {
   return JSON.stringify({ success: true, category: result.category });
 }
 
-export function updateCategoryRules(input: {
-  category_name: string;
-  rules: string;
-}): string {
+export function getCategoryRules(input: { category_name?: string }): string {
+  const allCats = listCategories();
+  if (input.category_name) {
+    const cat = allCats.find((c) => c.name === input.category_name);
+    if (!cat) return JSON.stringify({ error: `Category "${input.category_name}" not found` });
+    return JSON.stringify({ category: cat.name, rules: cat.rules ?? null });
+  }
+  return JSON.stringify(allCats.map((c) => ({ category: c.name, rules: c.rules ?? null })));
+}
+
+export function updateCategoryRules(input: { category_name: string; rules: string }): string {
   const allCats = listCategories();
   const cat = allCats.find((c) => c.name === input.category_name);
   if (!cat) return JSON.stringify({ error: `Category "${input.category_name}" not found` });
