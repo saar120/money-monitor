@@ -136,13 +136,12 @@ export function startTelegramBot(): void {
 
   // ── Access control middleware ──
   if (allowedUsers.size === 0) {
-    console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot is open to all users.');
-  }
-  if (allowedUsers.size > 0) {
+    console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot will ignore all messages.');
+    bot.use(() => {});
+  } else {
     bot.use(async (ctx, next) => {
       const userId = ctx.from?.id;
       if (!userId || !allowedUsers.has(userId)) {
-        await ctx.reply('Access denied.');
         return;
       }
       await next();
@@ -285,9 +284,4 @@ export function stopTelegramBot(): void {
     bot.stop();
     bot = null;
   }
-}
-
-export function restartTelegramBot(): void {
-  stopTelegramBot();
-  startTelegramBot();
 }
