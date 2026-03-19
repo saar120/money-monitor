@@ -286,8 +286,3 @@ export function stopTelegramBot(): void {
     bot = null;
   }
 }
-
-export function restartTelegramBot(): void {
-  stopTelegramBot();
-  startTelegramBot();
-}
