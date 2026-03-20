@@ -11,6 +11,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 import { cn } from '@/lib/utils';
+import { handleOpenAutoFocus, handlePointerDown } from './focus-workarounds';
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
 const emits = defineEmits<DialogContentEmits>();
@@ -18,36 +19,6 @@ const emits = defineEmits<DialogContentEmits>();
 const delegatedProps = reactiveOmit(props, 'class');
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
-
-function handleOpenAutoFocus(event: Event) {
-  const container = event.target as HTMLElement | null;
-  const input = container?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea');
-  if (input) {
-    event.preventDefault();
-    // Use setTimeout instead of nextTick for reliability on Windows/Electron.
-    // Reka UI's FocusScope can race with nextTick; setTimeout(0) defers past
-    // the FocusScope's synchronous mount logic and MutationObserver callbacks.
-    setTimeout(() => input.focus(), 0);
-  }
-}
-
-/**
- * Workaround for Reka UI focus-trap bug on Windows/Electron where clicking an
- * input inside the dialog does not focus it. The DismissableLayer / FocusScope
- * can leave stale state that intercepts focus. Re-applying focus in a
- * requestAnimationFrame fires after all synchronous focusin handlers, ensuring
- * the input wins the focus race.
- */
-function handlePointerDown(event: PointerEvent) {
-  const target = event.target;
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    requestAnimationFrame(() => {
-      if (document.activeElement !== target) {
-        target.focus();
-      }
-    });
-  }
-}
 </script>
 
 <template>
