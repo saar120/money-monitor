@@ -20,7 +20,7 @@ import { settingsRoutes } from './api/settings.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { alertsRoutes } from './api/alerts.routes.js';
 import { startScheduler, stopScheduler, checkAndRunMissedScrape } from './scraper/scheduler.js';
-import { startTelegramBot, stopTelegramBot } from './telegram/bot.js';
+import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
 
 export async function createServer() {
   const app = Fastify({
@@ -178,21 +178,21 @@ export async function createServer() {
   async function shutdown() {
     app.log.info('Shutting down...');
     stopScheduler();
-    stopTelegramBot();
+    await stopTelegramBot();
     await app.close();
     closeAll();
   }
 
   /** Restart background services after system sleep/wake. */
-  function onResume() {
+  async function onResume() {
     checkAndRunMissedScrape();
     stopScheduler();
     startScheduler();
-    // Note: we intentionally do NOT restart the Telegram bot here.
-    // grammY's long-polling loop recovers from network errors automatically.
-    // Calling bot.stop() sends a final getUpdates that acknowledges (and
-    // discards) any updates queued while the system was asleep, which causes
-    // the first message after wake to be silently lost.
+    // Restart the Telegram bot to kill any stale polling connections from
+    // before sleep. bot.stop() is properly awaited so the cleanup getUpdates
+    // finishes before the new instance starts — preventing the 409 race
+    // condition that previously caused the first post-wake message to be lost.
+    await restartTelegramBot();
   }
 
   return { app, start, shutdown, onResume };
