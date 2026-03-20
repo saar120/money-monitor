@@ -45,5 +45,6 @@ vi.mock('../scraper/scheduler.js', () => ({
 
 vi.mock('../telegram/bot.js', () => ({
   startTelegramBot: vi.fn(),
-  stopTelegramBot: vi.fn(),
+  stopTelegramBot: vi.fn().mockResolvedValue(undefined),
+  restartTelegramBot: vi.fn().mockResolvedValue(undefined),
 }));
