@@ -1,31 +1,41 @@
 <script setup lang="ts">
-import type { DialogContentEmits, DialogContentProps } from "reka-ui"
-import type { HTMLAttributes } from "vue"
-import { nextTick } from "vue"
-import { reactiveOmit } from "@vueuse/core"
-import { X } from "lucide-vue-next"
+import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
+import type { HTMLAttributes } from 'vue';
+import { reactiveOmit } from '@vueuse/core';
+import { X } from 'lucide-vue-next';
 import {
   DialogClose,
   DialogContent,
   DialogOverlay,
   DialogPortal,
   useForwardPropsEmits,
-} from "reka-ui"
-import { cn } from "@/lib/utils"
+} from 'reka-ui';
+import { cn } from '@/lib/utils';
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes["class"] }>()
-const emits = defineEmits<DialogContentEmits>()
+const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
+const emits = defineEmits<DialogContentEmits>();
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, 'class');
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
 function handleOpenAutoFocus(event: Event) {
   const container = event.target as HTMLElement | null;
   const input = container?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea');
   if (input) {
     event.preventDefault();
-    nextTick(() => input.focus());
+    setTimeout(() => input.focus(), 0);
+  }
+}
+
+function handlePointerDown(event: PointerEvent) {
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    requestAnimationFrame(() => {
+      if (document.activeElement !== target) {
+        target.focus();
+      }
+    });
   }
 }
 </script>
@@ -44,13 +54,19 @@ function handleOpenAutoFocus(event: Event) {
         "
         v-bind="forwarded"
         @open-auto-focus="handleOpenAutoFocus"
-        @pointer-down-outside="(event) => {
-          const originalEvent = event.detail.originalEvent;
-          const target = originalEvent.target as HTMLElement;
-          if (originalEvent.offsetX > target.clientWidth || originalEvent.offsetY > target.clientHeight) {
-            event.preventDefault();
+        @pointerdown="handlePointerDown"
+        @pointer-down-outside="
+          (event) => {
+            const originalEvent = event.detail.originalEvent;
+            const target = originalEvent.target as HTMLElement;
+            if (
+              originalEvent.offsetX > target.clientWidth ||
+              originalEvent.offsetY > target.clientHeight
+            ) {
+              event.preventDefault();
+            }
           }
-        }"
+        "
       >
         <slot />
 

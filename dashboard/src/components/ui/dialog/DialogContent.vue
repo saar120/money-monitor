@@ -1,31 +1,51 @@
 <script setup lang="ts">
-import type { DialogContentEmits, DialogContentProps } from "reka-ui"
-import type { HTMLAttributes } from "vue"
-import { nextTick } from "vue"
-import { reactiveOmit } from "@vueuse/core"
-import { X } from "lucide-vue-next"
+import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
+import type { HTMLAttributes } from 'vue';
+import { reactiveOmit } from '@vueuse/core';
+import { X } from 'lucide-vue-next';
 import {
   DialogClose,
   DialogContent,
   DialogOverlay,
   DialogPortal,
   useForwardPropsEmits,
-} from "reka-ui"
-import { cn } from "@/lib/utils"
+} from 'reka-ui';
+import { cn } from '@/lib/utils';
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes["class"] }>()
-const emits = defineEmits<DialogContentEmits>()
+const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
+const emits = defineEmits<DialogContentEmits>();
 
-const delegatedProps = reactiveOmit(props, "class")
+const delegatedProps = reactiveOmit(props, 'class');
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits)
+const forwarded = useForwardPropsEmits(delegatedProps, emits);
 
 function handleOpenAutoFocus(event: Event) {
   const container = event.target as HTMLElement | null;
   const input = container?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea');
   if (input) {
     event.preventDefault();
-    nextTick(() => input.focus());
+    // Use setTimeout instead of nextTick for reliability on Windows/Electron.
+    // Reka UI's FocusScope can race with nextTick; setTimeout(0) defers past
+    // the FocusScope's synchronous mount logic and MutationObserver callbacks.
+    setTimeout(() => input.focus(), 0);
+  }
+}
+
+/**
+ * Workaround for Reka UI focus-trap bug on Windows/Electron where clicking an
+ * input inside the dialog does not focus it. The DismissableLayer / FocusScope
+ * can leave stale state that intercepts focus. Re-applying focus in a
+ * requestAnimationFrame fires after all synchronous focusin handlers, ensuring
+ * the input wins the focus race.
+ */
+function handlePointerDown(event: PointerEvent) {
+  const target = event.target;
+  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
+    requestAnimationFrame(() => {
+      if (document.activeElement !== target) {
+        target.focus();
+      }
+    });
   }
 }
 </script>
@@ -41,8 +61,10 @@ function handleOpenAutoFocus(event: Event) {
         cn(
           'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 bg-bg-primary p-6 shadow-[var(--shadow-xl)] rounded-2xl border border-separator/30 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
           props.class,
-        )"
+        )
+      "
       @open-auto-focus="handleOpenAutoFocus"
+      @pointerdown="handlePointerDown"
     >
       <slot />
 

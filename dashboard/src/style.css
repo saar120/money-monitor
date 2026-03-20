@@ -250,6 +250,19 @@
     user-select: none;
   }
 
+  /* ── Ensure dialog/layer content always receives pointer events ──
+   * Reka UI's DismissableLayer sets body { pointer-events: none } when a modal
+   * dialog opens, and sets pointer-events: auto on the layer via inline style.
+   * On Windows/Electron, cleanup can fail (stale refs), leaving body stuck with
+   * pointer-events: none while the new layer has NO inline override — so the
+   * layer inherits none and all clicks inside the dialog are swallowed.
+   * This CSS fallback only applies when Reka UI omits the inline style; when
+   * Reka UI explicitly sets pointer-events: none (for lower stacked layers),
+   * the inline style wins due to higher specificity. */
+  [data-dismissable-layer] {
+    pointer-events: auto;
+  }
+
   /* ── Interactive elements inside drag regions must opt out ── */
   [style*='app-region: drag'] button,
   [style*='app-region: drag'] a,
