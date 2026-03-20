@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import type { DialogContentEmits, DialogContentProps } from "reka-ui"
 import type { HTMLAttributes } from "vue"
+import { nextTick } from "vue"
 import { reactiveOmit } from "@vueuse/core"
 import { X } from "lucide-vue-next"
 import {
@@ -18,6 +19,15 @@ const emits = defineEmits<DialogContentEmits>()
 const delegatedProps = reactiveOmit(props, "class")
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits)
+
+function handleOpenAutoFocus(event: Event) {
+  const container = event.target as HTMLElement | null;
+  const input = container?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea');
+  if (input) {
+    event.preventDefault();
+    nextTick(() => input.focus());
+  }
+}
 </script>
 
 <template>
@@ -33,6 +43,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits)
           )
         "
         v-bind="forwarded"
+        @open-auto-focus="handleOpenAutoFocus"
         @pointer-down-outside="(event) => {
           const originalEvent = event.detail.originalEvent;
           const target = originalEvent.target as HTMLElement;
