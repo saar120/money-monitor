@@ -2,7 +2,11 @@ import type { FastifyInstance } from 'fastify';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions, scrapeLogs } from '../db/schema.js';
-import { setCredentials, deleteCredentials } from '../scraper/credential-store.js';
+import {
+  setCredentials,
+  mergeCredentials,
+  deleteCredentials,
+} from '../scraper/credential-store.js';
 import { randomUUID } from 'node:crypto';
 import { createAccountSchema, updateAccountSchema } from './validation.js';
 import { parseIntParam, validateBody } from './helpers.js';
@@ -11,12 +15,12 @@ import type { CompanyId } from '../shared/types.js';
 import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
 
 function stripCredentialsRef(account: Record<string, unknown>) {
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { credentialsRef, ...safe } = account;
   return safe;
 }
 
 export async function accountsRoutes(app: FastifyInstance) {
-
   app.get('/api/accounts', async (_request, reply) => {
     const rows = db.select().from(accounts).all();
     return reply.send({ accounts: rows.map(stripCredentialsRef) });
@@ -31,14 +35,18 @@ export async function accountsRoutes(app: FastifyInstance) {
     setCredentials(credentialsRef, credentials);
 
     const isManualLoginCompany = MANUAL_LOGIN_COMPANIES.has(companyId);
-    const result = db.insert(accounts).values({
-      companyId,
-      displayName,
-      credentialsRef,
-      accountType: getAccountType(companyId as CompanyId),
-      manualLogin: isManualLoginCompany,
-      showBrowser: isManualLoginCompany,
-    }).returning().get();
+    const result = db
+      .insert(accounts)
+      .values({
+        companyId,
+        displayName,
+        credentialsRef,
+        accountType: getAccountType(companyId as CompanyId),
+        manualLogin: isManualLoginCompany,
+        showBrowser: isManualLoginCompany,
+      })
+      .returning()
+      .get();
 
     return reply.status(201).send({ account: stripCredentialsRef(result) });
   });
@@ -55,7 +63,7 @@ export async function accountsRoutes(app: FastifyInstance) {
     const { displayName, isActive, manualLogin, showBrowser, credentials } = data;
 
     if (credentials && Object.keys(credentials).length > 0) {
-      setCredentials(existing.credentialsRef, credentials);
+      mergeCredentials(existing.credentialsRef, credentials);
     }
 
     const updateSet: Record<string, unknown> = {};
@@ -74,7 +82,7 @@ export async function accountsRoutes(app: FastifyInstance) {
 
   app.delete<{
     Params: { id: string };
-    Querystring: { deleteTransactions?: string }
+    Querystring: { deleteTransactions?: string };
   }>('/api/accounts/:id', async (request, reply) => {
     const id = parseIntParam(request.params.id, 'account ID', reply);
     if (id === null) return;
@@ -83,7 +91,9 @@ export async function accountsRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
     // Only delete credentials if no other account shares them
-    const siblings = db.select({ id: accounts.id }).from(accounts)
+    const siblings = db
+      .select({ id: accounts.id })
+      .from(accounts)
       .where(eq(accounts.credentialsRef, existing.credentialsRef))
       .all();
 

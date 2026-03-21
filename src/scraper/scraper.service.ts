@@ -221,8 +221,23 @@ export async function scrapeAccount(
     };
 
     // Cast to any since credential shape varies by company
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any
-    const result = await scraper.scrape({ ...(credentials as any), otpCodeRetriever });
+    let result: Awaited<ReturnType<typeof scraper.scrape>>;
+    try {
+      // eslint-disable-next-line @typescript-eslint/no-explicit-any
+      result = await scraper.scrape({ ...(credentials as any), otpCodeRetriever });
+    } catch (scrapeErr) {
+      // The upstream OneZero scraper destructures API responses without checking for errors,
+      // e.g. `const { resultData: { idToken } } = response` crashes when resultData is undefined.
+      // Re-throw with a clearer message so the outer catch produces a useful log/error.
+      const msg = scrapeErr instanceof Error ? scrapeErr.message : String(scrapeErr);
+      if (msg.includes("reading 'idToken'") || msg.includes("reading 'otpToken'")) {
+        throw new Error(
+          'One Zero login failed after OTP verification — please verify your email and password are correct',
+          { cause: scrapeErr },
+        );
+      }
+      throw scrapeErr;
+    }
 
     if (!result.success) {
       console.error(

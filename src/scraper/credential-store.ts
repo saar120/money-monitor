@@ -65,6 +65,12 @@ export function setCredentials(ref: string, creds: Record<string, string>): void
   saveAll(all);
 }
 
+export function mergeCredentials(ref: string, creds: Record<string, string>): void {
+  const all = loadAll();
+  all[ref] = { ...all[ref], ...creds };
+  saveAll(all);
+}
+
 export function deleteCredentials(ref: string): void {
   const all = loadAll();
   delete all[ref];
