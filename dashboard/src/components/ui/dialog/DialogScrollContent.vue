@@ -11,6 +11,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 import { cn } from '@/lib/utils';
+import { handleDialogAutoFocus, handleDialogPointerDown } from './dialogFocusHelpers';
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
 const emits = defineEmits<DialogContentEmits>();
@@ -18,28 +19,6 @@ const emits = defineEmits<DialogContentEmits>();
 const delegatedProps = reactiveOmit(props, 'class');
 
 const forwarded = useForwardPropsEmits(delegatedProps, emits);
-
-function handleOpenAutoFocus(event: Event) {
-  const container = event.target as HTMLElement | null;
-  const input = container?.querySelector<HTMLElement>('input:not([type="hidden"]), textarea');
-  if (input) {
-    event.preventDefault();
-    setTimeout(() => {
-      if (input.isConnected) input.focus();
-    }, 0);
-  }
-}
-
-function handlePointerDown(event: PointerEvent) {
-  const target = event.target;
-  if (target instanceof HTMLInputElement || target instanceof HTMLTextAreaElement) {
-    requestAnimationFrame(() => {
-      if (target.isConnected && document.activeElement !== target) {
-        target.focus();
-      }
-    });
-  }
-}
 </script>
 
 <template>
@@ -55,8 +34,8 @@ function handlePointerDown(event: PointerEvent) {
           )
         "
         v-bind="forwarded"
-        @open-auto-focus="handleOpenAutoFocus"
-        @pointerdown="handlePointerDown"
+        @open-auto-focus="handleDialogAutoFocus"
+        @pointerdown="handleDialogPointerDown"
         @pointer-down-outside="
           (event) => {
             const originalEvent = event.detail.originalEvent;
