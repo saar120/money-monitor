@@ -14,7 +14,6 @@
     "dashboard:dev": "cd dashboard && npm run dev",
     "dashboard:build": "cd dashboard && npm run build",
     "mcp": "tsx src/mcp-server.ts",
-    "postinstall": "npx patch-package",
     "electron:prebuild": "npm run build && tsc -p electron/tsconfig.json && npm run electron:rebuild",
     "electron:dev": "npm run electron:prebuild && electron .",
     "electron:build": "npm run electron:prebuild && electron-builder --mac",

@@ -1,22 +1,12 @@
 <script setup lang="ts">
-import type { DialogDescriptionProps } from "reka-ui"
-import type { HTMLAttributes } from "vue"
-import { reactiveOmit } from "@vueuse/core"
-import { DialogDescription, useForwardProps } from "reka-ui"
-import { cn } from "@/lib/utils"
+import type { HTMLAttributes } from 'vue';
+import { cn } from '@/lib/utils';
 
-const props = defineProps<DialogDescriptionProps & { class?: HTMLAttributes["class"] }>()
-
-const delegatedProps = reactiveOmit(props, "class")
-
-const forwardedProps = useForwardProps(delegatedProps)
+const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 </script>
 
 <template>
-  <DialogDescription
-    v-bind="forwardedProps"
-    :class="cn('text-[13px] text-text-secondary', props.class)"
-  >
+  <p :class="cn('text-[13px] text-text-secondary', props.class)">
     <slot />
-  </DialogDescription>
+  </p>
 </template>

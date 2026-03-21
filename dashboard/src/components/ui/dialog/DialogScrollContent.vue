@@ -1,63 +1,73 @@
 <script setup lang="ts">
-import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
-import type { HTMLAttributes } from 'vue';
-import { reactiveOmit } from '@vueuse/core';
+import { ref, watch, inject, onBeforeUnmount, type HTMLAttributes } from 'vue';
 import { X } from 'lucide-vue-next';
-import {
-  DialogClose,
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  useForwardPropsEmits,
-} from 'reka-ui';
 import { cn } from '@/lib/utils';
-import { handleDialogAutoFocus, handleDialogPointerDown } from './dialogFocusHelpers';
+import { DIALOG_INJECTION_KEY } from './dialogContext';
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
-const emits = defineEmits<DialogContentEmits>();
+const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 
-const delegatedProps = reactiveOmit(props, 'class');
+const ctx = inject(DIALOG_INJECTION_KEY)!;
+const dialogRef = ref<HTMLDialogElement | null>(null);
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits);
+watch(
+  () => ctx.open.value,
+  (isOpen) => {
+    const el = dialogRef.value;
+    if (!el) return;
+    if (isOpen && !el.open) {
+      el.showModal();
+    } else if (!isOpen && el.open) {
+      el.close();
+    }
+  },
+  { flush: 'post' },
+);
+
+function onCancel(e: Event) {
+  e.preventDefault();
+  ctx.close();
+}
+
+function onClickBackdrop(e: MouseEvent) {
+  if (e.target === dialogRef.value) {
+    ctx.close();
+  }
+}
+
+onBeforeUnmount(() => {
+  const el = dialogRef.value;
+  if (el?.open) el.close();
+});
 </script>
 
 <template>
-  <DialogPortal>
-    <DialogOverlay
-      class="fixed inset-0 z-50 grid place-items-center overflow-y-auto bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
+  <Teleport to="body">
+    <dialog
+      v-if="ctx.open.value"
+      ref="dialogRef"
+      class="fixed inset-0 m-0 h-full w-full max-w-none max-h-none bg-transparent p-0 overflow-y-auto grid place-items-center backdrop:bg-black/40"
+      @cancel="onCancel"
+      @click="onClickBackdrop"
     >
-      <DialogContent
+      <div
         :class="
           cn(
-            'relative z-50 grid w-full max-w-lg my-8 gap-4 bg-bg-primary p-6 shadow-[0_16px_48px_rgba(0,0,0,0.2)] rounded-xl duration-200 md:w-full',
+            'relative z-50 w-full max-w-lg my-8 gap-4 bg-bg-primary p-6 shadow-[0_16px_48px_rgba(0,0,0,0.2)] rounded-xl md:w-full',
             props.class,
           )
         "
-        v-bind="forwarded"
-        @open-auto-focus="handleDialogAutoFocus"
-        @pointerdown="handleDialogPointerDown"
-        @pointer-down-outside="
-          (event) => {
-            const originalEvent = event.detail.originalEvent;
-            const target = originalEvent.target as HTMLElement;
-            if (
-              originalEvent.offsetX > target.clientWidth ||
-              originalEvent.offsetY > target.clientHeight
-            ) {
-              event.preventDefault();
-            }
-          }
-        "
+        @click.stop
       >
         <slot />
 
-        <DialogClose
+        <button
           class="absolute top-3 right-3 p-0.5 transition-colors rounded-md hover:bg-secondary"
+          @click="ctx.close()"
         >
           <X class="w-4 h-4" />
           <span class="sr-only">Close</span>
-        </DialogClose>
-      </DialogContent>
-    </DialogOverlay>
-  </DialogPortal>
+        </button>
+      </div>
+    </dialog>
+  </Teleport>
 </template>

@@ -1,50 +1,70 @@
 <script setup lang="ts">
-import type { DialogContentEmits, DialogContentProps } from 'reka-ui';
-import type { HTMLAttributes } from 'vue';
-import { reactiveOmit } from '@vueuse/core';
+import { ref, watch, inject, onBeforeUnmount, type HTMLAttributes } from 'vue';
 import { X } from 'lucide-vue-next';
-import {
-  DialogClose,
-  DialogContent,
-  DialogOverlay,
-  DialogPortal,
-  useForwardPropsEmits,
-} from 'reka-ui';
 import { cn } from '@/lib/utils';
-import { handleDialogAutoFocus, handleDialogPointerDown } from './dialogFocusHelpers';
+import { DIALOG_INJECTION_KEY } from './dialogContext';
 
-const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
-const emits = defineEmits<DialogContentEmits>();
+const props = defineProps<{ class?: HTMLAttributes['class'] }>();
 
-const delegatedProps = reactiveOmit(props, 'class');
+const ctx = inject(DIALOG_INJECTION_KEY)!;
+const dialogRef = ref<HTMLDialogElement | null>(null);
 
-const forwarded = useForwardPropsEmits(delegatedProps, emits);
+watch(
+  () => ctx.open.value,
+  (isOpen) => {
+    const el = dialogRef.value;
+    if (!el) return;
+    if (isOpen && !el.open) {
+      el.showModal();
+    } else if (!isOpen && el.open) {
+      el.close();
+    }
+  },
+  { flush: 'post' },
+);
+
+function onCancel(e: Event) {
+  e.preventDefault();
+  ctx.close();
+}
+
+function onClickBackdrop(e: MouseEvent) {
+  if (e.target === dialogRef.value) {
+    ctx.close();
+  }
+}
+
+onBeforeUnmount(() => {
+  const el = dialogRef.value;
+  if (el?.open) el.close();
+});
 </script>
 
 <template>
-  <DialogPortal>
-    <DialogOverlay
-      class="fixed inset-0 z-50 bg-black/40 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0"
-    />
-    <DialogContent
-      v-bind="forwarded"
+  <Teleport to="body">
+    <dialog
+      v-if="ctx.open.value"
+      ref="dialogRef"
       :class="
         cn(
-          'fixed left-1/2 top-1/2 z-50 grid w-full max-w-lg -translate-x-1/2 -translate-y-1/2 gap-4 bg-bg-primary p-6 shadow-[var(--shadow-xl)] rounded-2xl border border-separator/30 duration-200 data-[state=open]:animate-in data-[state=closed]:animate-out data-[state=closed]:fade-out-0 data-[state=open]:fade-in-0 data-[state=closed]:zoom-out-95 data-[state=open]:zoom-in-95 data-[state=closed]:slide-out-to-left-1/2 data-[state=closed]:slide-out-to-top-[48%] data-[state=open]:slide-in-from-left-1/2 data-[state=open]:slide-in-from-top-[48%]',
+          'fixed inset-0 m-auto w-full max-w-lg gap-4 bg-bg-primary p-6 shadow-[var(--shadow-xl)] rounded-2xl border border-separator/30 backdrop:bg-black/40 open:animate-in open:fade-in-0 open:zoom-in-95',
           props.class,
         )
       "
-      @open-auto-focus="handleDialogAutoFocus"
-      @pointerdown="handleDialogPointerDown"
+      @cancel="onCancel"
+      @click="onClickBackdrop"
     >
-      <slot />
+      <div @click.stop>
+        <slot />
+      </div>
 
-      <DialogClose
-        class="absolute right-4 top-4 rounded-md opacity-50 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none"
+      <button
+        class="absolute right-4 top-4 rounded-md opacity-50 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30"
+        @click="ctx.close()"
       >
         <X class="w-4 h-4" />
         <span class="sr-only">Close</span>
-      </DialogClose>
-    </DialogContent>
-  </DialogPortal>
+      </button>
+    </dialog>
+  </Teleport>
 </template>

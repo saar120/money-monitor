@@ -1,15 +1,19 @@
 <script setup lang="ts">
-import type { DialogRootEmits, DialogRootProps } from "reka-ui"
-import { DialogRoot, useForwardPropsEmits } from "reka-ui"
+import { provide, toRef } from 'vue';
+import { DIALOG_INJECTION_KEY } from './dialogContext';
 
-const props = defineProps<DialogRootProps>()
-const emits = defineEmits<DialogRootEmits>()
+const props = defineProps<{ open?: boolean }>();
+const emit = defineEmits<{ 'update:open': [value: boolean] }>();
 
-const forwarded = useForwardPropsEmits(props, emits)
+const openRef = toRef(props, 'open');
+
+function close() {
+  emit('update:open', false);
+}
+
+provide(DIALOG_INJECTION_KEY, { open: openRef, close });
 </script>
 
 <template>
-  <DialogRoot v-bind="forwarded">
-    <slot />
-  </DialogRoot>
+  <slot />
 </template>
