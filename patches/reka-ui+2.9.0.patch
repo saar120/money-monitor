@@ -1,0 +1,26 @@
+diff --git a/node_modules/reka-ui/dist/FocusScope/FocusScope.cjs b/node_modules/reka-ui/dist/FocusScope/FocusScope.cjs
+index ca50de1..1a1a0a4 100644
+--- a/node_modules/reka-ui/dist/FocusScope/FocusScope.cjs
++++ b/node_modules/reka-ui/dist/FocusScope/FocusScope.cjs
+@@ -63,6 +63,8 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ (0,
+ 				if (!container.contains(relatedTarget)) require_FocusScope_utils.focus(lastFocusedElementRef.value, { select: true });
+ 			}
+ 			function handleMutations(mutations) {
++				const focusedElement = require_shared_getActiveElement.getActiveElement();
++				if (focusedElement !== document.body) return;
+ 				const isLastFocusedElementExist = container.contains(lastFocusedElementRef.value);
+ 				if (!isLastFocusedElementExist) require_FocusScope_utils.focus(container);
+ 			}
+diff --git a/node_modules/reka-ui/dist/FocusScope/FocusScope.js b/node_modules/reka-ui/dist/FocusScope/FocusScope.js
+index 0e17b90..b8ea694 100644
+--- a/node_modules/reka-ui/dist/FocusScope/FocusScope.js
++++ b/node_modules/reka-ui/dist/FocusScope/FocusScope.js
+@@ -62,6 +62,8 @@ var FocusScope_vue_vue_type_script_setup_true_lang_default = /* @__PURE__ */ def
+ 				if (!container.contains(relatedTarget)) focus(lastFocusedElementRef.value, { select: true });
+ 			}
+ 			function handleMutations(mutations) {
++				const focusedElement = getActiveElement();
++				if (focusedElement !== document.body) return;
+ 				const isLastFocusedElementExist = container.contains(lastFocusedElementRef.value);
+ 				if (!isLastFocusedElementExist) focus(container);
+ 			}
