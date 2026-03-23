@@ -279,9 +279,14 @@ export function startTelegramBot(): void {
   });
 }
 
-export function stopTelegramBot(): void {
+export async function stopTelegramBot(): Promise<void> {
   if (bot) {
-    bot.stop();
+    await bot.stop();
     bot = null;
   }
+}
+
+export async function restartTelegramBot(): Promise<void> {
+  await stopTelegramBot();
+  startTelegramBot();
 }
