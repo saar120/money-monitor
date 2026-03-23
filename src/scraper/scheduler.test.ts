@@ -39,11 +39,11 @@ describe('checkAndRunMissedScrape', () => {
     vi.resetModules();
     // Clear call counts and restore default return values on shared mock fns
     vi.mocked(hasActiveSessions).mockReset().mockReturnValue(false);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock return value doesn't need full type
+
     vi.mocked(getUniqueActiveAccounts)
       .mockReset()
       .mockReturnValue([{ id: 1 }] as any);
-    // eslint-disable-next-line @typescript-eslint/no-explicit-any -- mock return value doesn't need full type
+
     vi.mocked(runScrapeSession)
       .mockReset()
       .mockReturnValue({ session: { id: 'test-session' } } as any);
@@ -123,6 +123,32 @@ describe('checkAndRunMissedScrape', () => {
     checkAndRunMissedScrape();
 
     expect(runScrapeSession).not.toHaveBeenCalled();
+
+    stopScheduler();
+  });
+
+  it('does not trigger a second scrape on a subsequent wakeup for the same missed tick', async () => {
+    // 05:00 Jerusalem (03:00 UTC) — before the 06:00 cron
+    vi.setSystemTime(new Date('2026-03-15T03:00:00.000Z'));
+
+    const { startScheduler, stopScheduler, checkAndRunMissedScrape } =
+      await import('./scheduler.js');
+
+    startScheduler();
+
+    // First wakeup at 10:00 Jerusalem (08:00 UTC) — cron at 06:00 was missed
+    vi.setSystemTime(new Date('2026-03-15T08:00:00.000Z'));
+    checkAndRunMissedScrape();
+    expect(runScrapeSession).toHaveBeenCalledTimes(1);
+
+    // Simulate the onResume pattern: stop + start scheduler
+    stopScheduler();
+    startScheduler();
+
+    // Second wakeup at 11:00 Jerusalem (09:00 UTC) — same day, no new missed tick
+    vi.setSystemTime(new Date('2026-03-15T09:00:00.000Z'));
+    checkAndRunMissedScrape();
+    expect(runScrapeSession).toHaveBeenCalledTimes(1); // should NOT scrape again
 
     stopScheduler();
   });

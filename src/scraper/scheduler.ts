@@ -120,6 +120,8 @@ export function checkAndRunMissedScrape(): void {
         return;
       }
 
+      lastCronFireTime = new Date();
+
       const { session } = runScrapeSession('scheduled', uniqueAccounts);
       console.log(`[Scheduler] Started catch-up session ${session.id}`);
     } else {
