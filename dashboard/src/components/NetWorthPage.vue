@@ -22,9 +22,6 @@ import {
   createAsset,
   updateAsset,
   deleteAsset,
-  createHolding,
-  updateHolding,
-  deleteHolding,
   createLiability,
   updateLiability,
   deleteLiability,
@@ -32,17 +29,14 @@ import {
   type NetWorthHistory,
   type Account,
   type Asset,
-  type Holding,
   type Liability,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
+import { formatCurrency, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS,
   ASSET_TYPE_LABELS,
-  HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS,
-  LIQUIDITY_STYLES,
   LIABILITY_TYPE_LABELS,
 } from '@/lib/net-worth-constants';
 import { getAssetCategory } from '@/lib/asset-categories';
@@ -79,15 +73,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus,
-  ChevronDown,
+  ChevronRight,
   Pencil,
   Trash2,
   TrendingUp,
   TrendingDown,
   AlertCircle,
   Loader2,
-  Check,
-  X,
 } from 'lucide-vue-next';
 
 ChartJS.register(
@@ -132,19 +124,10 @@ async function refreshAll() {
 
 // ─── Computed data ───
 const nw = computed(() => netWorth.data.value);
-const banks = computed(() => nw.value?.banks ?? []);
-const assets = computed(() => nw.value?.assets ?? []);
 const nwLiabilities = computed(() => nw.value?.liabilities ?? []);
 const bankAccounts = computed(() =>
   (accountsApi.data.value?.accounts ?? []).filter((a) => a.accountType === 'bank'),
 );
-
-function assetNativeDisplay(asset: { currency: string; totalValueIls: number }): string {
-  if (asset.currency === 'ILS') return formatAmount(asset.totalValueIls, 'ILS');
-  const rate = nw.value?.exchangeRates?.[asset.currency] ?? 1;
-  const native = asset.totalValueIls / rate;
-  return `${formatAmount(native, asset.currency)} (${formatAmount(asset.totalValueIls, 'ILS')})`;
-}
 
 // Merged liability data: net-worth summary + full detail
 interface MergedLiability {
@@ -208,6 +191,90 @@ const allocationData = computed(() => {
     ],
   };
 });
+
+// ─── Assets grouped by category (for enhanced assets section) ───
+interface AssetCategoryGroup {
+  key: string;
+  label: string;
+  color: string;
+  value: number;
+  weight: number; // percentage of total assets (including banks)
+  items: { id: number; name: string; type: string; totalValueIls: number; currency: string }[];
+}
+
+const assetCategoryGroups = computed<AssetCategoryGroup[]>(() => {
+  const nwData = nw.value;
+  if (!nwData) return [];
+
+  const assetsTotal = nwData.assetsTotal + nwData.banksTotal;
+  if (assetsTotal <= 0) return [];
+
+  // Group assets by type
+  const byType = new Map<string, { value: number; items: AssetCategoryGroup['items'] }>();
+  for (const asset of nwData.assets) {
+    const existing = byType.get(asset.type);
+    const item = {
+      id: asset.id,
+      name: asset.name,
+      type: asset.type,
+      totalValueIls: asset.totalValueIls,
+      currency: asset.currency,
+    };
+    if (existing) {
+      existing.value += asset.totalValueIls;
+      existing.items.push(item);
+    } else {
+      byType.set(asset.type, { value: asset.totalValueIls, items: [item] });
+    }
+  }
+
+  // Add banks as "Cash" category
+  if (nwData.banksTotal > 0) {
+    byType.set('banks', {
+      value: nwData.banksTotal,
+      items: nwData.banks.map((b) => ({
+        id: b.id,
+        name: b.name,
+        type: 'banks',
+        totalValueIls: b.balanceIls,
+        currency: 'ILS',
+      })),
+    });
+  }
+
+  const groups: AssetCategoryGroup[] = [];
+  for (const [type, data] of byType) {
+    if (data.value <= 0) continue;
+    groups.push({
+      key: type,
+      label: type === 'banks' ? 'Cash' : (ASSET_TYPE_LABELS[type] ?? type),
+      color: ASSET_TYPE_COLORS[type] ?? '#71717a',
+      value: data.value,
+      weight: (data.value / assetsTotal) * 100,
+      items: data.items.sort((a, b) => b.totalValueIls - a.totalValueIls),
+    });
+  }
+
+  // Sort by value descending
+  groups.sort((a, b) => b.value - a.value);
+  return groups;
+});
+
+const totalAssetsValue = computed(() => {
+  const nwData = nw.value;
+  if (!nwData) return 0;
+  return nwData.assetsTotal + nwData.banksTotal;
+});
+
+// Expanded categories in the assets table
+const expandedCategories = ref(new Set<string>());
+function toggleCategory(key: string) {
+  if (expandedCategories.value.has(key)) {
+    expandedCategories.value.delete(key);
+  } else {
+    expandedCategories.value.add(key);
+  }
+}
 
 const doughnutCenterTextPlugin = {
   id: 'doughnutCenterText',
@@ -334,76 +401,6 @@ const lineOptions = computed(() => ({
   },
 }));
 
-// ─── Asset expand/collapse ───
-const expandedAssets = ref(new Set<number>());
-
-function toggleExpand(assetId: number) {
-  if (expandedAssets.value.has(assetId)) {
-    expandedAssets.value.delete(assetId);
-  } else {
-    expandedAssets.value.add(assetId);
-  }
-}
-
-// ─── Quick update (inline editing) ───
-const editingAssetId = ref<number | null>(null);
-const editedHoldings = ref(new Map<number, { quantity: number; lastPrice: number | null }>());
-const savingHoldings = ref(new Set<number>());
-const savedHoldings = ref(new Set<number>());
-const failedHoldings = ref(new Map<number, string>());
-
-function startQuickUpdate(asset: Asset) {
-  editingAssetId.value = asset.id;
-  expandedAssets.value.add(asset.id);
-  editedHoldings.value.clear();
-  savingHoldings.value.clear();
-  savedHoldings.value.clear();
-  failedHoldings.value.clear();
-  for (const h of asset.holdings) {
-    editedHoldings.value.set(h.id, {
-      quantity: h.quantity,
-      lastPrice: h.lastPrice,
-    });
-  }
-}
-
-function cancelQuickUpdate() {
-  editingAssetId.value = null;
-  editedHoldings.value.clear();
-}
-
-async function saveQuickUpdate(asset: Asset) {
-  const promises: Promise<void>[] = [];
-  for (const h of asset.holdings) {
-    const edited = editedHoldings.value.get(h.id);
-    if (!edited) continue;
-    const dirty = edited.quantity !== h.quantity || edited.lastPrice !== h.lastPrice;
-    if (!dirty) continue;
-    savingHoldings.value.add(h.id);
-    const data: { quantity?: number; lastPrice?: number | null } = {};
-    if (edited.quantity !== h.quantity) data.quantity = edited.quantity;
-    if (edited.lastPrice !== h.lastPrice) data.lastPrice = edited.lastPrice;
-    promises.push(
-      updateHolding(h.id, data)
-        .then(() => {
-          savedHoldings.value.add(h.id);
-          savingHoldings.value.delete(h.id);
-          setTimeout(() => savedHoldings.value.delete(h.id), 2000);
-        })
-        .catch((err) => {
-          failedHoldings.value.set(h.id, err instanceof Error ? err.message : 'Failed');
-          savingHoldings.value.delete(h.id);
-        }),
-    );
-  }
-  await Promise.all(promises);
-  if (failedHoldings.value.size === 0) {
-    editingAssetId.value = null;
-    editedHoldings.value.clear();
-    refreshAll();
-  }
-}
-
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const editingAsset = ref<Asset | null>(null);
@@ -495,93 +492,6 @@ async function handleSaveAsset() {
   }
 }
 
-// ─── Holding Dialog ───
-const showHoldingDialog = ref(false);
-const holdingParentAssetId = ref<number | null>(null);
-const holdingParentAsset = computed(
-  () => assetsApi.data.value?.find((a) => a.id === holdingParentAssetId.value) ?? null,
-);
-const editingHolding = ref<Holding | null>(null);
-const holdingForm = ref({
-  name: '',
-  type: 'stock',
-  currency: 'ILS',
-  quantity: 0,
-  costBasis: 0,
-  lastPrice: 0,
-  notes: '',
-});
-const holdingSaving = ref(false);
-
-function openAddHolding(assetId: number) {
-  holdingParentAssetId.value = assetId;
-  editingHolding.value = null;
-  holdingForm.value = {
-    name: '',
-    type: 'stock',
-    currency: 'ILS',
-    quantity: 0,
-    costBasis: 0,
-    lastPrice: 0,
-    notes: '',
-  };
-  showHoldingDialog.value = true;
-}
-
-function openEditHolding(assetId: number, holding: Holding) {
-  holdingParentAssetId.value = assetId;
-  editingHolding.value = holding;
-  holdingForm.value = {
-    name: holding.name,
-    type: holding.type,
-    currency: holding.currency,
-    quantity: holding.quantity,
-    costBasis: holding.costBasis,
-    lastPrice: holding.lastPrice ?? 0,
-    notes: holding.notes ?? '',
-  };
-  showHoldingDialog.value = true;
-}
-
-const holdingShowPrice = computed(() =>
-  ['stock', 'etf', 'crypto'].includes(holdingForm.value.type),
-);
-const holdingValid = computed(
-  () =>
-    holdingForm.value.name.trim() && holdingForm.value.type && holdingForm.value.currency.trim(),
-);
-const holdingDoubleCount = computed(() => {
-  if (!holdingParentAsset.value?.linkedAccountId) return false;
-  return holdingForm.value.currency.toUpperCase() === 'ILS' && holdingForm.value.type === 'cash';
-});
-
-async function handleSaveHolding() {
-  if (!holdingValid.value || !holdingParentAssetId.value || holdingDoubleCount.value) return;
-  holdingSaving.value = true;
-  try {
-    const data: Record<string, unknown> = {
-      name: holdingForm.value.name.trim(),
-      type: holdingForm.value.type,
-      currency: holdingForm.value.currency.trim(),
-      quantity: Number(holdingForm.value.quantity),
-      costBasis: Number(holdingForm.value.costBasis),
-      notes: holdingForm.value.notes.trim() || undefined,
-    };
-    if (holdingShowPrice.value) {
-      data.lastPrice = Number(holdingForm.value.lastPrice);
-    }
-    if (editingHolding.value) {
-      await updateHolding(editingHolding.value.id, data as Parameters<typeof updateHolding>[1]);
-    } else {
-      await createHolding(holdingParentAssetId.value, data as Parameters<typeof createHolding>[1]);
-    }
-    showHoldingDialog.value = false;
-    refreshAll();
-  } finally {
-    holdingSaving.value = false;
-  }
-}
-
 // ─── Liability Dialog ───
 const showLiabilityDialog = ref(false);
 const editingLiability = ref<Liability | null>(null);
@@ -669,7 +579,6 @@ async function handleSaveLiability() {
 
 // ─── Delete confirmations ───
 const deletingAsset = ref<{ id: number; name: string } | null>(null);
-const deletingHolding = ref<{ id: number; name: string; assetName: string } | null>(null);
 const deletingLiability = ref<{ id: number; name: string } | null>(null);
 
 async function handleDeleteAsset() {
@@ -678,18 +587,6 @@ async function handleDeleteAsset() {
   deletingAsset.value = null;
   try {
     await deleteAsset(target.id);
-    refreshAll();
-  } catch {
-    /* toast/error handling could go here */
-  }
-}
-
-async function handleDeleteHolding() {
-  const target = deletingHolding.value;
-  if (!target) return;
-  deletingHolding.value = null;
-  try {
-    await deleteHolding(target.id);
     refreshAll();
   } catch {
     /* toast/error handling could go here */
@@ -709,12 +606,6 @@ async function handleDeleteLiability() {
 }
 
 // ─── Helpers ───
-function pctOfTotal(value: number): string {
-  const total = nw.value?.total ?? 0;
-  if (total <= 0) return '0%';
-  return `${((value / total) * 100).toFixed(1)}%`;
-}
-
 function paidOffPct(original: number, current: number): number {
   if (original <= 0) return 0;
   return Math.max(0, Math.min(100, ((original - current) / original) * 100));
@@ -876,276 +767,162 @@ const fullLiabilityMap = computed(() => {
 
     <!-- Lists section -->
     <div class="space-y-5">
-      <!-- Assets Section -->
-      <div class="space-y-5 animate-fade-in-up stagger-3">
-        <h2 class="text-[15px] font-semibold">Assets</h2>
-
-        <Card v-if="assets.length > 0">
-          <div
-            v-for="(asset, idx) in assets"
-            :key="asset.id"
-            :class="['group', idx < assets.length - 1 ? 'border-b border-separator' : '']"
-          >
-            <!-- Asset Row (collapsed) -->
-            <div
-              class="flex items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
-              @click="toggleExpand(asset.id)"
-            >
-              <div
-                class="w-2.5 h-2.5 rounded-full flex-shrink-0"
-                :style="{ backgroundColor: ASSET_TYPE_COLORS[asset.type] ?? '#71717a' }"
-              />
-              <div class="flex-1 min-w-0">
-                <p
-                  class="text-[13px] font-medium hover:underline cursor-pointer"
-                  @click.stop="router.push(`/net-worth/assets/${asset.id}`)"
-                >
-                  {{ asset.name }}
-                </p>
-                <p class="text-[11px] text-text-secondary">
-                  {{ ASSET_TYPE_LABELS[asset.type] ?? asset.type }}
-                  <template v-if="getFullAsset(asset.id)?.institution">
-                    &middot; {{ getFullAsset(asset.id)!.institution }}</template
-                  >
-                  <Badge
-                    v-if="asset.liquidity"
-                    :class="LIQUIDITY_STYLES[asset.liquidity] ?? ''"
-                    class="ml-1.5 text-[10px] px-1.5 py-0 border-0"
-                  >
-                    {{ LIQUIDITY_LABELS[asset.liquidity] ?? asset.liquidity }}
-                  </Badge>
-                </p>
-              </div>
-              <div class="text-right flex-shrink-0">
-                <p class="text-[15px] font-semibold tabular-nums">
-                  {{ assetNativeDisplay(asset) }}
-                </p>
-                <p class="text-[11px] text-text-secondary">
-                  {{ pctOfTotal(asset.totalValueIls) }} of total
-                </p>
-              </div>
-              <!-- Hover actions -->
-              <div
-                class="flex items-center gap-0.5 invisible group-hover:visible flex-shrink-0"
-                @click.stop
+      <!-- Enhanced Assets Section -->
+      <div class="space-y-4 animate-fade-in-up stagger-3">
+        <Card v-if="assetCategoryGroups.length > 0">
+          <CardContent class="pt-5 pb-4">
+            <!-- Header: Assets · ₪total -->
+            <div class="flex items-baseline gap-2 mb-4">
+              <h2 class="text-[17px] font-semibold">Assets</h2>
+              <span class="text-[17px] text-text-secondary font-normal"
+                >&middot; {{ formatCurrency(totalAssetsValue) }}</span
               >
-                <button
-                  class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
-                  @click="openEditAsset(getFullAsset(asset.id)!)"
-                >
-                  <Pencil class="h-3 w-3" />
-                </button>
-                <button
-                  class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
-                  @click="deletingAsset = { id: asset.id, name: asset.name }"
-                >
-                  <Trash2 class="h-3 w-3 text-destructive" />
-                </button>
-              </div>
-              <ChevronDown
-                class="h-4 w-4 text-text-secondary transition-transform duration-150 flex-shrink-0"
-                :class="{ 'rotate-180': expandedAssets.has(asset.id) }"
+            </div>
+
+            <!-- Stacked allocation bar -->
+            <div class="flex h-2.5 rounded-full overflow-hidden mb-3">
+              <div
+                v-for="group in assetCategoryGroups"
+                :key="group.key"
+                :style="{ width: group.weight + '%', backgroundColor: group.color }"
+                class="transition-all duration-300"
               />
             </div>
 
-            <!-- Expanded Holdings -->
-            <div
-              class="overflow-hidden transition-all duration-200 ease-out"
-              :style="{ maxHeight: expandedAssets.has(asset.id) ? '1000px' : '0px' }"
-            >
-              <div v-if="getFullAsset(asset.id)" class="pl-8 pr-4 pb-3">
-                <!-- Quick Update Mode -->
-                <template v-if="editingAssetId === asset.id">
-                  <div class="flex items-center justify-between mb-2">
-                    <p class="text-[11px] font-medium text-text-secondary">Holdings (editing):</p>
-                    <div class="flex gap-1.5">
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-7 text-[11px]"
-                        @click="cancelQuickUpdate"
-                        >Cancel</Button
-                      >
-                      <Button
-                        size="sm"
-                        class="h-7 text-[11px]"
-                        @click="saveQuickUpdate(getFullAsset(asset.id)!)"
-                        >Save Changes</Button
-                      >
-                    </div>
-                  </div>
-                  <div class="space-y-1.5">
-                    <div
-                      v-for="h in getFullAsset(asset.id)!.holdings"
-                      :key="h.id"
-                      class="flex items-center gap-2 text-[11px]"
-                    >
-                      <span class="w-24 truncate font-medium">{{ h.name }}</span>
-                      <Input
-                        type="number"
-                        step="any"
-                        class="h-7 text-[11px] w-24"
-                        :model-value="editedHoldings.get(h.id)?.quantity"
-                        @update:model-value="
-                          (v: string | number) => {
-                            const e = editedHoldings.get(h.id);
-                            if (e) e.quantity = Number(v);
-                          }
-                        "
-                      />
-                      <template v-if="['stock', 'etf', 'crypto'].includes(h.type)">
-                        <Input
-                          type="number"
-                          step="any"
-                          class="h-7 text-[11px] w-24"
-                          :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
-                          @update:model-value="
-                            (v: string | number) => {
-                              const e = editedHoldings.get(h.id);
-                              if (e) e.lastPrice = Number(v);
-                            }
-                          "
-                        />
-                      </template>
-                      <span v-else class="w-24 text-center">-</span>
-                      <span class="w-20 text-right tabular-nums">{{
-                        formatCompact(h.currentValueIls)
-                      }}</span>
-                      <span class="w-6 flex justify-center">
-                        <Loader2 v-if="savingHoldings.has(h.id)" class="h-3.5 w-3.5 animate-spin" />
-                        <Check
-                          v-else-if="savedHoldings.has(h.id)"
-                          class="h-3.5 w-3.5 text-success"
-                        />
-                        <X
-                          v-else-if="failedHoldings.has(h.id)"
-                          class="h-3.5 w-3.5 text-destructive"
-                          :title="failedHoldings.get(h.id)"
-                        />
-                      </span>
-                    </div>
-                  </div>
-                </template>
+            <!-- Legend -->
+            <div class="flex flex-wrap gap-x-4 gap-y-1 mb-5">
+              <div
+                v-for="group in assetCategoryGroups"
+                :key="group.key"
+                class="flex items-center gap-1.5"
+              >
+                <div
+                  class="w-2 h-2 rounded-full flex-shrink-0"
+                  :style="{ backgroundColor: group.color }"
+                />
+                <span class="text-[12px] text-text-secondary">{{ group.label }}</span>
+                <span class="text-[12px] font-medium">{{ Math.round(group.weight) }}%</span>
+              </div>
+            </div>
 
-                <!-- View Mode -->
-                <template v-else>
-                  <p class="text-[11px] font-medium text-text-secondary mb-2">Holdings:</p>
-                  <div
-                    v-if="getFullAsset(asset.id)!.holdings.length === 0"
-                    class="text-[11px] text-text-secondary py-2"
-                  >
-                    <template
-                      v-if="
-                        getAssetCategory(asset.type) === 'crypto' ||
-                        getAssetCategory(asset.type) === 'brokerage'
-                      "
-                    >
-                      No holdings yet.
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-6 text-[11px] ml-2"
-                        @click.stop="openAddHolding(asset.id)"
-                      >
-                        <Plus class="h-3 w-3 mr-1" /> Add
-                      </Button>
-                    </template>
-                    <template v-else> Click to view and update value. </template>
-                  </div>
-                  <div v-else class="space-y-1">
-                    <div
-                      v-for="h in getFullAsset(asset.id)!.holdings"
-                      :key="h.id"
-                      class="flex items-center gap-2 text-[11px] group/holding"
-                    >
-                      <span class="w-24 truncate font-medium">{{ h.name }}</span>
-                      <span class="w-20 text-text-secondary tabular-nums">
-                        <template
-                          v-if="h.quantity !== 1 || ['stock', 'etf', 'crypto'].includes(h.type)"
-                        >
-                          {{ h.quantity }}
-                          {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : h.currency }}
-                        </template>
-                        <template v-else>-</template>
-                      </span>
-                      <span class="w-16 text-text-secondary tabular-nums">
-                        {{
-                          h.lastPrice != null
-                            ? `${h.currency === 'ILS' ? '₪' : '$'}${h.lastPrice}`
-                            : '-'
-                        }}
-                      </span>
-                      <span
-                        class="w-20 text-right tabular-nums font-medium"
-                        :class="h.stale ? 'text-text-secondary' : ''"
-                      >
-                        {{ formatCompact(h.currentValueIls) }}
-                        <AlertCircle
-                          v-if="h.stale"
-                          class="h-3 w-3 inline ml-0.5 text-text-secondary"
-                        />
-                      </span>
-                      <span
-                        v-if="h.gainLossPercent != null"
-                        class="w-14 text-right tabular-nums"
-                        :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
-                      >
-                        {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
-                      </span>
-                      <span v-else class="w-14" />
+            <!-- Table header -->
+            <div
+              class="flex items-center px-3 pb-2 text-[11px] font-semibold text-text-secondary uppercase tracking-wider"
+            >
+              <span class="flex-1">Name</span>
+              <span class="w-[200px] text-center max-md:hidden">Weight</span>
+              <span class="w-[120px] text-right">Value</span>
+            </div>
+
+            <!-- Category rows -->
+            <Card class="divide-y divide-separator">
+              <div v-for="group in assetCategoryGroups" :key="group.key">
+                <!-- Category row -->
+                <div
+                  class="flex items-center gap-3 px-3 py-3.5 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
+                  @click="toggleCategory(group.key)"
+                >
+                  <ChevronRight
+                    class="h-4 w-4 text-text-secondary transition-transform duration-150 flex-shrink-0"
+                    :class="{ 'rotate-90': expandedCategories.has(group.key) }"
+                  />
+                  <span class="text-[14px] font-medium flex-1">{{ group.label }}</span>
+                  <!-- Weight bar + percentage -->
+                  <div class="w-[200px] flex items-center gap-2.5 max-md:hidden">
+                    <div class="flex-1 h-2 rounded-full bg-bg-tertiary overflow-hidden">
                       <div
-                        class="flex items-center gap-1 opacity-0 group-hover/holding:opacity-100 transition-opacity ml-auto"
+                        class="h-full rounded-full transition-all duration-300"
+                        :style="{
+                          width: group.weight + '%',
+                          backgroundColor: group.color,
+                          opacity: 0.7,
+                        }"
+                      />
+                    </div>
+                    <span class="text-[13px] tabular-nums text-text-secondary w-12 text-right"
+                      >{{ group.weight.toFixed(2) }}%</span
+                    >
+                  </div>
+                  <span class="w-[120px] text-right text-[14px] font-semibold tabular-nums">{{
+                    formatCurrency(group.value)
+                  }}</span>
+                </div>
+
+                <!-- Expanded individual assets -->
+                <div
+                  class="overflow-hidden transition-all duration-200 ease-out"
+                  :style="{ maxHeight: expandedCategories.has(group.key) ? '2000px' : '0px' }"
+                >
+                  <div class="bg-bg-secondary/30">
+                    <div
+                      v-for="(item, itemIdx) in group.items"
+                      :key="item.id"
+                      :class="[
+                        'flex items-center gap-3 pl-10 pr-3 py-2.5 group/item',
+                        itemIdx < group.items.length - 1 ? 'border-b border-separator/50' : '',
+                      ]"
+                    >
+                      <div class="flex-1 min-w-0">
+                        <p
+                          v-if="item.type !== 'banks'"
+                          class="text-[13px] font-medium hover:underline cursor-pointer"
+                          @click.stop="router.push(`/net-worth/assets/${item.id}`)"
+                        >
+                          {{ item.name }}
+                        </p>
+                        <p v-else class="text-[13px] font-medium">{{ item.name }}</p>
+                      </div>
+                      <!-- Item weight bar -->
+                      <div class="w-[200px] flex items-center gap-2.5 max-md:hidden">
+                        <div class="flex-1 h-1.5 rounded-full bg-bg-tertiary overflow-hidden">
+                          <div
+                            class="h-full rounded-full transition-all duration-300"
+                            :style="{
+                              width:
+                                (totalAssetsValue > 0
+                                  ? (item.totalValueIls / totalAssetsValue) * 100
+                                  : 0) + '%',
+                              backgroundColor: group.color,
+                              opacity: 0.5,
+                            }"
+                          />
+                        </div>
+                        <span class="text-[12px] tabular-nums text-text-secondary w-12 text-right">
+                          {{
+                            totalAssetsValue > 0
+                              ? ((item.totalValueIls / totalAssetsValue) * 100).toFixed(2)
+                              : '0.00'
+                          }}%
+                        </span>
+                      </div>
+                      <span class="w-[120px] text-right text-[13px] tabular-nums">{{
+                        formatCurrency(item.totalValueIls)
+                      }}</span>
+                      <!-- Hover actions for non-bank assets -->
+                      <div
+                        v-if="item.type !== 'banks'"
+                        class="flex items-center gap-0.5 opacity-0 group-hover/item:opacity-100 transition-opacity flex-shrink-0"
                         @click.stop
                       >
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="h-6 w-6"
-                          @click="openEditHolding(asset.id, h)"
+                        <button
+                          class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                          @click="openEditAsset(getFullAsset(item.id)!)"
                         >
                           <Pencil class="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="h-6 w-6"
-                          @click="
-                            deletingHolding = { id: h.id, name: h.name, assetName: asset.name }
-                          "
+                        </button>
+                        <button
+                          class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                          @click="deletingAsset = { id: item.id, name: item.name }"
                         >
                           <Trash2 class="h-3 w-3 text-destructive" />
-                        </Button>
+                        </button>
                       </div>
                     </div>
-                    <div
-                      v-if="
-                        getAssetCategory(asset.type) === 'crypto' ||
-                        getAssetCategory(asset.type) === 'brokerage'
-                      "
-                      class="flex gap-1.5 mt-1"
-                    >
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-6 text-[11px]"
-                        @click.stop="openAddHolding(asset.id)"
-                      >
-                        <Plus class="h-3 w-3 mr-1" /> Add Holding
-                      </Button>
-                      <Button
-                        variant="outline"
-                        size="sm"
-                        class="h-6 text-[11px]"
-                        @click.stop="startQuickUpdate(getFullAsset(asset.id)!)"
-                      >
-                        Update Values
-                      </Button>
-                    </div>
                   </div>
-                </template>
+                </div>
               </div>
-            </div>
-          </div>
+            </Card>
+          </CardContent>
         </Card>
 
         <p
@@ -1154,25 +931,6 @@ const fullLiabilityMap = computed(() => {
         >
           No assets tracked yet.
         </p>
-      </div>
-
-      <!-- Bank Balances -->
-      <div v-if="banks.length > 0" class="space-y-5 animate-fade-in-up stagger-4">
-        <h2 class="text-[15px] font-semibold">Bank Balances</h2>
-        <div
-          class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"
-        >
-          <Card v-for="bank in banks" :key="bank.id">
-            <CardHeader class="pb-1">
-              <CardTitle class="text-[13px] font-medium truncate">{{ bank.name }}</CardTitle>
-            </CardHeader>
-            <CardContent>
-              <div class="text-[17px] font-semibold tabular-nums">
-                {{ formatCurrency(bank.balanceIls) }}
-              </div>
-            </CardContent>
-          </Card>
-        </div>
       </div>
 
       <!-- Liabilities Section -->
@@ -1386,78 +1144,6 @@ const fullLiabilityMap = computed(() => {
       </DialogContent>
     </Dialog>
 
-    <!-- ─── Holding Dialog ─── -->
-    <Dialog v-model:open="showHoldingDialog">
-      <DialogContent class="sm:max-w-md">
-        <DialogHeader>
-          <DialogTitle>
-            {{
-              editingHolding
-                ? 'Edit Holding'
-                : `Add Holding${holdingParentAsset ? ` to ${holdingParentAsset.name}` : ''}`
-            }}
-          </DialogTitle>
-        </DialogHeader>
-        <div class="space-y-4 py-2">
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Name</label>
-            <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit shkalit" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Type</label>
-            <Select v-model="holdingForm.type">
-              <SelectTrigger>
-                <SelectValue placeholder="Select type..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="(label, key) in HOLDING_TYPE_LABELS" :key="key" :value="key">
-                  {{ label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Currency</label>
-            <Input v-model="holdingForm.currency" placeholder="USD" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Quantity</label>
-            <Input v-model="holdingForm.quantity" type="number" step="any" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Cost Basis</label>
-            <Input v-model="holdingForm.costBasis" type="number" step="any" />
-          </div>
-          <div v-if="holdingShowPrice" class="space-y-1.5">
-            <label class="text-[13px] font-medium">Last Price (per unit)</label>
-            <Input v-model="holdingForm.lastPrice" type="number" step="any" />
-          </div>
-          <div
-            v-if="holdingDoubleCount"
-            class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
-          >
-            ILS cash for this institution is already tracked via the linked bank account.
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Notes</label>
-            <Textarea v-model="holdingForm.notes" placeholder="Optional notes..." :rows="2" />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
-          </DialogClose>
-          <Button
-            :disabled="!holdingValid || holdingSaving || holdingDoubleCount"
-            @click="handleSaveHolding"
-          >
-            <Loader2 v-if="holdingSaving" class="h-4 w-4 mr-2 animate-spin" />
-            {{ editingHolding ? 'Save Changes' : 'Add Holding' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
     <!-- ─── Liability Dialog ─── -->
     <Dialog v-model:open="showLiabilityDialog">
       <DialogContent class="sm:max-w-md">
@@ -1549,35 +1235,6 @@ const fullLiabilityMap = computed(() => {
             @click="handleDeleteAsset"
           >
             Hide Asset
-          </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-
-    <!-- Delete Holding -->
-    <AlertDialog
-      :open="!!deletingHolding"
-      @update:open="
-        (v) => {
-          if (!v) deletingHolding = null;
-        }
-      "
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete "{{ deletingHolding?.name }}"?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently remove this holding from {{ deletingHolding?.assetName }}. Related
-            movement records will be preserved.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel @click="deletingHolding = null">Cancel</AlertDialogCancel>
-          <Button
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            @click="handleDeleteHolding"
-          >
-            Delete Holding
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
