@@ -214,6 +214,24 @@ export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {})
   );
 }
 
+export interface CashflowDetailData {
+  income: Array<{ category: string; amount: number }>;
+  expenses: Array<{ category: string; amount: number }>;
+  totalIncome: number;
+  totalExpenses: number;
+  surplus: number;
+}
+
+export function getCashflowDetail(params: Omit<SummaryFilters, 'groupBy'> = {}) {
+  const query = new URLSearchParams({ groupBy: 'cashflow-detail' });
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) query.set(key, String(value));
+  });
+  return request<{ groupBy: 'cashflow-detail'; summary: CashflowDetailData }>(
+    `/transactions/summary?${query}`,
+  );
+}
+
 // ─── Scraping ───
 
 export function triggerScrape(accountId: number) {

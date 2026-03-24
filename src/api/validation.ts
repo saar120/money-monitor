@@ -70,7 +70,7 @@ export const summaryQuerySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
-  groupBy: z.enum(['category', 'month', 'account', 'cashflow']).default('category'),
+  groupBy: z.enum(['category', 'month', 'account', 'cashflow', 'cashflow-detail']).default('category'),
   expensesOnly: z
     .enum(['true', 'false'])
     .transform((v) => v === 'true')

@@ -22,7 +22,7 @@ function normalizeDescription(desc: string): string {
 
 export function getSpendingSummary(
   filters: TransactionFilterParams,
-  groupBy: 'category' | 'month' | 'account' | 'cashflow',
+  groupBy: 'category' | 'month' | 'account' | 'cashflow' | 'cashflow-detail',
 ) {
   const { conditions, empty } = buildTransactionFilters(filters);
   if (empty) return { groupBy, summary: [] };
@@ -39,6 +39,31 @@ export function getSpendingSummary(
       .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
       .orderBy(sql`month desc`).all();
     return { groupBy: 'cashflow' as const, summary: rows };
+  }
+
+  if (groupBy === 'cashflow-detail') {
+    const income = db.select({
+      category: sql<string>`COALESCE(${transactions.category}, 'uncategorized')`.as('category'),
+      amount: sql<number>`SUM(${transactions.chargedAmount})`.as('amount'),
+    }).from(transactions).where(and(...conditions, sql`${transactions.chargedAmount} > 0`))
+      .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
+      .orderBy(sql`amount desc`).all();
+
+    const expenses = db.select({
+      category: sql<string>`COALESCE(${transactions.category}, 'uncategorized')`.as('category'),
+      amount: sql<number>`SUM(ABS(${transactions.chargedAmount}))`.as('amount'),
+    }).from(transactions).where(and(...conditions, sql`${transactions.chargedAmount} < 0`))
+      .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
+      .orderBy(sql`amount desc`).all();
+
+    const totalIncome = income.reduce((s, r) => s + r.amount, 0);
+    const totalExpenses = expenses.reduce((s, r) => s + r.amount, 0);
+    const surplus = round2(totalIncome - totalExpenses);
+
+    return {
+      groupBy: 'cashflow-detail' as const,
+      summary: { income, expenses, totalIncome: round2(totalIncome), totalExpenses: round2(totalExpenses), surplus },
+    };
   }
 
   if (groupBy === 'month') {

@@ -12,7 +12,8 @@ import {
   Title,
 } from 'chart.js';
 import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
-import { getSummary, getCashflowSummary, getAccounts } from '../api/client';
+import { getSummary, getAccounts } from '../api/client';
+import CashflowSankey from './CashflowSankey.vue';
 import { useApi } from '../composables/useApi';
 import { useSseConnection } from '../composables/useSseConnection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -61,8 +62,6 @@ const lastMonthSummary = useApi(() =>
     expensesOnly: true,
   }),
 );
-const cashflowSummary = useApi(() => getCashflowSummary());
-
 const bankAccounts = computed(() =>
   (accountsData.data.value?.accounts ?? []).filter((a) => a.accountType === 'bank'),
 );
@@ -73,7 +72,6 @@ function refreshAll() {
   monthlySummary.execute();
   accountSummary.execute();
   lastMonthSummary.execute();
-  cashflowSummary.execute();
 }
 
 const throttledRefresh = useThrottleFn(refreshAll, 2000);
@@ -173,26 +171,6 @@ const monthlyChartData = computed(() => {
   };
 });
 
-const cashflowChartData = computed(() => {
-  const items = (cashflowSummary.data.value?.summary ?? []).slice(0, 12).reverse();
-  return {
-    labels: items.map((s) => s.month),
-    datasets: [
-      {
-        label: 'Income (ILS)',
-        data: items.map((s) => s.income),
-        backgroundColor: '#34C759',
-        borderRadius: 6,
-      },
-      {
-        label: 'Expenses (ILS)',
-        data: items.map((s) => s.expense),
-        backgroundColor: '#FF2D55',
-        borderRadius: 6,
-      },
-    ],
-  };
-});
 </script>
 
 <template>
@@ -324,26 +302,8 @@ const cashflowChartData = computed(() => {
         </Card>
       </div>
 
-      <!-- Cashflow -->
-      <Card>
-        <CardHeader class="py-4 px-5">
-          <CardTitle class="text-[15px]">Cashflow</CardTitle>
-        </CardHeader>
-        <CardContent class="px-5 pb-4 pt-0">
-          <div class="h-[220px]">
-            <Bar
-              v-if="cashflowSummary.data.value"
-              :data="cashflowChartData"
-              :options="chartOptions"
-            />
-            <Skeleton v-else-if="cashflowSummary.loading.value" class="h-full w-full rounded-lg" />
-            <div v-else class="flex flex-col items-center justify-center h-full text-center">
-              <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
-              <p class="text-text-secondary text-[13px]">No data yet</p>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
+      <!-- Cashflow Sankey -->
+      <CashflowSankey />
 
       <!-- Per Account -->
       <div v-if="accountSummary.loading.value" class="space-y-2">
