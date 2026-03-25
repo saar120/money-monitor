@@ -128,8 +128,15 @@ export function startTelegramBot(): void {
   });
   // Persist alert markdown into the user's active chat session so the
   // financial advisor has context if the user replies about the alert.
-  registerOnAlertSent((chatId: number, markdown: string) => {
+  // A synthetic user message is inserted when needed to maintain the
+  // alternating user/assistant pattern that LLM APIs require.
+  registerOnAlertSent((chatId: number, markdown: string, context?: string) => {
     const sessionId = resolveSession(chatId);
+    const messages = getSessionMessages(sessionId);
+    const lastRole = messages?.[messages.length - 1]?.role;
+    if (!messages || messages.length === 0 || lastRole === 'assistant') {
+      appendMessage(sessionId, 'user', context ?? '[Automated financial alert]');
+    }
     appendMessage(sessionId, 'assistant', markdown);
   });
   registerGetChatIds(() => getAllChatIds());

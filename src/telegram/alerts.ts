@@ -14,21 +14,21 @@ import type { ScrapeResult } from '../scraper/scraper.service.js';
 // ── Telegram send helper ──────────────────────────────────────────────────────
 
 let _sendMessage: ((chatId: number, html: string) => Promise<void>) | null = null;
-let _onAlertSent: ((chatId: number, markdown: string) => void) | null = null;
+let _onAlertSent: ((chatId: number, markdown: string, context?: string) => void) | null = null;
 
 export function registerSendMessage(fn: (chatId: number, html: string) => Promise<void>) {
   _sendMessage = fn;
 }
 
-export function registerOnAlertSent(fn: (chatId: number, markdown: string) => void) {
+export function registerOnAlertSent(fn: (chatId: number, markdown: string, context?: string) => void) {
   _onAlertSent = fn;
 }
 
-async function sendAlert(chatIds: number[], markdown: string): Promise<void> {
+async function sendAlert(chatIds: number[], markdown: string, context?: string): Promise<void> {
   if (!_sendMessage || chatIds.length === 0) return;
   const html = markdownToTelegramHtml(markdown);
   for (const chatId of chatIds) {
-    _onAlertSent?.(chatId, markdown);
+    _onAlertSent?.(chatId, markdown, context);
     for (const chunk of splitMessage(html)) {
       try {
         await _sendMessage(chatId, chunk);
@@ -88,22 +88,32 @@ function buildPostScrapeUserMessage(
   const knownStr = known.length > 0 ? known.join(', ') : 'none tracked yet';
   const lastNw = settings._lastNetWorthTotal;
 
-  return `Today is ${today} (Israel timezone). A bank/credit-card scrape just completed.
+  return `<scrape-context>
+Today is ${today} (Israel timezone). A bank/credit-card scrape just completed.
+</scrape-context>
 
-Scrape results:
+<scrape-results>
 - ${totalNew} new transactions found (${totalFound} total scanned)
 - Scrape errors: ${errorLines}
+</scrape-results>
 
-Alert thresholds:
+<alert-thresholds>
 - Large charge threshold: ₪${fmt(settings.largeChargeThreshold)}
 - Unusual spending threshold: ${settings.unusualSpendingPercent}%
+</alert-thresholds>
 
-Known recurring charges (already alerted in the past): ${knownStr}
+<known-recurring>
+${knownStr}
+</known-recurring>
+
+<prior-state>
 Last known net worth: ${lastNw !== undefined ? `₪${fmt(lastNw)}` : 'not yet recorded'}
-
 Report scrape errors: ${settings.reportScrapeErrors ? 'yes' : 'no'}
+</prior-state>
 
-Analyze the new data using your tools. Compose a single Telegram message covering anything noteworthy. If nothing is worth alerting about, respond with exactly: [SILENT]`;
+<task>
+Analyze the new data using your tools. Compose a single Telegram message covering anything noteworthy. If nothing is worth alerting about, respond with exactly: [SILENT]
+</task>`;
 }
 
 /** Update internal tracking state after alert agent runs. */
@@ -149,7 +159,11 @@ export async function runPostScrapeAlerts(scrapeResults: ScrapeResult[]): Promis
     const message = await runAlertAgent({ systemPrompt, userMessage });
 
     if (message) {
-      await sendAlert(chatIds, message);
+      await sendAlert(
+        chatIds,
+        message,
+        'A bank/credit-card scrape just completed and new transactions were found. The following is an automated financial alert.',
+      );
     }
   } catch (err) {
     console.error('[Alerts] Post-scrape agent failed:', err instanceof Error ? err.message : err);
@@ -180,7 +194,11 @@ export async function sendMonthlySummary(): Promise<void> {
     const message = await runAlertAgent({ systemPrompt, userMessage });
 
     if (message) {
-      await sendAlert(chatIds, message);
+      await sendAlert(
+        chatIds,
+        message,
+        'An automated monthly financial summary has been generated.',
+      );
     }
   } catch (err) {
     console.error(
