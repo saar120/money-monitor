@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { Line } from 'vue-chartjs';
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip,
-} from 'chart.js';
+import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import {
   getAsset, getMovements, getAssetSnapshots,
   createHolding, updateHolding, deleteHolding,
@@ -11,7 +8,6 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
-import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency } from '@/lib/format';
 import { HOLDING_TYPE_LABELS } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -38,10 +34,6 @@ import {
   Plus, Trash2, TrendingUp, TrendingDown,
   AlertCircle, Loader2, RefreshCw,
 } from 'lucide-vue-next';
-
-ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
-
-const { tooltip: themeTooltip, axisTicks, grid: themeGrid } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
@@ -256,62 +248,18 @@ async function confirmDeleteMovement() {
 }
 
 // ── Chart ──
-const chartData = computed(() => {
-  if (snapshots.value.length === 0) return null;
-  return {
-    labels: snapshots.value.map(s => {
-      const d = new Date(s.date);
-      return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    }),
-    datasets: [{
-      label: 'Value (ILS)',
-      data: snapshots.value.map(s => s.totalValueIls),
-      borderColor: '#007AFF',
-      backgroundColor: 'rgba(0, 122, 255, 0.15)',
-      fill: true,
-      tension: 0.4,
-      borderWidth: 2.5,
-      borderCapStyle: 'round' as const,
-      borderJoinStyle: 'round' as const,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-    }],
-  };
-});
+const chartLabels = computed(() =>
+  snapshots.value.map(s => {
+    const d = new Date(s.date);
+    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  }),
+);
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      ...themeTooltip.value,
-      callbacks: {
-        label(ctx: { parsed: { y: number | null } }) {
-          return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
-        },
-      },
-    },
-  },
-  scales: {
-    x: {
-      ticks: axisTicks.value,
-      grid: themeGrid.value,
-    },
-    y: {
-      ticks: {
-        ...axisTicks.value,
-        callback(value: number | string) {
-          const v = Number(value);
-          if (v >= 1_000_000) return `\u20AA${(v / 1_000_000).toFixed(1)}M`;
-          if (v >= 1_000) return `\u20AA${(v / 1_000).toFixed(0)}K`;
-          return `\u20AA${v}`;
-        },
-      },
-      grid: themeGrid.value,
-    },
-  },
-}));
+const chartDatasets = computed(() =>
+  snapshots.value.length === 0
+    ? null
+    : [{ label: 'Value (ILS)', data: snapshots.value.map(s => s.totalValueIls), color: '#007AFF', areaColor: 'rgba(0, 122, 255, 0.15)' }],
+);
 </script>
 
 <template>
@@ -521,11 +469,11 @@ const chartOptions = computed(() => ({
           <CardTitle class="text-[15px]">Value Over Time</CardTitle>
         </CardHeader>
         <CardContent>
-          <div v-if="snapshotsApi.loading.value && !chartData">
+          <div v-if="snapshotsApi.loading.value && !chartDatasets">
             <Skeleton class="h-48 w-full rounded-md" />
           </div>
-          <div v-else-if="chartData">
-            <Line :data="chartData" :options="chartOptions" />
+          <div v-else-if="chartDatasets" class="h-48">
+            <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
             Update holdings to start building value history
