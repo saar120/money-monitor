@@ -201,7 +201,7 @@ const doughnutOption = computed(() => {
     graphic: {
       type: 'text' as const,
       left: 'center',
-      top: 'center',
+      top: '45%',
       style: {
         text: formatCompact(nwData.total),
         fill: textPrimary.value,
@@ -213,8 +213,8 @@ const doughnutOption = computed(() => {
     },
     series: [{
       type: 'pie',
-      radius: ['60%', '85%'],
-      center: ['50%', '42%'],
+      radius: ['50%', '72%'],
+      center: ['50%', '48%'],
       label: { show: false },
       itemStyle: { borderRadius: 6 },
       data: slices.map(s => ({
