@@ -1,9 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted, watch } from 'vue';
-import { Line } from 'vue-chartjs';
-import {
-  Chart as ChartJS, CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip,
-} from 'chart.js';
+import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import {
   getAsset, getMovements, getAssetSnapshots,
   createMovement, deleteMovement,
@@ -11,7 +8,6 @@ import {
   type Asset, type Holding, type Movement, type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
-import { useChartTheme } from '@/composables/useChartTheme';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
 import {
   ASSET_TYPE_COLORS, ASSET_TYPE_LABELS, HOLDING_TYPE_LABELS,
@@ -42,10 +38,6 @@ import {
   Plus, Trash2, TrendingUp, TrendingDown,
   AlertCircle, Loader2, Pencil, RefreshCw,
 } from 'lucide-vue-next';
-
-ChartJS.register(CategoryScale, LinearScale, LineElement, PointElement, Filler, Tooltip);
-
-const { tooltip: themeTooltip, axisTicks, grid: themeGrid } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 
@@ -151,65 +143,37 @@ function formatMovementDate(iso: string) {
 }
 
 // ─── Chart ───
-const chartData = computed(() => {
+const chartLabels = computed(() =>
+  snapshots.value.map(s => {
+    const d = new Date(s.date);
+    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+  }),
+);
+
+const chartDatasets = computed(() => {
   if (snapshots.value.length === 0) return null;
-  return {
-    labels: snapshots.value.map(s => {
-      const d = new Date(s.date);
-      return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
-    }),
-    datasets: [{
-      label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
-      data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
-      borderColor: '#007AFF',
-      backgroundColor: 'rgba(0, 122, 255, 0.15)',
-      fill: true,
-      tension: 0.4,
-      borderWidth: 2.5,
-      borderCapStyle: 'round' as const,
-      borderJoinStyle: 'round' as const,
-      pointRadius: 3,
-      pointHoverRadius: 5,
-      spanGaps: true,
-    }],
+  return [{
+    label: showingIls.value ? 'Value (ILS)' : `Value (${assetCurrency.value})`,
+    data: snapshots.value.map(s => showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls)),
+    color: '#007AFF',
+    areaColor: 'rgba(0, 122, 255, 0.15)',
+  }];
+});
+
+const yAxisFormatter = computed(() => {
+  const cur = showingIls.value ? 'ILS' : assetCurrency.value;
+  const sym = CURRENCY_SYMBOLS[cur] ?? cur + ' ';
+  return (v: number) => {
+    if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
+    if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
+    return `${sym}${v}`;
   };
 });
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      ...themeTooltip.value,
-      callbacks: {
-        label(ctx: { parsed: { y: number | null } }) {
-          const currency = showingIls.value ? 'ILS' : assetCurrency.value;
-          return ` ${formatAmount(ctx.parsed.y ?? 0, currency)}`;
-        },
-      },
-    },
-  },
-  scales: {
-    x: {
-      ticks: axisTicks.value,
-      grid: themeGrid.value,
-    },
-    y: {
-      ticks: {
-        ...axisTicks.value,
-        callback(value: number | string) {
-          const v = Number(value);
-          const cur = showingIls.value ? 'ILS' : assetCurrency.value;
-          const sym = CURRENCY_SYMBOLS[cur] ?? cur + ' ';
-          if (v >= 1_000_000) return `${sym}${(v / 1_000_000).toFixed(1)}M`;
-          if (v >= 1_000) return `${sym}${(v / 1_000).toFixed(0)}K`;
-          return `${sym}${v}`;
-        },
-      },
-      grid: themeGrid.value,
-    },
-  },
-}));
+const tooltipFmt = computed(() => {
+  const currency = showingIls.value ? 'ILS' : assetCurrency.value;
+  return (v: number) => formatAmount(v, currency);
+});
 
 // ─── Holding Dialog ───
 const showHoldingDialog = ref(false);
@@ -669,11 +633,16 @@ async function confirmDeleteMovement() {
           <CardTitle class="text-[15px]">Value Over Time</CardTitle>
         </CardHeader>
         <CardContent>
-          <div v-if="snapshotsApi.loading.value && !chartData">
+          <div v-if="snapshotsApi.loading.value && !chartDatasets">
             <Skeleton class="h-48 w-full rounded-md" />
           </div>
-          <div v-else-if="chartData">
-            <Line :data="chartData" :options="chartOptions" />
+          <div v-else-if="chartDatasets" class="h-48">
+            <EChartsLineChart
+              :labels="chartLabels"
+              :datasets="chartDatasets"
+              :y-axis-formatter="yAxisFormatter"
+              :tooltip-formatter="tooltipFmt"
+            />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
             Update holdings to start building value history
