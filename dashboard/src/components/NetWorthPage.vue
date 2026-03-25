@@ -215,6 +215,7 @@ const doughnutOption = computed(() => {
       type: 'pie',
       radius: ['50%', '72%'],
       center: ['50%', '48%'],
+      padAngle: 2,
       label: { show: false },
       itemStyle: { borderRadius: 6 },
       data: slices.map(s => ({
