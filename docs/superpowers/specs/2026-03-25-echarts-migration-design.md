@@ -31,14 +31,16 @@ A reusable line chart component used by all 5 line chart consumers (4 asset deta
 
 - `labels: string[]` — x-axis labels
 - `datasets: Array<{ label: string; data: number[]; color: string; areaColor?: string }>` — one or more line series
-- `yAxisFormatter?: (value: number) => string` — custom y-axis tick formatter (e.g. `₪50K`)
+- `yAxisFormatter?: (value: number) => string` — custom y-axis tick formatter (e.g. `₪50K`). Parents with reactive formatters (e.g. BrokerageDetail's ILS/native toggle) should pass a computed prop so the chart re-renders when the formatter changes.
 - `tooltipFormatter?: (value: number) => string` — custom tooltip value formatter
+- `showLegend?: boolean` — whether to show the legend (default: false)
 
 **Internals:**
 
-- Tree-shaken ECharts imports: `LineChart`, `GridComponent`, `TooltipComponent`, `CanvasRenderer`
+- Tree-shaken ECharts imports: `LineChart`, `GridComponent`, `TooltipComponent`, `LegendComponent`, `CanvasRenderer`
 - Uses `useChartTheme()` raw CSS variable resolvers for colors
 - `autoresize` enabled for responsive behavior
+- `<VChart>` element must have `class="h-full w-full"` so it fills the parent container's dimensions
 
 ### 2. OverviewDashboard — Doughnut → ECharts Pie
 
@@ -46,25 +48,29 @@ Inline ECharts pie chart config within `OverviewDashboard.vue`.
 
 - `type: 'pie'` with `radius: ['60%', '85%']` for doughnut cutout
 - `itemStyle.borderRadius: 6` to match current rounded segments
+- `padAngle: 2` to match the current `spacing: 3` gap between segments
 - Category labels and colors from existing `chartColors` array
 - Tooltip uses `useChartTheme()` resolved colors
+- Tree-shaking: `PieChart`, `LegendComponent`, `TooltipComponent`, `CanvasRenderer`
 
 ### 3. OverviewDashboard — Bar → ECharts Bar
 
 Inline ECharts bar chart config within `OverviewDashboard.vue`.
 
-- `type: 'bar'` with `barBorderRadius: [6, 6, 0, 0]`
+- `type: 'bar'` with `itemStyle.borderRadius: [6, 6, 0, 0]`
 - Dashed grid lines via `splitLine.lineStyle.type: 'dashed'`
 - Same color scheme (`#007AFF`)
+- Tree-shaking: `BarChart`, `GridComponent`, `TooltipComponent`, `LegendComponent`, `CanvasRenderer`
 
 ### 4. NetWorthPage — Doughnut → ECharts Pie with Center Text
 
 Inline ECharts pie chart config with `graphic` component for center text.
 
-- Same doughnut approach as OverviewDashboard
-- `graphic` text element positioned at chart center showing formatted net worth total
+- Same doughnut approach as OverviewDashboard but without `padAngle` (no spacing in current NetWorthPage doughnut)
+- `graphic` text element positioned at center (`left: 'center'`, `top: 'center'`) showing formatted net worth total
 - Legend at bottom with `useChartTheme()` colors
 - Tooltip shows value + percentage (matching current behavior)
+- Tree-shaking: `PieChart`, `LegendComponent`, `TooltipComponent`, `GraphicComponent`, `CanvasRenderer`
 
 ### 5. NetWorthPage — Trend Line → Shared Component
 
@@ -93,10 +99,17 @@ Following the pattern established in `CashflowSankey.vue`:
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
-import { GridComponent, TooltipComponent } from 'echarts/components';
+import {
+  GridComponent,
+  TooltipComponent,
+  LegendComponent,
+  GraphicComponent,
+} from 'echarts/components';
 import VChart from 'vue-echarts';
 
+// Register only what each component needs — example for line chart:
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
+// Pie charts also need: PieChart, LegendComponent, GraphicComponent (for center text)
 ```
 
 ## Migration Order
