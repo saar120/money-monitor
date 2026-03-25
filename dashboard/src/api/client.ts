@@ -188,7 +188,7 @@ export interface CashflowItem {
 }
 
 export interface SummaryFilters {
-  groupBy?: string;
+  groupBy?: 'category' | 'month' | 'account' | 'cashflow' | 'cashflow-detail';
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
   startDate?: string;
@@ -214,9 +214,14 @@ export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {})
   );
 }
 
+export interface CategoryAmount {
+  category: string;
+  amount: number;
+}
+
 export interface CashflowDetailData {
-  income: Array<{ category: string; amount: number }>;
-  expenses: Array<{ category: string; amount: number }>;
+  income: CategoryAmount[];
+  expenses: CategoryAmount[];
   totalIncome: number;
   totalExpenses: number;
   surplus: number;
