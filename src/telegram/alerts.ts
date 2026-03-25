@@ -88,22 +88,32 @@ function buildPostScrapeUserMessage(
   const knownStr = known.length > 0 ? known.join(', ') : 'none tracked yet';
   const lastNw = settings._lastNetWorthTotal;
 
-  return `Today is ${today} (Israel timezone). A bank/credit-card scrape just completed.
+  return `<scrape-context>
+Today is ${today} (Israel timezone). A bank/credit-card scrape just completed.
+</scrape-context>
 
-Scrape results:
+<scrape-results>
 - ${totalNew} new transactions found (${totalFound} total scanned)
 - Scrape errors: ${errorLines}
+</scrape-results>
 
-Alert thresholds:
+<alert-thresholds>
 - Large charge threshold: ₪${fmt(settings.largeChargeThreshold)}
 - Unusual spending threshold: ${settings.unusualSpendingPercent}%
+</alert-thresholds>
 
-Known recurring charges (already alerted in the past): ${knownStr}
+<known-recurring>
+${knownStr}
+</known-recurring>
+
+<prior-state>
 Last known net worth: ${lastNw !== undefined ? `₪${fmt(lastNw)}` : 'not yet recorded'}
-
 Report scrape errors: ${settings.reportScrapeErrors ? 'yes' : 'no'}
+</prior-state>
 
-Analyze the new data using your tools. Compose a single Telegram message covering anything noteworthy. If nothing is worth alerting about, respond with exactly: [SILENT]`;
+<task>
+Analyze the new data using your tools. Compose a single Telegram message covering anything noteworthy. If nothing is worth alerting about, respond with exactly: [SILENT]
+</task>`;
 }
 
 /** Update internal tracking state after alert agent runs. */
