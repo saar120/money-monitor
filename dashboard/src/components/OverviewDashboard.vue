@@ -1,16 +1,10 @@
 <script setup lang="ts">
 import { onMounted, computed, watch } from 'vue';
-import { Doughnut, Bar } from 'vue-chartjs';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  BarElement,
-  Title,
-} from 'chart.js';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { PieChart, BarChart } from 'echarts/charts';
+import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
+import VChart from 'vue-echarts';
 import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
 import { getSummary, getAccounts } from '../api/client';
 import CashflowSankey from './CashflowSankey.vue';
@@ -23,9 +17,9 @@ import { formatCurrency } from '@/lib/format';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { BarChart3 } from 'lucide-vue-next';
 
-ChartJS.register(ArcElement, Tooltip, Legend, CategoryScale, LinearScale, BarElement, Title);
+use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent]);
 
-const { tooltip: themeTooltip, legendLabels, axisTicks, grid: themeGrid } = useChartTheme();
+const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
@@ -113,61 +107,76 @@ const chartColors = [
   '#64D2FF',
 ];
 
-const chartOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  plugins: {
-    legend: { labels: legendLabels.value },
-    tooltip: themeTooltip.value,
-  },
-  scales: {
-    x: {
-      ticks: axisTicks.value,
-      grid: { ...themeGrid.value, drawBorder: false },
-      border: { dash: [4, 4] },
-    },
-    y: {
-      ticks: axisTicks.value,
-      grid: { ...themeGrid.value, drawBorder: false },
-      border: { dash: [4, 4] },
-    },
-  },
-}));
-
-const doughnutOptions = computed(() => ({
-  responsive: true,
-  maintainAspectRatio: false,
-  cutout: '70%',
-  spacing: 3,
-  plugins: chartOptions.value.plugins,
-}));
-
-const categoryChartData = computed(() => {
+const doughnutOption = computed(() => {
   const items = categorySummary.data.value?.summary ?? [];
+  if (items.length === 0) return null;
   return {
-    labels: items.map((s) => s.category ?? 'uncategorized'),
-    datasets: [
-      {
-        data: items.map((s) => Math.abs(s.totalAmount)),
-        backgroundColor: chartColors.slice(0, items.length),
-        borderRadius: 6,
+    tooltip: {
+      trigger: 'item' as const,
+      backgroundColor: bgPrimary.value,
+      borderColor: separator.value,
+      borderWidth: 1,
+      textStyle: { color: textPrimary.value, fontSize: 12 },
+      formatter(params: any) {
+        return `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`;
       },
-    ],
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: textSecondary.value, fontSize: 11 },
+      itemWidth: 8,
+      itemHeight: 8,
+      icon: 'circle',
+    },
+    series: [{
+      type: 'pie',
+      radius: ['60%', '85%'],
+      center: ['50%', '45%'],
+      padAngle: 2,
+      itemStyle: { borderRadius: 6 },
+      label: { show: false },
+      data: items.map((s, i) => ({
+        name: s.category ?? 'uncategorized',
+        value: Math.abs(s.totalAmount),
+        itemStyle: { color: chartColors[i % chartColors.length] },
+      })),
+    }],
   };
 });
 
-const monthlyChartData = computed(() => {
+const barOption = computed(() => {
   const items = (monthlySummary.data.value?.summary ?? []).slice(0, 12).reverse();
+  if (items.length === 0) return null;
   return {
-    labels: items.map((s) => s.month ?? ''),
-    datasets: [
-      {
-        label: 'Monthly Spending (ILS)',
-        data: items.map((s) => Math.abs(s.totalAmount)),
-        backgroundColor: '#007AFF',
-        borderRadius: 6,
+    tooltip: {
+      trigger: 'axis' as const,
+      backgroundColor: bgPrimary.value,
+      borderColor: separator.value,
+      borderWidth: 1,
+      textStyle: { color: textPrimary.value, fontSize: 12 },
+      formatter(params: any) {
+        const p = Array.isArray(params) ? params[0] : params;
+        return `${p.axisValueLabel}<br/><b>${formatCurrency(p.value)}</b>`;
       },
-    ],
+    },
+    grid: { left: 12, right: 12, top: 10, bottom: 10, containLabel: true },
+    xAxis: {
+      type: 'category' as const,
+      data: items.map(s => s.month ?? ''),
+      axisLabel: { color: textSecondary.value, fontSize: 11 },
+      axisLine: { lineStyle: { color: separator.value } },
+      axisTick: { show: false },
+    },
+    yAxis: {
+      type: 'value' as const,
+      axisLabel: { color: textSecondary.value, fontSize: 11 },
+      splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
+    },
+    series: [{
+      type: 'bar',
+      data: items.map(s => Math.abs(s.totalAmount)),
+      itemStyle: { color: '#007AFF', borderRadius: [6, 6, 0, 0] },
+    }],
   };
 });
 
@@ -264,10 +273,11 @@ const monthlyChartData = computed(() => {
           </CardHeader>
           <CardContent class="px-5 pb-4 pt-0">
             <div class="h-[240px] flex items-center justify-center">
-              <Doughnut
-                v-if="categorySummary.data.value"
-                :data="categoryChartData"
-                :options="doughnutOptions"
+              <VChart
+                v-if="doughnutOption"
+                :option="doughnutOption"
+                autoresize
+                class="h-full w-full"
               />
               <Skeleton
                 v-else-if="categorySummary.loading.value"
@@ -287,10 +297,11 @@ const monthlyChartData = computed(() => {
           </CardHeader>
           <CardContent class="px-5 pb-4 pt-0">
             <div class="h-[240px]">
-              <Bar
-                v-if="monthlySummary.data.value"
-                :data="monthlyChartData"
-                :options="chartOptions"
+              <VChart
+                v-if="barOption"
+                :option="barOption"
+                autoresize
+                class="h-full w-full"
               />
               <Skeleton v-else-if="monthlySummary.loading.value" class="h-full w-full rounded-lg" />
               <div v-else class="flex flex-col items-center justify-center h-full text-center">
