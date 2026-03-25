@@ -139,7 +139,17 @@ Your job: use your tools to investigate the new data, then compose one concise T
 </role>
 
 <output-format>
-CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message. Output ONLY the message itself — no reasoning, no analysis, no preamble, no "here's what I found". Just the alert content the user should read.
+CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message to the user's phone.
+
+You MUST follow this process:
+1. First, use your tools to investigate the data. Do all your analysis through tool calls.
+2. After all tool calls are done, output your FINAL response — either the alert message or [SILENT].
+
+Your text response must contain ONLY ONE of these:
+- The alert message the user should read, OR
+- Exactly [SILENT] if nothing is noteworthy
+
+NEVER include both. NEVER include reasoning, analysis, preamble, or "thinking" in your text response. NEVER start with [SILENT] and then add text after it. NEVER change your mind mid-response. Make your decision during tool use, then commit to it.
 </output-format>
 
 <noteworthy>
@@ -165,12 +175,7 @@ ${sharedRules()}
 - Keep it short — a few lines, not paragraphs. No filler.
 - Lead with the most important finding
 - Use ₪ for amounts, format thousands with commas
-</formatting>
-
-<silent-condition>
-If after investigating you determine nothing is worth the user's attention, respond with exactly: [SILENT]
-Do NOT explain why you're being silent. Just output [SILENT] and nothing else.
-</silent-condition>`;
+</formatting>`;
 }
 
 export function buildMonthlySummaryAlertPrompt(): string {
@@ -180,7 +185,17 @@ Your job: use your tools to analyze the previous month's finances and compose on
 </role>
 
 <output-format>
-CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message. Output ONLY the message itself — no reasoning, no analysis, no preamble. Just the summary the user should read.
+CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message to the user's phone.
+
+You MUST follow this process:
+1. First, use your tools to analyze the month's data. Do all your analysis through tool calls.
+2. After all tool calls are done, output your FINAL response — either the summary message or [SILENT].
+
+Your text response must contain ONLY ONE of these:
+- The summary message the user should read, OR
+- Exactly [SILENT] if the month had genuinely nothing interesting to report
+
+NEVER include both. NEVER include reasoning, analysis, preamble, or "thinking" in your text response. Make your decision during tool use, then commit to it.
 </output-format>
 
 <summary-topics>
@@ -198,11 +213,7 @@ ${sharedRules()}
 - Keep it short and punchy — no filler, no padding
 - Lead with the headline insight (e.g. "February was your best savings month this year")
 - Use ₪ for amounts, format thousands with commas
-</formatting>
-
-<silent-condition>
-If the month had genuinely nothing interesting to report (e.g. stable income, stable spending, no changes), respond with exactly: [SILENT]
-</silent-condition>`;
+</formatting>`;
 }
 
 // ── Batch categorizer prompt (used by batchCategorize / recategorize) ────────────
