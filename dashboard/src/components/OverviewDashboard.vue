@@ -126,12 +126,13 @@ const doughnutOption = computed(() => {
       textStyle: { color: textSecondary.value, fontSize: 11 },
       itemWidth: 8,
       itemHeight: 8,
+      itemGap: 8,
       icon: 'circle',
     },
     series: [{
       type: 'pie',
-      radius: ['60%', '85%'],
-      center: ['50%', '45%'],
+      radius: ['50%', '72%'],
+      center: ['50%', '38%'],
       padAngle: 2,
       itemStyle: { borderRadius: 6 },
       label: { show: false },
@@ -272,7 +273,7 @@ const barOption = computed(() => {
             <CardTitle class="text-[15px]">Spending by Category</CardTitle>
           </CardHeader>
           <CardContent class="px-5 pb-4 pt-0">
-            <div class="h-[240px] flex items-center justify-center">
+            <div class="h-[300px]">
               <VChart
                 v-if="doughnutOption"
                 :option="doughnutOption"

@@ -764,14 +764,16 @@ const fullLiabilityMap = computed(() => {
           <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <VChart
-            v-if="doughnutOption"
-            :option="doughnutOption"
-            autoresize
-            class="h-full w-full"
-          />
-          <Skeleton v-else-if="netWorth.loading.value" class="h-48 w-full rounded-lg" />
-          <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
+          <div class="h-[280px]">
+            <VChart
+              v-if="doughnutOption"
+              :option="doughnutOption"
+              autoresize
+              class="h-full w-full"
+            />
+            <Skeleton v-else-if="netWorth.loading.value" class="h-full w-full rounded-lg" />
+            <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
+          </div>
         </CardContent>
       </Card>
 
