@@ -1,18 +1,15 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
-import { Doughnut, Line } from 'vue-chartjs';
-import {
-  Chart as ChartJS,
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Filler,
-} from 'chart.js';
+import { use } from 'echarts/core';
+import { CanvasRenderer } from 'echarts/renderers';
+import { PieChart } from 'echarts/charts';
+import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components';
+import VChart from 'vue-echarts';
+import EChartsLineChart from '@/components/EChartsLineChart.vue';
+
+use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent, GraphicComponent]);
+
 import {
   getNetWorth,
   getNetWorthHistory,
@@ -90,24 +87,8 @@ import {
   X,
 } from 'lucide-vue-next';
 
-ChartJS.register(
-  ArcElement,
-  Tooltip,
-  Legend,
-  CategoryScale,
-  LinearScale,
-  LineElement,
-  PointElement,
-  Filler,
-);
 
-const {
-  textPrimary,
-  tooltip: themeTooltip,
-  legendLabels,
-  axisTicks,
-  grid: themeGrid,
-} = useChartTheme();
+const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 
 const router = useRouter();
 
@@ -172,11 +153,10 @@ const lastMonthDelta = computed(() => {
 });
 
 // ─── Allocation doughnut ───
-const allocationData = computed(() => {
+const doughnutOption = computed(() => {
   const nwData = nw.value;
   if (!nwData) return null;
   const slices: { label: string; value: number; color: string }[] = [];
-  // Group assets by type
   const byType = new Map<string, number>();
   for (const asset of nwData.assets) {
     byType.set(asset.type, (byType.get(asset.type) ?? 0) + asset.totalValueIls);
@@ -197,142 +177,93 @@ const allocationData = computed(() => {
       color: ASSET_TYPE_COLORS.banks ?? '#3b82f6',
     });
   }
+
+  if (slices.length === 0) return null;
+
   return {
-    labels: slices.map((s) => s.label),
-    datasets: [
-      {
-        data: slices.map((s) => s.value),
-        backgroundColor: slices.map((s) => s.color),
-        borderRadius: 6,
+    tooltip: {
+      trigger: 'item' as const,
+      backgroundColor: bgPrimary.value,
+      borderColor: separator.value,
+      borderWidth: 1,
+      textStyle: { color: textPrimary.value, fontSize: 12 },
+      formatter(params: any) {
+        return `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`;
       },
-    ],
+    },
+    legend: {
+      bottom: 0,
+      textStyle: { color: textSecondary.value, fontSize: 11 },
+      itemWidth: 8,
+      itemHeight: 8,
+      icon: 'circle',
+    },
+    graphic: {
+      type: 'text' as const,
+      left: 'center',
+      top: 'center',
+      style: {
+        text: formatCompact(nwData.total),
+        fill: textPrimary.value,
+        fontSize: 16,
+        fontWeight: 'bold' as const,
+        fontFamily: '-apple-system, BlinkMacSystemFont, sans-serif',
+        textAlign: 'center' as const,
+      },
+    },
+    series: [{
+      type: 'pie',
+      radius: ['60%', '85%'],
+      center: ['50%', '42%'],
+      label: { show: false },
+      itemStyle: { borderRadius: 6 },
+      data: slices.map(s => ({
+        name: s.label,
+        value: s.value,
+        itemStyle: { color: s.color },
+      })),
+    }],
   };
 });
-
-const doughnutCenterTextPlugin = {
-  id: 'doughnutCenterText',
-  afterDraw(chart: ChartJS) {
-    const total = nw.value?.total;
-    if (total == null) return;
-    const { ctx, chartArea } = chart;
-    const cx = (chartArea.left + chartArea.right) / 2;
-    const cy = (chartArea.top + chartArea.bottom) / 2;
-    ctx.save();
-    ctx.textAlign = 'center';
-    ctx.textBaseline = 'middle';
-    ctx.fillStyle = textPrimary.value;
-    ctx.font = 'bold 16px -apple-system, BlinkMacSystemFont, sans-serif';
-    ctx.fillText(formatCompact(total), cx, cy);
-    ctx.restore();
-  },
-};
-
-const doughnutOptions = computed(() => ({
-  cutout: '70%',
-  plugins: {
-    legend: {
-      position: 'bottom' as const,
-      labels: legendLabels.value,
-    },
-    tooltip: {
-      ...themeTooltip.value,
-      callbacks: {
-        label(ctx: { label?: string; parsed: number; dataset: { data: number[] } }) {
-          const total = ctx.dataset.data.reduce((a: number, b: number) => a + b, 0);
-          const pct = total > 0 ? ((ctx.parsed / total) * 100).toFixed(1) : '0';
-          return ` ${formatCurrency(ctx.parsed)} (${pct}%)`;
-        },
-      },
-    },
-  },
-}));
 
 // ─── Trend line chart ───
 const showLiquidOnly = ref(false);
 
-const trendData = computed(() => {
+const trendLabels = computed(() => {
   const series = history.data.value?.series ?? [];
-  if (series.length === 0) return null;
-  const labels = series.map((p) => {
+  return series.map(p => {
     const d = new Date(p.date);
     return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   });
-
-  if (showLiquidOnly.value) {
-    return {
-      labels,
-      datasets: [
-        {
-          label: 'Liquid Net Worth',
-          data: series.map((p) => p.liquidTotal),
-          borderColor: '#5AC8FA',
-          backgroundColor: 'rgba(90, 200, 250, 0.15)',
-          fill: true,
-          tension: 0.4,
-          borderWidth: 2.5,
-          borderCapStyle: 'round' as const,
-          borderJoinStyle: 'round' as const,
-          pointRadius: 3,
-          pointHoverRadius: 5,
-          spanGaps: true,
-        },
-      ],
-    };
-  }
-
-  return {
-    labels,
-    datasets: [
-      {
-        label: 'Total Net Worth',
-        data: series.map((p) => p.total),
-        borderColor: '#007AFF',
-        backgroundColor: 'rgba(0, 122, 255, 0.15)',
-        fill: true,
-        tension: 0.4,
-        borderWidth: 2.5,
-        borderCapStyle: 'round' as const,
-        borderJoinStyle: 'round' as const,
-        pointRadius: 3,
-        pointHoverRadius: 5,
-        spanGaps: true,
-      },
-    ],
-  };
 });
 
-const lineOptions = computed(() => ({
-  responsive: true,
-  plugins: {
-    legend: { display: false },
-    tooltip: {
-      ...themeTooltip.value,
-      callbacks: {
-        label(ctx: { parsed: { y: number | null } }) {
-          return ` ${formatCurrency(ctx.parsed.y ?? 0)}`;
-        },
-      },
-    },
-  },
-  scales: {
-    x: {
-      ticks: axisTicks.value,
-      grid: themeGrid.value,
-    },
-    y: {
-      ticks: {
-        ...axisTicks.value,
-        callback(value: number | string) {
-          const v = Number(value);
-          if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
-          if (v >= 1_000) return `₪${(v / 1_000).toFixed(0)}K`;
-          return `₪${v}`;
-        },
-      },
-      grid: themeGrid.value,
-    },
-  },
-}));
+const trendDatasets = computed(() => {
+  const series = history.data.value?.series ?? [];
+  if (series.length === 0) return null;
+
+  if (showLiquidOnly.value) {
+    return [{
+      label: 'Liquid Net Worth',
+      data: series.map(p => p.liquidTotal),
+      color: '#5AC8FA',
+      areaColor: 'rgba(90, 200, 250, 0.15)',
+    }];
+  }
+  return [{
+    label: 'Total Net Worth',
+    data: series.map(p => p.total),
+    color: '#007AFF',
+    areaColor: 'rgba(0, 122, 255, 0.15)',
+  }];
+});
+
+const nwYAxisFormatter = (v: number): string => {
+  if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
+  if (v >= 1_000) return `₪${(v / 1_000).toFixed(0)}K`;
+  return `₪${v}`;
+};
+
+const nwTooltipFormatter = (v: number): string => formatCurrency(v);
 
 // ─── Asset expand/collapse ───
 const expandedAssets = ref(new Set<number>());
@@ -833,11 +764,11 @@ const fullLiabilityMap = computed(() => {
           <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
         </CardHeader>
         <CardContent>
-          <Doughnut
-            v-if="allocationData"
-            :data="allocationData"
-            :options="doughnutOptions"
-            :plugins="[doughnutCenterTextPlugin]"
+          <VChart
+            v-if="doughnutOption"
+            :option="doughnutOption"
+            autoresize
+            class="h-full w-full"
           />
           <Skeleton v-else-if="netWorth.loading.value" class="h-48 w-full rounded-lg" />
           <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
@@ -865,7 +796,14 @@ const fullLiabilityMap = computed(() => {
           </div>
         </CardHeader>
         <CardContent>
-          <Line v-if="trendData" :data="trendData" :options="lineOptions" />
+          <div v-if="trendDatasets" class="h-48">
+            <EChartsLineChart
+              :labels="trendLabels"
+              :datasets="trendDatasets"
+              :y-axis-formatter="nwYAxisFormatter"
+              :tooltip-formatter="nwTooltipFormatter"
+            />
+          </div>
           <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-lg" />
           <p v-else class="text-[13px] text-text-secondary text-center py-12">
             Start tracking your assets to see net worth history
