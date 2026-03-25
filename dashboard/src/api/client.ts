@@ -188,7 +188,7 @@ export interface CashflowItem {
 }
 
 export interface SummaryFilters {
-  groupBy?: string;
+  groupBy?: 'category' | 'month' | 'account' | 'cashflow' | 'cashflow-detail';
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
   startDate?: string;
@@ -210,6 +210,29 @@ export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {})
     if (value !== undefined) query.set(key, String(value));
   });
   return request<{ groupBy: 'cashflow'; summary: CashflowItem[] }>(
+    `/transactions/summary?${query}`,
+  );
+}
+
+export interface CategoryAmount {
+  category: string;
+  amount: number;
+}
+
+export interface CashflowDetailData {
+  income: CategoryAmount[];
+  expenses: CategoryAmount[];
+  totalIncome: number;
+  totalExpenses: number;
+  surplus: number;
+}
+
+export function getCashflowDetail(params: Omit<SummaryFilters, 'groupBy'> = {}) {
+  const query = new URLSearchParams({ groupBy: 'cashflow-detail' });
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) query.set(key, String(value));
+  });
+  return request<{ groupBy: 'cashflow-detail'; summary: CashflowDetailData }>(
     `/transactions/summary?${query}`,
   );
 }
