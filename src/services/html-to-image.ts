@@ -53,8 +53,9 @@ export async function renderHtmlToImage(html: string): Promise<Buffer> {
 export async function screenshotDashboard(
   route: string,
   selector: string,
-  viewportWidth: number = 1280,
+  opts: { viewportWidth?: number; startDate?: string; endDate?: string } = {},
 ): Promise<Buffer> {
+  const viewportWidth = opts.viewportWidth ?? 1280;
   const b = await getBrowser();
   const page = await b.newPage();
   try {
@@ -70,9 +71,14 @@ export async function screenshotDashboard(
       }, config.API_TOKEN);
     }
 
+    // Append date query params if provided (dashboard components read these)
+    const url = new URL(`${baseUrl}${route}`);
+    if (opts.startDate) url.searchParams.set('startDate', opts.startDate);
+    if (opts.endDate) url.searchParams.set('endDate', opts.endDate);
+
     // Use domcontentloaded instead of networkidle0 because the dashboard keeps
     // an SSE connection open (/api/scrape/events) which prevents network idle.
-    await page.goto(`${baseUrl}${route}`, { waitUntil: 'domcontentloaded', timeout: 15000 });
+    await page.goto(url.toString(), { waitUntil: 'domcontentloaded', timeout: 15000 });
 
     // Wait for charts to finish rendering (ECharts canvas elements appear)
     await page

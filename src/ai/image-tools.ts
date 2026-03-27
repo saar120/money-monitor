@@ -251,13 +251,15 @@ export function buildGenerateTableImageTool() {
     execute: async (args) => {
       const view = args.view as string;
 
+      const dateOpts = { startDate: args.start_date, endDate: args.end_date };
+
       // Multi-chart views — send each chart as a separate image
       if (view in MULTI_CHART_VIEWS) {
         const chartKeys = MULTI_CHART_VIEWS[view];
         const captions: string[] = [];
         for (const key of chartKeys) {
           const chartDef = CHART_VIEWS[key];
-          const buffer = await screenshotDashboard(chartDef.route, chartDef.selector);
+          const buffer = await screenshotDashboard(chartDef.route, chartDef.selector, dateOpts);
           pendingImages.push({ buffer, caption: chartDef.caption });
           captions.push(chartDef.caption);
         }
@@ -267,7 +269,7 @@ export function buildGenerateTableImageTool() {
       // Single chart views — screenshot the live dashboard
       if (view in CHART_VIEWS) {
         const chartDef = CHART_VIEWS[view as ChartViewType];
-        const buffer = await screenshotDashboard(chartDef.route, chartDef.selector);
+        const buffer = await screenshotDashboard(chartDef.route, chartDef.selector, dateOpts);
         pendingImages.push({ buffer, caption: chartDef.caption });
         return `Image generated and queued for delivery: ${chartDef.caption}`;
       }

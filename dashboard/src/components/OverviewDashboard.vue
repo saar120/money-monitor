@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { onMounted, computed, watch } from 'vue';
+import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart, BarChart } from 'echarts/charts';
@@ -21,12 +22,15 @@ use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, Grid
 
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 
+const route = useRoute();
+
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 }
 const [y, m] = israelDate(new Date()).split('-').map(Number) as [number, number];
-const thisMonthStart = `${y}-${String(m).padStart(2, '0')}-01`;
-const thisMonthEnd = israelDate(new Date(y, m, 0)); // last day of current month
+// Allow URL query params to override dates (used by Puppeteer screenshots)
+const thisMonthStart = (route.query.startDate as string) ?? `${y}-${String(m).padStart(2, '0')}-01`;
+const thisMonthEnd = (route.query.endDate as string) ?? israelDate(new Date(y, m, 0));
 const lastMonthStart = israelDate(new Date(y, m - 2, 1));
 const lastMonthEnd = israelDate(new Date(y, m - 1, 0));
 
