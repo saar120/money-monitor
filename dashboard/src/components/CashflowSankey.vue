@@ -424,7 +424,7 @@ onBeforeUnmount(() => {
   <!-- Interactive dialog -->
   <Dialog v-model:open="dialogOpen">
     <DialogContent class="max-w-[90vw] w-[90vw] h-[85vh] flex flex-col">
-      <DialogHeader class="flex-shrink-0 flex flex-row items-center justify-between">
+      <DialogHeader class="flex-shrink-0 flex flex-row items-center justify-between pr-10">
         <div>
           <DialogTitle>Cashflow</DialogTitle>
           <DialogDescription class="text-[12px]">
