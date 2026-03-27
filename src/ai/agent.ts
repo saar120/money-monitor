@@ -43,6 +43,7 @@ import {
   buildManageLiabilityTool,
 } from './asset-tools.js';
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
+import { buildGenerateTableImageTool } from './image-tools.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
 
 // Load OAuth credentials at module init
@@ -134,6 +135,7 @@ const TOOL_STATUS: Record<string, string> = {
   get_alert_settings: 'Checking alert settings...',
   update_alert_settings: 'Updating alert settings...',
   get_latest_scrape_transactions: 'Looking up latest scrape results...',
+  generate_table_image: 'Generating table image...',
 };
 
 // ── Helpers ──────────────────────────────────────────────────────────────────────
@@ -228,6 +230,7 @@ export async function* chat(
     buildGetAlertSettingsTool(),
     buildUpdateAlertSettingsTool(),
     buildGetLatestScrapeTransactionsTool(),
+    buildGenerateTableImageTool(),
   ];
 
   const agent = new Agent({

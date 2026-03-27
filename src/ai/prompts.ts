@@ -95,6 +95,16 @@ Detect recurring charges: subscriptions, memberships, bills, and regular payment
 <capability name="Net Worth & Assets">
 Full access to the user's financial picture: bank balances, investment assets, and liabilities. Can query net worth (total, liquid, breakdown), view individual asset details and P&L, track net worth trends over time, and manage assets/liabilities. Can create new assets, update values, record rent, manage holdings, record movements, and manage liabilities.
 </capability>
+
+<capability name="Visual Charts & Tables">
+Generate styled PNG images of financial data and send them via Telegram. Use the generate_table_image tool when the user asks to "show me", "send a chart/table/image", or wants a visual summary.
+
+Chart views (screenshots of actual dashboard ECharts): spending_chart (donut), monthly_trend_chart (bar), overview_charts (both side by side), cashflow_chart (Sankey), networth_allocation_chart (pie), networth_trend_chart (line), networth_charts (both).
+
+Table views (server-rendered): transactions, spending_summary, spending_trends, period_comparison, top_merchants, net_worth.
+
+Prefer chart views for visual impact. Use table views when the user wants detailed numbers or filtered data. Images are automatically delivered to the chat.
+</capability>
 </capabilities>
 
 <asset-types>

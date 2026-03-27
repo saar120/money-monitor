@@ -21,6 +21,7 @@ import { demoRoutes } from './api/demo.routes.js';
 import { alertsRoutes } from './api/alerts.routes.js';
 import { startScheduler, stopScheduler, checkAndRunMissedScrape } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
+import { closeImageBrowser, setServerPort } from './services/html-to-image.js';
 
 export async function createServer() {
   const app = Fastify({
@@ -170,6 +171,7 @@ export async function createServer() {
       allowedOrigins.push(`http://localhost:${boundPort}`, `http://127.0.0.1:${boundPort}`);
     }
     app.log.info(`Server running on http://${host}:${boundPort}`);
+    setServerPort(boundPort);
     startScheduler();
     startTelegramBot();
     return boundPort;
@@ -179,6 +181,7 @@ export async function createServer() {
     app.log.info('Shutting down...');
     stopScheduler();
     await stopTelegramBot();
+    await closeImageBrowser();
     await app.close();
     closeAll();
   }

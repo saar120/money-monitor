@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { SankeyChart } from 'echarts/charts';
@@ -26,12 +27,19 @@ use([CanvasRenderer, SankeyChart, TooltipComponent]);
 
 const { textPrimary, bgPrimary, separator } = useChartTheme();
 
+const route = useRoute();
+
 // ── Period selector ──
 
 const periodMode = ref<'days' | 'month'>('month');
 const selectedDays = ref('30');
 const now = new Date();
-const selectedMonth = ref(`${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`);
+// Allow URL query params to override month (used by Puppeteer screenshots)
+const qStart = route.query.startDate as string | undefined;
+const initialMonth = qStart
+  ? qStart.slice(0, 7) // "2026-01-01" → "2026-01"
+  : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
+const selectedMonth = ref(initialMonth);
 
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
@@ -359,7 +367,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Card>
+  <Card id="chart-cashflow">
     <CardHeader class="py-4 px-5 flex flex-row items-center justify-between">
       <CardTitle class="text-[15px]">Cashflow</CardTitle>
       <div class="flex items-center gap-1.5">
