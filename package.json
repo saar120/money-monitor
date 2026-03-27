@@ -1,6 +1,6 @@
 {
   "name": "money-monitor",
-  "version": "0.1.8",
+  "version": "0.1.9",
   "description": "",
   "main": "electron/main.js",
   "type": "module",
