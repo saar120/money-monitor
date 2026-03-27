@@ -87,7 +87,6 @@ import {
   X,
 } from 'lucide-vue-next';
 
-
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 
 const router = useRouter();
@@ -211,19 +210,21 @@ const doughnutOption = computed(() => {
         textAlign: 'center' as const,
       },
     },
-    series: [{
-      type: 'pie',
-      radius: ['50%', '72%'],
-      center: ['50%', '48%'],
-      padAngle: 2,
-      label: { show: false },
-      itemStyle: { borderRadius: 6 },
-      data: slices.map(s => ({
-        name: s.label,
-        value: s.value,
-        itemStyle: { color: s.color },
-      })),
-    }],
+    series: [
+      {
+        type: 'pie',
+        radius: ['50%', '72%'],
+        center: ['50%', '48%'],
+        padAngle: 2,
+        label: { show: false },
+        itemStyle: { borderRadius: 6 },
+        data: slices.map((s) => ({
+          name: s.label,
+          value: s.value,
+          itemStyle: { color: s.color },
+        })),
+      },
+    ],
   };
 });
 
@@ -232,7 +233,7 @@ const showLiquidOnly = ref(false);
 
 const trendLabels = computed(() => {
   const series = history.data.value?.series ?? [];
-  return series.map(p => {
+  return series.map((p) => {
     const d = new Date(p.date);
     return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   });
@@ -243,19 +244,23 @@ const trendDatasets = computed(() => {
   if (series.length === 0) return null;
 
   if (showLiquidOnly.value) {
-    return [{
-      label: 'Liquid Net Worth',
-      data: series.map(p => p.liquidTotal),
-      color: '#5AC8FA',
-      areaColor: 'rgba(90, 200, 250, 0.15)',
-    }];
+    return [
+      {
+        label: 'Liquid Net Worth',
+        data: series.map((p) => p.liquidTotal),
+        color: '#5AC8FA',
+        areaColor: 'rgba(90, 200, 250, 0.15)',
+      },
+    ];
   }
-  return [{
-    label: 'Total Net Worth',
-    data: series.map(p => p.total),
-    color: '#007AFF',
-    areaColor: 'rgba(0, 122, 255, 0.15)',
-  }];
+  return [
+    {
+      label: 'Total Net Worth',
+      data: series.map((p) => p.total),
+      color: '#007AFF',
+      areaColor: 'rgba(0, 122, 255, 0.15)',
+    },
+  ];
 });
 
 const nwYAxisFormatter = (v: number): string => {
@@ -759,8 +764,11 @@ const fullLiabilityMap = computed(() => {
     </Card>
 
     <!-- Charts Row -->
-    <div class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2">
-      <Card>
+    <div
+      id="networth-charts"
+      class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2"
+    >
+      <Card id="chart-networth-allocation">
         <CardHeader>
           <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
         </CardHeader>
@@ -778,7 +786,7 @@ const fullLiabilityMap = computed(() => {
         </CardContent>
       </Card>
 
-      <Card>
+      <Card id="chart-networth-trend">
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
           <CardTitle class="text-[15px]">Net Worth Trend</CardTitle>
           <div class="flex gap-1 text-[11px]">

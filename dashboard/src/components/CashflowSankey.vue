@@ -359,7 +359,7 @@ onBeforeUnmount(() => {
 </script>
 
 <template>
-  <Card>
+  <Card id="chart-cashflow">
     <CardHeader class="py-4 px-5 flex flex-row items-center justify-between">
       <CardTitle class="text-[15px]">Cashflow</CardTitle>
       <div class="flex items-center gap-1.5">

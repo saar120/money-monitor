@@ -129,19 +129,21 @@ const doughnutOption = computed(() => {
       itemGap: 8,
       icon: 'circle',
     },
-    series: [{
-      type: 'pie',
-      radius: ['50%', '72%'],
-      center: ['50%', '38%'],
-      padAngle: 2,
-      itemStyle: { borderRadius: 6 },
-      label: { show: false },
-      data: items.map((s, i) => ({
-        name: s.category ?? 'uncategorized',
-        value: Math.abs(s.totalAmount),
-        itemStyle: { color: chartColors[i % chartColors.length] },
-      })),
-    }],
+    series: [
+      {
+        type: 'pie',
+        radius: ['50%', '72%'],
+        center: ['50%', '38%'],
+        padAngle: 2,
+        itemStyle: { borderRadius: 6 },
+        label: { show: false },
+        data: items.map((s, i) => ({
+          name: s.category ?? 'uncategorized',
+          value: Math.abs(s.totalAmount),
+          itemStyle: { color: chartColors[i % chartColors.length] },
+        })),
+      },
+    ],
   };
 });
 
@@ -163,7 +165,7 @@ const barOption = computed(() => {
     grid: { left: 12, right: 12, top: 10, bottom: 10, containLabel: true },
     xAxis: {
       type: 'category' as const,
-      data: items.map(s => s.month ?? ''),
+      data: items.map((s) => s.month ?? ''),
       axisLabel: { color: textSecondary.value, fontSize: 11 },
       axisLine: { lineStyle: { color: separator.value } },
       axisTick: { show: false },
@@ -173,14 +175,15 @@ const barOption = computed(() => {
       axisLabel: { color: textSecondary.value, fontSize: 11 },
       splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
     },
-    series: [{
-      type: 'bar',
-      data: items.map(s => Math.abs(s.totalAmount)),
-      itemStyle: { color: '#007AFF', borderRadius: [6, 6, 0, 0] },
-    }],
+    series: [
+      {
+        type: 'bar',
+        data: items.map((s) => Math.abs(s.totalAmount)),
+        itemStyle: { color: '#007AFF', borderRadius: [6, 6, 0, 0] },
+      },
+    ],
   };
 });
-
 </script>
 
 <template>
@@ -267,8 +270,8 @@ const barOption = computed(() => {
       </div>
 
       <!-- Charts Row — constrained height -->
-      <div class="grid grid-cols-2 gap-4">
-        <Card>
+      <div id="overview-charts" class="grid grid-cols-2 gap-4">
+        <Card id="chart-spending-by-category">
           <CardHeader class="py-4 px-5">
             <CardTitle class="text-[15px]">Spending by Category</CardTitle>
           </CardHeader>
@@ -292,18 +295,13 @@ const barOption = computed(() => {
           </CardContent>
         </Card>
 
-        <Card>
+        <Card id="chart-monthly-trend">
           <CardHeader class="py-4 px-5">
             <CardTitle class="text-[15px]">Monthly Trend</CardTitle>
           </CardHeader>
           <CardContent class="px-5 pb-4 pt-0">
             <div class="h-[240px]">
-              <VChart
-                v-if="barOption"
-                :option="barOption"
-                autoresize
-                class="h-full w-full"
-              />
+              <VChart v-if="barOption" :option="barOption" autoresize class="h-full w-full" />
               <Skeleton v-else-if="monthlySummary.loading.value" class="h-full w-full rounded-lg" />
               <div v-else class="flex flex-col items-center justify-center h-full text-center">
                 <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
