@@ -16,6 +16,7 @@ const router = createRouter({
     { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
     { path: '/net-worth', component: () => import('./components/NetWorthPage.vue') },
     { path: '/net-worth/assets/:id', component: () => import('./components/AssetDetailPage.vue') },
+    { path: '/budgets', component: () => import('./components/BudgetsPage.vue') },
     { path: '/alerts', component: () => import('./components/AlertsPage.vue') },
     { path: '/setup', name: 'setup', component: () => import('./components/SetupWizard.vue') },
     { path: '/settings', component: () => import('./components/SettingsPage.vue') },

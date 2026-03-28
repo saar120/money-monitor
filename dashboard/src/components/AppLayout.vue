@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Settings,
   Bell,
+  Wallet,
 } from 'lucide-vue-next';
 import { getSettings, toggleDemoMode } from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
@@ -58,6 +59,7 @@ const navSections = [
       { path: '/', label: 'Overview', icon: LayoutDashboard },
       { path: '/net-worth', label: 'Net Worth', icon: TrendingUp },
       { path: '/transactions', label: 'Transactions', icon: Receipt },
+      { path: '/budgets', label: 'Budgets', icon: Wallet },
     ],
   },
   {
@@ -93,6 +95,7 @@ const pageTitles: Record<string, string> = {
   '/categories': 'Categories',
   '/alerts': 'Alerts',
   '/scraping': 'Scraping',
+  '/budgets': 'Budgets',
   '/settings': 'Settings',
 };
 

@@ -196,6 +196,21 @@ export const accountBalanceHistory = sqliteTable(
   ],
 );
 
+export const budgets = sqliteTable('budgets', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  amount: real('amount').notNull(),
+  period: text('period').notNull().default('monthly'), // 'monthly' | 'yearly'
+  categoryNames: text('category_names').notNull().default('[]'), // JSON array of category name strings
+  alertThreshold: integer('alert_threshold').notNull().default(80),
+  alertEnabled: integer('alert_enabled', { mode: 'boolean' }).notNull().default(true),
+  color: text('color'),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
 export const liabilities = sqliteTable('liabilities', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull().unique(),

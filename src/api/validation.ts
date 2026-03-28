@@ -70,7 +70,9 @@ export const summaryQuerySchema = z.object({
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
-  groupBy: z.enum(['category', 'month', 'account', 'cashflow', 'cashflow-detail']).default('category'),
+  groupBy: z
+    .enum(['category', 'month', 'account', 'cashflow', 'cashflow-detail'])
+    .default('category'),
   expensesOnly: z
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
@@ -278,6 +280,43 @@ export const netWorthHistoryQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}$/)
     .optional(),
   granularity: z.enum(['daily', 'weekly', 'monthly']).default('monthly'),
+});
+
+// ─── Budgets ───
+
+export const createBudgetSchema = z.object({
+  name: z.string().min(1).max(100),
+  amount: z.number().positive(),
+  period: z.enum(['monthly', 'yearly']).default('monthly'),
+  categoryNames: z.array(z.string().min(1)).min(1),
+  alertThreshold: z.number().int().min(0).max(100).default(80),
+  alertEnabled: z.boolean().default(true),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .optional(),
+});
+
+export const updateBudgetSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  amount: z.number().positive().optional(),
+  period: z.enum(['monthly', 'yearly']).optional(),
+  categoryNames: z.array(z.string().min(1)).min(1).optional(),
+  alertThreshold: z.number().int().min(0).max(100).optional(),
+  alertEnabled: z.boolean().optional(),
+  color: z
+    .string()
+    .regex(/^#[0-9a-fA-F]{6}$/)
+    .nullable()
+    .optional(),
+  isActive: z.boolean().optional(),
+});
+
+export const budgetProgressQuerySchema = z.object({
+  monthlyView: z
+    .enum(['true', 'false'])
+    .transform((v) => v === 'true')
+    .optional(),
 });
 
 // ─── Movements ───
