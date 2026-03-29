@@ -63,18 +63,22 @@ export async function runAlertAgent(opts: {
       unsubscribe();
       const trimmed = text.trim();
 
-      // Detect [SILENT] — exact match or model prefixed it before continuing
-      if (trimmed === '[SILENT]' || trimmed === '') {
+      if (trimmed === '') {
         resolve(null);
         return;
       }
 
-      // If the model started with [SILENT] then changed its mind and wrote
-      // the actual alert, strip the [SILENT] prefix and any reasoning between
-      // it and the real message content.
-      const silentPrefix = /^\[SILENT\]\s*/i;
-      const cleaned = silentPrefix.test(trimmed) ? trimmed.replace(silentPrefix, '').trim() : trimmed;
-      resolve(cleaned || null);
+      // Extract content from <message> tags if present (strips reasoning/thinking)
+      const messageMatch = trimmed.match(/<message>([\s\S]*?)<\/message>\s*$/);
+      const content = messageMatch ? messageMatch[1].trim() : trimmed;
+
+      // Detect [SILENT] anywhere in the response
+      if (content === '[SILENT]' || content === '') {
+        resolve(null);
+        return;
+      }
+
+      resolve(content);
     };
 
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
