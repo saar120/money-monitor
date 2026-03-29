@@ -49,7 +49,7 @@ export async function runAlertAgent(opts: {
   const tools = buildAlertTools();
 
   const agent = new Agent({
-    initialState: { systemPrompt: opts.systemPrompt, model, tools, thinkingLevel: 'off' as const },
+    initialState: { systemPrompt: opts.systemPrompt, model, tools },
     getApiKey: resolveApiKey,
   });
 
