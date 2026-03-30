@@ -1,10 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
-import { use } from 'echarts/core';
-import { CanvasRenderer } from 'echarts/renderers';
-import { BarChart } from 'echarts/charts';
-import { TooltipComponent, GridComponent, MarkLineComponent } from 'echarts/components';
-import VChart from 'vue-echarts';
+import { ref, computed, onMounted, watch } from 'vue';
+import { ToggleGroupRoot, ToggleGroupItem } from 'reka-ui';
 import {
   getBudgetProgress,
   getCategories,
@@ -18,7 +14,6 @@ import {
 import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Switch } from '@/components/ui/switch';
 import {
@@ -35,28 +30,8 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import {
-  formatCurrency,
-  getCategoryStyle,
-  buildCategoryMap,
-  DEFAULT_CATEGORY_COLOR,
-} from '@/lib/format';
-import { useChartTheme } from '@/composables/useChartTheme';
-import {
-  Plus,
-  Pencil,
-  Trash2,
-  AlertTriangle,
-  TrendingDown,
-  TrendingUp,
-  Wallet,
-  ChevronDown,
-  ChevronUp,
-} from 'lucide-vue-next';
-
-use([CanvasRenderer, BarChart, TooltipComponent, GridComponent, MarkLineComponent]);
-
-const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+import { formatCurrency, buildCategoryMap, DEFAULT_CATEGORY_COLOR } from '@/lib/format';
+import { Plus, Pencil, Trash2, Wallet, Search, Check } from 'lucide-vue-next';
 
 // ── State ──
 
@@ -64,8 +39,7 @@ const progressData = ref<BudgetProgress[]>([]);
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const error = ref('');
-const monthlyView = ref(false);
-const expandedBudgetId = ref<number | null>(null);
+const activePeriod = ref<'monthly' | 'yearly'>('monthly');
 
 // Dialog state
 const showDialog = ref(false);
@@ -81,7 +55,31 @@ const formAlertEnabled = ref(true);
 const formColor = ref('#007AFF');
 const formCategoryNames = ref<string[]>([]);
 
+const categorySearch = ref('');
+
 const categoryMap = computed(() => buildCategoryMap(categories.value));
+
+const filteredCategories = computed(() => {
+  const q = categorySearch.value.toLowerCase();
+  return categories.value
+    .filter((c) => !c.ignoredFromStats)
+    .filter((c) => !q || c.label.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
+});
+
+const COLOR_SWATCHES = [
+  '#007AFF',
+  '#5856D6',
+  '#AF52DE',
+  '#FF2D55',
+  '#FF3B30',
+  '#FF9500',
+  '#FFCC00',
+  '#34C759',
+  '#00C7BE',
+  '#30B0C7',
+  '#64D2FF',
+  '#AC8E68',
+];
 
 // ── Data loading ──
 
@@ -89,10 +87,7 @@ async function loadData() {
   loading.value = true;
   error.value = '';
   try {
-    const [progressRes, catRes] = await Promise.all([
-      getBudgetProgress(monthlyView.value),
-      getCategories(),
-    ]);
+    const [progressRes, catRes] = await Promise.all([getBudgetProgress(false), getCategories()]);
     progressData.value = progressRes.progress;
     categories.value = catRes.categories;
   } catch (e: unknown) {
@@ -106,15 +101,39 @@ onMounted(loadData);
 
 // ── Computed ──
 
-const totalBudgeted = computed(() =>
-  progressData.value.reduce((sum, p) => sum + p.budget.amount, 0),
+const monthlyBudgets = computed(() =>
+  progressData.value.filter((p) => p.budget.period === 'monthly'),
 );
-const totalSpent = computed(() => progressData.value.reduce((sum, p) => sum + p.spent, 0));
-const overallPercentage = computed(() =>
-  totalBudgeted.value > 0 ? Math.round((totalSpent.value / totalBudgeted.value) * 100) : 0,
+const yearlyBudgets = computed(() =>
+  progressData.value.filter((p) => p.budget.period === 'yearly'),
 );
+const hasBothPeriods = computed(
+  () => monthlyBudgets.value.length > 0 && yearlyBudgets.value.length > 0,
+);
+
+// Auto-select the period that has budgets if only one exists
+watch(progressData, () => {
+  if (monthlyBudgets.value.length === 0 && yearlyBudgets.value.length > 0)
+    activePeriod.value = 'yearly';
+  else if (yearlyBudgets.value.length === 0 && monthlyBudgets.value.length > 0)
+    activePeriod.value = 'monthly';
+});
+
+const isMonthly = computed(() => activePeriod.value === 'monthly');
+const activeBudgets = computed(() =>
+  isMonthly.value ? monthlyBudgets.value : yearlyBudgets.value,
+);
+
+// Summary for active period
+const activeTotal = computed(() => activeBudgets.value.reduce((s, p) => s + p.budget.amount, 0));
+const activeSpent = computed(() => activeBudgets.value.reduce((s, p) => s + p.spent, 0));
+const activePct = computed(() =>
+  activeTotal.value > 0 ? Math.round((activeSpent.value / activeTotal.value) * 100) : 0,
+);
+const activeRemaining = computed(() => Math.max(activeTotal.value - activeSpent.value, 0));
+
 const alertCount = computed(
-  () => progressData.value.filter((p) => p.isAlertTriggered || p.isOverBudget).length,
+  () => activeBudgets.value.filter((p) => p.isAlertTriggered || p.isOverBudget).length,
 );
 
 // ── Dialog ──
@@ -128,6 +147,7 @@ function openCreate() {
   formAlertEnabled.value = true;
   formColor.value = '#007AFF';
   formCategoryNames.value = [];
+  categorySearch.value = '';
   showDialog.value = true;
 }
 
@@ -140,6 +160,7 @@ function openEdit(budget: Budget) {
   formAlertEnabled.value = budget.alertEnabled;
   formColor.value = budget.color ?? '#007AFF';
   formCategoryNames.value = [...budget.categoryNames];
+  categorySearch.value = '';
   showDialog.value = true;
 }
 
@@ -198,15 +219,6 @@ async function removeBudget(id: number, name: string) {
   }
 }
 
-function toggleExpand(id: number) {
-  expandedBudgetId.value = expandedBudgetId.value === id ? null : id;
-}
-
-async function toggleMonthlyView() {
-  monthlyView.value = !monthlyView.value;
-  await loadData();
-}
-
 // ── Progress color ──
 
 function progressColor(percentage: number): string {
@@ -214,82 +226,35 @@ function progressColor(percentage: number): string {
   if (percentage >= 80) return 'var(--warning)';
   return 'var(--success)';
 }
-
-function progressBgColor(percentage: number): string {
-  if (percentage >= 100) return 'var(--destructive)';
-  if (percentage >= 80) return 'var(--warning)';
-  return 'var(--success)';
-}
-
-// ── Monthly breakdown chart ──
-
-function monthlyChartOption(progress: BudgetProgress) {
-  const mv = progress.monthlyView;
-  if (!mv) return null;
-
-  const months = mv.breakdown.map((m) => m.month);
-  const spent = mv.breakdown.map((m) => m.spent);
-
-  return {
-    tooltip: {
-      trigger: 'axis' as const,
-      backgroundColor: bgPrimary.value,
-      borderColor: separator.value,
-      borderWidth: 1,
-      textStyle: { color: textPrimary.value, fontSize: 12 },
-      // eslint-disable-next-line @typescript-eslint/no-explicit-any
-      formatter(params: any) {
-        const p = Array.isArray(params) ? params[0] : params;
-        return `${p.axisValueLabel}<br/><b>${formatCurrency(p.value)}</b> / ${formatCurrency(mv.monthlyBudget)}`;
-      },
-    },
-    grid: { left: 8, right: 8, top: 20, bottom: 4, containLabel: true },
-    xAxis: {
-      type: 'category' as const,
-      data: months,
-      axisLabel: { color: textSecondary.value, fontSize: 10 },
-      axisLine: { lineStyle: { color: separator.value } },
-      axisTick: { show: false },
-    },
-    yAxis: {
-      type: 'value' as const,
-      axisLabel: { color: textSecondary.value, fontSize: 10 },
-      splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
-    },
-    series: [
-      {
-        type: 'bar',
-        data: spent.map((s) => ({
-          value: s,
-          itemStyle: {
-            color: s > mv.monthlyBudget ? 'var(--destructive)' : 'var(--success)',
-            borderRadius: [4, 4, 0, 0],
-          },
-        })),
-        markLine: {
-          silent: true,
-          symbol: 'none',
-          lineStyle: { color: textSecondary.value, type: 'dashed' as const, width: 1.5 },
-          data: [{ yAxis: mv.monthlyBudget, label: { show: false } }],
-        },
-      },
-    ],
-  };
-}
 </script>
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
     <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
-        <Button
-          v-if="progressData.some((p) => p.budget.period === 'yearly')"
-          size="sm"
-          variant="outline"
-          @click="toggleMonthlyView"
+        <!-- Period picker — only if both types exist -->
+        <ToggleGroupRoot
+          v-if="hasBothPeriods"
+          type="single"
+          :model-value="activePeriod"
+          class="inline-flex rounded-lg bg-bg-tertiary p-0.5"
+          @update:model-value="
+            (v: unknown) => {
+              if (v === 'monthly' || v === 'yearly') activePeriod = v;
+            }
+          "
         >
-          {{ monthlyView ? 'Total View' : 'Monthly View' }}
-        </Button>
+          <ToggleGroupItem
+            value="monthly"
+            class="px-3 py-1 text-[12px] font-medium rounded-md transition-colors duration-150 data-[state=on]:bg-bg-primary data-[state=on]:text-text-primary data-[state=on]:shadow-[var(--shadow-sm)] data-[state=off]:text-text-secondary data-[state=off]:hover:text-text-primary"
+            >Monthly</ToggleGroupItem
+          >
+          <ToggleGroupItem
+            value="yearly"
+            class="px-3 py-1 text-[12px] font-medium rounded-md transition-colors duration-150 data-[state=on]:bg-bg-primary data-[state=on]:text-text-primary data-[state=on]:shadow-[var(--shadow-sm)] data-[state=off]:text-text-secondary data-[state=off]:hover:text-text-primary"
+            >Yearly</ToggleGroupItem
+          >
+        </ToggleGroupRoot>
         <Button size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-1" />
           New Budget
@@ -299,212 +264,191 @@ function monthlyChartOption(progress: BudgetProgress) {
 
     <p v-if="error" class="text-[13px] text-destructive mb-3">{{ error }}</p>
 
-    <!-- Loading skeletons -->
-    <div v-if="loading && progressData.length === 0" class="space-y-4">
+    <!-- Loading -->
+    <div v-if="loading && progressData.length === 0" class="space-y-5">
       <div class="grid grid-cols-3 gap-3">
-        <Skeleton class="h-20 rounded-xl" />
-        <Skeleton class="h-20 rounded-xl" />
-        <Skeleton class="h-20 rounded-xl" />
+        <Skeleton class="h-[72px] rounded-xl" />
+        <Skeleton class="h-[72px] rounded-xl" />
+        <Skeleton class="h-[72px] rounded-xl" />
       </div>
-      <Skeleton class="h-44 rounded-xl" />
-      <Skeleton class="h-44 rounded-xl" />
+      <Skeleton class="h-[200px] rounded-xl" />
     </div>
 
+    <!-- Empty state -->
     <div
       v-else-if="progressData.length === 0 && !loading"
-      class="flex flex-col items-center justify-center flex-1 gap-3 text-text-secondary"
+      class="flex flex-col items-center justify-center flex-1 gap-5"
     >
-      <Wallet class="h-12 w-12 opacity-30" />
-      <p class="text-[14px]">No budgets yet</p>
-      <p class="text-[12px]">Create a budget to start tracking your spending against limits.</p>
-      <Button size="sm" @click="openCreate">
+      <Wallet class="h-10 w-10 text-text-tertiary" />
+      <div class="text-center">
+        <p class="text-[14px] font-medium text-text-primary">No budgets yet</p>
+        <p class="text-[13px] text-text-secondary mt-1.5">
+          Set spending limits on categories to track where your money goes.
+        </p>
+      </div>
+      <Button size="sm" variant="outline" @click="openCreate">
         <Plus class="h-4 w-4 mr-1" />
-        Create Your First Budget
+        Create budget
       </Button>
     </div>
 
     <div v-else class="flex-1 min-h-0 overflow-y-auto space-y-5">
-      <!-- Overview cards -->
+      <!-- Summary -->
       <div class="grid grid-cols-3 gap-3">
-        <Card>
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Total Budgeted</p>
-            <p class="text-[18px] font-semibold mt-1 tabular-nums">
-              {{ formatCurrency(totalBudgeted) }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Total Spent</p>
-            <p
-              class="text-[18px] font-semibold mt-1 tabular-nums"
-              :class="
-                overallPercentage >= 100
-                  ? 'text-destructive'
-                  : overallPercentage >= 80
-                    ? 'text-[var(--warning)]'
-                    : ''
-              "
+        <div class="rounded-xl border border-separator/50 px-4 py-3">
+          <p class="text-[11px] text-text-tertiary mb-1">
+            {{ isMonthly ? 'Monthly Budget' : 'Yearly Budget' }}
+          </p>
+          <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
+            {{ formatCurrency(activeTotal) }}
+          </p>
+          <p class="text-[11px] text-text-tertiary mt-1.5">
+            {{ activeBudgets.length }} {{ activeBudgets.length === 1 ? 'budget' : 'budgets' }}
+            <template v-if="!isMonthly">
+              &middot; {{ formatCurrency(activeTotal / 12) }}/mo</template
             >
-              {{ formatCurrency(totalSpent) }}
+          </p>
+        </div>
+        <div class="rounded-xl border border-separator/50 px-4 py-3">
+          <p class="text-[11px] text-text-tertiary mb-1">
+            {{ isMonthly ? 'Spent This Month' : 'Spent YTD' }}
+          </p>
+          <div class="flex items-baseline gap-2">
+            <p
+              class="text-[20px] font-semibold tabular-nums leading-tight"
+              :style="{
+                color:
+                  activePct >= 100
+                    ? 'var(--destructive)'
+                    : activePct >= 80
+                      ? 'var(--warning)'
+                      : 'var(--text-primary)',
+              }"
+            >
+              {{ formatCurrency(activeSpent) }}
             </p>
-            <p class="text-[11px] text-text-tertiary mt-0.5">{{ overallPercentage }}% of budget</p>
-          </CardContent>
-        </Card>
-        <Card>
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Alerts</p>
-            <div class="flex items-center gap-2 mt-1">
-              <p
-                class="text-[18px] font-semibold tabular-nums"
-                :class="alertCount > 0 ? 'text-[var(--warning)]' : 'text-success'"
-              >
-                {{ alertCount }}
-              </p>
-              <AlertTriangle v-if="alertCount > 0" class="h-4 w-4 text-[var(--warning)]" />
-            </div>
-            <p class="text-[11px] text-text-tertiary mt-0.5">
-              {{ alertCount > 0 ? 'budgets need attention' : 'all on track' }}
-            </p>
-          </CardContent>
-        </Card>
+            <span
+              class="text-[12px] tabular-nums font-medium"
+              :style="{ color: progressColor(activePct) }"
+              >{{ activePct }}%</span
+            >
+          </div>
+          <div class="h-1 rounded-full bg-separator/30 overflow-hidden mt-2">
+            <div
+              class="h-full rounded-full transition-all duration-500"
+              :style="{
+                width: `${Math.min(activePct, 100)}%`,
+                backgroundColor: progressColor(activePct),
+              }"
+            />
+          </div>
+        </div>
+        <div class="rounded-xl border border-separator/50 px-4 py-3">
+          <p class="text-[11px] text-text-tertiary mb-1">Remaining</p>
+          <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
+            {{ formatCurrency(activeRemaining) }}
+          </p>
+          <p
+            v-if="alertCount > 0"
+            class="text-[11px] text-[var(--warning)] mt-1.5 flex items-center gap-1"
+          >
+            <span class="w-1.5 h-1.5 rounded-full bg-[var(--warning)]" />
+            {{ alertCount }} need attention
+          </p>
+          <p v-else-if="!isMonthly" class="text-[11px] text-text-tertiary mt-1.5">
+            {{ formatCurrency(activeRemaining / 12) }}/mo
+          </p>
+          <p v-else class="text-[11px] text-text-tertiary mt-1.5">All on track</p>
+        </div>
       </div>
 
-      <!-- Budget cards -->
-      <div class="space-y-3">
-        <Card v-for="p in progressData" :key="p.budget.id" class="overflow-hidden">
-          <CardContent class="p-5">
-            <!-- Header row -->
-            <div class="flex items-start justify-between mb-3">
-              <div class="flex items-center gap-2.5">
-                <div
-                  class="w-3 h-3 rounded-full flex-shrink-0"
-                  :style="{ backgroundColor: p.budget.color ?? '#007AFF' }"
+      <!-- Budget list -->
+      <Card>
+        <CardContent class="p-0 divide-y divide-separator/40">
+          <div v-for="p in activeBudgets" :key="p.budget.id" class="group px-5 py-4">
+            <div class="flex items-center justify-between gap-4 mb-2.5 min-w-0">
+              <div class="flex items-center gap-2.5 min-w-0">
+                <span
+                  class="w-2.5 h-2.5 rounded-full flex-shrink-0"
+                  :style="{ backgroundColor: p.budget.color ?? 'var(--accent)' }"
                 />
-                <div>
-                  <h3 class="text-[14px] font-semibold text-text-primary">{{ p.budget.name }}</h3>
-                  <div class="flex items-center gap-1.5 mt-0.5">
-                    <Badge variant="secondary" class="text-[10px] px-1.5 py-0">
-                      {{ p.budget.period === 'yearly' ? 'Yearly' : 'Monthly' }}
-                    </Badge>
-                    <Badge
-                      v-if="p.isOverBudget"
-                      class="text-[10px] px-1.5 py-0 bg-destructive/15 text-destructive border-0"
-                    >
-                      Over Budget
-                    </Badge>
-                    <Badge
-                      v-else-if="p.isAlertTriggered"
-                      class="text-[10px] px-1.5 py-0 bg-[var(--warning)]/15 text-[var(--warning)] border-0"
-                    >
-                      Alert
-                    </Badge>
-                  </div>
+                <h3 class="text-[13px] font-medium text-text-primary truncate">
+                  {{ p.budget.name }}
+                </h3>
+                <span
+                  v-if="p.isOverBudget"
+                  class="text-[11px] font-medium text-destructive flex-shrink-0"
+                  >Over budget</span
+                >
+                <span
+                  v-else-if="p.isAlertTriggered"
+                  class="text-[11px] font-medium text-[var(--warning)] flex-shrink-0"
+                  >Alert</span
+                >
+              </div>
+              <div class="flex items-center gap-2 flex-shrink-0">
+                <span
+                  class="text-[13px] tabular-nums text-text-primary font-medium whitespace-nowrap"
+                >
+                  {{ formatCurrency(p.spent) }}
+                  <span class="text-text-tertiary font-normal"
+                    >/ {{ formatCurrency(p.budget.amount) }}</span
+                  >
+                </span>
+                <div
+                  class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
+                >
+                  <button
+                    type="button"
+                    class="p-1 rounded hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary transition-colors duration-150"
+                    @click="openEdit(p.budget)"
+                  >
+                    <Pencil class="h-3.5 w-3.5" />
+                  </button>
+                  <button
+                    type="button"
+                    class="p-1 rounded hover:bg-bg-tertiary text-text-tertiary hover:text-destructive transition-colors duration-150"
+                    @click="removeBudget(p.budget.id, p.budget.name)"
+                  >
+                    <Trash2 class="h-3.5 w-3.5" />
+                  </button>
                 </div>
               </div>
-              <div class="flex items-center gap-1">
-                <button
-                  v-if="p.budget.period === 'yearly' && monthlyView"
-                  class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary"
-                  @click="toggleExpand(p.budget.id)"
-                >
-                  <ChevronDown v-if="expandedBudgetId !== p.budget.id" class="h-3.5 w-3.5" />
-                  <ChevronUp v-else class="h-3.5 w-3.5" />
-                </button>
-                <button
-                  class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary"
-                  @click="openEdit(p.budget)"
-                >
-                  <Pencil class="h-3.5 w-3.5" />
-                </button>
-                <button
-                  class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-destructive"
-                  @click="removeBudget(p.budget.id, p.budget.name)"
-                >
-                  <Trash2 class="h-3.5 w-3.5" />
-                </button>
-              </div>
             </div>
-
-            <!-- Progress bar -->
-            <div class="mb-2">
-              <div class="flex justify-between text-[12px] mb-1.5">
-                <span class="text-text-secondary"> {{ formatCurrency(p.spent) }} spent </span>
-                <span class="text-text-secondary">
-                  {{ formatCurrency(p.budget.amount) }}
-                </span>
-              </div>
-              <div class="h-2.5 rounded-full bg-separator/30 overflow-hidden">
+            <div class="flex items-center gap-3 mb-2">
+              <div class="flex-1 h-1.5 rounded-full bg-separator/25 overflow-hidden">
                 <div
                   class="h-full rounded-full transition-all duration-500"
                   :style="{
                     width: `${Math.min(p.percentage, 100)}%`,
-                    backgroundColor: progressBgColor(p.percentage),
+                    backgroundColor: progressColor(p.percentage),
                   }"
                 />
               </div>
-              <div class="flex justify-between text-[11px] mt-1">
-                <span
-                  class="font-medium tabular-nums"
-                  :style="{ color: progressColor(p.percentage) }"
-                >
-                  {{ p.percentage }}%
-                </span>
-                <span class="text-text-tertiary tabular-nums">
-                  {{ formatCurrency(Math.max(p.remaining, 0)) }} remaining
-                </span>
-              </div>
-            </div>
-
-            <!-- Category badges -->
-            <div class="flex flex-wrap gap-1.5 mt-3">
-              <Badge
-                v-for="catName in p.budget.categoryNames"
-                :key="catName"
-                variant="secondary"
-                :style="getCategoryStyle(categoryMap.get(catName)?.color)"
-                class="text-[11px]"
+              <span
+                class="text-[11px] tabular-nums font-medium w-10 text-right flex-shrink-0"
+                :style="{ color: progressColor(p.percentage) }"
+                >{{ p.percentage }}%</span
               >
-                {{ categoryMap.get(catName)?.label ?? catName }}
-              </Badge>
             </div>
-
-            <!-- Yearly monthly view -->
-            <template v-if="p.monthlyView && expandedBudgetId === p.budget.id">
-              <div class="mt-4 pt-4 border-t border-separator/30">
-                <div class="flex items-center justify-between mb-2">
-                  <p class="text-[12px] font-medium text-text-secondary">Monthly Breakdown</p>
-                  <div class="flex items-center gap-2">
-                    <Badge
-                      variant="secondary"
-                      class="text-[10px]"
-                      :class="
-                        p.monthlyView.isOnTrack
-                          ? 'bg-success/15 text-success'
-                          : 'bg-destructive/15 text-destructive'
-                      "
-                    >
-                      <TrendingDown v-if="p.monthlyView.isOnTrack" class="h-3 w-3 mr-0.5" />
-                      <TrendingUp v-else class="h-3 w-3 mr-0.5" />
-                      {{ p.monthlyView.isOnTrack ? 'On Track' : 'Over Pace' }}
-                    </Badge>
-                    <span class="text-[11px] text-text-tertiary tabular-nums">
-                      {{ formatCurrency(p.monthlyView.monthlyBudget) }}/mo
-                    </span>
-                  </div>
-                </div>
-                <VChart
-                  v-if="monthlyChartOption(p)"
-                  :option="monthlyChartOption(p)!"
-                  :style="{ height: '160px' }"
-                  autoresize
-                />
-              </div>
-            </template>
-          </CardContent>
-        </Card>
-      </div>
+            <div class="flex items-center justify-between gap-4 min-w-0">
+              <p class="text-[11px] text-text-tertiary truncate">
+                {{ p.budget.categoryNames.map((n) => categoryMap.get(n)?.label ?? n).join(', ') }}
+              </p>
+              <span
+                class="text-[11px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
+              >
+                {{ formatCurrency(Math.max(p.remaining, 0)) }} left
+                <template v-if="!isMonthly">
+                  <span class="text-text-tertiary"
+                    >&middot; {{ formatCurrency(p.budget.amount / 12) }}/mo</span
+                  >
+                </template>
+              </span>
+            </div>
+          </div>
+        </CardContent>
+      </Card>
     </div>
 
     <!-- Create/Edit Dialog -->
@@ -514,11 +458,29 @@ function monthlyChartOption(progress: BudgetProgress) {
           <DialogTitle>{{ editingBudget ? 'Edit Budget' : 'New Budget' }}</DialogTitle>
         </DialogHeader>
 
-        <div class="space-y-4">
-          <!-- Name -->
-          <div>
-            <label class="text-[12px] font-medium text-text-secondary mb-1 block">Name</label>
-            <Input v-model="formName" placeholder="e.g. Living Expenses" />
+        <div class="space-y-5">
+          <!-- Name + Color row -->
+          <div class="flex gap-3 items-end">
+            <div class="flex-1">
+              <label class="text-[12px] font-medium text-text-secondary mb-1 block">Name</label>
+              <Input v-model="formName" placeholder="e.g. Living Expenses" />
+            </div>
+            <div>
+              <label class="text-[12px] font-medium text-text-secondary mb-1 block">Color</label>
+              <div class="grid grid-cols-6 gap-1.5">
+                <button
+                  v-for="swatch in COLOR_SWATCHES"
+                  :key="swatch"
+                  type="button"
+                  class="w-5 h-5 rounded-full transition-all duration-150 border-2 hover:scale-110"
+                  :class="
+                    formColor === swatch ? 'border-text-primary scale-110' : 'border-transparent'
+                  "
+                  :style="{ backgroundColor: swatch }"
+                  @click="formColor = swatch"
+                />
+              </div>
+            </div>
           </div>
 
           <!-- Amount + Period row -->
@@ -543,66 +505,78 @@ function monthlyChartOption(progress: BudgetProgress) {
             </div>
           </div>
 
-          <!-- Alert threshold -->
-          <div class="grid grid-cols-[1fr_auto] gap-3 items-end">
-            <div>
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">
-                Alert at (%)
-              </label>
-              <Input v-model.number="formAlertThreshold" type="number" min="0" max="100" step="5" />
+          <!-- Alert section -->
+          <div class="border-t border-separator/30 pt-4">
+            <div class="flex items-center justify-between mb-2">
+              <span class="text-[12px] font-medium text-text-primary">Alerts</span>
+              <Switch v-model="formAlertEnabled" />
             </div>
-            <div class="flex items-center gap-2 pb-1">
-              <Switch v-model:checked="formAlertEnabled" />
-              <span class="text-[12px] text-text-secondary">Enabled</span>
+            <div
+              class="flex items-center gap-2 text-[12px] transition-opacity duration-150"
+              :class="
+                formAlertEnabled
+                  ? 'text-text-secondary'
+                  : 'text-text-tertiary opacity-40 pointer-events-none'
+              "
+            >
+              <span class="whitespace-nowrap">Notify at</span>
+              <Input
+                v-model.number="formAlertThreshold"
+                type="number"
+                min="0"
+                max="100"
+                step="5"
+                class="!h-7 w-16 text-center text-[12px] tabular-nums"
+              />
+              <span>% of budget</span>
             </div>
-          </div>
-
-          <!-- Color -->
-          <div>
-            <label class="text-[12px] font-medium text-text-secondary mb-1 block">Color</label>
-            <input
-              v-model="formColor"
-              type="color"
-              class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer"
-            />
           </div>
 
           <!-- Categories -->
-          <div>
-            <label class="text-[12px] font-medium text-text-secondary mb-1.5 block">
+          <div class="border-t border-separator/30 pt-4">
+            <label class="text-[12px] font-medium text-text-primary mb-2 block">
               Categories
-              <span class="text-text-tertiary">({{ formCategoryNames.length }} selected)</span>
+              <span v-if="formCategoryNames.length" class="text-text-tertiary font-normal"
+                >&middot; {{ formCategoryNames.length }}</span
+              >
             </label>
             <div
-              class="max-h-48 overflow-y-auto rounded-lg border border-separator/30 p-2 space-y-1"
+              v-if="categories.filter((c) => !c.ignoredFromStats).length > 8"
+              class="relative mb-2"
             >
+              <Search
+                class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary"
+              />
+              <Input v-model="categorySearch" placeholder="Search…" class="!h-7 text-[12px] pl-8" />
+            </div>
+            <div class="max-h-48 overflow-y-auto -mx-1 space-y-px">
               <button
-                v-for="cat in categories.filter((c) => !c.ignoredFromStats)"
+                v-for="cat in filteredCategories"
                 :key="cat.name"
-                class="flex items-center gap-2 w-full px-2 py-1.5 rounded-md text-left text-[13px] transition-colors"
+                class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded text-left text-[13px] transition-colors"
                 :class="
                   formCategoryNames.includes(cat.name)
-                    ? 'bg-primary/10 text-primary'
-                    : 'hover:bg-bg-tertiary text-text-primary'
+                    ? 'bg-fill-primary'
+                    : 'hover:bg-fill-secondary'
                 "
                 @click="toggleCategory(cat.name)"
               >
                 <div
-                  class="w-3 h-3 rounded-full flex-shrink-0 border"
+                  class="w-2 h-2 rounded-full flex-shrink-0"
                   :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }"
                 />
-                <span class="flex-1">{{ cat.label }}</span>
-                <svg
+                <span class="flex-1 text-text-primary">{{ cat.label }}</span>
+                <Check
                   v-if="formCategoryNames.includes(cat.name)"
-                  class="h-3.5 w-3.5 text-primary flex-shrink-0"
-                  viewBox="0 0 24 24"
-                  fill="none"
-                  stroke="currentColor"
-                  stroke-width="2.5"
-                >
-                  <polyline points="20 6 9 17 4 12" />
-                </svg>
+                  class="h-3.5 w-3.5 text-text-primary flex-shrink-0"
+                />
               </button>
+              <p
+                v-if="filteredCategories.length === 0"
+                class="text-[12px] text-text-tertiary text-center py-3 px-2"
+              >
+                No match for "{{ categorySearch }}"
+              </p>
             </div>
           </div>
         </div>

@@ -7,7 +7,7 @@
   "scripts": {
     "dev": "tsx watch src/index.ts",
     "dev:all": "concurrently \"npm run dev\" \"npm run dashboard:dev\"",
-    "build": "tsc && shx cp -r src/db/migrations dist/db/migrations && npm run dashboard:build",
+    "build": "tsc && shx rm -rf dist/db/migrations && shx cp -r src/db/migrations dist/db/migrations && npm run dashboard:build",
     "start": "node dist/index.js",
     "db:generate": "drizzle-kit generate",
     "db:studio": "drizzle-kit studio",
