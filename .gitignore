@@ -7,6 +7,7 @@ data/
 dashboard/node_modules/
 dashboard/dist/
 .worktrees/
+.superpowers/
 backups/
 electron/*.js
 electron/*.mjs
