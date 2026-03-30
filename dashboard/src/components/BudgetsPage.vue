@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch } from 'vue';
+import { ref, computed, onMounted, watchEffect } from 'vue';
 import { ToggleGroupRoot, ToggleGroupItem } from 'reka-ui';
 import {
   getBudgetProgress,
@@ -59,12 +59,18 @@ const categorySearch = ref('');
 
 const categoryMap = computed(() => buildCategoryMap(categories.value));
 
+const nonIgnoredCategories = computed(() => categories.value.filter((c) => !c.ignoredFromStats));
+
 const filteredCategories = computed(() => {
   const q = categorySearch.value.toLowerCase();
-  return categories.value
-    .filter((c) => !c.ignoredFromStats)
-    .filter((c) => !q || c.label.toLowerCase().includes(q) || c.name.toLowerCase().includes(q));
+  if (!q) return nonIgnoredCategories.value;
+  return nonIgnoredCategories.value.filter(
+    (c) => c.label.toLowerCase().includes(q) || c.name.toLowerCase().includes(q),
+  );
 });
+
+const TOGGLE_ITEM_CLASS =
+  'px-3 py-1 text-[12px] font-medium rounded-md transition-colors duration-150 data-[state=on]:bg-bg-primary data-[state=on]:text-text-primary data-[state=on]:shadow-[var(--shadow-sm)] data-[state=off]:text-text-secondary data-[state=off]:hover:text-text-primary';
 
 const COLOR_SWATCHES = [
   '#007AFF',
@@ -112,7 +118,7 @@ const hasBothPeriods = computed(
 );
 
 // Auto-select the period that has budgets if only one exists
-watch(progressData, () => {
+watchEffect(() => {
   if (monthlyBudgets.value.length === 0 && yearlyBudgets.value.length > 0)
     activePeriod.value = 'yearly';
   else if (yearlyBudgets.value.length === 0 && monthlyBudgets.value.length > 0)
@@ -179,26 +185,19 @@ async function saveBudget() {
 
   saving.value = true;
   try {
+    const payload = {
+      name: formName.value,
+      amount,
+      period: formPeriod.value,
+      categoryNames: formCategoryNames.value,
+      alertThreshold: formAlertThreshold.value,
+      alertEnabled: formAlertEnabled.value,
+      color: formColor.value,
+    };
     if (editingBudget.value) {
-      await updateBudgetApi(editingBudget.value.id, {
-        name: formName.value,
-        amount,
-        period: formPeriod.value,
-        categoryNames: formCategoryNames.value,
-        alertThreshold: formAlertThreshold.value,
-        alertEnabled: formAlertEnabled.value,
-        color: formColor.value,
-      });
+      await updateBudgetApi(editingBudget.value.id, payload);
     } else {
-      await createBudget({
-        name: formName.value,
-        amount,
-        period: formPeriod.value,
-        categoryNames: formCategoryNames.value,
-        alertThreshold: formAlertThreshold.value,
-        alertEnabled: formAlertEnabled.value,
-        color: formColor.value,
-      });
+      await createBudget(payload);
     }
     showDialog.value = false;
     await loadData();
@@ -221,10 +220,14 @@ async function removeBudget(id: number, name: string) {
 
 // ── Progress color ──
 
-function progressColor(percentage: number): string {
+function setActivePeriod(v: unknown) {
+  if (v === 'monthly' || v === 'yearly') activePeriod.value = v;
+}
+
+function progressColor(percentage: number, neutral = false): string {
   if (percentage >= 100) return 'var(--destructive)';
   if (percentage >= 80) return 'var(--warning)';
-  return 'var(--success)';
+  return neutral ? 'var(--text-primary)' : 'var(--success)';
 }
 </script>
 
@@ -238,22 +241,10 @@ function progressColor(percentage: number): string {
           type="single"
           :model-value="activePeriod"
           class="inline-flex rounded-lg bg-bg-tertiary p-0.5"
-          @update:model-value="
-            (v: unknown) => {
-              if (v === 'monthly' || v === 'yearly') activePeriod = v;
-            }
-          "
+          @update:model-value="setActivePeriod"
         >
-          <ToggleGroupItem
-            value="monthly"
-            class="px-3 py-1 text-[12px] font-medium rounded-md transition-colors duration-150 data-[state=on]:bg-bg-primary data-[state=on]:text-text-primary data-[state=on]:shadow-[var(--shadow-sm)] data-[state=off]:text-text-secondary data-[state=off]:hover:text-text-primary"
-            >Monthly</ToggleGroupItem
-          >
-          <ToggleGroupItem
-            value="yearly"
-            class="px-3 py-1 text-[12px] font-medium rounded-md transition-colors duration-150 data-[state=on]:bg-bg-primary data-[state=on]:text-text-primary data-[state=on]:shadow-[var(--shadow-sm)] data-[state=off]:text-text-secondary data-[state=off]:hover:text-text-primary"
-            >Yearly</ToggleGroupItem
-          >
+          <ToggleGroupItem value="monthly" :class="TOGGLE_ITEM_CLASS">Monthly</ToggleGroupItem>
+          <ToggleGroupItem value="yearly" :class="TOGGLE_ITEM_CLASS">Yearly</ToggleGroupItem>
         </ToggleGroupRoot>
         <Button size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-1" />
@@ -316,14 +307,7 @@ function progressColor(percentage: number): string {
           <div class="flex items-baseline gap-2">
             <p
               class="text-[20px] font-semibold tabular-nums leading-tight"
-              :style="{
-                color:
-                  activePct >= 100
-                    ? 'var(--destructive)'
-                    : activePct >= 80
-                      ? 'var(--warning)'
-                      : 'var(--text-primary)',
-              }"
+              :style="{ color: progressColor(activePct, true) }"
             >
               {{ formatCurrency(activeSpent) }}
             </p>
@@ -540,10 +524,7 @@ function progressColor(percentage: number): string {
                 >&middot; {{ formCategoryNames.length }}</span
               >
             </label>
-            <div
-              v-if="categories.filter((c) => !c.ignoredFromStats).length > 8"
-              class="relative mb-2"
-            >
+            <div v-if="nonIgnoredCategories.length > 8" class="relative mb-2">
               <Search
                 class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary"
               />
