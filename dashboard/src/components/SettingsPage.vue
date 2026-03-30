@@ -300,7 +300,7 @@ async function save() {
             </div>
 
             <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
-              <Button variant="outline" size="sm" class="w-full" @click="startOAuth">
+              <Button variant="secondary" size="sm" class="w-full" @click="startOAuth">
                 Login with Anthropic
               </Button>
               <p class="text-[11px] text-text-secondary">
