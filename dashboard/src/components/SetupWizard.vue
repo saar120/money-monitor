@@ -6,7 +6,13 @@ import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from '@/components/ui/select';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check, CheckCircle } from 'lucide-vue-next';
 
 const router = useRouter();
@@ -33,7 +39,7 @@ onMounted(async () => {
 });
 
 const currentProvider = computed(() =>
-  providers.value.find(p => p.id === selectedProvider.value)
+  providers.value.find((p) => p.id === selectedProvider.value),
 );
 
 // Step 2: Credentials Master Key
@@ -44,11 +50,11 @@ const autoMasterKey = ref(generateKey());
 function generateKey(): string {
   const arr = new Uint8Array(32);
   crypto.getRandomValues(arr);
-  return Array.from(arr, b => b.toString(16).padStart(2, '0')).join('');
+  return Array.from(arr, (b) => b.toString(16).padStart(2, '0')).join('');
 }
 
 const masterKey = computed(() =>
-  masterKeyMode.value === 'auto' ? autoMasterKey.value : customMasterKey.value
+  masterKeyMode.value === 'auto' ? autoMasterKey.value : customMasterKey.value,
 );
 
 // Step 3: Optional settings
@@ -58,9 +64,12 @@ const telegramBotToken = ref('');
 
 // Anthropic OAuth
 const oauthConnected = ref(false);
-const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useAnthropicOAuth({
-  onSuccess: () => { oauthConnected.value = true; },
-});
+const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } =
+  useAnthropicOAuth({
+    onSuccess: () => {
+      oauthConnected.value = true;
+    },
+  });
 
 const canProceed = computed(() => {
   if (step.value === 1) {
@@ -113,13 +122,18 @@ async function finish() {
 </script>
 
 <template>
-  <div class="min-h-screen bg-bg-secondary flex items-center justify-center p-8" style="background-image: radial-gradient(ellipse at 50% 0%, var(--accent-15), transparent 70%)">
+  <div
+    class="min-h-screen bg-bg-secondary flex items-center justify-center p-8"
+    style="background-image: radial-gradient(ellipse at 50% 0%, var(--accent-15), transparent 70%)"
+  >
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
     <div class="w-full max-w-lg">
       <!-- Header -->
       <div class="text-center mb-8">
-        <div class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-4">
+        <div
+          class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-4"
+        >
           <Wallet class="h-7 w-7 text-primary" />
         </div>
         <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
@@ -129,7 +143,8 @@ async function finish() {
       <!-- Progress -->
       <div class="flex items-center justify-center gap-2 mb-8">
         <div
-          v-for="s in 3" :key="s"
+          v-for="s in 3"
+          :key="s"
           class="h-2 w-2 rounded-full transition-all duration-200"
           :class="[s <= step ? 'bg-primary' : 'bg-bg-tertiary', s === step ? 'scale-110' : '']"
         />
@@ -154,9 +169,13 @@ async function finish() {
             <Button
               v-for="p in providers"
               :key="p.id"
-              :variant="selectedProvider === p.id ? 'default' : 'outline'"
-              @click="selectedProvider = p.id; selectedModel = ''; apiKey = ''"
+              :variant="selectedProvider === p.id ? 'default' : 'secondary'"
               class="justify-start"
+              @click="
+                selectedProvider = p.id;
+                selectedModel = '';
+                apiKey = '';
+              "
             >
               {{ p.name }}
             </Button>
@@ -164,10 +183,12 @@ async function finish() {
 
           <!-- API Key -->
           <div class="space-y-1">
-            <label class="text-[13px] font-medium text-text-primary block">{{ currentProvider?.name ?? 'API' }} Key</label>
+            <label class="text-[13px] font-medium text-text-primary block"
+              >{{ currentProvider?.name ?? 'API' }} Key</label
+            >
             <Input
-              type="password"
               v-model="apiKey"
+              type="password"
               :placeholder="selectedProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'"
             />
           </div>
@@ -179,13 +200,16 @@ async function finish() {
               <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
             </div>
 
-            <div v-if="oauthConnected && oauthStep === 'idle'" class="flex items-center gap-2 text-[13px]">
+            <div
+              v-if="oauthConnected && oauthStep === 'idle'"
+              class="flex items-center gap-2 text-[13px]"
+            >
               <CheckCircle class="h-4 w-4 text-green-500" />
               <span class="text-text-secondary">Anthropic OAuth connected</span>
             </div>
 
             <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
-              <Button variant="outline" size="sm" @click="startOAuth" class="w-full">
+              <Button variant="secondary" size="sm" class="w-full" @click="startOAuth">
                 Login with Anthropic
               </Button>
               <p class="text-[11px] text-text-secondary">
@@ -208,7 +232,9 @@ async function finish() {
                   Submit
                 </Button>
               </div>
-              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">Cancel</button>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">
+                Cancel
+              </button>
             </div>
 
             <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
@@ -220,8 +246,10 @@ async function finish() {
             <!-- Manual OAuth token paste -->
             <div class="space-y-1">
               <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
-              <Input type="password" v-model="oauthToken" placeholder="oat-..." />
-              <p class="text-[11px] text-text-secondary mt-1">Paste an OAuth token directly (e.g. from Claude Code CLI)</p>
+              <Input v-model="oauthToken" type="password" placeholder="oat-..." />
+              <p class="text-[11px] text-text-secondary mt-1">
+                Paste an OAuth token directly (e.g. from Claude Code CLI)
+              </p>
             </div>
           </template>
 
@@ -262,14 +290,14 @@ async function finish() {
         <CardContent class="space-y-4">
           <div class="flex gap-2">
             <Button
-              :variant="masterKeyMode === 'auto' ? 'default' : 'outline'"
+              :variant="masterKeyMode === 'auto' ? 'default' : 'secondary'"
               size="sm"
               @click="masterKeyMode = 'auto'"
             >
               Auto-generate
             </Button>
             <Button
-              :variant="masterKeyMode === 'custom' ? 'default' : 'outline'"
+              :variant="masterKeyMode === 'custom' ? 'default' : 'secondary'"
               size="sm"
               @click="masterKeyMode = 'custom'"
             >
@@ -278,7 +306,9 @@ async function finish() {
           </div>
 
           <div v-if="masterKeyMode === 'auto'">
-            <div class="p-3 rounded-lg bg-bg-secondary border border-separator font-mono text-[11px] break-all text-text-secondary">
+            <div
+              class="p-3 rounded-lg bg-bg-secondary border border-separator font-mono text-[11px] break-all text-text-secondary"
+            >
               {{ autoMasterKey }}
             </div>
             <p class="text-[11px] text-text-secondary mt-1.5">
@@ -311,7 +341,9 @@ async function finish() {
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Scrape Schedule (cron)</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+              >Scrape Schedule (cron)</label
+            >
             <Input v-model="scrapeCron" placeholder="0 6 * * *" />
           </div>
           <div>
@@ -319,7 +351,9 @@ async function finish() {
             <Input v-model="scrapeTimezone" placeholder="Asia/Jerusalem" />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Telegram Bot Token</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5"
+              >Telegram Bot Token</label
+            >
             <Input v-model="telegramBotToken" type="password" placeholder="Optional" />
           </div>
         </CardContent>
@@ -330,11 +364,7 @@ async function finish() {
 
       <!-- Navigation -->
       <div class="flex items-center justify-between mt-6">
-        <Button
-          v-if="step > 1"
-          variant="ghost"
-          @click="prev"
-        >
+        <Button v-if="step > 1" variant="ghost" @click="prev">
           <ArrowLeft class="h-4 w-4 mr-1" />
           Back
         </Button>
@@ -344,23 +374,20 @@ async function finish() {
           <Button
             v-if="step === 1"
             variant="ghost"
-            @click="step = 2; apiKey = ''; oauthToken = ''; cancelOAuth()"
+            @click="
+              step = 2;
+              apiKey = '';
+              oauthToken = '';
+              cancelOAuth();
+            "
           >
             Skip
           </Button>
-          <Button
-            v-if="step < 3"
-            :disabled="step === 2 && !canProceed"
-            @click="next"
-          >
+          <Button v-if="step < 3" :disabled="step === 2 && !canProceed" @click="next">
             Next
             <ArrowRight class="h-4 w-4 ml-1" />
           </Button>
-          <Button
-            v-if="step === 3"
-            :disabled="saving"
-            @click="finish"
-          >
+          <Button v-if="step === 3" :disabled="saving" @click="finish">
             {{ saving ? 'Saving...' : 'Finish Setup' }}
             <Check v-if="!saving" class="h-4 w-4 ml-1" />
           </Button>

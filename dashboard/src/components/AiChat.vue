@@ -175,7 +175,7 @@ function handleKeydown(e: KeyboardEvent) {
                 <Button
                   v-for="s in suggestions"
                   :key="s"
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   class="rounded-xl border-separator/70 text-primary hover:bg-primary/8 text-[12px] h-auto py-2 px-4 shadow-[var(--shadow-sm)]"
                   @click="sendMessage(s)"

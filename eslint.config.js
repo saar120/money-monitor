@@ -60,6 +60,8 @@ export default tseslint.config(
         WheelEvent: 'readonly',
         PointerEvent: 'readonly',
         MouseEvent: 'readonly',
+        Event: 'readonly',
+        crypto: 'readonly',
         HTMLCanvasElement: 'readonly',
         HTMLDivElement: 'readonly',
         requestAnimationFrame: 'readonly',

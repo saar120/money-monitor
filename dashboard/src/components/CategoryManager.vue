@@ -193,7 +193,7 @@ onMounted(load);
       </SettingsRow>
       <SettingsRow>
         <div class="flex items-center gap-2 ml-auto">
-          <Button size="sm" variant="outline" @click="showNewForm = false">Cancel</Button>
+          <Button size="sm" variant="secondary" @click="showNewForm = false">Cancel</Button>
           <Button size="sm" :disabled="saving || !newName || !newLabel" @click="addCategory">
             {{ saving ? 'Saving…' : 'Save' }}
           </Button>

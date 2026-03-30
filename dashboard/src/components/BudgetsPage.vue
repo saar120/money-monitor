@@ -277,7 +277,7 @@ function progressColor(percentage: number, neutral = false): string {
           Set spending limits on categories to track where your money goes.
         </p>
       </div>
-      <Button size="sm" variant="outline" @click="openCreate">
+      <Button size="sm" variant="secondary" @click="openCreate">
         <Plus class="h-4 w-4 mr-1" />
         Create budget
       </Button>
@@ -384,14 +384,14 @@ function progressColor(percentage: number, neutral = false): string {
                 >
                   <button
                     type="button"
-                    class="p-1 rounded hover:bg-bg-tertiary text-text-tertiary hover:text-text-primary transition-colors duration-150"
+                    class="p-1 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
                     @click="openEdit(p.budget)"
                   >
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
-                    class="p-1 rounded hover:bg-bg-tertiary text-text-tertiary hover:text-destructive transition-colors duration-150"
+                    class="p-1 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-destructive transition-all duration-150"
                     @click="removeBudget(p.budget.id, p.budget.name)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
@@ -537,8 +537,8 @@ function progressColor(percentage: number, neutral = false): string {
                 class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded text-left text-[13px] transition-colors"
                 :class="
                   formCategoryNames.includes(cat.name)
-                    ? 'bg-fill-primary'
-                    : 'hover:bg-fill-secondary'
+                    ? 'bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)]'
+                    : 'hover:bg-[var(--glass-bg)] border border-transparent'
                 "
                 @click="toggleCategory(cat.name)"
               >
@@ -563,8 +563,9 @@ function progressColor(percentage: number, neutral = false): string {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="showDialog = false">Cancel</Button>
+          <Button variant="secondary" @click="showDialog = false">Cancel</Button>
           <Button
+            variant="filled"
             :disabled="saving || !formName || !Number(formAmount) || formCategoryNames.length === 0"
             @click="saveBudget"
           >
