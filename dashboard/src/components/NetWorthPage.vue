@@ -685,7 +685,7 @@ const fullLiabilityMap = computed(() => {
   <div class="space-y-5 animate-fade-in-up">
     <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
-        <Button size="sm" variant="outline" @click="openAddLiability">
+        <Button size="sm" variant="secondary" @click="openAddLiability">
           <Plus class="h-4 w-4 mr-1" />
           Add Liability
         </Button>
@@ -909,7 +909,7 @@ const fullLiabilityMap = computed(() => {
                     <p class="text-[11px] font-medium text-text-secondary">Holdings (editing):</p>
                     <div class="flex gap-1.5">
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         class="h-7 text-[11px]"
                         @click="cancelQuickUpdate"
@@ -991,7 +991,7 @@ const fullLiabilityMap = computed(() => {
                     >
                       No holdings yet.
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         class="h-6 text-[11px] ml-2"
                         @click.stop="openAddHolding(asset.id)"
@@ -1074,7 +1074,7 @@ const fullLiabilityMap = computed(() => {
                       class="flex gap-1.5 mt-1"
                     >
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         class="h-6 text-[11px]"
                         @click.stop="openAddHolding(asset.id)"
@@ -1082,7 +1082,7 @@ const fullLiabilityMap = computed(() => {
                         <Plus class="h-3 w-3 mr-1" /> Add Holding
                       </Button>
                       <Button
-                        variant="outline"
+                        variant="secondary"
                         size="sm"
                         class="h-6 text-[11px]"
                         @click.stop="startQuickUpdate(getFullAsset(asset.id)!)"
@@ -1325,9 +1325,9 @@ const fullLiabilityMap = computed(() => {
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="!assetValid || assetSaving" @click="handleSaveAsset">
+          <Button variant="filled" :disabled="!assetValid || assetSaving" @click="handleSaveAsset">
             <Loader2 v-if="assetSaving" class="h-4 w-4 mr-2 animate-spin" />
             {{ editingAsset ? 'Save Changes' : 'Add Asset' }}
           </Button>
@@ -1394,9 +1394,10 @@ const fullLiabilityMap = computed(() => {
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
           <Button
+            variant="filled"
             :disabled="!holdingValid || holdingSaving || holdingDoubleCount"
             @click="handleSaveHolding"
           >
@@ -1463,9 +1464,13 @@ const fullLiabilityMap = computed(() => {
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="!liabilityValid || liabilitySaving" @click="handleSaveLiability">
+          <Button
+            variant="filled"
+            :disabled="!liabilityValid || liabilitySaving"
+            @click="handleSaveLiability"
+          >
             <Loader2 v-if="liabilitySaving" class="h-4 w-4 mr-2 animate-spin" />
             {{ editingLiability ? 'Save Changes' : 'Add Liability' }}
           </Button>
@@ -1493,12 +1498,7 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingAsset = null">Cancel</AlertDialogCancel>
-          <Button
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            @click="handleDeleteAsset"
-          >
-            Hide Asset
-          </Button>
+          <Button variant="destructive-filled" @click="handleDeleteAsset"> Hide Asset </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
     </AlertDialog>
@@ -1522,10 +1522,7 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingHolding = null">Cancel</AlertDialogCancel>
-          <Button
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            @click="handleDeleteHolding"
-          >
+          <Button variant="destructive-filled" @click="handleDeleteHolding">
             Delete Holding
           </Button>
         </AlertDialogFooter>
@@ -1550,10 +1547,7 @@ const fullLiabilityMap = computed(() => {
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="deletingLiability = null">Cancel</AlertDialogCancel>
-          <Button
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-            @click="handleDeleteLiability"
-          >
+          <Button variant="destructive-filled" @click="handleDeleteLiability">
             Hide Liability
           </Button>
         </AlertDialogFooter>
