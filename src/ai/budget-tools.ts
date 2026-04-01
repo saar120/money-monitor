@@ -9,7 +9,7 @@ export function buildGetBudgetProgressTool() {
   return createAgentTool({
     name: 'get_budget_progress',
     description:
-      'Get budget progress — how much has been spent vs. the budget limit. Returns spending amount, percentage used, remaining amount, and over-budget status. If budget_id is provided, returns progress for that single budget. Otherwise returns all active budgets. For yearly budgets, set monthly_view to true to get a per-month breakdown.',
+      'Get budget progress — how much has been spent vs. the budget limit. Returns spending amount, percentage used, remaining amount, and over-budget status. If budget_id is provided, returns progress for that single budget. Otherwise returns all active budgets. For yearly budgets, set monthly_view to true to get a per-month breakdown. Use reference_date to look at past periods (e.g. "2026-03-01" for last month, "2025-06-15" for 2025 yearly budgets).',
     label: 'Checking budget progress',
     parameters: Type.Object({
       budget_id: Type.Optional(
@@ -22,6 +22,12 @@ export function buildGetBudgetProgressTool() {
         Type.Boolean({
           description:
             'For yearly budgets, include per-month breakdown. Default false. Prefer using with budget_id to avoid large payloads.',
+        }),
+      ),
+      reference_date: Type.Optional(
+        Type.String({
+          description:
+            'ISO date (e.g. "2026-03-01") to view a past period. For monthly budgets, returns that month. For yearly, returns that year. Defaults to today (current period).',
         }),
       ),
     }),
@@ -85,16 +91,21 @@ Before calling, confirm the details with the user if there is any ambiguity.`,
 export async function getBudgetProgress(input: {
   budget_id?: number;
   monthly_view?: boolean;
+  reference_date?: string;
 }): Promise<string> {
   const monthlyView = input.monthly_view ?? false;
 
   if (input.budget_id !== undefined) {
-    const result = budgetService.getBudgetProgress(input.budget_id, monthlyView);
+    const result = budgetService.getBudgetProgress(
+      input.budget_id,
+      monthlyView,
+      input.reference_date,
+    );
     if (!result) return JSON.stringify({ error: 'Budget not found' });
     return JSON.stringify(result);
   }
 
-  return JSON.stringify(budgetService.getAllBudgetProgress(monthlyView));
+  return JSON.stringify(budgetService.getAllBudgetProgress(monthlyView, input.reference_date));
 }
 
 export async function manageBudget(input: {

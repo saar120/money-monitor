@@ -89,6 +89,31 @@ describe('getBudgetProgress', () => {
     expect(result.monthlyView.monthlyBudget).toBe(1000);
     expect(result.monthlyView.breakdown).toBeInstanceOf(Array);
   });
+
+  it('returns past month progress with reference_date', async () => {
+    const account = insertAccount(testDb.db);
+    const budget = insertBudget({
+      name: 'Food',
+      amount: 500,
+      period: 'monthly',
+      categoryNames: JSON.stringify(['food']),
+    });
+
+    // Transaction in March 2026
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-03-10',
+      chargedAmount: -150,
+      category: 'food',
+    });
+
+    // Query March specifically
+    const result = JSON.parse(
+      await getBudgetProgress({ budget_id: budget.id, reference_date: '2026-03-15' }),
+    );
+    expect(result.spent).toBe(150);
+    expect(result.period.startDate).toBe('2026-03-01');
+    expect(result.period.endDate).toBe('2026-03-31');
+  });
 });
 
 describe('manageBudget', () => {

@@ -103,27 +103,38 @@ export function deleteBudget(id: number) {
 
 // ── Progress ──
 
-function getBudgetDateRange(period: string): { startDate: string; endDate: string } {
+function getBudgetDateRange(
+  period: string,
+  referenceDate?: string,
+): { startDate: string; endDate: string } {
   const today = todayInIsrael();
-  const [y, m] = today.split('-').map(Number);
+  const ref = referenceDate ?? today;
+  const [y, m] = ref.split('-').map(Number);
 
   if (period === 'yearly') {
-    return { startDate: `${y}-01-01`, endDate: today };
+    // If the reference year is the current year, end date is today; otherwise end of that year
+    const endDate = y === parseInt(today.split('-')[0], 10) ? today : `${y}-12-31`;
+    return { startDate: `${y}-01-01`, endDate };
   }
   // monthly
-  return { startDate: `${y}-${String(m).padStart(2, '0')}-01`, endDate: today };
+  const lastDay = new Date(y, m, 0).getDate();
+  const monthStr = String(m).padStart(2, '0');
+  const isCurrent =
+    y === parseInt(today.split('-')[0], 10) && m === parseInt(today.split('-')[1], 10);
+  const endDate = isCurrent ? today : `${y}-${monthStr}-${String(lastDay).padStart(2, '0')}`;
+  return { startDate: `${y}-${monthStr}-01`, endDate };
 }
 
-function getCurrentMonthNumber(): number {
-  const today = todayInIsrael();
-  return parseInt(today.split('-')[1], 10);
+function getMonthNumber(referenceDate?: string): number {
+  const ref = referenceDate ?? todayInIsrael();
+  return parseInt(ref.split('-')[1], 10);
 }
 
-export function getBudgetProgress(budgetId: number, monthlyView = false) {
+export function getBudgetProgress(budgetId: number, monthlyView = false, referenceDate?: string) {
   const budget = getBudget(budgetId);
   if (!budget) return null;
 
-  const { startDate, endDate } = getBudgetDateRange(budget.period);
+  const { startDate, endDate } = getBudgetDateRange(budget.period, referenceDate);
   const categoryNames = budget.categoryNames;
 
   if (categoryNames.length === 0) {
@@ -172,7 +183,15 @@ export function getBudgetProgress(budgetId: number, monthlyView = false) {
       .all();
   }
 
-  return buildProgressResult(budget, spent, monthlyBreakdown, startDate, endDate, monthlyView);
+  return buildProgressResult(
+    budget,
+    spent,
+    monthlyBreakdown,
+    startDate,
+    endDate,
+    monthlyView,
+    referenceDate,
+  );
 }
 
 function buildProgressResult(
@@ -182,6 +201,7 @@ function buildProgressResult(
   startDate: string,
   endDate: string,
   monthlyView: boolean,
+  referenceDate?: string,
 ) {
   const percentage = budget.amount > 0 ? round2((spent / budget.amount) * 100) : 0;
   const remaining = round2(budget.amount - spent);
@@ -200,7 +220,7 @@ function buildProgressResult(
 
   if (budget.period === 'yearly' && monthlyView) {
     const monthlyBudget = round2(budget.amount / 12);
-    const currentMonth = getCurrentMonthNumber();
+    const currentMonth = getMonthNumber(referenceDate);
     const expectedSpentByNow = round2(monthlyBudget * currentMonth);
 
     result.monthlyView = {
@@ -220,7 +240,7 @@ function buildProgressResult(
   return result;
 }
 
-export function getAllBudgetProgress(monthlyView = false) {
+export function getAllBudgetProgress(monthlyView = false, referenceDate?: string) {
   const allBudgets = listBudgets(false);
-  return allBudgets.map((b) => getBudgetProgress(b.id, monthlyView)).filter(Boolean);
+  return allBudgets.map((b) => getBudgetProgress(b.id, monthlyView, referenceDate)).filter(Boolean);
 }
