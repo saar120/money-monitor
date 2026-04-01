@@ -42,6 +42,7 @@ import {
   buildRecordMovementTool,
   buildManageLiabilityTool,
 } from './asset-tools.js';
+import { buildGetBudgetProgressTool, buildManageBudgetTool } from './budget-tools.js';
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
 import { buildGenerateTableImageTool } from './image-tools.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
@@ -132,6 +133,8 @@ const TOOL_STATUS: Record<string, string> = {
   manage_holding: 'Updating holding...',
   record_movement: 'Recording movement...',
   manage_liability: 'Updating liability...',
+  get_budget_progress: 'Checking budget progress...',
+  manage_budget: 'Updating budget...',
   get_alert_settings: 'Checking alert settings...',
   update_alert_settings: 'Updating alert settings...',
   get_latest_scrape_transactions: 'Looking up latest scrape results...',
@@ -227,6 +230,8 @@ export async function* chat(
     buildManageHoldingTool(),
     buildRecordMovementTool(),
     buildManageLiabilityTool(),
+    buildGetBudgetProgressTool(),
+    buildManageBudgetTool(),
     buildGetAlertSettingsTool(),
     buildUpdateAlertSettingsTool(),
     buildGetLatestScrapeTransactionsTool(),
