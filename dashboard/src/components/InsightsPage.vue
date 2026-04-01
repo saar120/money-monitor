@@ -243,10 +243,10 @@ onMounted(async () => {
         {{ offset + 1 }}–{{ Math.min(offset + limit, total) }} of {{ total }}
       </p>
       <div class="flex gap-2">
-        <Button variant="outline" size="sm" :disabled="offset === 0" @click="prevPage">
+        <Button variant="secondary" size="sm" :disabled="offset === 0" @click="prevPage">
           Previous
         </Button>
-        <Button variant="outline" size="sm" :disabled="offset + limit >= total" @click="nextPage">
+        <Button variant="secondary" size="sm" :disabled="offset + limit >= total" @click="nextPage">
           Next
         </Button>
       </div>

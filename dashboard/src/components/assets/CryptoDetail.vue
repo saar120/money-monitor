@@ -2,10 +2,18 @@
 import { ref, computed, onMounted, watch } from 'vue';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import {
-  getAsset, getMovements, getAssetSnapshots,
-  createHolding, updateHolding, deleteHolding,
-  createMovement, deleteMovement,
-  type Asset, type Holding, type Movement, type AssetSnapshot,
+  getAsset,
+  getMovements,
+  getAssetSnapshots,
+  createHolding,
+  updateHolding,
+  deleteHolding,
+  createMovement,
+  deleteMovement,
+  type Asset,
+  type Holding,
+  type Movement,
+  type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency } from '@/lib/format';
@@ -17,22 +25,45 @@ import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import {
-  AlertDialog, AlertDialogCancel,
-  AlertDialogContent, AlertDialogDescription, AlertDialogFooter,
-  AlertDialogHeader, AlertDialogTitle,
+  AlertDialog,
+  AlertDialogCancel,
+  AlertDialogContent,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogHeader,
+  AlertDialogTitle,
 } from '@/components/ui/alert-dialog';
 import {
-  Table, TableBody, TableCell, TableHead, TableHeader, TableRow,
+  Table,
+  TableBody,
+  TableCell,
+  TableHead,
+  TableHeader,
+  TableRow,
 } from '@/components/ui/table';
 import {
-  Select, SelectContent, SelectItem, SelectTrigger, SelectValue,
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
 } from '@/components/ui/select';
 import {
-  Plus, Trash2, TrendingUp, TrendingDown,
-  AlertCircle, Loader2, RefreshCw,
+  Plus,
+  Trash2,
+  TrendingUp,
+  TrendingDown,
+  AlertCircle,
+  Loader2,
+  RefreshCw,
 } from 'lucide-vue-next';
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
@@ -40,11 +71,9 @@ const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 // ── Data fetching ──
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
 const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 })
+  getMovements(props.assetId, { limit: 50 }),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
-  getAssetSnapshots(props.assetId)
-);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
 
 onMounted(() => {
   movementsApi.execute();
@@ -77,11 +106,15 @@ const MOVEMENT_BADGE_CLASSES: Record<string, string> = {
 };
 
 const buySellMovements = computed(() =>
-  movements.value.filter(m => m.type === 'buy' || m.type === 'sell')
+  movements.value.filter((m) => m.type === 'buy' || m.type === 'sell'),
 );
 
 function formatMovementDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 // ── Quick Update ──
@@ -127,7 +160,13 @@ async function saveQuickUpdate() {
 
 // ── Holding Dialog ──
 const showHoldingDialog = ref(false);
-const holdingForm = ref({ name: '', currency: 'BTC', quantity: 0, costBasis: 0, lastPrice: null as number | null });
+const holdingForm = ref({
+  name: '',
+  currency: 'BTC',
+  quantity: 0,
+  costBasis: 0,
+  lastPrice: null as number | null,
+});
 const holdingSaving = ref(false);
 
 function openAddHolding() {
@@ -148,7 +187,9 @@ async function saveHolding() {
     });
     showHoldingDialog.value = false;
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     holdingSaving.value = false;
   }
 }
@@ -165,7 +206,9 @@ async function confirmDeleteHolding() {
   try {
     await deleteHolding(target.id);
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     deletingHolding.value = false;
   }
 }
@@ -198,22 +241,28 @@ function openAddMovement() {
   showMovementDialog.value = true;
 }
 
-watch(() => movementForm.value.holdingId, (val) => {
-  if (val !== 'none') {
-    const h = holdings.value.find(x => x.id === Number(val));
-    if (h) movementForm.value.currency = h.currency;
-  }
-});
+watch(
+  () => movementForm.value.holdingId,
+  (val) => {
+    if (val !== 'none') {
+      const h = holdings.value.find((x) => x.id === Number(val));
+      if (h) movementForm.value.currency = h.currency;
+    }
+  },
+);
 
 async function saveMovement() {
   movementSaving.value = true;
   movementError.value = null;
   try {
     const isSell = movementForm.value.type === 'sell';
-    const quantity = isSell ? -Math.abs(movementForm.value.quantity) : Math.abs(movementForm.value.quantity);
+    const quantity = isSell
+      ? -Math.abs(movementForm.value.quantity)
+      : Math.abs(movementForm.value.quantity);
 
     await createMovement(props.assetId, {
-      holdingId: movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
+      holdingId:
+        movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
       date: movementForm.value.date,
       type: movementForm.value.type,
       quantity,
@@ -242,14 +291,16 @@ async function confirmDeleteMovement() {
   try {
     await deleteMovement(target.id);
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     deletingMovement.value = false;
   }
 }
 
 // ── Chart ──
 const chartLabels = computed(() =>
-  snapshots.value.map(s => {
+  snapshots.value.map((s) => {
     const d = new Date(s.date);
     return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }),
@@ -258,7 +309,14 @@ const chartLabels = computed(() =>
 const chartDatasets = computed(() =>
   snapshots.value.length === 0
     ? null
-    : [{ label: 'Value (ILS)', data: snapshots.value.map(s => s.totalValueIls), color: '#007AFF', areaColor: 'rgba(0, 122, 255, 0.15)' }],
+    : [
+        {
+          label: 'Value (ILS)',
+          data: snapshots.value.map((s) => s.totalValueIls),
+          color: '#007AFF',
+          areaColor: 'rgba(0, 122, 255, 0.15)',
+        },
+      ],
 );
 </script>
 
@@ -273,7 +331,7 @@ const chartDatasets = computed(() =>
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
     <template v-else-if="asset">
@@ -281,8 +339,13 @@ const chartDatasets = computed(() =>
       <div>
         <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]">Crypto</span>
-          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
+          <span
+            class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]"
+            >Crypto</span
+          >
+          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+            asset.institution
+          }}</span>
         </div>
       </div>
 
@@ -290,19 +353,30 @@ const chartDatasets = computed(() =>
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Value (ILS)</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Value (ILS)</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(asset.totalValueIls) }}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Invested</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Invested</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div v-if="asset.totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalInvestedIls) }}</div>
+            <div
+              v-if="asset.totalInvestedIls != null"
+              class="text-[22px] font-semibold tabular-nums"
+            >
+              {{ formatCurrency(asset.totalInvestedIls) }}
+            </div>
             <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
@@ -313,17 +387,30 @@ const chartDatasets = computed(() =>
           </CardHeader>
           <CardContent>
             <template v-if="totalReturn">
-              <div :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
-                {{ totalReturn.amount >= 0 ? '+' : '-' }}{{ formatCurrency(Math.abs(totalReturn.amount)) }}
+              <div
+                :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'"
+                class="text-[22px] font-semibold tabular-nums"
+              >
+                {{ totalReturn.amount >= 0 ? '+' : '-'
+                }}{{ formatCurrency(Math.abs(totalReturn.amount)) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
-                <component :is="totalReturn.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
+                <component
+                  :is="totalReturn.amount >= 0 ? TrendingUp : TrendingDown"
+                  class="h-3.5 w-3.5"
+                  :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'"
+                />
+                <span
+                  :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[13px]"
+                >
                   {{ totalReturn.pct >= 0 ? '+' : '' }}{{ totalReturn.pct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(asset.totalValueIls) }}</div>
+            <div v-else class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(asset.totalValueIls) }}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -335,14 +422,19 @@ const chartDatasets = computed(() =>
             <CardTitle class="text-[15px]">Coin Holdings</CardTitle>
             <div class="flex items-center gap-2">
               <template v-if="quickUpdateMode">
-                <Button variant="outline" size="sm" @click="cancelQuickUpdate">Cancel</Button>
+                <Button variant="secondary" size="sm" @click="cancelQuickUpdate">Cancel</Button>
                 <Button size="sm" :disabled="savingQuick" @click="saveQuickUpdate">
                   <Loader2 v-if="savingQuick" class="h-3.5 w-3.5 mr-1 animate-spin" />
                   Save
                 </Button>
               </template>
               <template v-else>
-                <Button v-if="holdings.length > 0" variant="outline" size="sm" @click="startQuickUpdate">
+                <Button
+                  v-if="holdings.length > 0"
+                  variant="secondary"
+                  size="sm"
+                  @click="startQuickUpdate"
+                >
                   <RefreshCw class="h-3.5 w-3.5 mr-1" />
                   Update Values
                 </Button>
@@ -397,7 +489,12 @@ const chartDatasets = computed(() =>
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.quantity"
-                        @update:model-value="(v: string | number) => { const m = editedHoldings.get(h.id); if (m) m.quantity = Number(v); }"
+                        @update:model-value="
+                          (v: string | number) => {
+                            const m = editedHoldings.get(h.id);
+                            if (m) m.quantity = Number(v);
+                          }
+                        "
                       />
                     </template>
                     <template v-else>{{ h.quantity.toLocaleString() }}</template>
@@ -408,7 +505,12 @@ const chartDatasets = computed(() =>
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.lastPrice ?? ''"
-                        @update:model-value="(v: string | number) => { const m = editedHoldings.get(h.id); if (m) m.lastPrice = v === '' ? null : Number(v); }"
+                        @update:model-value="
+                          (v: string | number) => {
+                            const m = editedHoldings.get(h.id);
+                            if (m) m.lastPrice = v === '' ? null : Number(v);
+                          }
+                        "
                       />
                     </template>
                     <template v-else>
@@ -416,22 +518,42 @@ const chartDatasets = computed(() =>
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-[13px] font-medium">{{ formatCurrency(h.currentValueIls) }}</TableCell>
-                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell">{{ formatCurrency(h.costBasis) }}</TableCell>
+                  <TableCell class="text-right tabular-nums text-[13px] font-medium">{{
+                    formatCurrency(h.currentValueIls)
+                  }}</TableCell>
+                  <TableCell
+                    class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell"
+                    >{{ formatCurrency(h.costBasis) }}</TableCell
+                  >
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
-                      <span :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px] tabular-nums font-medium">
+                      <span
+                        :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'"
+                        class="text-[13px] tabular-nums font-medium"
+                      >
                         {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatCurrency(h.gainLoss) }}
                       </span>
-                      <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px] block">
+                      <span
+                        v-if="h.gainLossPercent != null"
+                        :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
+                        class="text-[11px] block"
+                      >
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                     </div>
                     <span v-else class="text-text-secondary text-[13px]">-</span>
                   </TableCell>
                   <TableCell>
-                    <div v-if="!quickUpdateMode" class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity">
-                      <Button variant="ghost" size="icon" class="h-7 w-7" @click="holdingToDelete = h">
+                    <div
+                      v-if="!quickUpdateMode"
+                      class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
+                    >
+                      <Button
+                        variant="ghost"
+                        size="icon"
+                        class="h-7 w-7"
+                        @click="holdingToDelete = h"
+                      >
                         <Trash2 class="h-3.5 w-3.5 text-destructive" />
                       </Button>
                     </div>
@@ -446,7 +568,9 @@ const chartDatasets = computed(() =>
             <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
               <div class="flex items-center justify-between">
                 <span class="font-medium text-[13px]">{{ h.name }}</span>
-                <Badge variant="outline" class="text-[11px]">{{ HOLDING_TYPE_LABELS[h.type] ?? h.type }}</Badge>
+                <Badge variant="outline" class="text-[11px]">{{
+                  HOLDING_TYPE_LABELS[h.type] ?? h.type
+                }}</Badge>
               </div>
               <div class="text-[11px] text-text-secondary mt-1">
                 {{ h.quantity.toLocaleString() }} units
@@ -454,7 +578,11 @@ const chartDatasets = computed(() =>
               </div>
               <div class="flex items-center justify-between mt-1">
                 <span class="text-[13px] font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
-                <span v-if="h.gainLossPercent != null" :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'" class="text-[11px]">
+                <span
+                  v-if="h.gainLossPercent != null"
+                  :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[11px]"
+                >
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
               </div>
@@ -505,8 +633,13 @@ const chartDatasets = computed(() =>
             <div class="flex items-start justify-between">
               <div>
                 <div class="flex items-center gap-2">
-                  <Badge :class="MOVEMENT_BADGE_CLASSES[m.type] ?? 'bg-muted text-text-secondary'">{{ m.type }}</Badge>
-                  <span class="text-[13px] text-text-secondary">{{ m.holdingName ?? 'General' }}</span>
+                  <Badge
+                    :class="MOVEMENT_BADGE_CLASSES[m.type] ?? 'bg-muted text-text-secondary'"
+                    >{{ m.type }}</Badge
+                  >
+                  <span class="text-[13px] text-text-secondary">{{
+                    m.holdingName ?? 'General'
+                  }}</span>
                 </div>
                 <div class="text-[13px] font-medium mt-1 tabular-nums">
                   {{ m.quantity > 0 ? '+' : '' }}{{ m.quantity.toLocaleString() }} {{ m.currency }}
@@ -514,10 +647,14 @@ const chartDatasets = computed(() =>
                     @ {{ m.pricePerUnit.toLocaleString() }}/unit
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">
+                  {{ m.notes }}
+                </p>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
+                <span class="text-[11px] text-text-secondary">{{
+                  formatMovementDate(m.date)
+                }}</span>
                 <Button
                   variant="ghost"
                   size="icon"
@@ -558,14 +695,24 @@ const chartDatasets = computed(() =>
           </div>
           <div>
             <label class="text-[13px] font-medium">Last Price (ILS)</label>
-            <Input :model-value="holdingForm.lastPrice ?? ''" @update:model-value="(v: string | number) => holdingForm.lastPrice = v === '' ? null : Number(v)" type="number" />
+            <Input
+              :model-value="holdingForm.lastPrice ?? ''"
+              type="number"
+              @update:model-value="
+                (v: string | number) => (holdingForm.lastPrice = v === '' ? null : Number(v))
+              "
+            />
           </div>
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="holdingSaving || !holdingForm.name" @click="saveHolding">
+          <Button
+            variant="filled"
+            :disabled="holdingSaving || !holdingForm.name"
+            @click="saveHolding"
+          >
             <Loader2 v-if="holdingSaving" class="h-4 w-4 mr-1 animate-spin" />
             Add Coin
           </Button>
@@ -574,20 +721,27 @@ const chartDatasets = computed(() =>
     </Dialog>
 
     <!-- Delete Holding Confirm -->
-    <AlertDialog :open="!!holdingToDelete" @update:open="(v: boolean) => { if (!v) holdingToDelete = null }">
+    <AlertDialog
+      :open="!!holdingToDelete"
+      @update:open="
+        (v: boolean) => {
+          if (!v) holdingToDelete = null;
+        }
+      "
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete coin?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will permanently remove "{{ holdingToDelete?.name }}" from this wallet.
-            Related movement records will be preserved.
+            This will permanently remove "{{ holdingToDelete?.name }}" from this wallet. Related
+            movement records will be preserved.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="holdingToDelete = null">Cancel</AlertDialogCancel>
           <Button
+            variant="destructive-filled"
             :disabled="deletingHolding"
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             @click="confirmDeleteHolding"
           >
             <Loader2 v-if="deletingHolding" class="h-4 w-4 mr-1 animate-spin" />
@@ -613,7 +767,9 @@ const chartDatasets = computed(() =>
             <Select v-model="movementForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
-                <SelectItem v-for="t in CRYPTO_MOVEMENT_TYPES" :key="t" :value="t">{{ t }}</SelectItem>
+                <SelectItem v-for="t in CRYPTO_MOVEMENT_TYPES" :key="t" :value="t">{{
+                  t
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -623,7 +779,9 @@ const chartDatasets = computed(() =>
               <SelectTrigger><SelectValue placeholder="Select coin" /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">General (no coin)</SelectItem>
-                <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{ h.name }}</SelectItem>
+                <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{
+                  h.name
+                }}</SelectItem>
               </SelectContent>
             </Select>
           </div>
@@ -633,7 +791,13 @@ const chartDatasets = computed(() =>
           </div>
           <div>
             <label class="text-[13px] font-medium">Price per Unit (ILS)</label>
-            <Input :model-value="movementForm.pricePerUnit ?? ''" @update:model-value="(v: string | number) => movementForm.pricePerUnit = v === '' ? null : Number(v)" type="number" />
+            <Input
+              :model-value="movementForm.pricePerUnit ?? ''"
+              type="number"
+              @update:model-value="
+                (v: string | number) => (movementForm.pricePerUnit = v === '' ? null : Number(v))
+              "
+            />
           </div>
           <div>
             <label class="text-[13px] font-medium">Notes</label>
@@ -643,9 +807,13 @@ const chartDatasets = computed(() =>
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="movementSaving || !movementForm.quantity" @click="saveMovement">
+          <Button
+            variant="filled"
+            :disabled="movementSaving || !movementForm.quantity"
+            @click="saveMovement"
+          >
             <Loader2 v-if="movementSaving" class="h-4 w-4 mr-1 animate-spin" />
             Record Movement
           </Button>
@@ -654,19 +822,27 @@ const chartDatasets = computed(() =>
     </Dialog>
 
     <!-- Delete Movement Confirm -->
-    <AlertDialog :open="!!movementToDelete" @update:open="(v: boolean) => { if (!v) movementToDelete = null }">
+    <AlertDialog
+      :open="!!movementToDelete"
+      @update:open="
+        (v: boolean) => {
+          if (!v) movementToDelete = null;
+        }
+      "
+    >
       <AlertDialogContent>
         <AlertDialogHeader>
           <AlertDialogTitle>Delete movement?</AlertDialogTitle>
           <AlertDialogDescription>
-            This will remove the {{ movementToDelete?.type }} movement from {{ formatMovementDate(movementToDelete?.date ?? '') }}.
+            This will remove the {{ movementToDelete?.type }} movement from
+            {{ formatMovementDate(movementToDelete?.date ?? '') }}.
           </AlertDialogDescription>
         </AlertDialogHeader>
         <AlertDialogFooter>
           <AlertDialogCancel @click="movementToDelete = null">Cancel</AlertDialogCancel>
           <Button
+            variant="destructive-filled"
             :disabled="deletingMovement"
-            class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
             @click="confirmDeleteMovement"
           >
             <Loader2 v-if="deletingMovement" class="h-4 w-4 mr-1 animate-spin" />

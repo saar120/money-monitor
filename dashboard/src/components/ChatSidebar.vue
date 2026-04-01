@@ -1,6 +1,11 @@
 <script setup lang="ts">
 import { ref, onMounted } from 'vue';
-import { getChatSessions, createChatSession, deleteChatSession, type SessionMeta } from '../api/client';
+import {
+  getChatSessions,
+  createChatSession,
+  deleteChatSession,
+  type SessionMeta,
+} from '../api/client';
 import { Plus, Trash2, MessageSquare } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
 
@@ -20,7 +25,9 @@ async function loadSessions() {
   try {
     const { sessions: data } = await getChatSessions();
     sessions.value = data;
-  } catch { /* ignore */ }
+  } catch {
+    /* ignore */
+  }
 }
 
 async function handleNewChat() {
@@ -38,8 +45,10 @@ async function handleDelete(id: string, event: Event) {
   event.stopPropagation();
   try {
     await deleteChatSession(id);
-    sessions.value = sessions.value.filter(s => s.id !== id);
-  } catch { /* ignore */ }
+    sessions.value = sessions.value.filter((s) => s.id !== id);
+  } catch {
+    /* ignore */
+  }
 }
 
 function formatDate(iso: string): string {
@@ -62,7 +71,7 @@ defineExpose({ loadSessions });
   <div class="flex flex-col h-full">
     <div class="p-3 border-b border-separator">
       <Button
-        variant="outline"
+        variant="secondary"
         size="sm"
         class="w-full justify-start gap-2"
         :disabled="loading"
@@ -78,7 +87,9 @@ defineExpose({ loadSessions });
         v-for="session in sessions"
         :key="session.id"
         class="group w-full text-left px-3 py-2.5 text-[13px] transition-colors hover:bg-bg-tertiary flex items-start gap-2"
-        :class="session.id === activeSessionId ? 'bg-primary/10 text-primary' : 'text-text-secondary'"
+        :class="
+          session.id === activeSessionId ? 'bg-primary/10 text-primary' : 'text-text-secondary'
+        "
         @click="$emit('select', session)"
       >
         <MessageSquare class="h-4 w-4 mt-0.5 flex-shrink-0 opacity-50" />
@@ -97,7 +108,10 @@ defineExpose({ loadSessions });
         </div>
       </button>
 
-      <div v-if="sessions.length === 0" class="px-3 py-6 text-center text-text-secondary text-[11px]">
+      <div
+        v-if="sessions.length === 0"
+        class="px-3 py-6 text-center text-text-secondary text-[11px]"
+      >
         No conversations yet
       </div>
     </div>

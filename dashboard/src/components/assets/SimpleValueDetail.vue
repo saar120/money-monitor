@@ -1,8 +1,13 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import {
-  getAsset, getMovements, getAssetSnapshots, updateAssetValue,
-  type Asset, type Movement, type AssetSnapshot,
+  getAsset,
+  getMovements,
+  getAssetSnapshots,
+  updateAssetValue,
+  type Asset,
+  type Movement,
+  type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency } from '@/lib/format';
@@ -13,7 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle, DialogFooter, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { TrendingUp, TrendingDown, Loader2, Plus } from 'lucide-vue-next';
 
@@ -22,11 +32,9 @@ const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 // ── Data fetching ──
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
 const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 })
+  getMovements(props.assetId, { limit: 50 }),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
-  getAssetSnapshots(props.assetId)
-);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
 
 onMounted(() => {
   movementsApi.execute();
@@ -51,7 +59,9 @@ const pnl = computed(() => {
   return { amount, pct };
 });
 
-const contributionMovements = computed(() => movements.value.filter(m => m.type === 'contribution'));
+const contributionMovements = computed(() =>
+  movements.value.filter((m) => m.type === 'contribution'),
+);
 
 // ── Update Value Dialog ──
 const showUpdateDialog = ref(false);
@@ -75,14 +85,16 @@ async function handleUpdate() {
     });
     showUpdateDialog.value = false;
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     saving.value = false;
   }
 }
 
 // ── Chart ──
 const chartLabels = computed(() =>
-  snapshots.value.map(s => {
+  snapshots.value.map((s) => {
     const d = new Date(s.date);
     return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }),
@@ -91,11 +103,22 @@ const chartLabels = computed(() =>
 const chartDatasets = computed(() =>
   snapshots.value.length === 0
     ? null
-    : [{ label: 'Value (ILS)', data: snapshots.value.map(s => s.totalValueIls), color: '#007AFF', areaColor: 'rgba(0, 122, 255, 0.15)' }],
+    : [
+        {
+          label: 'Value (ILS)',
+          data: snapshots.value.map((s) => s.totalValueIls),
+          color: '#007AFF',
+          areaColor: 'rgba(0, 122, 255, 0.15)',
+        },
+      ],
 );
 
 function formatMovementDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 </script>
 
@@ -110,7 +133,7 @@ function formatMovementDate(iso: string) {
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
     <template v-else-if="asset">
@@ -118,10 +141,14 @@ function formatMovementDate(iso: string) {
       <div>
         <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400">
+          <span
+            class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400"
+          >
             {{ ASSET_TYPE_LABELS[asset.type] ?? asset.type }}
           </span>
-          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
+          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+            asset.institution
+          }}</span>
         </div>
       </div>
 
@@ -132,16 +159,22 @@ function formatMovementDate(iso: string) {
             <CardTitle class="text-[13px] font-medium text-text-secondary">Current Value</CardTitle>
           </CardHeader>
           <CardContent>
-            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(currentValue) }}
+            </div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Contributed</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Contributed</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div v-if="totalContributed > 0" class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(totalContributed) }}</div>
+            <div v-if="totalContributed > 0" class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(totalContributed) }}
+            </div>
             <div v-else class="text-[13px] text-text-secondary">No data</div>
           </CardContent>
         </Card>
@@ -152,17 +185,29 @@ function formatMovementDate(iso: string) {
           </CardHeader>
           <CardContent>
             <template v-if="pnl">
-              <div :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
+              <div
+                :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                class="text-[22px] font-semibold tabular-nums"
+              >
                 {{ pnl.amount >= 0 ? '+' : '-' }}{{ formatCurrency(Math.abs(pnl.amount)) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
-                <component :is="pnl.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
+                <component
+                  :is="pnl.amount >= 0 ? TrendingUp : TrendingDown"
+                  class="h-3.5 w-3.5"
+                  :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                />
+                <span
+                  :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[13px]"
+                >
                   {{ pnl.pct >= 0 ? '+' : '' }}{{ pnl.pct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div v-else class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(currentValue) }}
+            </div>
           </CardContent>
         </Card>
       </div>
@@ -208,9 +253,15 @@ function formatMovementDate(iso: string) {
         </div>
 
         <div v-else class="border border-separator rounded-lg divide-y divide-separator">
-          <div v-for="m in contributionMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
+          <div
+            v-for="m in contributionMovements"
+            :key="m.id"
+            class="px-4 py-3 flex items-center justify-between"
+          >
             <span class="text-[13px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
-            <span class="text-[13px] font-medium tabular-nums">{{ formatCurrency(Math.abs(m.quantity)) }}</span>
+            <span class="text-[13px] font-medium tabular-nums">{{
+              formatCurrency(Math.abs(m.quantity))
+            }}</span>
           </div>
         </div>
       </div>
@@ -235,9 +286,9 @@ function formatMovementDate(iso: string) {
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="saving" @click="handleUpdate">
+          <Button variant="filled" :disabled="saving" @click="handleUpdate">
             <Loader2 v-if="saving" class="h-4 w-4 mr-1 animate-spin" />
             Update
           </Button>

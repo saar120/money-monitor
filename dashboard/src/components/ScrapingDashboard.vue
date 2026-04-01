@@ -511,7 +511,7 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
           <Input v-model="otpCode" placeholder="Enter OTP code" @keyup.enter="handleOtpSubmit" />
         </div>
         <DialogFooter>
-          <Button :disabled="otpSubmitting || !otpCode" @click="handleOtpSubmit">
+          <Button variant="filled" :disabled="otpSubmitting || !otpCode" @click="handleOtpSubmit">
             <Loader2 v-if="otpSubmitting" class="mr-2 h-4 w-4 animate-spin" />
             Submit
           </Button>
@@ -532,7 +532,11 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
           </p>
         </div>
         <DialogFooter>
-          <Button :disabled="manualLoginSubmitting" @click="handleManualLoginConfirm">
+          <Button
+            variant="filled"
+            :disabled="manualLoginSubmitting"
+            @click="handleManualLoginConfirm"
+          >
             <Loader2 v-if="manualLoginSubmitting" class="mr-2 h-4 w-4 animate-spin" />
             Done
           </Button>

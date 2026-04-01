@@ -1,9 +1,14 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
 import {
-  getAsset, getMovements, getAssetSnapshots,
-  updateAssetValue, recordRentIncome,
-  type Asset, type Movement, type AssetSnapshot,
+  getAsset,
+  getMovements,
+  getAssetSnapshots,
+  updateAssetValue,
+  recordRentIncome,
+  type Asset,
+  type Movement,
+  type AssetSnapshot,
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency, formatAmount } from '@/lib/format';
@@ -13,8 +18,12 @@ import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
-  Dialog, DialogContent, DialogHeader, DialogTitle,
-  DialogFooter, DialogClose,
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogFooter,
+  DialogClose,
 } from '@/components/ui/dialog';
 import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
 
@@ -25,9 +34,7 @@ const assetApi = useApi<Asset>(() => getAsset(props.assetId));
 const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
   getMovements(props.assetId, { limit: 50 }),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() =>
-  getAssetSnapshots(props.assetId),
-);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
 
 const asset = computed(() => assetApi.data.value ?? props.initialAsset);
 const movements = computed(() => movementsApi.data.value?.movements ?? []);
@@ -45,7 +52,7 @@ async function refreshAll() {
 // ─── Computed values ───
 const nativeCurrency = computed(() => asset.value?.currency ?? 'ILS');
 const isMultiCurrency = computed(() => nativeCurrency.value !== 'ILS');
-const balanceHolding = computed(() => asset.value?.holdings.find(h => h.type === 'balance'));
+const balanceHolding = computed(() => asset.value?.holdings.find((h) => h.type === 'balance'));
 const nativeValue = computed(() => balanceHolding.value?.currentValue ?? 0);
 
 const currentValue = computed(() => asset.value?.totalValueIls ?? 0);
@@ -54,15 +61,19 @@ const totalRent = computed(() => asset.value?.totalRentEarned ?? 0);
 
 const pnl = computed(() => {
   if (purchasePrice.value === 0) return null;
-  const amount = (currentValue.value + totalRent.value) - purchasePrice.value;
+  const amount = currentValue.value + totalRent.value - purchasePrice.value;
   const pct = (amount / purchasePrice.value) * 100;
   return { amount, pct };
 });
 
-const rentMovements = computed(() => movements.value.filter(m => m.type === 'rent_income'));
+const rentMovements = computed(() => movements.value.filter((m) => m.type === 'rent_income'));
 
 function formatMovementDate(iso: string) {
-  return new Date(iso).toLocaleDateString('en-US', { month: 'short', day: 'numeric', year: 'numeric' });
+  return new Date(iso).toLocaleDateString('en-US', {
+    month: 'short',
+    day: 'numeric',
+    year: 'numeric',
+  });
 }
 
 // ─── Update Value Dialog ───
@@ -81,7 +92,9 @@ async function saveUpdate() {
     await updateAssetValue(props.assetId, { currentValue: updateForm.value.currentValue });
     showUpdateDialog.value = false;
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     updatingSaving.value = false;
   }
 }
@@ -106,14 +119,16 @@ async function saveRent() {
     });
     showRentDialog.value = false;
     await refreshAll();
-  } catch { /* noop */ } finally {
+  } catch {
+    /* noop */
+  } finally {
     rentSaving.value = false;
   }
 }
 
 // ─── Chart ───
 const chartLabels = computed(() =>
-  snapshots.value.map(s => {
+  snapshots.value.map((s) => {
     const d = new Date(s.date);
     return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
   }),
@@ -122,7 +137,14 @@ const chartLabels = computed(() =>
 const chartDatasets = computed(() =>
   snapshots.value.length === 0
     ? null
-    : [{ label: 'Value (ILS)', data: snapshots.value.map(s => s.totalValueIls), color: '#007AFF', areaColor: 'rgba(0, 122, 255, 0.15)' }],
+    : [
+        {
+          label: 'Value (ILS)',
+          data: snapshots.value.map((s) => s.totalValueIls),
+          color: '#007AFF',
+          areaColor: 'rgba(0, 122, 255, 0.15)',
+        },
+      ],
 );
 </script>
 
@@ -137,7 +159,7 @@ const chartDatasets = computed(() =>
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="outline" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
     </div>
 
     <template v-else-if="asset">
@@ -145,11 +167,15 @@ const chartDatasets = computed(() =>
       <div>
         <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
         <div class="flex items-center gap-2 mt-1">
-          <span class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-pink-500/10 text-pink-500">
+          <span
+            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-pink-500/10 text-pink-500"
+          >
             <Home class="h-3 w-3" />
             Real Estate
           </span>
-          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{ asset.institution }}</span>
+          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+            asset.institution
+          }}</span>
         </div>
       </div>
 
@@ -157,10 +183,14 @@ const chartDatasets = computed(() =>
       <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Property Value</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Property Value</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(currentValue) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(currentValue) }}
+            </div>
             <div v-if="isMultiCurrency" class="text-[13px] text-text-secondary mt-0.5">
               {{ formatAmount(nativeValue, nativeCurrency) }}
             </div>
@@ -169,20 +199,28 @@ const chartDatasets = computed(() =>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Purchase Price</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Purchase Price</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div v-if="purchasePrice" class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(purchasePrice) }}</div>
+            <div v-if="purchasePrice" class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(purchasePrice) }}
+            </div>
             <div v-else class="text-[13px] text-text-secondary">Not set</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Rent Earned</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary"
+              >Total Rent Earned</CardTitle
+            >
           </CardHeader>
           <CardContent>
-            <div class="text-[22px] font-semibold tabular-nums">{{ formatCurrency(totalRent) }}</div>
+            <div class="text-[22px] font-semibold tabular-nums">
+              {{ formatCurrency(totalRent) }}
+            </div>
           </CardContent>
         </Card>
 
@@ -192,12 +230,22 @@ const chartDatasets = computed(() =>
           </CardHeader>
           <CardContent>
             <template v-if="pnl">
-              <div :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[22px] font-semibold tabular-nums">
+              <div
+                :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                class="text-[22px] font-semibold tabular-nums"
+              >
                 {{ pnl.amount >= 0 ? '+' : '' }}{{ formatCurrency(pnl.amount) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
-                <component :is="pnl.amount >= 0 ? TrendingUp : TrendingDown" class="h-3.5 w-3.5" :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" />
-                <span :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'" class="text-[13px]">
+                <component
+                  :is="pnl.amount >= 0 ? TrendingUp : TrendingDown"
+                  class="h-3.5 w-3.5"
+                  :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                />
+                <span
+                  :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
+                  class="text-[13px]"
+                >
                   {{ pnl.pct >= 0 ? '+' : '' }}{{ pnl.pct.toFixed(1) }}%
                 </span>
               </div>
@@ -210,7 +258,7 @@ const chartDatasets = computed(() =>
       <!-- Action buttons -->
       <div class="flex gap-3">
         <Button @click="openUpdateDialog">Update Value</Button>
-        <Button variant="outline" @click="openRentDialog">
+        <Button variant="secondary" @click="openRentDialog">
           <Plus class="h-4 w-4 mr-1" />
           Record Rent Income
         </Button>
@@ -247,16 +295,32 @@ const chartDatasets = computed(() =>
           <div v-else-if="rentMovements.length === 0" class="text-center py-8">
             <p class="text-text-secondary text-[13px]">No rent income recorded yet</p>
           </div>
-          <div v-else class="space-y-0 border border-separator rounded-lg divide-y divide-separator">
-            <div v-for="m in rentMovements" :key="m.id" class="px-4 py-3 flex items-center justify-between">
+          <div
+            v-else
+            class="space-y-0 border border-separator rounded-lg divide-y divide-separator"
+          >
+            <div
+              v-for="m in rentMovements"
+              :key="m.id"
+              class="px-4 py-3 flex items-center justify-between"
+            >
               <div>
                 <div class="text-[13px] font-medium tabular-nums">
-                  {{ isMultiCurrency ? formatAmount(Math.abs(m.quantity), nativeCurrency) : formatCurrency(Math.abs(m.quantity)) }}
-                  <span v-if="isMultiCurrency && m.sourceAmount" class="text-text-secondary text-[11px] ml-1">
+                  {{
+                    isMultiCurrency
+                      ? formatAmount(Math.abs(m.quantity), nativeCurrency)
+                      : formatCurrency(Math.abs(m.quantity))
+                  }}
+                  <span
+                    v-if="isMultiCurrency && m.sourceAmount"
+                    class="text-text-secondary text-[11px] ml-1"
+                  >
                     ({{ formatCurrency(Math.abs(m.sourceAmount)) }})
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">{{ m.notes }}</p>
+                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">
+                  {{ m.notes }}
+                </p>
               </div>
               <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
             </div>
@@ -279,9 +343,13 @@ const chartDatasets = computed(() =>
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="updatingSaving || !updateForm.currentValue" @click="saveUpdate">
+          <Button
+            variant="filled"
+            :disabled="updatingSaving || !updateForm.currentValue"
+            @click="saveUpdate"
+          >
             <Loader2 v-if="updatingSaving" class="h-4 w-4 mr-1 animate-spin" />
             Save
           </Button>
@@ -311,9 +379,9 @@ const chartDatasets = computed(() =>
         </div>
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="rentSaving || !rentForm.amount" @click="saveRent">
+          <Button variant="filled" :disabled="rentSaving || !rentForm.amount" @click="saveRent">
             <Loader2 v-if="rentSaving" class="h-4 w-4 mr-1 animate-spin" />
             Record
           </Button>

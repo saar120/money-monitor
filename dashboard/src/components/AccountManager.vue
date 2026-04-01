@@ -347,7 +347,7 @@ onMounted(() => {
 
               <div class="flex items-center gap-2 flex-shrink-0">
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   :disabled="scrapingAccounts.has(account.id)"
                   @click="handleScrape(account)"
@@ -361,7 +361,7 @@ onMounted(() => {
                 </Button>
 
                 <Button
-                  variant="outline"
+                  variant="secondary"
                   size="sm"
                   @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
@@ -389,12 +389,7 @@ onMounted(() => {
                     </AlertDialogHeader>
                     <AlertDialogFooter>
                       <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction
-                        class="bg-destructive text-destructive-foreground hover:bg-destructive/90"
-                        @click="handleDelete(account)"
-                      >
-                        Delete
-                      </AlertDialogAction>
+                      <AlertDialogAction @click="handleDelete(account)"> Delete </AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -480,7 +475,7 @@ onMounted(() => {
                   <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
                   <Input v-model="field.value" type="password" placeholder="Value" />
                 </div>
-                <Button variant="outline" size="sm" @click="addCredentialField">
+                <Button variant="secondary" size="sm" @click="addCredentialField">
                   <Plus class="h-3 w-3 mr-1.5" />
                   Add Field
                 </Button>
@@ -491,9 +486,9 @@ onMounted(() => {
 
         <DialogFooter>
           <DialogClose as-child>
-            <Button variant="outline">Cancel</Button>
+            <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button :disabled="!newCompanyId || !newDisplayName" @click="handleAdd">
+          <Button variant="filled" :disabled="!newCompanyId || !newDisplayName" @click="handleAdd">
             Save Account
           </Button>
         </DialogFooter>
@@ -527,8 +522,12 @@ onMounted(() => {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="handleOtpCancel">Cancel</Button>
-          <Button :disabled="!otpCode.trim() || otpSubmitting" @click="handleOtpSubmit">
+          <Button variant="secondary" @click="handleOtpCancel">Cancel</Button>
+          <Button
+            variant="filled"
+            :disabled="!otpCode.trim() || otpSubmitting"
+            @click="handleOtpSubmit"
+          >
             <Loader2 v-if="otpSubmitting" class="h-4 w-4 mr-2 animate-spin" />
             {{ otpSubmitting ? 'Submitting...' : 'Submit' }}
           </Button>
@@ -558,8 +557,12 @@ onMounted(() => {
         </div>
 
         <DialogFooter>
-          <Button variant="outline" @click="handleManualLoginCancel">Cancel</Button>
-          <Button :disabled="manualLoginSubmitting" @click="handleManualLoginConfirm">
+          <Button variant="secondary" @click="handleManualLoginCancel">Cancel</Button>
+          <Button
+            variant="filled"
+            :disabled="manualLoginSubmitting"
+            @click="handleManualLoginConfirm"
+          >
             <Loader2 v-if="manualLoginSubmitting" class="h-4 w-4 mr-2 animate-spin" />
             {{ manualLoginSubmitting ? 'Confirming...' : "I've Logged In" }}
           </Button>
