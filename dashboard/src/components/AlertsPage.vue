@@ -115,11 +115,11 @@ async function testAlert() {
           <AlertCircle class="h-3.5 w-3.5" />
           {{ error }}
         </div>
-        <Button variant="outline" size="sm" :disabled="saving" @click="reset">
+        <Button variant="secondary" size="sm" :disabled="saving" @click="reset">
           <RotateCcw class="h-3 w-3 mr-1.5" />
           Reset
         </Button>
-        <Button variant="outline" size="sm" :disabled="testSending" @click="testAlert">
+        <Button variant="secondary" size="sm" :disabled="testSending" @click="testAlert">
           <SendHorizonal class="h-3 w-3 mr-1.5" />
           {{ testSending ? 'Sending…' : 'Test' }}
         </Button>

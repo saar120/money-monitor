@@ -127,6 +127,13 @@
       "when": 1773732019499,
       "tag": "0017_sweet_sabra",
       "breakpoints": true
+    },
+    {
+      "idx": 18,
+      "version": "6",
+      "when": 1774732643972,
+      "tag": "0018_chunky_maggott",
+      "breakpoints": true
     }
   ]
 }

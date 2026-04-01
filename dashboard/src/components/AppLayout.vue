@@ -12,6 +12,7 @@ import {
   TrendingUp,
   Settings,
   Bell,
+  Wallet,
 } from 'lucide-vue-next';
 import { getSettings, toggleDemoMode } from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
@@ -58,6 +59,7 @@ const navSections = [
       { path: '/', label: 'Overview', icon: LayoutDashboard },
       { path: '/net-worth', label: 'Net Worth', icon: TrendingUp },
       { path: '/transactions', label: 'Transactions', icon: Receipt },
+      { path: '/budgets', label: 'Budgets', icon: Wallet },
     ],
   },
   {
@@ -93,6 +95,7 @@ const pageTitles: Record<string, string> = {
   '/categories': 'Categories',
   '/alerts': 'Alerts',
   '/scraping': 'Scraping',
+  '/budgets': 'Budgets',
   '/settings': 'Settings',
 };
 
@@ -195,7 +198,7 @@ const pageTitle = computed(() => {
         <span class="inline-block w-1.5 h-1.5 rounded-full bg-[var(--warning)] mr-1" />
         <span>Demo Mode — Viewing sample data</span>
         <button
-          class="underline hover:no-underline font-medium ml-1 text-primary"
+          class="underline underline-offset-4 hover:no-underline font-medium ml-1 text-primary transition-all duration-150"
           @click="exitDemo"
         >
           Exit

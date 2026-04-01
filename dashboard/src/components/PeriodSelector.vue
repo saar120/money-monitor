@@ -80,7 +80,7 @@ function onSelect(v: any) {
     <!-- Month nav arrows -->
     <div v-if="periodMode === 'month'" class="flex items-center gap-0.5">
       <button
-        class="p-0.5 rounded hover:bg-bg-secondary text-text-secondary hover:text-text-primary"
+        class="p-0.5 rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
         @click="shiftMonth(-1)"
       >
         <ChevronLeft class="h-3.5 w-3.5" />
@@ -89,7 +89,7 @@ function onSelect(v: any) {
         monthLabel
       }}</span>
       <button
-        class="p-0.5 rounded hover:bg-bg-secondary text-text-secondary hover:text-text-primary"
+        class="p-0.5 rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
         @click="shiftMonth(1)"
       >
         <ChevronRight class="h-3.5 w-3.5" />

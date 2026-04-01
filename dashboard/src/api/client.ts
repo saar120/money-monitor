@@ -879,6 +879,96 @@ export function toggleDemoMode(enabled: boolean) {
   });
 }
 
+// ─── Budgets ───
+
+export interface Budget {
+  id: number;
+  name: string;
+  amount: number;
+  period: 'monthly' | 'yearly';
+  categoryNames: string[];
+  alertThreshold: number;
+  alertEnabled: boolean;
+  color: string | null;
+  isActive: boolean;
+  createdAt: string;
+}
+
+export interface BudgetMonthlyBreakdown {
+  month: string;
+  spent: number;
+  budgeted: number;
+  percentage: number;
+}
+
+export interface BudgetMonthlyView {
+  monthlyBudget: number;
+  currentMonth: number;
+  expectedSpentByNow: number;
+  isOnTrack: boolean;
+  breakdown: BudgetMonthlyBreakdown[];
+}
+
+export interface BudgetProgress {
+  budget: Budget;
+  spent: number;
+  remaining: number;
+  percentage: number;
+  isOverBudget: boolean;
+  isAlertTriggered: boolean;
+  period: { startDate: string; endDate: string };
+  monthlyView?: BudgetMonthlyView;
+}
+
+export function getBudgets() {
+  return request<{ budgets: Budget[] }>('/budgets');
+}
+
+export function getBudgetProgress(monthlyView = false) {
+  const params = monthlyView ? '?monthlyView=true' : '';
+  return request<{ progress: BudgetProgress[] }>(`/budgets/progress${params}`);
+}
+
+export function getSingleBudgetProgress(id: number, monthlyView = false) {
+  const params = monthlyView ? '?monthlyView=true' : '';
+  return request<BudgetProgress>(`/budgets/${id}/progress${params}`);
+}
+
+export function createBudget(data: {
+  name: string;
+  amount: number;
+  period?: 'monthly' | 'yearly';
+  categoryNames: string[];
+  alertThreshold?: number;
+  alertEnabled?: boolean;
+  color?: string;
+}) {
+  return request<{ budget: Budget }>('/budgets', { method: 'POST', body: JSON.stringify(data) });
+}
+
+export function updateBudget(
+  id: number,
+  data: {
+    name?: string;
+    amount?: number;
+    period?: 'monthly' | 'yearly';
+    categoryNames?: string[];
+    alertThreshold?: number;
+    alertEnabled?: boolean;
+    color?: string | null;
+    isActive?: boolean;
+  },
+) {
+  return request<{ budget: Budget }>(`/budgets/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteBudget(id: number) {
+  return request<{ deleted: boolean }>(`/budgets/${id}`, { method: 'DELETE' });
+}
+
 // ─── Alert Settings ───
 
 export interface AlertSettings {

@@ -29,7 +29,7 @@ onMounted(async () => {
   }
 });
 
-const category = computed(() => asset.value ? getAssetCategory(asset.value.type) : null);
+const category = computed(() => (asset.value ? getAssetCategory(asset.value.type) : null));
 </script>
 
 <template>
@@ -49,12 +49,20 @@ const category = computed(() => asset.value ? getAssetCategory(asset.value.type)
 
     <div v-else-if="error" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ error }}</p>
-      <Button variant="outline" size="sm" class="mt-4" @click="$router.go(0)">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="$router.go(0)">Retry</Button>
     </div>
 
     <template v-else-if="asset">
-      <SimpleValueDetail v-if="category === 'simple_value'" :asset-id="assetId" :initial-asset="asset" />
-      <RealEstateDetail v-else-if="category === 'real_estate'" :asset-id="assetId" :initial-asset="asset" />
+      <SimpleValueDetail
+        v-if="category === 'simple_value'"
+        :asset-id="assetId"
+        :initial-asset="asset"
+      />
+      <RealEstateDetail
+        v-else-if="category === 'real_estate'"
+        :asset-id="assetId"
+        :initial-asset="asset"
+      />
       <CryptoDetail v-else-if="category === 'crypto'" :asset-id="assetId" :initial-asset="asset" />
       <BrokerageDetail v-else :asset-id="assetId" :initial-asset="asset" />
     </template>

@@ -250,7 +250,7 @@ onUnmounted(() => {
         <Input v-model="startDate" type="date" class="w-36" @change="applyFilters" />
         <span class="text-[12px] text-text-tertiary">to</span>
         <Input v-model="endDate" type="date" class="w-36" @change="applyFilters" />
-        <Button variant="outline" size="sm" @click="applyFilters">Filter</Button>
+        <Button variant="secondary" size="sm" @click="applyFilters">Filter</Button>
       </div>
     </div>
 
@@ -453,7 +453,7 @@ onUnmounted(() => {
       </p>
       <div class="flex gap-2">
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           :disabled="(filters.offset ?? 0) === 0"
           @click="prevPage"
@@ -461,7 +461,7 @@ onUnmounted(() => {
           Previous
         </Button>
         <Button
-          variant="outline"
+          variant="secondary"
           size="sm"
           :disabled="(filters.offset ?? 0) + (filters.limit ?? 50) >= total"
           @click="nextPage"

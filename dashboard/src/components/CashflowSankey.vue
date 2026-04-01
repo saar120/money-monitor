@@ -373,7 +373,7 @@ onBeforeUnmount(() => {
       <div class="flex items-center gap-1.5">
         <button
           v-if="chartOption"
-          class="p-1 rounded hover:bg-bg-secondary text-text-secondary hover:text-text-primary transition-colors"
+          class="p-1 rounded-md text-text-secondary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
           title="Expand"
           @click="dialogOpen = true"
         >
@@ -401,7 +401,7 @@ onBeforeUnmount(() => {
           <BarChart3 class="h-8 w-8 text-red-400 mb-2" />
           <p class="text-red-500 text-[13px] mb-1">Failed to load cashflow data</p>
           <button
-            class="text-[12px] text-text-secondary underline"
+            class="text-[12px] text-primary underline underline-offset-4 hover:no-underline transition-all duration-150"
             @click="
               refresh();
               categoriesData.execute();
@@ -457,7 +457,7 @@ onBeforeUnmount(() => {
         />
         <button
           v-if="isZoomed"
-          class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] rounded bg-bg-secondary text-text-secondary hover:text-text-primary border border-separator"
+          class="absolute top-2 right-2 z-10 px-2 py-1 text-[11px] rounded-md bg-[var(--glass-bg)] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary border border-[var(--glass-border)] backdrop-blur-[10px] transition-all duration-150"
           @click="resetView"
         >
           Reset
