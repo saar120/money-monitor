@@ -25,7 +25,7 @@ export function buildGetBudgetProgressTool() {
         }),
       ),
     }),
-    execute: (args) => getBudgetProgressHandler(args),
+    execute: async (args) => getBudgetProgress(args),
   });
 }
 
@@ -76,13 +76,13 @@ Before calling, confirm the details with the user if there is any ambiguity.`,
         }),
       ),
     }),
-    execute: (args) => manageBudget(args),
+    execute: async (args) => manageBudget(args),
   });
 }
 
 // ── Handler functions ───────────────────────────────────────────────────────────
 
-export async function getBudgetProgressHandler(input: {
+export async function getBudgetProgress(input: {
   budget_id?: number;
   monthly_view?: boolean;
 }): Promise<string> {
@@ -136,17 +136,16 @@ export async function manageBudget(input: {
         error: 'Missing required field: budget_id for update',
       });
 
-    const data: Record<string, unknown> = {};
-    if (input.name !== undefined) data.name = input.name;
-    if (input.amount !== undefined) data.amount = input.amount;
-    if (input.period !== undefined) data.period = input.period;
-    if (input.category_names !== undefined) data.categoryNames = input.category_names;
-    if (input.alert_threshold !== undefined) data.alertThreshold = input.alert_threshold;
-    if (input.alert_enabled !== undefined) data.alertEnabled = input.alert_enabled;
-    if (input.color !== undefined) data.color = input.color;
-    if (input.is_active !== undefined) data.isActive = input.is_active;
-
-    const result = budgetService.updateBudget(input.budget_id, data);
+    const result = budgetService.updateBudget(input.budget_id, {
+      name: input.name,
+      amount: input.amount,
+      period: input.period,
+      categoryNames: input.category_names,
+      alertThreshold: input.alert_threshold,
+      alertEnabled: input.alert_enabled,
+      color: input.color,
+      isActive: input.is_active,
+    });
     if (!result.ok) return JSON.stringify({ error: result.error });
     return JSON.stringify(result.budget);
   }

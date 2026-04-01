@@ -11,7 +11,7 @@ vi.mock('../db/connection.js', () => ({
   },
 }));
 
-const { getBudgetProgressHandler, manageBudget } = await import('./budget-tools.js');
+const { getBudgetProgress, manageBudget } = await import('./budget-tools.js');
 
 function insertBudget(overrides: Partial<typeof schema.budgets.$inferInsert> = {}) {
   return testDb.db
@@ -29,7 +29,7 @@ function insertBudget(overrides: Partial<typeof schema.budgets.$inferInsert> = {
     .get();
 }
 
-describe('getBudgetProgressHandler', () => {
+describe('getBudgetProgress', () => {
   beforeEach(() => {
     testDb = createTestDb();
   });
@@ -42,7 +42,7 @@ describe('getBudgetProgressHandler', () => {
     insertBudget({ name: 'Food Budget' });
     insertBudget({ name: 'Inactive', isActive: false });
 
-    const result = JSON.parse(await getBudgetProgressHandler({}));
+    const result = JSON.parse(await getBudgetProgress({}));
     expect(result).toHaveLength(1);
     expect(result[0].budget.name).toBe('Food Budget');
     expect(result[0]).toHaveProperty('spent');
@@ -53,7 +53,7 @@ describe('getBudgetProgressHandler', () => {
   it('returns single budget progress when budget_id given', async () => {
     const budget = insertBudget({ name: 'Transport' });
 
-    const result = JSON.parse(await getBudgetProgressHandler({ budget_id: budget.id }));
+    const result = JSON.parse(await getBudgetProgress({ budget_id: budget.id }));
     expect(result.budget.name).toBe('Transport');
     expect(result.spent).toBe(0);
     expect(result.percentage).toBe(0);
@@ -61,7 +61,7 @@ describe('getBudgetProgressHandler', () => {
   });
 
   it('returns error for non-existent budget_id', async () => {
-    const result = JSON.parse(await getBudgetProgressHandler({ budget_id: 999 }));
+    const result = JSON.parse(await getBudgetProgress({ budget_id: 999 }));
     expect(result).toEqual({ error: 'Budget not found' });
   });
 
@@ -81,7 +81,7 @@ describe('getBudgetProgressHandler', () => {
     });
 
     const result = JSON.parse(
-      await getBudgetProgressHandler({ budget_id: budget.id, monthly_view: true }),
+      await getBudgetProgress({ budget_id: budget.id, monthly_view: true }),
     );
     expect(result.budget.name).toBe('Annual Food');
     expect(result.spent).toBe(200);
