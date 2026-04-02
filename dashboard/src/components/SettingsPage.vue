@@ -108,6 +108,17 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+
+  // Auto-update listener
+  if (electronAPI?.getAutoUpdateEnabled) {
+    autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
+    cleanupUpdateListener = electronAPI.onUpdateStatus((data) => {
+      updateStatus.value = data.status;
+      if (data.version) updateVersion.value = data.version;
+      if (data.percent != null) updatePercent.value = data.percent;
+      if (data.error) updateError.value = data.error;
+    });
+  }
 });
 
 const isElectron = computed(() => data.value?.isElectron ?? false);
@@ -131,23 +142,8 @@ const updateStatus = ref<string>('idle');
 const updateVersion = ref('');
 const updatePercent = ref(0);
 const updateError = ref('');
-const checkingForUpdates = ref(false);
+const checkingForUpdates = computed(() => updateStatus.value === 'checking');
 let cleanupUpdateListener: (() => void) | null = null;
-
-onMounted(async () => {
-  if (electronAPI?.getAutoUpdateEnabled) {
-    autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
-    cleanupUpdateListener = electronAPI.onUpdateStatus(
-      (data: { status: string; version?: string; percent?: number; error?: string }) => {
-        updateStatus.value = data.status;
-        if (data.version) updateVersion.value = data.version;
-        if (data.percent != null) updatePercent.value = data.percent;
-        if (data.error) updateError.value = data.error;
-        if (data.status !== 'checking') checkingForUpdates.value = false;
-      },
-    );
-  }
-});
 
 onUnmounted(() => {
   cleanupUpdateListener?.();
@@ -159,13 +155,12 @@ async function toggleAutoUpdate(enabled: boolean) {
 }
 
 async function manualCheckForUpdates() {
-  checkingForUpdates.value = true;
   updateStatus.value = 'checking';
   updateError.value = '';
   try {
     await electronAPI?.checkForUpdates();
   } catch {
-    checkingForUpdates.value = false;
+    updateStatus.value = 'error';
   }
 }
 

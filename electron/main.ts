@@ -17,7 +17,7 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
-import { readFileSync, writeFileSync } from 'node:fs';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -46,11 +46,15 @@ if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
 // blocked.  Stripping the attribute early prevents "damaged" errors.
 if (isMac && app.isPackaged) {
   const appUnpacked = join(process.resourcesPath, 'app.asar.unpacked');
-  try {
-    execFileSync('/usr/bin/xattr', ['-cr', appUnpacked], { timeout: 10000 });
-    console.log('[Electron] Quarantine attributes stripped from unpacked modules');
-  } catch (e) {
-    console.warn('[Electron] Failed to strip quarantine:', e instanceof Error ? e.message : e);
+  const quarantineDone = join(app.getPath('userData'), '.quarantine-stripped');
+  if (!existsSync(quarantineDone)) {
+    try {
+      execFileSync('/usr/bin/xattr', ['-cr', appUnpacked], { timeout: 10000 });
+      writeFileSync(quarantineDone, '', { mode: 0o600 });
+      console.log('[Electron] Quarantine attributes stripped from unpacked modules');
+    } catch (e) {
+      console.warn('[Electron] Failed to strip quarantine:', e instanceof Error ? e.message : e);
+    }
   }
 }
 
@@ -370,17 +374,20 @@ function setupAutoUpdater() {
     sendUpdateStatus('downloading', { percent: progress.percent });
   });
 
-  autoUpdater.on('update-downloaded', (info) => {
+  autoUpdater.on('update-downloaded', async (info) => {
     console.log(`[AutoUpdater] Update downloaded: v${info.version}`);
     sendUpdateStatus('ready', { version: info.version });
-    const response = dialog.showMessageBoxSync(mainWindow ?? ({} as BrowserWindow), {
-      type: 'info',
+    const options = {
+      type: 'info' as const,
       buttons: ['Restart Now', 'Later'],
       defaultId: 0,
       title: 'Update Ready',
       message: `Version ${info.version} has been downloaded.`,
       detail: 'Restart the application to apply the update.',
-    });
+    };
+    const { response } = mainWindow
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options);
     if (response === 0) {
       isQuitting = true;
       autoUpdater.quitAndInstall();
@@ -391,8 +398,6 @@ function setupAutoUpdater() {
     console.error('[AutoUpdater] Error:', err.message);
     sendUpdateStatus('error', { error: err.message });
   });
-
-  // ── IPC handlers ──────────────────────────────────────────────────────────
 
   ipcMain.handle('auto-update:check', async () => {
     const result = await autoUpdater.checkForUpdatesAndNotify();
@@ -416,7 +421,6 @@ function setupAutoUpdater() {
     return { success: true };
   });
 
-  // Initial check + start periodic timer if enabled
   if (isAutoUpdateEnabled()) {
     autoUpdater.checkForUpdatesAndNotify();
     startPeriodicChecks();
@@ -426,10 +430,8 @@ function setupAutoUpdater() {
 function startPeriodicChecks() {
   stopPeriodicChecks();
   updateCheckTimer = setInterval(() => {
-    if (isAutoUpdateEnabled()) {
-      console.log('[AutoUpdater] Periodic update check');
-      autoUpdater.checkForUpdatesAndNotify();
-    }
+    console.log('[AutoUpdater] Periodic update check');
+    autoUpdater.checkForUpdatesAndNotify();
   }, UPDATE_CHECK_INTERVAL);
 }
 
@@ -515,6 +517,7 @@ app.whenReady().then(async () => {
 
     app.on('before-quit', () => {
       isQuitting = true;
+      stopPeriodicChecks();
     });
 
     let quitting = false;

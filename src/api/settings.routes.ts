@@ -39,7 +39,6 @@ const SETTABLE_KEYS = [
   'TELEGRAM_BOT_TOKEN',
   'TELEGRAM_ALLOWED_USERS',
   'AI_MAX_TURNS',
-  'AUTO_UPDATE_ENABLED',
 ] as const;
 
 function redact(value: string): string {
