@@ -39,6 +39,34 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
+      - name: Ad-hoc sign and strip quarantine
+        run: |
+          APP_PATH=$(find dist/mac* -name "*.app" -maxdepth 1 | head -1)
+          if [ -n "$APP_PATH" ]; then
+            echo "Ad-hoc signing $APP_PATH"
+            codesign --force --deep --sign - "$APP_PATH"
+            xattr -cr "$APP_PATH"
+          fi
+
+      - name: Re-package signed app into zip
+        run: |
+          APP_DIR=$(find dist -type d -name "mac*" | head -1)
+          APP_NAME=$(find "$APP_DIR" -name "*.app" -maxdepth 1 -exec basename {} \;)
+          ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
+          if [ -n "$ZIP_PATH" ] && [ -n "$APP_DIR" ]; then
+            echo "Re-packaging $APP_NAME into $ZIP_PATH"
+            rm "$ZIP_PATH"
+            cd "$APP_DIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" "../$(basename "$ZIP_PATH")" && cd -
+          fi
+
+      - name: Upload signed zip to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: dist/*.zip
+          fail_on_unmatched_files: true
+          generate_release_notes: true
+          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+
   build-windows:
     runs-on: windows-latest
     permissions:

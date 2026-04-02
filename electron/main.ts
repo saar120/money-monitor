@@ -39,6 +39,21 @@ if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
   }
 }
 
+// ── Strip macOS quarantine from unpacked native modules on first launch ──────
+// When users download and extract the zip, macOS applies com.apple.quarantine
+// to all files.  The app itself may pass Gatekeeper (ad-hoc signed), but
+// unpacked native binaries (better-sqlite3, puppeteer-core) can still be
+// blocked.  Stripping the attribute early prevents "damaged" errors.
+if (isMac && app.isPackaged) {
+  const appUnpacked = join(process.resourcesPath, 'app.asar.unpacked');
+  try {
+    execFileSync('/usr/bin/xattr', ['-cr', appUnpacked], { timeout: 10000 });
+    console.log('[Electron] Quarantine attributes stripped from unpacked modules');
+  } catch (e) {
+    console.warn('[Electron] Failed to strip quarantine:', e instanceof Error ? e.message : e);
+  }
+}
+
 // ── Set app name (affects userData path and menu bar) ────────────────────────
 app.name = 'Money Monitor';
 
