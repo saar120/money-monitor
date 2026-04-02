@@ -39,12 +39,10 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Sign, strip quarantine, and re-package with installer
+      - name: Sign and strip quarantine
         run: |
           APP_DIR=$(find dist -type d -name "mac*" | head -1)
           APP_PATH=$(find "$APP_DIR" -name "*.app" -maxdepth 1 | head -1)
-          APP_NAME=$(basename "$APP_PATH")
-          ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
 
           # Ad-hoc sign the app (turns "damaged" into "unidentified developer")
           codesign --force --deep --sign - "$APP_PATH"
@@ -52,12 +50,11 @@ jobs:
           # Strip quarantine
           xattr -cr "$APP_PATH"
 
-          # Re-package zip with the installer script included
+          # Re-package the signed app into the zip
+          ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
           rm "$ZIP_PATH"
           STAGE_DIR=$(mktemp -d)
           cp -R "$APP_PATH" "$STAGE_DIR/"
-          cp scripts/install-mac.command "$STAGE_DIR/"
-          chmod +x "$STAGE_DIR/install-mac.command"
           cd "$STAGE_DIR" && ditto -c -k --sequesterRsrc . "../release.zip" && cd -
           mv "$STAGE_DIR/../release.zip" "$ZIP_PATH"
           rm -rf "$STAGE_DIR"

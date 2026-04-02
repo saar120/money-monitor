@@ -27,6 +27,12 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 
+// ── Set app name FIRST (affects userData path and menu bar) ─────────────────
+// IMPORTANT: Must be set before any call to app.getPath('userData'), because
+// Electron caches the path on first access.  The package.json "name" is
+// "money-monitor" but we want the userData dir to be "Money Monitor".
+app.name = 'Money Monitor';
+
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
 if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
   try {
@@ -58,9 +64,6 @@ if (isMac && app.isPackaged) {
     }
   }
 }
-
-// ── Set app name (affects userData path and menu bar) ────────────────────────
-app.name = 'Money Monitor';
 
 // ── 1. Set data directory BEFORE any backend import ──────────────────────────
 const dataDir = app.getPath('userData');
@@ -443,10 +446,61 @@ function stopPeriodicChecks() {
   }
 }
 
+// ── Move-to-Applications prompt (macOS only) ───────────────────────────────
+// When the app is launched from outside /Applications (e.g. extracted zip in
+// Downloads), offer to move it there.  This replaces the install-mac.command
+// script which macOS Gatekeeper blocks as "unsafe".
+async function promptMoveToApplications(): Promise<boolean> {
+  if (!isMac || !app.isPackaged) return false;
+
+  const appPath = app.getAppPath();
+  // In a packaged app, appPath points to the asar inside the .app bundle.
+  // Walk up to the .app directory itself.
+  const appBundlePath = appPath.replace(/\/Contents\/Resources\/.*$/, '');
+  if (appBundlePath.startsWith('/Applications/')) return false;
+
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Move to Applications', 'Keep Current Location'],
+    defaultId: 0,
+    title: 'Move to Applications?',
+    message: 'Money Monitor is not in the Applications folder.',
+    detail:
+      'Move it to /Applications for the best experience — it will appear in Launchpad and replace any older version.',
+  });
+
+  if (response !== 0) return false;
+
+  const dest = `/Applications/${app.name}.app`;
+  try {
+    // Remove old installation if present
+    execFileSync('/bin/rm', ['-rf', dest], { timeout: 10000 });
+    // Copy current bundle to /Applications
+    execFileSync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
+    // Strip quarantine from the new copy
+    execFileSync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
+
+    // Relaunch from /Applications
+    app.relaunch({ execPath: join(dest, 'Contents', 'MacOS', app.name) });
+    app.exit(0);
+    return true;
+  } catch (e) {
+    console.error('[Electron] Failed to move to /Applications:', e);
+    dialog.showErrorBox(
+      'Could not move app',
+      'Failed to move Money Monitor to /Applications. You can drag it there manually.',
+    );
+    return false;
+  }
+}
+
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
   try {
+    // Offer to move to /Applications before doing anything else
+    if (await promptMoveToApplications()) return;
+
     // About panel
     app.setAboutPanelOptions({
       applicationName: 'Money Monitor',
