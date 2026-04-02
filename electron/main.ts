@@ -13,6 +13,7 @@ import {
   Tray,
 } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
+import { autoUpdater } from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { execFileSync } from 'node:child_process';
@@ -294,6 +295,46 @@ function createTray(port: number) {
   tray.setContextMenu(contextMenu);
 }
 
+// ── Auto-updater ────────────────────────────────────────────────────────────
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[AutoUpdater] Update available: v${info.version}`);
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[AutoUpdater] App is up to date');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[AutoUpdater] Download progress: ${Math.round(progress.percent)}%`);
+  });
+
+  autoUpdater.on('update-downloaded', (info) => {
+    console.log(`[AutoUpdater] Update downloaded: v${info.version}`);
+    const response = dialog.showMessageBoxSync(mainWindow ?? ({} as BrowserWindow), {
+      type: 'info',
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      title: 'Update Ready',
+      message: `Version ${info.version} has been downloaded.`,
+      detail: 'Restart the application to apply the update.',
+    });
+    if (response === 0) {
+      isQuitting = true;
+      autoUpdater.quitAndInstall();
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message);
+  });
+
+  autoUpdater.checkForUpdatesAndNotify();
+}
+
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
@@ -338,6 +379,11 @@ app.whenReady().then(async () => {
 
     createWindow(port);
     createTray(port);
+
+    // Check for updates (only in packaged builds)
+    if (app.isPackaged) {
+      setupAutoUpdater();
+    }
 
     // Re-send accent color when system preferences change
     nativeTheme.on('updated', () => {

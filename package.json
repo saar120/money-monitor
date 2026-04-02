@@ -59,14 +59,19 @@
     "productName": "Money Monitor",
     "icon": "electron/icons/icon",
     "mac": {
-      "target": "dmg",
+      "target": [
+        "dmg",
+        "zip"
+      ],
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.finance"
     },
     "win": {
+      "target": "nsis",
       "icon": "electron/icons/icon.ico"
     },
     "linux": {
+      "target": "AppImage",
       "icon": "electron/icons/icon-256.png"
     },
     "files": [
@@ -82,7 +87,11 @@
       "node_modules/better-sqlite3/**",
       "node_modules/puppeteer-core/**"
     ],
-    "publish": null
+    "publish": {
+      "provider": "github",
+      "owner": "saar120",
+      "repo": "money-monitor"
+    }
   },
   "dependencies": {
     "@fastify/cors": "^11.2.0",
@@ -96,6 +105,7 @@
     "cron-parser": "^5.5.0",
     "dotenv": "^17.3.1",
     "drizzle-orm": "^0.45.1",
+    "electron-updater": "^6.8.3",
     "fastify": "^5.7.4",
     "grammy": "^1.41.1",
     "israeli-bank-scrapers-core": "^6.7.1",
