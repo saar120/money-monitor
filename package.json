@@ -59,10 +59,7 @@
     "productName": "Money Monitor",
     "icon": "electron/icons/icon",
     "mac": {
-      "target": [
-        "dmg",
-        "zip"
-      ],
+      "target": "zip",
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.finance"
     },

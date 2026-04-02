@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Menu,
   nativeImage,
   nativeTheme,
@@ -16,6 +17,7 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 import { autoUpdater } from 'electron-updater';
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
+import { readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -296,24 +298,66 @@ function createTray(port: number) {
 }
 
 // ── Auto-updater ────────────────────────────────────────────────────────────
+
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Read the AUTO_UPDATE_ENABLED flag from config.json (defaults to true). */
+function isAutoUpdateEnabled(): boolean {
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    return raw.AUTO_UPDATE_ENABLED !== 'false';
+  } catch {
+    return true; // default on
+  }
+}
+
+/** Persist the AUTO_UPDATE_ENABLED flag to config.json. */
+function setAutoUpdateEnabled(enabled: boolean): void {
+  let raw: Record<string, string> = {};
+  try {
+    raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+  } catch {
+    // file doesn't exist yet
+  }
+  raw.AUTO_UPDATE_ENABLED = String(enabled);
+  writeFileSync(join(dataDir, 'config.json'), JSON.stringify(raw, null, 2), { mode: 0o600 });
+}
+
+function sendUpdateStatus(
+  status: string,
+  info?: { version?: string; percent?: number; error?: string },
+) {
+  mainWindow?.webContents.send('auto-update:status', { status, ...info });
+}
+
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
 
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdater] Checking for updates...');
+    sendUpdateStatus('checking');
+  });
+
   autoUpdater.on('update-available', (info) => {
     console.log(`[AutoUpdater] Update available: v${info.version}`);
+    sendUpdateStatus('available', { version: info.version });
   });
 
   autoUpdater.on('update-not-available', () => {
     console.log('[AutoUpdater] App is up to date');
+    sendUpdateStatus('up-to-date');
   });
 
   autoUpdater.on('download-progress', (progress) => {
     console.log(`[AutoUpdater] Download progress: ${Math.round(progress.percent)}%`);
+    sendUpdateStatus('downloading', { percent: progress.percent });
   });
 
   autoUpdater.on('update-downloaded', (info) => {
     console.log(`[AutoUpdater] Update downloaded: v${info.version}`);
+    sendUpdateStatus('ready', { version: info.version });
     const response = dialog.showMessageBoxSync(mainWindow ?? ({} as BrowserWindow), {
       type: 'info',
       buttons: ['Restart Now', 'Later'],
@@ -330,9 +374,55 @@ function setupAutoUpdater() {
 
   autoUpdater.on('error', (err) => {
     console.error('[AutoUpdater] Error:', err.message);
+    sendUpdateStatus('error', { error: err.message });
   });
 
-  autoUpdater.checkForUpdatesAndNotify();
+  // ── IPC handlers ──────────────────────────────────────────────────────────
+
+  ipcMain.handle('auto-update:check', async () => {
+    const result = await autoUpdater.checkForUpdatesAndNotify();
+    return { updateAvailable: !!result?.updateInfo };
+  });
+
+  ipcMain.handle('auto-update:install', () => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('auto-update:get-enabled', () => isAutoUpdateEnabled());
+
+  ipcMain.handle('auto-update:set-enabled', (_event, enabled: boolean) => {
+    setAutoUpdateEnabled(enabled);
+    if (enabled) {
+      startPeriodicChecks();
+    } else {
+      stopPeriodicChecks();
+    }
+    return { success: true };
+  });
+
+  // Initial check + start periodic timer if enabled
+  if (isAutoUpdateEnabled()) {
+    autoUpdater.checkForUpdatesAndNotify();
+    startPeriodicChecks();
+  }
+}
+
+function startPeriodicChecks() {
+  stopPeriodicChecks();
+  updateCheckTimer = setInterval(() => {
+    if (isAutoUpdateEnabled()) {
+      console.log('[AutoUpdater] Periodic update check');
+      autoUpdater.checkForUpdatesAndNotify();
+    }
+  }, UPDATE_CHECK_INTERVAL);
+}
+
+function stopPeriodicChecks() {
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
 }
 
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
