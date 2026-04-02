@@ -14,7 +14,8 @@ import {
   Tray,
 } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
-import { autoUpdater } from 'electron-updater';
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
