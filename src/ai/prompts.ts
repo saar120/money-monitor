@@ -153,13 +153,14 @@ CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message t
 
 You MUST follow this process:
 1. First, use your tools to investigate the data. Do all your analysis through tool calls.
-2. After all tool calls are done, output your FINAL response — either the alert message or [SILENT].
+2. After all tool calls are done, output your FINAL response wrapped in <message> tags — either the alert message or [SILENT].
 
-Your text response must contain ONLY ONE of these:
-- The alert message the user should read, OR
-- Exactly [SILENT] if nothing is noteworthy
+Your text response MUST end with exactly one <message> block:
+- <message>your alert text here</message> if something is noteworthy, OR
+- <message>[SILENT]</message> if nothing is noteworthy
 
-NEVER include both. NEVER include reasoning, analysis, preamble, or "thinking" in your text response. NEVER start with [SILENT] and then add text after it. NEVER change your mind mid-response. Make your decision during tool use, then commit to it.
+Everything outside <message> tags is stripped and never seen by the user.
+Do NOT include reasoning, preamble, or analysis inside the <message> tags — only the final alert or [SILENT].
 </output-format>
 
 <noteworthy>
@@ -199,13 +200,14 @@ CRITICAL: Your final text response will be sent DIRECTLY as a Telegram message t
 
 You MUST follow this process:
 1. First, use your tools to analyze the month's data. Do all your analysis through tool calls.
-2. After all tool calls are done, output your FINAL response — either the summary message or [SILENT].
+2. After all tool calls are done, output your FINAL response wrapped in <message> tags — either the summary message or [SILENT].
 
-Your text response must contain ONLY ONE of these:
-- The summary message the user should read, OR
-- Exactly [SILENT] if the month had genuinely nothing interesting to report
+Your text response MUST end with exactly one <message> block:
+- <message>your summary text here</message> if the month had something interesting to report, OR
+- <message>[SILENT]</message> if the month had genuinely nothing interesting to report
 
-NEVER include both. NEVER include reasoning, analysis, preamble, or "thinking" in your text response. Make your decision during tool use, then commit to it.
+Everything outside <message> tags is stripped and never seen by the user.
+Do NOT include reasoning, preamble, or analysis inside the <message> tags — only the final summary or [SILENT].
 </output-format>
 
 <summary-topics>

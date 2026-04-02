@@ -108,4 +108,66 @@ describe('runAlertAgent', () => {
     expect(result).toContain('big charge');
     expect(result).toContain('Shufersal');
   });
+
+  it('strips reasoning and extracts only <message> tag content', async () => {
+    mockSubscribe.mockImplementation((cb: (event: any) => void) => {
+      setTimeout(() => {
+        cb({
+          type: 'agent_end',
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Let me analyze the data. The user had 2 new transactions.\n\n<message>⚠️ 2 עסקאות חדשות:\n- CLAUDE AI ₪314.90\n- דומינוס ₪28.60</message>',
+                },
+              ],
+            },
+          ],
+        });
+      }, 0);
+      return vi.fn();
+    });
+    mockPrompt.mockResolvedValue(undefined);
+
+    const result = await runAlertAgent({
+      systemPrompt: 'test prompt',
+      userMessage: 'test message',
+    });
+
+    expect(result).not.toContain('Let me analyze');
+    expect(result).toContain('CLAUDE AI');
+    expect(result).toContain('דומינוס');
+  });
+
+  it('returns null when reasoning is followed by [SILENT] in <message> tags', async () => {
+    mockSubscribe.mockImplementation((cb: (event: any) => void) => {
+      setTimeout(() => {
+        cb({
+          type: 'agent_end',
+          messages: [
+            {
+              role: 'assistant',
+              content: [
+                {
+                  type: 'text',
+                  text: 'Nothing noteworthy to report. Net worth unchanged.\n\n<message>[SILENT]</message>',
+                },
+              ],
+            },
+          ],
+        });
+      }, 0);
+      return vi.fn();
+    });
+    mockPrompt.mockResolvedValue(undefined);
+
+    const result = await runAlertAgent({
+      systemPrompt: 'test prompt',
+      userMessage: 'test message',
+    });
+
+    expect(result).toBeNull();
+  });
 });
