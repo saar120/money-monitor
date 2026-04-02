@@ -84,11 +84,9 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   app.post('/api/settings', async (request, reply) => {
     if (!isElectronMode) {
-      return reply
-        .status(400)
-        .send({
-          error: 'Settings can only be updated in Electron mode. Edit .env for standalone mode.',
-        });
+      return reply.status(400).send({
+        error: 'Settings can only be updated in Electron mode. Edit .env for standalone mode.',
+      });
     }
 
     const body = request.body as Record<string, unknown>;

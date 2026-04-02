@@ -2,6 +2,7 @@ import {
   app,
   BrowserWindow,
   dialog,
+  ipcMain,
   Menu,
   nativeImage,
   nativeTheme,
@@ -13,8 +14,11 @@ import {
   Tray,
 } from 'electron';
 import type { BrowserWindowConstructorOptions } from 'electron';
+import pkg from 'electron-updater';
+const { autoUpdater } = pkg;
 import { randomBytes } from 'node:crypto';
 import { join } from 'node:path';
+import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFileSync } from 'node:child_process';
 import { fileURLToPath } from 'node:url';
 
@@ -33,6 +37,25 @@ if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
     process.env.PATH = shellPath;
   } catch (e) {
     console.warn('[Electron] Failed to resolve shell PATH:', e instanceof Error ? e.message : e);
+  }
+}
+
+// ── Strip macOS quarantine from unpacked native modules on first launch ──────
+// When users download and extract the zip, macOS applies com.apple.quarantine
+// to all files.  The app itself may pass Gatekeeper (ad-hoc signed), but
+// unpacked native binaries (better-sqlite3, puppeteer-core) can still be
+// blocked.  Stripping the attribute early prevents "damaged" errors.
+if (isMac && app.isPackaged) {
+  const appUnpacked = join(process.resourcesPath, 'app.asar.unpacked');
+  const quarantineDone = join(app.getPath('userData'), '.quarantine-stripped');
+  if (!existsSync(quarantineDone)) {
+    try {
+      execFileSync('/usr/bin/xattr', ['-cr', appUnpacked], { timeout: 10000 });
+      writeFileSync(quarantineDone, '', { mode: 0o600 });
+      console.log('[Electron] Quarantine attributes stripped from unpacked modules');
+    } catch (e) {
+      console.warn('[Electron] Failed to strip quarantine:', e instanceof Error ? e.message : e);
+    }
   }
 }
 
@@ -294,6 +317,132 @@ function createTray(port: number) {
   tray.setContextMenu(contextMenu);
 }
 
+// ── Auto-updater ────────────────────────────────────────────────────────────
+
+const UPDATE_CHECK_INTERVAL = 24 * 60 * 60 * 1000; // 24 hours
+let updateCheckTimer: ReturnType<typeof setInterval> | null = null;
+
+/** Read the AUTO_UPDATE_ENABLED flag from config.json (defaults to true). */
+function isAutoUpdateEnabled(): boolean {
+  try {
+    const raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+    return raw.AUTO_UPDATE_ENABLED !== 'false';
+  } catch {
+    return true; // default on
+  }
+}
+
+/** Persist the AUTO_UPDATE_ENABLED flag to config.json. */
+function setAutoUpdateEnabled(enabled: boolean): void {
+  let raw: Record<string, string> = {};
+  try {
+    raw = JSON.parse(readFileSync(join(dataDir, 'config.json'), 'utf-8'));
+  } catch {
+    // file doesn't exist yet
+  }
+  raw.AUTO_UPDATE_ENABLED = String(enabled);
+  writeFileSync(join(dataDir, 'config.json'), JSON.stringify(raw, null, 2), { mode: 0o600 });
+}
+
+function sendUpdateStatus(
+  status: string,
+  info?: { version?: string; percent?: number; error?: string },
+) {
+  mainWindow?.webContents.send('auto-update:status', { status, ...info });
+}
+
+function setupAutoUpdater() {
+  autoUpdater.autoDownload = true;
+  autoUpdater.autoInstallOnAppQuit = true;
+
+  autoUpdater.on('checking-for-update', () => {
+    console.log('[AutoUpdater] Checking for updates...');
+    sendUpdateStatus('checking');
+  });
+
+  autoUpdater.on('update-available', (info) => {
+    console.log(`[AutoUpdater] Update available: v${info.version}`);
+    sendUpdateStatus('available', { version: info.version });
+  });
+
+  autoUpdater.on('update-not-available', () => {
+    console.log('[AutoUpdater] App is up to date');
+    sendUpdateStatus('up-to-date');
+  });
+
+  autoUpdater.on('download-progress', (progress) => {
+    console.log(`[AutoUpdater] Download progress: ${Math.round(progress.percent)}%`);
+    sendUpdateStatus('downloading', { percent: progress.percent });
+  });
+
+  autoUpdater.on('update-downloaded', async (info) => {
+    console.log(`[AutoUpdater] Update downloaded: v${info.version}`);
+    sendUpdateStatus('ready', { version: info.version });
+    const options = {
+      type: 'info' as const,
+      buttons: ['Restart Now', 'Later'],
+      defaultId: 0,
+      title: 'Update Ready',
+      message: `Version ${info.version} has been downloaded.`,
+      detail: 'Restart the application to apply the update.',
+    };
+    const { response } = mainWindow
+      ? await dialog.showMessageBox(mainWindow, options)
+      : await dialog.showMessageBox(options);
+    if (response === 0) {
+      isQuitting = true;
+      autoUpdater.quitAndInstall();
+    }
+  });
+
+  autoUpdater.on('error', (err) => {
+    console.error('[AutoUpdater] Error:', err.message);
+    sendUpdateStatus('error', { error: err.message });
+  });
+
+  ipcMain.handle('auto-update:check', async () => {
+    const result = await autoUpdater.checkForUpdatesAndNotify();
+    return { updateAvailable: !!result?.updateInfo };
+  });
+
+  ipcMain.handle('auto-update:install', () => {
+    isQuitting = true;
+    autoUpdater.quitAndInstall();
+  });
+
+  ipcMain.handle('auto-update:get-enabled', () => isAutoUpdateEnabled());
+
+  ipcMain.handle('auto-update:set-enabled', (_event, enabled: boolean) => {
+    setAutoUpdateEnabled(enabled);
+    if (enabled) {
+      startPeriodicChecks();
+    } else {
+      stopPeriodicChecks();
+    }
+    return { success: true };
+  });
+
+  if (isAutoUpdateEnabled()) {
+    autoUpdater.checkForUpdatesAndNotify();
+    startPeriodicChecks();
+  }
+}
+
+function startPeriodicChecks() {
+  stopPeriodicChecks();
+  updateCheckTimer = setInterval(() => {
+    console.log('[AutoUpdater] Periodic update check');
+    autoUpdater.checkForUpdatesAndNotify();
+  }, UPDATE_CHECK_INTERVAL);
+}
+
+function stopPeriodicChecks() {
+  if (updateCheckTimer) {
+    clearInterval(updateCheckTimer);
+    updateCheckTimer = null;
+  }
+}
+
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
@@ -339,6 +488,11 @@ app.whenReady().then(async () => {
     createWindow(port);
     createTray(port);
 
+    // Check for updates (only in packaged builds)
+    if (app.isPackaged) {
+      setupAutoUpdater();
+    }
+
     // Re-send accent color when system preferences change
     nativeTheme.on('updated', () => {
       sendAccentColor();
@@ -364,6 +518,7 @@ app.whenReady().then(async () => {
 
     app.on('before-quit', () => {
       isQuitting = true;
+      stopPeriodicChecks();
     });
 
     let quitting = false;

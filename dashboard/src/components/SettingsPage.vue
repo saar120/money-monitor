@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted, computed } from 'vue';
+import { ref, onMounted, onUnmounted, computed } from 'vue';
 import {
   getSettings,
   updateSettings,
@@ -21,7 +21,7 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { CheckCircle, AlertCircle } from 'lucide-vue-next';
+import { CheckCircle, AlertCircle, RefreshCw, Download } from 'lucide-vue-next';
 
 const loading = ref(true);
 const saving = ref(false);
@@ -108,9 +108,85 @@ onMounted(async () => {
   } finally {
     loading.value = false;
   }
+
+  // Auto-update listener
+  if (electronAPI?.getAutoUpdateEnabled) {
+    autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
+    cleanupUpdateListener = electronAPI.onUpdateStatus((data) => {
+      updateStatus.value = data.status;
+      if (data.version) updateVersion.value = data.version;
+      if (data.percent != null) updatePercent.value = data.percent;
+      if (data.error) updateError.value = data.error;
+    });
+  }
 });
 
 const isElectron = computed(() => data.value?.isElectron ?? false);
+
+// ── Auto-update ─────────────────────────────────────────────────────────────
+const electronAPI = (
+  window as unknown as {
+    electronAPI?: {
+      getAutoUpdateEnabled: () => Promise<boolean>;
+      setAutoUpdateEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
+      checkForUpdates: () => Promise<{ updateAvailable: boolean }>;
+      installUpdate: () => void;
+      onUpdateStatus: (
+        cb: (data: { status: string; version?: string; percent?: number; error?: string }) => void,
+      ) => () => void;
+    };
+  }
+).electronAPI;
+const autoUpdateEnabled = ref(true);
+const updateStatus = ref<string>('idle');
+const updateVersion = ref('');
+const updatePercent = ref(0);
+const updateError = ref('');
+const checkingForUpdates = computed(() => updateStatus.value === 'checking');
+let cleanupUpdateListener: (() => void) | null = null;
+
+onUnmounted(() => {
+  cleanupUpdateListener?.();
+});
+
+async function toggleAutoUpdate(enabled: boolean) {
+  autoUpdateEnabled.value = enabled;
+  await electronAPI?.setAutoUpdateEnabled(enabled);
+}
+
+async function manualCheckForUpdates() {
+  updateStatus.value = 'checking';
+  updateError.value = '';
+  try {
+    await electronAPI?.checkForUpdates();
+  } catch {
+    updateStatus.value = 'error';
+  }
+}
+
+function installUpdate() {
+  electronAPI?.installUpdate();
+}
+
+const updateStatusText = computed(() => {
+  switch (updateStatus.value) {
+    case 'checking':
+      return 'Checking for updates...';
+    case 'available':
+      return `Update v${updateVersion.value} available`;
+    case 'downloading':
+      return `Downloading update... ${Math.round(updatePercent.value)}%`;
+    case 'ready':
+      return `v${updateVersion.value} ready to install`;
+    case 'up-to-date':
+      return 'App is up to date';
+    case 'error':
+      return `Update error: ${updateError.value}`;
+    default:
+      return '';
+  }
+});
+
 const demoMode = ref(false);
 const togglingDemo = ref(false);
 
@@ -486,6 +562,46 @@ async function save() {
             placeholder="Comma-separated user IDs"
             class="w-52"
           />
+        </SettingsRow>
+      </SettingsGroup>
+
+      <!-- Updates -->
+      <SettingsGroup title="Updates" description="Automatic update settings">
+        <SettingsRow label="Auto-update" description="Automatically check for and download updates">
+          <Switch :model-value="autoUpdateEnabled" @update:model-value="toggleAutoUpdate" />
+        </SettingsRow>
+        <SettingsRow label="Check for Updates">
+          <div class="flex items-center gap-3">
+            <Button
+              variant="secondary"
+              size="sm"
+              :disabled="checkingForUpdates"
+              @click="manualCheckForUpdates"
+            >
+              <RefreshCw
+                class="h-3.5 w-3.5 mr-1.5"
+                :class="{ 'animate-spin': checkingForUpdates }"
+              />
+              Check Now
+            </Button>
+            <Button v-if="updateStatus === 'ready'" size="sm" @click="installUpdate">
+              <Download class="h-3.5 w-3.5 mr-1.5" />
+              Install & Restart
+            </Button>
+          </div>
+        </SettingsRow>
+        <SettingsRow v-if="updateStatusText">
+          <p
+            class="text-[12px]"
+            :class="{
+              'text-text-secondary': ['checking', 'up-to-date', 'idle'].includes(updateStatus),
+              'text-blue-500': ['available', 'downloading'].includes(updateStatus),
+              'text-green-500': updateStatus === 'ready',
+              'text-destructive': updateStatus === 'error',
+            }"
+          >
+            {{ updateStatusText }}
+          </p>
         </SettingsRow>
       </SettingsGroup>
 

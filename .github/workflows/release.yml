@@ -34,14 +34,38 @@ jobs:
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build and package
-        run: npm run electron:build
+        run: npm run electron:prebuild && electron-builder --mac --publish always
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Upload DMG to GitHub Release
+      - name: Sign, strip quarantine, and re-package with installer
+        run: |
+          APP_DIR=$(find dist -type d -name "mac*" | head -1)
+          APP_PATH=$(find "$APP_DIR" -name "*.app" -maxdepth 1 | head -1)
+          APP_NAME=$(basename "$APP_PATH")
+          ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
+
+          # Ad-hoc sign the app (turns "damaged" into "unidentified developer")
+          codesign --force --deep --sign - "$APP_PATH"
+
+          # Strip quarantine
+          xattr -cr "$APP_PATH"
+
+          # Re-package zip with the installer script included
+          rm "$ZIP_PATH"
+          STAGE_DIR=$(mktemp -d)
+          cp -R "$APP_PATH" "$STAGE_DIR/"
+          cp scripts/install-mac.command "$STAGE_DIR/"
+          chmod +x "$STAGE_DIR/install-mac.command"
+          cd "$STAGE_DIR" && ditto -c -k --sequesterRsrc . "../release.zip" && cd -
+          mv "$STAGE_DIR/../release.zip" "$ZIP_PATH"
+          rm -rf "$STAGE_DIR"
+
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.dmg
+          files: dist/*.zip
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
@@ -70,12 +94,6 @@ jobs:
         run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
 
       - name: Build and package
-        run: npm run electron:build:win
-
-      - name: Upload EXE to GitHub Release
-        uses: softprops/action-gh-release@v2
-        with:
-          files: dist/*.exe
-          fail_on_unmatched_files: true
-          generate_release_notes: true
-          prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
+        run: npm run electron:prebuild && npx electron-builder --win --publish always
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}

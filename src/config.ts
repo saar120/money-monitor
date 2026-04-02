@@ -116,6 +116,7 @@ const envSchema = z.object({
   SCRAPE_TIMEOUT: z.coerce.number().default(120000),
   SCRAPE_SHOW_BROWSER: z.coerce.boolean().default(false),
   AI_MAX_TURNS: z.coerce.number().int().min(1).max(20).default(8),
+  AUTO_UPDATE_ENABLED: z.coerce.boolean().default(true),
 });
 
 export type Config = z.infer<typeof envSchema>;

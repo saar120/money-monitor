@@ -1,4 +1,4 @@
-import { contextBridge } from 'electron';
+import { contextBridge, ipcRenderer } from 'electron';
 
 // Add the 'electron' and platform classes once the DOM is available.
 // document.documentElement is null when preload runs before page load.
@@ -29,4 +29,25 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => process.env.MM_APP_VERSION ?? 'unknown',
   getAuthToken: () => process.env.API_TOKEN ?? '',
   getDataPath: () => process.env.MONEY_MONITOR_DATA_DIR ?? '',
+  // Auto-update
+  checkForUpdates: () => ipcRenderer.invoke('auto-update:check'),
+  installUpdate: () => ipcRenderer.invoke('auto-update:install'),
+  getAutoUpdateEnabled: () => ipcRenderer.invoke('auto-update:get-enabled'),
+  setAutoUpdateEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('auto-update:set-enabled', enabled),
+  onUpdateStatus: (
+    callback: (status: {
+      status: string;
+      version?: string;
+      percent?: number;
+      error?: string;
+    }) => void,
+  ) => {
+    const listener = (
+      _event: Electron.IpcRendererEvent,
+      data: { status: string; version?: string; percent?: number; error?: string },
+    ) => callback(data);
+    ipcRenderer.on('auto-update:status', listener);
+    return () => ipcRenderer.removeListener('auto-update:status', listener);
+  },
 });
