@@ -39,27 +39,30 @@ jobs:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
           GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
-      - name: Ad-hoc sign and strip quarantine
-        run: |
-          APP_PATH=$(find dist/mac* -name "*.app" -maxdepth 1 | head -1)
-          if [ -n "$APP_PATH" ]; then
-            echo "Ad-hoc signing $APP_PATH"
-            codesign --force --deep --sign - "$APP_PATH"
-            xattr -cr "$APP_PATH"
-          fi
-
-      - name: Re-package signed app into zip
+      - name: Sign, strip quarantine, and re-package with installer
         run: |
           APP_DIR=$(find dist -type d -name "mac*" | head -1)
-          APP_NAME=$(find "$APP_DIR" -name "*.app" -maxdepth 1 -exec basename {} \;)
+          APP_PATH=$(find "$APP_DIR" -name "*.app" -maxdepth 1 | head -1)
+          APP_NAME=$(basename "$APP_PATH")
           ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
-          if [ -n "$ZIP_PATH" ] && [ -n "$APP_DIR" ]; then
-            echo "Re-packaging $APP_NAME into $ZIP_PATH"
-            rm "$ZIP_PATH"
-            cd "$APP_DIR" && ditto -c -k --sequesterRsrc --keepParent "$APP_NAME" "../$(basename "$ZIP_PATH")" && cd -
-          fi
 
-      - name: Upload signed zip to GitHub Release
+          # Ad-hoc sign the app (turns "damaged" into "unidentified developer")
+          codesign --force --deep --sign - "$APP_PATH"
+
+          # Strip quarantine
+          xattr -cr "$APP_PATH"
+
+          # Re-package zip with the installer script included
+          rm "$ZIP_PATH"
+          STAGE_DIR=$(mktemp -d)
+          cp -R "$APP_PATH" "$STAGE_DIR/"
+          cp scripts/install-mac.command "$STAGE_DIR/"
+          chmod +x "$STAGE_DIR/install-mac.command"
+          cd "$STAGE_DIR" && ditto -c -k --sequesterRsrc . "../release.zip" && cd -
+          mv "$STAGE_DIR/../release.zip" "$ZIP_PATH"
+          rm -rf "$STAGE_DIR"
+
+      - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: dist/*.zip
