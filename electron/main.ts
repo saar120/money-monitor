@@ -17,10 +17,13 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 import pkg from 'electron-updater';
 const { autoUpdater } = pkg;
 import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFile } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+
+const execFileAsync = promisify(execFile);
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
@@ -457,6 +460,14 @@ async function promptMoveToApplications(): Promise<boolean> {
   // In a packaged app, appPath points to the asar inside the .app bundle.
   // Walk up to the .app directory itself.
   const appBundlePath = appPath.replace(/\/Contents\/Resources\/.*$/, '');
+  if (appBundlePath === appPath || !appBundlePath.endsWith('.app')) {
+    console.warn(
+      '[Electron] Could not derive .app bundle path from:',
+      appPath,
+      '— skipping prompt',
+    );
+    return false;
+  }
   if (appBundlePath.startsWith('/Applications/')) return false;
 
   const { response } = await dialog.showMessageBox({
@@ -472,24 +483,37 @@ async function promptMoveToApplications(): Promise<boolean> {
   if (response !== 0) return false;
 
   const dest = `/Applications/${app.name}.app`;
+  let rmSucceeded = false;
   try {
-    // Remove old installation if present
-    execFileSync('/bin/rm', ['-rf', dest], { timeout: 10000 });
+    // Remove old installation if present (rm -rf is safe on non-existent paths)
+    await execFileAsync('/bin/rm', ['-rf', dest], { timeout: 10000 });
+    rmSucceeded = true;
     // Copy current bundle to /Applications
-    execFileSync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
+    await execFileAsync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
     // Strip quarantine from the new copy
-    execFileSync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
+    await execFileAsync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
 
-    // Relaunch from /Applications
-    app.relaunch({ execPath: join(dest, 'Contents', 'MacOS', app.name) });
+    // Relaunch from /Applications using the actual binary name from the running process
+    app.relaunch({ execPath: join(dest, 'Contents', 'MacOS', basename(process.execPath)) });
     app.exit(0);
-    return true;
+    return true; // unreachable — app.exit() terminates before this
   } catch (e) {
     console.error('[Electron] Failed to move to /Applications:', e);
-    dialog.showErrorBox(
-      'Could not move app',
-      'Failed to move Money Monitor to /Applications. You can drag it there manually.',
-    );
+    const err = e as NodeJS.ErrnoException & { signal?: string };
+    const rmNote = rmSucceeded
+      ? ' Any existing copy in /Applications has already been removed.'
+      : '';
+    let detail: string;
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      detail = `Permission denied.${rmNote} Open Finder and drag Money Monitor.app to /Applications manually (you may be prompted for your password).`;
+    } else if (err.code === 'ENOSPC') {
+      detail = `Not enough disk space in /Applications.${rmNote} Free up some space and try again.`;
+    } else if (err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT') {
+      detail = `The operation timed out.${rmNote} You can drag Money Monitor.app to /Applications manually.`;
+    } else {
+      detail = `An unexpected error occurred.${rmNote} You can drag Money Monitor.app to /Applications manually.`;
+    }
+    dialog.showErrorBox('Could not move app', detail);
     return false;
   }
 }
