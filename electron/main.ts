@@ -17,15 +17,24 @@ import type { BrowserWindowConstructorOptions } from 'electron';
 import pkg from 'electron-updater';
 const { autoUpdater } = pkg;
 import { randomBytes } from 'node:crypto';
-import { join } from 'node:path';
+import { basename, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { execFileSync } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
+import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+
+const execFileAsync = promisify(execFile);
 
 const __dirname = fileURLToPath(new URL('.', import.meta.url));
 
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
+
+// ── Set app name FIRST (affects userData path and menu bar) ─────────────────
+// IMPORTANT: Must be set before any call to app.getPath('userData'), because
+// Electron caches the path on first access.  The package.json "name" is
+// "money-monitor" but we want the userData dir to be "Money Monitor".
+app.name = 'Money Monitor';
 
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
 if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
@@ -58,9 +67,6 @@ if (isMac && app.isPackaged) {
     }
   }
 }
-
-// ── Set app name (affects userData path and menu bar) ────────────────────────
-app.name = 'Money Monitor';
 
 // ── 1. Set data directory BEFORE any backend import ──────────────────────────
 const dataDir = app.getPath('userData');
@@ -443,13 +449,92 @@ function stopPeriodicChecks() {
   }
 }
 
+// ── Move-to-Applications prompt (macOS only) ───────────────────────────────
+// When the app is launched from outside /Applications (e.g. extracted zip in
+// Downloads), offer to move it there.  This replaces the install-mac.command
+// script which macOS Gatekeeper blocks as "unsafe".
+async function promptMoveToApplications(): Promise<boolean> {
+  if (!isMac || !app.isPackaged) return false;
+
+  const appPath = app.getAppPath();
+  // In a packaged app, appPath points to the asar inside the .app bundle.
+  // Walk up to the .app directory itself.
+  const appBundlePath = appPath.replace(/\/Contents\/Resources\/.*$/, '');
+  if (appBundlePath === appPath || !appBundlePath.endsWith('.app')) {
+    console.warn(
+      '[Electron] Could not derive .app bundle path from:',
+      appPath,
+      '— skipping prompt',
+    );
+    return false;
+  }
+  if (appBundlePath.startsWith('/Applications/')) return false;
+
+  // Respect previous "Keep Current Location" choice
+  const declinedFlag = join(app.getPath('userData'), '.move-to-applications-declined');
+  if (existsSync(declinedFlag)) return false;
+
+  const { response } = await dialog.showMessageBox({
+    type: 'question',
+    buttons: ['Move to Applications', 'Keep Current Location'],
+    defaultId: 0,
+    title: 'Move to Applications?',
+    message: `${app.name} is not in the Applications folder.`,
+    detail:
+      'Move it to /Applications for the best experience — it will appear in Launchpad and replace any older version.',
+  });
+
+  if (response !== 0) {
+    try {
+      writeFileSync(declinedFlag, '', { mode: 0o600 });
+    } catch {
+      /* best-effort */
+    }
+    return false;
+  }
+
+  const dest = `/Applications/${app.name}.app`;
+  let rmSucceeded = false;
+  try {
+    await execFileAsync('/bin/rm', ['-rf', dest], { timeout: 10000 });
+    rmSucceeded = true;
+    await execFileAsync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
+    await execFileAsync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
+
+    // Relaunch from /Applications using the actual binary name from the running process
+    app.relaunch({ execPath: join(dest, 'Contents', 'MacOS', basename(process.execPath)) });
+    app.exit(0);
+    return true; // unreachable — app.exit() terminates before this
+  } catch (e) {
+    console.error('[Electron] Failed to move to /Applications:', e);
+    const err = e as NodeJS.ErrnoException & { signal?: string };
+    const rmNote = rmSucceeded
+      ? ' Any existing copy in /Applications has already been removed.'
+      : '';
+    let detail: string;
+    if (err.code === 'EACCES' || err.code === 'EPERM') {
+      detail = `Permission denied.${rmNote} Open Finder and drag ${app.name}.app to /Applications manually (you may be prompted for your password).`;
+    } else if (err.code === 'ENOSPC') {
+      detail = `Not enough disk space in /Applications.${rmNote} Free up some space and try again.`;
+    } else if (err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT') {
+      detail = `The operation timed out.${rmNote} You can drag ${app.name}.app to /Applications manually.`;
+    } else {
+      detail = `An unexpected error occurred.${rmNote} You can drag ${app.name}.app to /Applications manually.`;
+    }
+    dialog.showErrorBox('Could not move app', detail);
+    return false;
+  }
+}
+
 // ── 7. App lifecycle ────────────────────────────────────────────────────────
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
   try {
+    if (await promptMoveToApplications()) return;
+
     // About panel
     app.setAboutPanelOptions({
-      applicationName: 'Money Monitor',
+      applicationName: app.name,
       applicationVersion: app.getVersion(),
       copyright: 'Personal Finance Tracker',
       iconPath: join(__dirname, 'icons', 'icon-512.png'),
