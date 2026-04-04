@@ -1,6 +1,6 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loginAnthropic, getOAuthApiKey } from '@mariozechner/pi-ai/oauth';
+import { loginAnthropic, loginOpenAICodex, getOAuthApiKey } from '@mariozechner/pi-ai/oauth';
 import type { OAuthCredentials } from '@mariozechner/pi-ai/oauth';
 import { dataDir } from '../paths.js';
 import { config, type Config } from '../config.js';
@@ -55,16 +55,19 @@ export function startAnthropicOAuth(): Promise<string> {
     pendingLoginPromise = loginAnthropic(
       (url: string) => resolveUrl(url),
       () => codePromise,
-    ).then(creds => {
-      credentials.anthropic = creds;
-      saveCredentials();
-    }).catch(err => {
-      // If onAuthUrl never fired, reject the outer promise
-      rejectUrl(err);
-    }).finally(() => {
-      pendingCodeResolve = null;
-      pendingLoginPromise = null;
-    });
+    )
+      .then((creds) => {
+        credentials.anthropic = creds;
+        saveCredentials();
+      })
+      .catch((err) => {
+        // If onAuthUrl never fired, reject the outer promise
+        rejectUrl(err);
+      })
+      .finally(() => {
+        pendingCodeResolve = null;
+        pendingLoginPromise = null;
+      });
   });
 }
 
@@ -88,10 +91,70 @@ export function cancelAnthropicOAuth(): void {
   pendingLoginPromise = null;
 }
 
+// ── OpenAI Codex OAuth (ChatGPT Plus/Pro subscription) ─────────────────────
+
+let pendingOpenAICodeResolve: ((code: string) => void) | null = null;
+let pendingOpenAILoginPromise: Promise<void> | null = null;
+
+/**
+ * Start the OpenAI Codex OAuth flow.
+ * Returns the authorization URL the user must open in a browser.
+ * The flow suspends until `completeOpenAICodexOAuth` is called with the code.
+ */
+export function startOpenAICodexOAuth(): Promise<string> {
+  if (pendingOpenAICodeResolve) {
+    throw new Error('OpenAI OAuth flow already in progress');
+  }
+
+  return new Promise<string>((resolveUrl, rejectUrl) => {
+    const codePromise = new Promise<string>((resolve) => {
+      pendingOpenAICodeResolve = resolve;
+    });
+
+    pendingOpenAILoginPromise = loginOpenAICodex({
+      onAuth: (info) => resolveUrl(info.url),
+      onPrompt: () => codePromise,
+      onManualCodeInput: () => codePromise,
+    })
+      .then((creds) => {
+        credentials['openai-codex'] = creds;
+        saveCredentials();
+      })
+      .catch((err) => {
+        rejectUrl(err);
+      })
+      .finally(() => {
+        pendingOpenAICodeResolve = null;
+        pendingOpenAILoginPromise = null;
+      });
+  });
+}
+
+/**
+ * Complete the OpenAI Codex OAuth flow by providing the authorization code
+ * the user copied from the browser redirect.
+ */
+export async function completeOpenAICodexOAuth(code: string): Promise<void> {
+  if (!pendingOpenAICodeResolve) {
+    throw new Error('No OpenAI OAuth flow in progress');
+  }
+  pendingOpenAICodeResolve(code);
+  if (pendingOpenAILoginPromise) {
+    await pendingOpenAILoginPromise;
+  }
+}
+
+/** Cancel any in-progress OpenAI OAuth flow. */
+export function cancelOpenAICodexOAuth(): void {
+  pendingOpenAICodeResolve = null;
+  pendingOpenAILoginPromise = null;
+}
+
 /** Maps provider IDs to their config API key field names. */
 export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
+  'openai-codex': 'OPENAI_API_KEY',
   google: 'GEMINI_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
 };
@@ -111,7 +174,10 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
         return result.apiKey;
       }
     } catch (err) {
-      console.error(`[OAuth] Failed to refresh token for ${provider}:`, err instanceof Error ? err.message : err);
+      console.error(
+        `[OAuth] Failed to refresh token for ${provider}:`,
+        err instanceof Error ? err.message : err,
+      );
     }
   }
 
@@ -134,4 +200,9 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
 /** Check if Anthropic OAuth credentials exist. */
 export function hasAnthropicOAuth(): boolean {
   return !!credentials.anthropic?.refresh;
+}
+
+/** Check if OpenAI Codex OAuth credentials exist. */
+export function hasOpenAICodexOAuth(): boolean {
+  return !!credentials['openai-codex']?.refresh;
 }

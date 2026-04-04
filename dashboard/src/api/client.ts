@@ -815,7 +815,7 @@ export interface SettingsResponse {
   isElectron: boolean;
   settings: Record<string, string | number | boolean>;
   dataDir: string;
-  oauth: { anthropic: boolean };
+  oauth: { anthropic: boolean; 'openai-codex': boolean };
   demoMode: boolean;
 }
 
@@ -866,8 +866,23 @@ export function cancelAnthropicOAuth() {
   return request<{ success: boolean }>('/settings/oauth/anthropic/cancel', { method: 'POST' });
 }
 
+export function startOpenAICodexOAuth() {
+  return request<{ url: string }>('/settings/oauth/openai-codex/start', { method: 'POST' });
+}
+
+export function completeOpenAICodexOAuth(code: string) {
+  return request<{ success: boolean }>('/settings/oauth/openai-codex/complete', {
+    method: 'POST',
+    body: JSON.stringify({ code }),
+  });
+}
+
+export function cancelOpenAICodexOAuth() {
+  return request<{ success: boolean }>('/settings/oauth/openai-codex/cancel', { method: 'POST' });
+}
+
 export function getOAuthStatus() {
-  return request<{ anthropic: boolean }>('/settings/oauth/status');
+  return request<{ anthropic: boolean; 'openai-codex': boolean }>('/settings/oauth/status');
 }
 
 // ─── Demo Mode ───

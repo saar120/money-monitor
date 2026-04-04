@@ -5,6 +5,7 @@ const mockGetOAuthApiKey = vi.fn();
 vi.mock('@mariozechner/pi-ai/oauth', () => ({
   getOAuthApiKey: mockGetOAuthApiKey,
   loginAnthropic: vi.fn(),
+  loginOpenAICodex: vi.fn(),
 }));
 
 // Mock paths
@@ -24,7 +25,9 @@ vi.mock('node:fs', () => ({
 const mockConfig: Record<string, any> = {};
 
 vi.mock('../config.js', () => ({
-  get config() { return mockConfig; },
+  get config() {
+    return mockConfig;
+  },
   isElectronMode: false,
   loadConfigFile: () => null,
   saveConfigFile: vi.fn(),
@@ -46,10 +49,11 @@ function resetConfig() {
 // ── PROVIDER_KEY_MAP ─────────────────────────────────────────────────────────
 
 describe('PROVIDER_KEY_MAP', () => {
-  it('maps all 4 supported providers to config fields', () => {
+  it('maps all supported providers to config fields', () => {
     expect(PROVIDER_KEY_MAP).toEqual({
       anthropic: 'ANTHROPIC_API_KEY',
       openai: 'OPENAI_API_KEY',
+      'openai-codex': 'OPENAI_API_KEY',
       google: 'GEMINI_API_KEY',
       openrouter: 'OPENROUTER_API_KEY',
     });

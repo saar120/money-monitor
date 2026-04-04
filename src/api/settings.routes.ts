@@ -14,6 +14,10 @@ import {
   startAnthropicOAuth,
   completeAnthropicOAuth,
   cancelAnthropicOAuth,
+  hasOpenAICodexOAuth,
+  startOpenAICodexOAuth,
+  completeOpenAICodexOAuth,
+  cancelOpenAICodexOAuth,
   PROVIDER_KEY_MAP,
 } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
@@ -54,7 +58,7 @@ export async function settingsRoutes(app: FastifyInstance) {
         isElectron: false,
         settings: {},
         dataDir: '',
-        oauth: { anthropic: false },
+        oauth: { anthropic: false, 'openai-codex': false },
         demoMode: isDemoMode(),
       });
     }
@@ -77,7 +81,7 @@ export async function settingsRoutes(app: FastifyInstance) {
       isElectron: isElectronMode,
       settings,
       dataDir,
-      oauth: { anthropic: hasAnthropicOAuth() },
+      oauth: { anthropic: hasAnthropicOAuth(), 'openai-codex': hasOpenAICodexOAuth() },
       demoMode: isDemoMode(),
     });
   });
@@ -117,6 +121,7 @@ export async function settingsRoutes(app: FastifyInstance) {
   const PROVIDER_META: Record<string, { name: string; authTypes: readonly string[] }> = {
     anthropic: { name: 'Anthropic', authTypes: ['api_key', 'oauth'] },
     openai: { name: 'OpenAI', authTypes: ['api_key'] },
+    'openai-codex': { name: 'ChatGPT Plus/Pro', authTypes: ['oauth'] },
     google: { name: 'Google Gemini', authTypes: ['api_key'] },
     openrouter: { name: 'OpenRouter', authTypes: ['api_key'] },
   };
@@ -178,7 +183,44 @@ export async function settingsRoutes(app: FastifyInstance) {
     return reply.send({ success: true });
   });
 
+  // ── OpenAI Codex OAuth endpoints ───────────────────────────────────────────
+
+  /** Start the OpenAI Codex (ChatGPT subscription) OAuth flow. */
+  app.post('/api/settings/oauth/openai-codex/start', async (_request, reply) => {
+    try {
+      const url = await startOpenAICodexOAuth();
+      return reply.send({ url });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  /** Complete the OpenAI Codex OAuth flow with the authorization code. */
+  app.post('/api/settings/oauth/openai-codex/complete', async (request, reply) => {
+    const { code } = request.body as { code?: string };
+    if (!code) {
+      return reply.status(400).send({ error: 'Authorization code is required' });
+    }
+    try {
+      await completeOpenAICodexOAuth(code);
+      return reply.send({ success: true });
+    } catch (err) {
+      const msg = err instanceof Error ? err.message : String(err);
+      return reply.status(500).send({ error: msg });
+    }
+  });
+
+  /** Cancel any in-progress OpenAI Codex OAuth flow. */
+  app.post('/api/settings/oauth/openai-codex/cancel', async (_request, reply) => {
+    cancelOpenAICodexOAuth();
+    return reply.send({ success: true });
+  });
+
   app.get('/api/settings/oauth/status', async (_request, reply) => {
-    return reply.send({ anthropic: hasAnthropicOAuth() });
+    return reply.send({
+      anthropic: hasAnthropicOAuth(),
+      'openai-codex': hasOpenAICodexOAuth(),
+    });
   });
 }

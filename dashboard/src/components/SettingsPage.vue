@@ -9,6 +9,7 @@ import {
   type AIProvider,
 } from '../api/client';
 import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
+import { useOpenAICodexOAuth } from '../composables/useOpenAICodexOAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
@@ -211,6 +212,22 @@ const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAu
     },
   });
 
+// ── OpenAI Codex OAuth ─────────────────────────────────────────────────────
+
+const openaiCodexOAuthConnected = computed(() => data.value?.oauth?.['openai-codex'] ?? false);
+const {
+  oauthStep: openaiOAuthStep,
+  oauthCode: openaiOAuthCode,
+  oauthError: openaiOAuthError,
+  startOAuth: startOpenaiOAuth,
+  submitOAuthCode: submitOpenaiOAuthCode,
+  cancelOAuth: cancelOpenaiOAuth,
+} = useOpenAICodexOAuth({
+  onSuccess: () => {
+    if (data.value) data.value.oauth['openai-codex'] = true;
+  },
+});
+
 // ── Save ─────────────────────────────────────────────────────────────────────
 
 async function save() {
@@ -318,6 +335,11 @@ async function save() {
               >
               <strong v-else class="text-destructive">Not set</strong>
             </span>
+            <span v-else-if="form.AI_PROVIDER === 'openai-codex'">
+              Auth:
+              <strong v-if="openaiCodexOAuthConnected" class="text-text-primary">OAuth</strong>
+              <strong v-else class="text-destructive">Not connected</strong>
+            </span>
             <span v-else>
               Auth:
               <strong v-if="currentProvider?.hasKey" class="text-text-primary">API Key</strong>
@@ -340,7 +362,10 @@ async function save() {
           </Select>
         </SettingsRow>
 
-        <SettingsRow :label="`${currentProvider?.name ?? 'API'} Key`">
+        <SettingsRow
+          v-if="currentProvider?.authTypes?.includes('api_key')"
+          :label="`${currentProvider?.name ?? 'API'} Key`"
+        >
           <Input
             type="password"
             class="w-52"
@@ -427,6 +452,63 @@ async function save() {
                 Paste an OAuth token directly (e.g. from Claude Code CLI)
               </p>
             </div>
+          </SettingsRow>
+        </template>
+
+        <!-- OpenAI Codex (ChatGPT subscription) OAuth section -->
+        <template v-if="form.AI_PROVIDER === 'openai-codex'">
+          <SettingsRow vertical>
+            <div
+              v-if="openaiCodexOAuthConnected && openaiOAuthStep === 'idle'"
+              class="flex items-center gap-2 text-[13px]"
+            >
+              <CheckCircle class="h-4 w-4 text-green-500" />
+              <span class="text-text-secondary">ChatGPT subscription connected</span>
+            </div>
+
+            <div v-else-if="openaiOAuthStep === 'idle'" class="space-y-1.5">
+              <Button variant="secondary" size="sm" class="w-full" @click="startOpenaiOAuth">
+                Login with ChatGPT
+              </Button>
+              <p class="text-[11px] text-text-secondary">
+                Use your ChatGPT Plus or Pro subscription
+              </p>
+            </div>
+
+            <div v-else-if="openaiOAuthStep === 'waiting_code'" class="space-y-2">
+              <p class="text-[12px] text-text-secondary">
+                A browser window has been opened. After authorizing, paste the code below:
+              </p>
+              <div class="flex gap-2">
+                <Input
+                  v-model="openaiOAuthCode"
+                  placeholder="Paste authorization code or redirect URL..."
+                  class="flex-1"
+                  @keydown.enter="submitOpenaiOAuthCode"
+                />
+                <Button
+                  size="sm"
+                  :disabled="!openaiOAuthCode.trim()"
+                  @click="submitOpenaiOAuthCode"
+                >
+                  Submit
+                </Button>
+              </div>
+              <button class="text-[11px] text-text-secondary underline" @click="cancelOpenaiOAuth">
+                Cancel
+              </button>
+            </div>
+
+            <div
+              v-else-if="openaiOAuthStep === 'submitting'"
+              class="text-[12px] text-text-secondary"
+            >
+              Verifying authorization...
+            </div>
+
+            <p v-if="openaiOAuthError" class="text-[11px] text-destructive">
+              {{ openaiOAuthError }}
+            </p>
           </SettingsRow>
         </template>
 
