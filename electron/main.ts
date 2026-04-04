@@ -19,7 +19,7 @@ const { autoUpdater } = pkg;
 import { randomBytes } from 'node:crypto';
 import { basename, join } from 'node:path';
 import { existsSync, readFileSync, writeFileSync } from 'node:fs';
-import { execFile } from 'node:child_process';
+import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
 
@@ -470,27 +470,35 @@ async function promptMoveToApplications(): Promise<boolean> {
   }
   if (appBundlePath.startsWith('/Applications/')) return false;
 
+  // Respect previous "Keep Current Location" choice
+  const declinedFlag = join(app.getPath('userData'), '.move-to-applications-declined');
+  if (existsSync(declinedFlag)) return false;
+
   const { response } = await dialog.showMessageBox({
     type: 'question',
     buttons: ['Move to Applications', 'Keep Current Location'],
     defaultId: 0,
     title: 'Move to Applications?',
-    message: 'Money Monitor is not in the Applications folder.',
+    message: `${app.name} is not in the Applications folder.`,
     detail:
       'Move it to /Applications for the best experience — it will appear in Launchpad and replace any older version.',
   });
 
-  if (response !== 0) return false;
+  if (response !== 0) {
+    try {
+      writeFileSync(declinedFlag, '', { mode: 0o600 });
+    } catch {
+      /* best-effort */
+    }
+    return false;
+  }
 
   const dest = `/Applications/${app.name}.app`;
   let rmSucceeded = false;
   try {
-    // Remove old installation if present (rm -rf is safe on non-existent paths)
     await execFileAsync('/bin/rm', ['-rf', dest], { timeout: 10000 });
     rmSucceeded = true;
-    // Copy current bundle to /Applications
     await execFileAsync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
-    // Strip quarantine from the new copy
     await execFileAsync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
 
     // Relaunch from /Applications using the actual binary name from the running process
@@ -505,13 +513,13 @@ async function promptMoveToApplications(): Promise<boolean> {
       : '';
     let detail: string;
     if (err.code === 'EACCES' || err.code === 'EPERM') {
-      detail = `Permission denied.${rmNote} Open Finder and drag Money Monitor.app to /Applications manually (you may be prompted for your password).`;
+      detail = `Permission denied.${rmNote} Open Finder and drag ${app.name}.app to /Applications manually (you may be prompted for your password).`;
     } else if (err.code === 'ENOSPC') {
       detail = `Not enough disk space in /Applications.${rmNote} Free up some space and try again.`;
     } else if (err.signal === 'SIGTERM' || err.code === 'ETIMEDOUT') {
-      detail = `The operation timed out.${rmNote} You can drag Money Monitor.app to /Applications manually.`;
+      detail = `The operation timed out.${rmNote} You can drag ${app.name}.app to /Applications manually.`;
     } else {
-      detail = `An unexpected error occurred.${rmNote} You can drag Money Monitor.app to /Applications manually.`;
+      detail = `An unexpected error occurred.${rmNote} You can drag ${app.name}.app to /Applications manually.`;
     }
     dialog.showErrorBox('Could not move app', detail);
     return false;
@@ -522,12 +530,11 @@ async function promptMoveToApplications(): Promise<boolean> {
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
   try {
-    // Offer to move to /Applications before doing anything else
     if (await promptMoveToApplications()) return;
 
     // About panel
     app.setAboutPanelOptions({
-      applicationName: 'Money Monitor',
+      applicationName: app.name,
       applicationVersion: app.getVersion(),
       copyright: 'Personal Finance Tracker',
       iconPath: join(__dirname, 'icons', 'icon-512.png'),
