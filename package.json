@@ -61,11 +61,13 @@
     "mac": {
       "target": "zip",
       "icon": "electron/icons/icon.icns",
-      "category": "public.app-category.finance"
+      "category": "public.app-category.finance",
+      "artifactName": "Money-Monitor-${version}-${arch}-mac.${ext}"
     },
     "win": {
       "target": "nsis",
-      "icon": "electron/icons/icon.ico"
+      "icon": "electron/icons/icon.ico",
+      "artifactName": "Money-Monitor-Setup-${version}.${ext}"
     },
     "linux": {
       "target": "AppImage",
