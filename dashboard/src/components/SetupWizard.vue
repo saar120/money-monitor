@@ -2,7 +2,8 @@
 import { ref, computed, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { updateSettings, getAIProviders, type AIProvider } from '../api/client';
-import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
+import { useOAuth } from '../composables/useOAuth';
+import { anthropicOAuth } from '../api/client';
 import { Card, CardContent, CardHeader, CardTitle, CardDescription } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -64,12 +65,14 @@ const telegramBotToken = ref('');
 
 // Anthropic OAuth
 const oauthConnected = ref(false);
-const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } =
-  useAnthropicOAuth({
+const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useOAuth(
+  anthropicOAuth,
+  {
     onSuccess: () => {
       oauthConnected.value = true;
     },
-  });
+  },
+);
 
 const canProceed = computed(() => {
   if (step.value === 1) {
