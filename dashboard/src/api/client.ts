@@ -851,35 +851,27 @@ export function updateSettings(settings: Record<string, string | number | boolea
 
 // ─── OAuth ───
 
-export function startAnthropicOAuth() {
-  return request<{ url: string }>('/settings/oauth/anthropic/start', { method: 'POST' });
+export interface OAuthClient {
+  start(): Promise<{ url: string }>;
+  complete(code: string): Promise<{ success: boolean }>;
+  cancel(): Promise<{ success: boolean }>;
 }
 
-export function completeAnthropicOAuth(code: string) {
-  return request<{ success: boolean }>('/settings/oauth/anthropic/complete', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
+function createOAuthClient(provider: string): OAuthClient {
+  return {
+    start: () => request<{ url: string }>(`/settings/oauth/${provider}/start`, { method: 'POST' }),
+    complete: (code: string) =>
+      request<{ success: boolean }>(`/settings/oauth/${provider}/complete`, {
+        method: 'POST',
+        body: JSON.stringify({ code }),
+      }),
+    cancel: () =>
+      request<{ success: boolean }>(`/settings/oauth/${provider}/cancel`, { method: 'POST' }),
+  };
 }
 
-export function cancelAnthropicOAuth() {
-  return request<{ success: boolean }>('/settings/oauth/anthropic/cancel', { method: 'POST' });
-}
-
-export function startOpenAICodexOAuth() {
-  return request<{ url: string }>('/settings/oauth/openai-codex/start', { method: 'POST' });
-}
-
-export function completeOpenAICodexOAuth(code: string) {
-  return request<{ success: boolean }>('/settings/oauth/openai-codex/complete', {
-    method: 'POST',
-    body: JSON.stringify({ code }),
-  });
-}
-
-export function cancelOpenAICodexOAuth() {
-  return request<{ success: boolean }>('/settings/oauth/openai-codex/cancel', { method: 'POST' });
-}
+export const anthropicOAuth = createOAuthClient('anthropic');
+export const openaiCodexOAuth = createOAuthClient('openai-codex');
 
 export function getOAuthStatus() {
   return request<{ anthropic: boolean; 'openai-codex': boolean }>('/settings/oauth/status');

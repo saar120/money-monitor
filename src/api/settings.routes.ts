@@ -9,6 +9,7 @@ import {
   SECRET_KEYS,
 } from '../config.js';
 import { dataDir } from '../paths.js';
+import type { OAuthFlow } from '../ai/auth.js';
 import {
   hasAnthropicOAuth,
   startAnthropicOAuth,
@@ -151,70 +152,48 @@ export async function settingsRoutes(app: FastifyInstance) {
 
   // ── OAuth endpoints ──────────────────────────────────────────────────────────
 
-  /** Start the Anthropic PKCE OAuth flow — returns the URL the user must open. */
-  app.post('/api/settings/oauth/anthropic/start', async (_request, reply) => {
-    try {
-      const url = await startAnthropicOAuth();
-      return reply.send({ url });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.status(500).send({ error: msg });
-    }
-  });
+  function registerOAuthRoutes(provider: string, flow: OAuthFlow) {
+    app.post(`/api/settings/oauth/${provider}/start`, async (_request, reply) => {
+      try {
+        const url = await flow.start();
+        return reply.send({ url });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
 
-  /** Complete the OAuth flow with the authorization code from the browser redirect. */
-  app.post('/api/settings/oauth/anthropic/complete', async (request, reply) => {
-    const { code } = request.body as { code?: string };
-    if (!code) {
-      return reply.status(400).send({ error: 'Authorization code is required' });
-    }
-    try {
-      await completeAnthropicOAuth(code);
+    app.post(`/api/settings/oauth/${provider}/complete`, async (request, reply) => {
+      const { code } = request.body as { code?: string };
+      if (!code) {
+        return reply.status(400).send({ error: 'Authorization code is required' });
+      }
+      try {
+        await flow.complete(code);
+        return reply.send({ success: true });
+      } catch (err) {
+        const msg = err instanceof Error ? err.message : String(err);
+        return reply.status(500).send({ error: msg });
+      }
+    });
+
+    app.post(`/api/settings/oauth/${provider}/cancel`, async (_request, reply) => {
+      flow.cancel();
       return reply.send({ success: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.status(500).send({ error: msg });
-    }
+    });
+  }
+
+  registerOAuthRoutes('anthropic', {
+    start: startAnthropicOAuth,
+    complete: completeAnthropicOAuth,
+    cancel: cancelAnthropicOAuth,
+    hasOAuth: hasAnthropicOAuth,
   });
-
-  /** Cancel any in-progress OAuth flow. */
-  app.post('/api/settings/oauth/anthropic/cancel', async (_request, reply) => {
-    cancelAnthropicOAuth();
-    return reply.send({ success: true });
-  });
-
-  // ── OpenAI Codex OAuth endpoints ───────────────────────────────────────────
-
-  /** Start the OpenAI Codex (ChatGPT subscription) OAuth flow. */
-  app.post('/api/settings/oauth/openai-codex/start', async (_request, reply) => {
-    try {
-      const url = await startOpenAICodexOAuth();
-      return reply.send({ url });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.status(500).send({ error: msg });
-    }
-  });
-
-  /** Complete the OpenAI Codex OAuth flow with the authorization code. */
-  app.post('/api/settings/oauth/openai-codex/complete', async (request, reply) => {
-    const { code } = request.body as { code?: string };
-    if (!code) {
-      return reply.status(400).send({ error: 'Authorization code is required' });
-    }
-    try {
-      await completeOpenAICodexOAuth(code);
-      return reply.send({ success: true });
-    } catch (err) {
-      const msg = err instanceof Error ? err.message : String(err);
-      return reply.status(500).send({ error: msg });
-    }
-  });
-
-  /** Cancel any in-progress OpenAI Codex OAuth flow. */
-  app.post('/api/settings/oauth/openai-codex/cancel', async (_request, reply) => {
-    cancelOpenAICodexOAuth();
-    return reply.send({ success: true });
+  registerOAuthRoutes('openai-codex', {
+    start: startOpenAICodexOAuth,
+    complete: completeOpenAICodexOAuth,
+    cancel: cancelOpenAICodexOAuth,
+    hasOAuth: hasOpenAICodexOAuth,
   });
 
   app.get('/api/settings/oauth/status', async (_request, reply) => {

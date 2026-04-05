@@ -32,123 +32,101 @@ function saveCredentials(): void {
   lastSavedJson = json;
 }
 
-// ── Two-step Anthropic OAuth (PKCE) ──────────────────────────────────────────
+// ── Generic OAuth flow factory ─────────────────────────────────────────────
 
-let pendingCodeResolve: ((code: string) => void) | null = null;
-let pendingLoginPromise: Promise<void> | null = null;
+type LoginAdapter = (
+  onUrl: (url: string) => void,
+  getCode: () => Promise<string>,
+) => Promise<OAuthCredentials>;
 
-/**
- * Step 1: Start the Anthropic OAuth PKCE flow.
- * Returns the authorization URL the user must open in a browser.
- * The flow suspends until `completeAnthropicOAuth` is called with the code.
- */
-export function startAnthropicOAuth(): Promise<string> {
-  if (pendingCodeResolve) {
-    throw new Error('OAuth flow already in progress');
-  }
+export interface OAuthFlow {
+  start(): Promise<string>;
+  complete(code: string): Promise<void>;
+  cancel(): void;
+  hasOAuth(): boolean;
+}
 
-  return new Promise<string>((resolveUrl, rejectUrl) => {
-    const codePromise = new Promise<string>((resolve) => {
-      pendingCodeResolve = resolve;
-    });
+function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow {
+  let pendingResolve: ((code: string) => void) | null = null;
+  let pendingReject: ((err: Error) => void) | null = null;
+  let pendingLogin: Promise<void> | null = null;
 
-    pendingLoginPromise = loginAnthropic(
-      (url: string) => resolveUrl(url),
-      () => codePromise,
-    )
-      .then((creds) => {
-        credentials.anthropic = creds;
-        saveCredentials();
-      })
-      .catch((err) => {
-        // If onAuthUrl never fired, reject the outer promise
-        rejectUrl(err);
-      })
-      .finally(() => {
-        pendingCodeResolve = null;
-        pendingLoginPromise = null;
+  function start(): Promise<string> {
+    if (pendingResolve) {
+      throw new Error('OAuth flow already in progress');
+    }
+
+    return new Promise<string>((resolveUrl, rejectUrl) => {
+      const codePromise = new Promise<string>((resolve, reject) => {
+        pendingResolve = resolve;
+        pendingReject = reject;
       });
-  });
-}
 
-/**
- * Step 2: Complete the OAuth flow by providing the authorization code
- * the user copied from the browser redirect.
- */
-export async function completeAnthropicOAuth(code: string): Promise<void> {
-  if (!pendingCodeResolve) {
-    throw new Error('No OAuth flow in progress');
-  }
-  pendingCodeResolve(code);
-  if (pendingLoginPromise) {
-    await pendingLoginPromise;
-  }
-}
-
-/** Cancel any in-progress OAuth flow. */
-export function cancelAnthropicOAuth(): void {
-  pendingCodeResolve = null;
-  pendingLoginPromise = null;
-}
-
-// ── OpenAI Codex OAuth (ChatGPT Plus/Pro subscription) ─────────────────────
-
-let pendingOpenAICodeResolve: ((code: string) => void) | null = null;
-let pendingOpenAILoginPromise: Promise<void> | null = null;
-
-/**
- * Start the OpenAI Codex OAuth flow.
- * Returns the authorization URL the user must open in a browser.
- * The flow suspends until `completeOpenAICodexOAuth` is called with the code.
- */
-export function startOpenAICodexOAuth(): Promise<string> {
-  if (pendingOpenAICodeResolve) {
-    throw new Error('OpenAI OAuth flow already in progress');
-  }
-
-  return new Promise<string>((resolveUrl, rejectUrl) => {
-    const codePromise = new Promise<string>((resolve) => {
-      pendingOpenAICodeResolve = resolve;
+      pendingLogin = loginFn(resolveUrl, () => codePromise)
+        .then((creds) => {
+          credentials[providerKey] = creds;
+          saveCredentials();
+        })
+        .catch((err) => {
+          rejectUrl(err);
+        })
+        .finally(() => {
+          pendingResolve = null;
+          pendingReject = null;
+          pendingLogin = null;
+        });
     });
-
-    pendingOpenAILoginPromise = loginOpenAICodex({
-      onAuth: (info) => resolveUrl(info.url),
-      onPrompt: () => codePromise,
-      onManualCodeInput: () => codePromise,
-    })
-      .then((creds) => {
-        credentials['openai-codex'] = creds;
-        saveCredentials();
-      })
-      .catch((err) => {
-        rejectUrl(err);
-      })
-      .finally(() => {
-        pendingOpenAICodeResolve = null;
-        pendingOpenAILoginPromise = null;
-      });
-  });
-}
-
-/**
- * Complete the OpenAI Codex OAuth flow by providing the authorization code
- * the user copied from the browser redirect.
- */
-export async function completeOpenAICodexOAuth(code: string): Promise<void> {
-  if (!pendingOpenAICodeResolve) {
-    throw new Error('No OpenAI OAuth flow in progress');
   }
-  pendingOpenAICodeResolve(code);
-  if (pendingOpenAILoginPromise) {
-    await pendingOpenAILoginPromise;
+
+  async function complete(code: string): Promise<void> {
+    if (!pendingResolve) {
+      throw new Error('No OAuth flow in progress');
+    }
+    pendingResolve(code);
+    if (pendingLogin) {
+      await pendingLogin;
+    }
   }
+
+  function cancel(): void {
+    if (pendingReject) {
+      pendingReject(new Error('OAuth flow cancelled'));
+    }
+    pendingResolve = null;
+    pendingReject = null;
+    pendingLogin = null;
+  }
+
+  function hasOAuth(): boolean {
+    return !!credentials[providerKey]?.refresh;
+  }
+
+  return { start, complete, cancel, hasOAuth };
 }
 
-/** Cancel any in-progress OpenAI OAuth flow. */
-export function cancelOpenAICodexOAuth(): void {
-  pendingOpenAICodeResolve = null;
-  pendingOpenAILoginPromise = null;
-}
+// ── Provider flows ─────────────────────────────────────────────────────────
+
+const anthropicFlow = createOAuthFlow('anthropic', (onUrl, getCode) =>
+  loginAnthropic(onUrl, getCode),
+);
+
+const openaiCodexFlow = createOAuthFlow('openai-codex', (onUrl, getCode) =>
+  loginOpenAICodex({
+    onAuth: (info) => onUrl(info.url),
+    onPrompt: getCode,
+    onManualCodeInput: getCode,
+  }),
+);
+
+export const startAnthropicOAuth = anthropicFlow.start;
+export const completeAnthropicOAuth = anthropicFlow.complete;
+export const cancelAnthropicOAuth = anthropicFlow.cancel;
+export const hasAnthropicOAuth = anthropicFlow.hasOAuth;
+
+export const startOpenAICodexOAuth = openaiCodexFlow.start;
+export const completeOpenAICodexOAuth = openaiCodexFlow.complete;
+export const cancelOpenAICodexOAuth = openaiCodexFlow.cancel;
+export const hasOpenAICodexOAuth = openaiCodexFlow.hasOAuth;
 
 /** Maps provider IDs to their config API key field names. */
 export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
@@ -195,14 +173,4 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
 
   // 4. Undefined — pi-ai will check env vars as final fallback
   return undefined;
-}
-
-/** Check if Anthropic OAuth credentials exist. */
-export function hasAnthropicOAuth(): boolean {
-  return !!credentials.anthropic?.refresh;
-}
-
-/** Check if OpenAI Codex OAuth credentials exist. */
-export function hasOpenAICodexOAuth(): boolean {
-  return !!credentials['openai-codex']?.refresh;
 }

@@ -5,11 +5,12 @@ import {
   updateSettings,
   toggleDemoMode,
   getAIProviders,
+  anthropicOAuth,
+  openaiCodexOAuth,
   type SettingsResponse,
   type AIProvider,
 } from '../api/client';
-import { useAnthropicOAuth } from '../composables/useAnthropicOAuth';
-import { useOpenAICodexOAuth } from '../composables/useOpenAICodexOAuth';
+import { useOAuth } from '../composables/useOAuth';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
@@ -202,17 +203,17 @@ async function handleDemoToggle(enabled: boolean) {
   }
 }
 
-// ── Anthropic OAuth ──────────────────────────────────────────────────────────
+// ── OAuth ───────────────────────────────────────────────────────────────────
 
 const oauthConnected = computed(() => data.value?.oauth?.anthropic ?? false);
-const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } =
-  useAnthropicOAuth({
+const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAuth } = useOAuth(
+  anthropicOAuth,
+  {
     onSuccess: () => {
       if (data.value) data.value.oauth.anthropic = true;
     },
-  });
-
-// ── OpenAI Codex OAuth ─────────────────────────────────────────────────────
+  },
+);
 
 const openaiCodexOAuthConnected = computed(() => data.value?.oauth?.['openai-codex'] ?? false);
 const {
@@ -222,7 +223,7 @@ const {
   startOAuth: startOpenaiOAuth,
   submitOAuthCode: submitOpenaiOAuthCode,
   cancelOAuth: cancelOpenaiOAuth,
-} = useOpenAICodexOAuth({
+} = useOAuth(openaiCodexOAuth, {
   onSuccess: () => {
     if (data.value) data.value.oauth['openai-codex'] = true;
   },
