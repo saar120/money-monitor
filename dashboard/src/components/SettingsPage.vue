@@ -127,6 +127,7 @@ const isElectron = computed(() => data.value?.isElectron ?? false);
 const electronAPI = (
   window as unknown as {
     electronAPI?: {
+      getAppVersion: () => string;
       getAutoUpdateEnabled: () => Promise<boolean>;
       setAutoUpdateEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
       checkForUpdates: () => Promise<{ updateAvailable: boolean }>;
@@ -137,6 +138,7 @@ const electronAPI = (
     };
   }
 ).electronAPI;
+const appVersion = electronAPI?.getAppVersion?.() ?? '';
 const autoUpdateEnabled = ref(true);
 const updateStatus = ref<string>('idle');
 const updateVersion = ref('');
@@ -567,6 +569,11 @@ async function save() {
 
       <!-- Updates -->
       <SettingsGroup title="Updates" description="Automatic update settings">
+        <SettingsRow v-if="appVersion" label="Current Version">
+          <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded"
+            >v{{ appVersion }}</code
+          >
+        </SettingsRow>
         <SettingsRow label="Auto-update" description="Automatically check for and download updates">
           <Switch :model-value="autoUpdateEnabled" @update:model-value="toggleAutoUpdate" />
         </SettingsRow>

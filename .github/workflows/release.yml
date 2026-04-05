@@ -34,35 +34,17 @@ jobs:
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
       - name: Build and package
-        run: npm run electron:prebuild && npx electron-builder --mac --publish always
+        run: npm run electron:prebuild && npx electron-builder --mac --publish never
         env:
           CSC_IDENTITY_AUTO_DISCOVERY: 'false'
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
-
-      - name: Sign and strip quarantine
-        run: |
-          APP_DIR=$(find dist -type d -name "mac*" | head -1)
-          APP_PATH=$(find "$APP_DIR" -name "*.app" -maxdepth 1 | head -1)
-
-          # Ad-hoc sign the app (turns "damaged" into "unidentified developer")
-          codesign --force --deep --sign - "$APP_PATH"
-
-          # Strip quarantine
-          xattr -cr "$APP_PATH"
-
-          # Re-package the signed app into the zip
-          ZIP_PATH=$(find dist -name "*.zip" -maxdepth 1 | head -1)
-          rm "$ZIP_PATH"
-          STAGE_DIR=$(mktemp -d)
-          cp -R "$APP_PATH" "$STAGE_DIR/"
-          cd "$STAGE_DIR" && ditto -c -k --sequesterRsrc . "../release.zip" && cd -
-          mv "$STAGE_DIR/../release.zip" "$ZIP_PATH"
-          rm -rf "$STAGE_DIR"
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
-          files: dist/*.zip
+          files: |
+            dist/*.zip
+            dist/*.blockmap
+            dist/latest-mac.yml
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
@@ -91,6 +73,13 @@ jobs:
         run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
 
       - name: Build and package
-        run: npm run electron:prebuild && npx electron-builder --win --publish always
-        env:
-          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+        run: npm run electron:prebuild && npx electron-builder --win --publish never
+
+      - name: Upload to GitHub Release
+        uses: softprops/action-gh-release@v2
+        with:
+          files: |
+            dist/*.exe
+            dist/*.blockmap
+            dist/latest.yml
+          fail_on_unmatched_files: true
