@@ -134,6 +134,13 @@
       "when": 1774732643972,
       "tag": "0018_chunky_maggott",
       "breakpoints": true
+    },
+    {
+      "idx": 19,
+      "version": "6",
+      "when": 1775660740495,
+      "tag": "0019_chunky_red_skull",
+      "breakpoints": true
     }
   ]
 }
