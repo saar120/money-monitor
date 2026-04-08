@@ -1,4 +1,6 @@
-import { describe, it, expect, beforeEach, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount } from '../__tests__/helpers/fixtures.js';
 
 // ── Mock alert-agent ──
 const mockRunAlertAgent = vi.fn();
@@ -70,6 +72,20 @@ vi.mock('../scraper/scraper.service.js', () => ({
   startScraping: vi.fn(),
 }));
 
+// ── Mock db/connection for stale account queries ──
+let testDb: TestDb;
+
+vi.mock('../db/connection.js', () => ({
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
+  isDemoMode: () => false,
+  closeAll: () => {},
+}));
+
 const {
   registerSendMessage,
   registerGetChatIds,
@@ -96,6 +112,7 @@ registerOnAlertSent(mockOnAlertSent);
 
 describe('alerts', () => {
   beforeEach(() => {
+    testDb = createTestDb();
     sentMessages = [];
     alertsSent = [];
     mockSendMessage.mockClear();
@@ -107,6 +124,10 @@ describe('alerts', () => {
     resetMockSettings();
     mockGetChatIds.mockReturnValue([12345]);
     mockGetNetWorth.mockResolvedValue({ total: 500000 });
+  });
+
+  afterAll(() => {
+    testDb?.close();
   });
 
   // ── runPostScrapeAlerts ──
@@ -251,6 +272,84 @@ describe('alerts', () => {
       expect(sentMessages[0].chatId).toBe(111);
       expect(sentMessages[1].chatId).toBe(222);
       expect(sentMessages[2].chatId).toBe(333);
+    });
+
+    it('includes stale manual-only accounts in the alert message', async () => {
+      const tenDaysAgo = new Date();
+      tenDaysAgo.setDate(tenDaysAgo.getDate() - 10);
+      insertAccount(testDb.db, {
+        displayName: 'Stale Isracard',
+        manualScrapeOnly: true,
+        stalenessDays: 7,
+        isActive: true,
+        lastScrapedAt: tenDaysAgo.toISOString(),
+      });
+      insertAccount(testDb.db, {
+        displayName: 'Fresh Amex',
+        manualScrapeOnly: true,
+        stalenessDays: 7,
+        isActive: true,
+        lastScrapedAt: new Date().toISOString(),
+      });
+
+      mockRunAlertAgent.mockResolvedValue('Alert message');
+      await runPostScrapeAlerts([
+        {
+          accountId: 99,
+          success: true,
+          transactionsFound: 5,
+          transactionsNew: 2,
+          durationMs: 1000,
+        },
+      ]);
+
+      const userMessage = mockRunAlertAgent.mock.calls[0][0].userMessage;
+      expect(userMessage).toContain('stale-manual-accounts');
+      expect(userMessage).toContain('Stale Isracard');
+      expect(userMessage).toContain('Remind the user to manually scrape');
+      expect(userMessage).not.toContain('Fresh Amex');
+    });
+
+    it('shows "none" for stale accounts when no manual-only accounts are stale', async () => {
+      mockRunAlertAgent.mockResolvedValue('Alert message');
+      await runPostScrapeAlerts([
+        {
+          accountId: 99,
+          success: true,
+          transactionsFound: 5,
+          transactionsNew: 2,
+          durationMs: 1000,
+        },
+      ]);
+
+      const userMessage = mockRunAlertAgent.mock.calls[0][0].userMessage;
+      expect(userMessage).toContain('<stale-manual-accounts>\nnone\n</stale-manual-accounts>');
+    });
+
+    it('does not alert for manual-only accounts with stalenessDays = null', async () => {
+      const thirtyDaysAgo = new Date();
+      thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
+      insertAccount(testDb.db, {
+        displayName: 'No Alert Account',
+        manualScrapeOnly: true,
+        stalenessDays: null,
+        isActive: true,
+        lastScrapedAt: thirtyDaysAgo.toISOString(),
+      });
+
+      mockRunAlertAgent.mockResolvedValue('Alert message');
+      await runPostScrapeAlerts([
+        {
+          accountId: 99,
+          success: true,
+          transactionsFound: 5,
+          transactionsNew: 2,
+          durationMs: 1000,
+        },
+      ]);
+
+      const userMessage = mockRunAlertAgent.mock.calls[0][0].userMessage;
+      expect(userMessage).not.toContain('No Alert Account');
     });
   });
 

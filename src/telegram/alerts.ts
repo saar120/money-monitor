@@ -10,6 +10,9 @@ import {
 } from '../ai/prompts.js';
 import { runAlertAgent } from '../ai/alert-agent.js';
 import type { ScrapeResult } from '../scraper/scraper.service.js';
+import { db } from '../db/connection.js';
+import { accounts } from '../db/schema.js';
+import { and, eq, isNotNull } from 'drizzle-orm';
 
 // ── Telegram send helper ──────────────────────────────────────────────────────
 
@@ -20,7 +23,9 @@ export function registerSendMessage(fn: (chatId: number, html: string) => Promis
   _sendMessage = fn;
 }
 
-export function registerOnAlertSent(fn: (chatId: number, markdown: string, context?: string) => void) {
+export function registerOnAlertSent(
+  fn: (chatId: number, markdown: string, context?: string) => void,
+) {
   _onAlertSent = fn;
 }
 
@@ -64,12 +69,60 @@ const fmt = (n: number): string => {
   return n.toLocaleString('en-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
 };
 
+// ── Stale manual account detection ──────────────────────────────────────────
+
+interface StaleAccountInfo {
+  id: number;
+  displayName: string;
+  daysSinceLastScrape: number | null; // null = never scraped
+  stalenessDays: number;
+}
+
+export function getStaleManualAccounts(): StaleAccountInfo[] {
+  const manualAccounts = db
+    .select()
+    .from(accounts)
+    .where(
+      and(
+        eq(accounts.manualScrapeOnly, true),
+        eq(accounts.isActive, true),
+        isNotNull(accounts.stalenessDays),
+      ),
+    )
+    .all();
+
+  const now = new Date();
+  const stale: StaleAccountInfo[] = [];
+
+  for (const account of manualAccounts) {
+    const threshold = account.stalenessDays!;
+    let daysSince: number | null = null;
+
+    if (account.lastScrapedAt) {
+      const lastScraped = new Date(account.lastScrapedAt);
+      daysSince = Math.floor((now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60 * 24));
+    }
+
+    if (daysSince === null || daysSince > threshold) {
+      stale.push({
+        id: account.id,
+        displayName: account.displayName,
+        daysSinceLastScrape: daysSince,
+        stalenessDays: threshold,
+      });
+    }
+  }
+
+  return stale;
+}
+
 // ── Post-Scrape Agent Alert ─────────────────────────────────────────────────
 
 /** Build the seed user message with scrape context for the alert agent. */
 function buildPostScrapeUserMessage(
   scrapeResults: ScrapeResult[],
   settings: AlertSettings,
+  staleAccounts: StaleAccountInfo[],
 ): string {
   const today = todayInIsrael();
 
@@ -87,6 +140,16 @@ function buildPostScrapeUserMessage(
   const known = settings._knownRecurring ?? [];
   const knownStr = known.length > 0 ? known.join(', ') : 'none tracked yet';
   const lastNw = settings._lastNetWorthTotal;
+
+  const staleLines =
+    staleAccounts.length > 0
+      ? staleAccounts
+          .map(
+            (a) =>
+              `  - "${a.displayName}" (id: ${a.id}) — ${a.daysSinceLastScrape === null ? 'never scraped' : `last scraped ${a.daysSinceLastScrape} days ago`} (threshold: ${a.stalenessDays} days)`,
+          )
+          .join('\n')
+      : '';
 
   return `<scrape-context>
 Today is ${today} (Israel timezone). A bank/credit-card scrape just completed.
@@ -110,6 +173,10 @@ ${knownStr}
 Last known net worth: ${lastNw !== undefined ? `₪${fmt(lastNw)}` : 'not yet recorded'}
 Report scrape errors: ${settings.reportScrapeErrors ? 'yes' : 'no'}
 </prior-state>
+
+<stale-manual-accounts>
+${staleAccounts.length > 0 ? 'The following accounts are marked "manual scrape only" and have exceeded their staleness threshold:\n' + staleLines + '\nRemind the user to manually scrape these accounts.' : 'none'}
+</stale-manual-accounts>
 
 <task>
 Analyze the new data using your tools. Compose a single Telegram message covering anything noteworthy. If nothing is worth alerting about, respond with exactly: [SILENT]
@@ -155,7 +222,8 @@ export async function runPostScrapeAlerts(scrapeResults: ScrapeResult[]): Promis
 
   try {
     const systemPrompt = withMemory(buildPostScrapeAlertPrompt());
-    const userMessage = buildPostScrapeUserMessage(scrapeResults, settings);
+    const staleAccounts = getStaleManualAccounts();
+    const userMessage = buildPostScrapeUserMessage(scrapeResults, settings, staleAccounts);
     const message = await runAlertAgent({ systemPrompt, userMessage });
 
     if (message) {
