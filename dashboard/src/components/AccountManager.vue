@@ -53,7 +53,11 @@ import {
   Check,
   X,
   Building2,
+  Settings,
+  ChevronDown,
 } from 'lucide-vue-next';
+
+const expandedSettings = ref(new Set<number>());
 
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
@@ -323,50 +327,93 @@ onMounted(() => {
                   </span>
                   <span v-else>Never scraped</span>
                 </p>
-                <div class="flex items-center gap-5 mt-3">
-                  <label
+                <button
+                  class="flex items-center gap-1.5 mt-3 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
+                  @click="
+                    expandedSettings.has(account.id)
+                      ? expandedSettings.delete(account.id)
+                      : expandedSettings.add(account.id)
+                  "
+                >
+                  <Settings class="h-3.5 w-3.5" />
+                  Settings
+                  <ChevronDown
+                    class="h-3 w-3 transition-transform duration-200"
+                    :class="{ 'rotate-180': expandedSettings.has(account.id) }"
+                  />
+                </button>
+
+                <div
+                  v-if="expandedSettings.has(account.id)"
+                  class="mt-3 rounded-lg border border-separator/60 divide-y divide-separator/40 overflow-hidden"
+                >
+                  <div
                     v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)"
-                    class="flex items-center gap-2 text-[12px] text-text-secondary"
+                    class="px-4 py-3 flex items-center justify-between"
                   >
+                    <div>
+                      <div class="text-[13px] text-text-primary">Manual login</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">
+                        Log in to the bank yourself in a visible browser
+                      </div>
+                    </div>
                     <Switch
                       :model-value="account.manualLogin"
                       @update:model-value="patchAccount(account.id, { manualLogin: $event })"
                     />
-                    Manual login
-                  </label>
-                  <label class="flex items-center gap-2 text-[12px] text-text-secondary">
+                  </div>
+
+                  <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <div class="text-[13px] text-text-primary">Show browser</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">
+                        Display the browser window during scraping
+                      </div>
+                    </div>
                     <Switch
                       :model-value="account.showBrowser"
                       :disabled="account.manualLogin"
                       @update:model-value="patchAccount(account.id, { showBrowser: $event })"
                     />
-                    Show browser
-                  </label>
-                  <label class="flex items-center gap-2 text-[12px] text-text-secondary">
-                    <Switch
-                      :model-value="account.manualScrapeOnly"
-                      @update:model-value="patchAccount(account.id, { manualScrapeOnly: $event })"
-                    />
-                    Manual scrape only
-                  </label>
-                </div>
-                <div v-if="account.manualScrapeOnly" class="flex items-center gap-2 mt-2">
-                  <label class="text-[12px] text-text-secondary whitespace-nowrap">
-                    Alert if not scraped for
-                  </label>
-                  <Input
-                    type="number"
-                    :model-value="account.stalenessDays ?? undefined"
-                    placeholder="No alert"
-                    min="1"
-                    class="w-20 h-7 text-xs"
-                    @change="
-                      patchAccount(account.id, {
-                        stalenessDays: $event.target.value ? Number($event.target.value) : null,
-                      })
-                    "
-                  />
-                  <span class="text-[12px] text-text-secondary">days</span>
+                  </div>
+
+                  <div class="px-4 py-3">
+                    <div class="flex items-center justify-between">
+                      <div>
+                        <div class="text-[13px] text-text-primary">Manual scrape only</div>
+                        <div class="text-[11px] text-text-secondary mt-0.5">
+                          Exclude from scheduled scrapes — only scrape when you click the button
+                        </div>
+                      </div>
+                      <Switch
+                        :model-value="account.manualScrapeOnly"
+                        @update:model-value="patchAccount(account.id, { manualScrapeOnly: $event })"
+                      />
+                    </div>
+                    <div
+                      v-if="account.manualScrapeOnly"
+                      class="flex items-center gap-2 mt-2.5 pl-1"
+                    >
+                      <label class="text-[12px] text-text-secondary whitespace-nowrap">
+                        Alert if not scraped for
+                      </label>
+                      <Input
+                        type="number"
+                        :model-value="account.stalenessDays ?? undefined"
+                        placeholder="—"
+                        min="1"
+                        class="w-16 h-7 text-xs"
+                        @change="
+                          patchAccount(account.id, {
+                            stalenessDays: ($event.target as HTMLInputElement).value
+                              ? Number(($event.target as HTMLInputElement).value)
+                              : null,
+                          })
+                        "
+                      />
+                      <span class="text-[12px] text-text-secondary">days</span>
+                    </div>
+                  </div>
                 </div>
               </div>
 
