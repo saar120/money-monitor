@@ -53,6 +53,8 @@ export interface Account {
   balance: number | null;
   manualLogin: boolean;
   showBrowser: boolean;
+  manualScrapeOnly: boolean;
+  stalenessDays: number | null;
   isActive: boolean;
   lastScrapedAt: string | null;
   createdAt: string;
@@ -77,6 +79,8 @@ export function updateAccount(
     isActive?: boolean;
     manualLogin?: boolean;
     showBrowser?: boolean;
+    manualScrapeOnly?: boolean;
+    stalenessDays?: number | null;
     credentials?: Record<string, string>;
   },
 ) {
