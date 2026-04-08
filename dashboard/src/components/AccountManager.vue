@@ -342,6 +342,31 @@ onMounted(() => {
                     />
                     Show browser
                   </label>
+                  <label class="flex items-center gap-2 text-[12px] text-text-secondary">
+                    <Switch
+                      :model-value="account.manualScrapeOnly"
+                      @update:model-value="patchAccount(account.id, { manualScrapeOnly: $event })"
+                    />
+                    Manual scrape only
+                  </label>
+                </div>
+                <div v-if="account.manualScrapeOnly" class="flex items-center gap-2 mt-2">
+                  <label class="text-[12px] text-text-secondary whitespace-nowrap">
+                    Alert if not scraped for
+                  </label>
+                  <Input
+                    type="number"
+                    :model-value="account.stalenessDays ?? undefined"
+                    placeholder="No alert"
+                    min="1"
+                    class="w-20 h-7 text-xs"
+                    @change="
+                      patchAccount(account.id, {
+                        stalenessDays: $event.target.value ? Number($event.target.value) : null,
+                      })
+                    "
+                  />
+                  <span class="text-[12px] text-text-secondary">days</span>
                 </div>
               </div>
 
