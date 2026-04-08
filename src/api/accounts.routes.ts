@@ -11,7 +11,6 @@ import type { CompanyId } from '../shared/types.js';
 import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
 
 function stripCredentialsRef(account: Record<string, unknown>) {
-  // eslint-disable-next-line @typescript-eslint/no-unused-vars
   const { credentialsRef, ...safe } = account;
   return safe;
 }

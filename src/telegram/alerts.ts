@@ -1,7 +1,7 @@
 import { loadAlertSettings, saveAlertSettings, type AlertSettings } from './alert-settings.js';
 import { detectRecurringTransactions } from '../services/summary.js';
 import { getNetWorth } from '../services/net-worth.js';
-import { todayInIsrael } from '../shared/dates.js';
+import { todayInIsrael, daysElapsedSince } from '../shared/dates.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
 import {
   buildPostScrapeAlertPrompt,
@@ -78,7 +78,7 @@ interface StaleAccountInfo {
   stalenessDays: number;
 }
 
-export function getStaleManualAccounts(): StaleAccountInfo[] {
+function getStaleManualAccounts(): StaleAccountInfo[] {
   const manualAccounts = db
     .select()
     .from(accounts)
@@ -91,17 +91,11 @@ export function getStaleManualAccounts(): StaleAccountInfo[] {
     )
     .all();
 
-  const now = new Date();
   const stale: StaleAccountInfo[] = [];
 
   for (const account of manualAccounts) {
     const threshold = account.stalenessDays!;
-    let daysSince: number | null = null;
-
-    if (account.lastScrapedAt) {
-      const lastScraped = new Date(account.lastScrapedAt);
-      daysSince = Math.floor((now.getTime() - lastScraped.getTime()) / (1000 * 60 * 60 * 24));
-    }
+    const daysSince = account.lastScrapedAt ? daysElapsedSince(account.lastScrapedAt) : null;
 
     if (daysSince === null || daysSince > threshold) {
       stale.push({

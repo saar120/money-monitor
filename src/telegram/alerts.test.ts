@@ -56,7 +56,8 @@ vi.mock('../services/net-worth.js', () => ({
 }));
 
 // ── Mock dates ──
-vi.mock('../shared/dates.js', () => ({
+vi.mock('../shared/dates.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shared/dates.js')>()),
   todayInIsrael: () => '2026-03-11',
 }));
 
