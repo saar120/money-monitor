@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, scrapeSessions } from '../db/schema.js';
 import type { Account, ScrapeSession } from '../shared/types.js';
@@ -80,7 +80,11 @@ export function hasActiveSessions(): boolean {
 }
 
 export function getUniqueActiveAccounts(): Account[] {
-  const activeAccounts = db.select().from(accounts).where(eq(accounts.isActive, true)).all();
+  const activeAccounts = db
+    .select()
+    .from(accounts)
+    .where(and(eq(accounts.isActive, true), eq(accounts.manualScrapeOnly, false)))
+    .all();
   const seen = new Set<string>();
   const unique: Account[] = [];
   for (const account of activeAccounts) {
