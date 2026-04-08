@@ -23,6 +23,8 @@ export const updateAccountSchema = z.object({
   isActive: z.boolean().optional(),
   manualLogin: z.boolean().optional(),
   showBrowser: z.boolean().optional(),
+  manualScrapeOnly: z.boolean().optional(),
+  stalenessDays: z.number().int().min(1).nullable().optional(),
   credentials: z.record(z.string(), z.string()).optional(),
 });
 
