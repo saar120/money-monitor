@@ -58,8 +58,10 @@
     "appId": "com.money-monitor.app",
     "productName": "Money Monitor",
     "icon": "electron/icons/icon",
+    "afterPack": "./scripts/afterPack.cjs",
     "mac": {
       "target": "zip",
+      "identity": null,
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.finance",
       "artifactName": "Money-Monitor-${version}-${arch}-mac.${ext}"
