@@ -65,17 +65,24 @@ describe('getLatestScrapeTransactions', () => {
     testDb?.close();
   });
 
-  it('returns error when no completed sessions exist', () => {
+  it('returns error when no finished sessions exist', () => {
     const result = JSON.parse(getLatestScrapeTransactions());
-    expect(result).toEqual({ error: 'No completed scrape sessions found' });
+    expect(result).toEqual({ error: 'No scrape sessions found' });
   });
 
-  it('ignores non-completed sessions', () => {
+  it('ignores running sessions but includes error sessions', () => {
     insertSession({ status: 'running' });
+
+    const result = JSON.parse(getLatestScrapeTransactions());
+    expect(result).toEqual({ error: 'No scrape sessions found' });
+  });
+
+  it('returns error-status sessions with their results', () => {
     insertSession({ status: 'error' });
 
     const result = JSON.parse(getLatestScrapeTransactions());
-    expect(result).toEqual({ error: 'No completed scrape sessions found' });
+    expect(result).toHaveProperty('session');
+    expect(result.session.id).toBeDefined();
   });
 
   it('returns the latest completed session with its transactions', () => {

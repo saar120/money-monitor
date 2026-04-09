@@ -16,7 +16,6 @@ function stripCredentialsRef(account: Record<string, unknown>) {
 }
 
 export async function accountsRoutes(app: FastifyInstance) {
-
   app.get('/api/accounts', async (_request, reply) => {
     const rows = db.select().from(accounts).all();
     return reply.send({ accounts: rows.map(stripCredentialsRef) });
@@ -31,14 +30,18 @@ export async function accountsRoutes(app: FastifyInstance) {
     setCredentials(credentialsRef, credentials);
 
     const isManualLoginCompany = MANUAL_LOGIN_COMPANIES.has(companyId);
-    const result = db.insert(accounts).values({
-      companyId,
-      displayName,
-      credentialsRef,
-      accountType: getAccountType(companyId as CompanyId),
-      manualLogin: isManualLoginCompany,
-      showBrowser: isManualLoginCompany,
-    }).returning().get();
+    const result = db
+      .insert(accounts)
+      .values({
+        companyId,
+        displayName,
+        credentialsRef,
+        accountType: getAccountType(companyId as CompanyId),
+        manualLogin: isManualLoginCompany,
+        showBrowser: isManualLoginCompany,
+      })
+      .returning()
+      .get();
 
     return reply.status(201).send({ account: stripCredentialsRef(result) });
   });
@@ -52,7 +55,15 @@ export async function accountsRoutes(app: FastifyInstance) {
 
     const data = validateBody(updateAccountSchema, request.body, reply);
     if (!data) return;
-    const { displayName, isActive, manualLogin, showBrowser, credentials } = data;
+    const {
+      displayName,
+      isActive,
+      manualLogin,
+      showBrowser,
+      manualScrapeOnly,
+      stalenessDays,
+      credentials,
+    } = data;
 
     if (credentials && Object.keys(credentials).length > 0) {
       setCredentials(existing.credentialsRef, credentials);
@@ -63,6 +74,8 @@ export async function accountsRoutes(app: FastifyInstance) {
     if (isActive !== undefined) updateSet.isActive = isActive;
     if (manualLogin !== undefined) updateSet.manualLogin = manualLogin;
     if (showBrowser !== undefined) updateSet.showBrowser = showBrowser;
+    if (manualScrapeOnly !== undefined) updateSet.manualScrapeOnly = manualScrapeOnly;
+    if (stalenessDays !== undefined) updateSet.stalenessDays = stalenessDays;
 
     if (Object.keys(updateSet).length > 0) {
       db.update(accounts).set(updateSet).where(eq(accounts.id, id)).run();
@@ -74,7 +87,7 @@ export async function accountsRoutes(app: FastifyInstance) {
 
   app.delete<{
     Params: { id: string };
-    Querystring: { deleteTransactions?: string }
+    Querystring: { deleteTransactions?: string };
   }>('/api/accounts/:id', async (request, reply) => {
     const id = parseIntParam(request.params.id, 'account ID', reply);
     if (id === null) return;
@@ -83,7 +96,9 @@ export async function accountsRoutes(app: FastifyInstance) {
     if (!existing) return reply.status(404).send({ error: 'Account not found' });
 
     // Only delete credentials if no other account shares them
-    const siblings = db.select({ id: accounts.id }).from(accounts)
+    const siblings = db
+      .select({ id: accounts.id })
+      .from(accounts)
       .where(eq(accounts.credentialsRef, existing.credentialsRef))
       .all();
 

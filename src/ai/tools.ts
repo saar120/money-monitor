@@ -521,17 +521,18 @@ export function getAccountBalances(): string {
 }
 
 export function getLatestScrapeTransactions(): string {
-  // 1. Find latest completed session
+  // 1. Find latest finished session (completed or error — a session marked
+  //    "error" may still have successful per-account results with new txns)
   const session = db
     .select()
     .from(scrapeSessions)
-    .where(eq(scrapeSessions.status, 'completed'))
+    .where(sql`${scrapeSessions.status} IN ('completed', 'error')`)
     .orderBy(desc(scrapeSessions.completedAt))
     .limit(1)
     .get();
 
   if (!session) {
-    return JSON.stringify({ error: 'No completed scrape sessions found' });
+    return JSON.stringify({ error: 'No scrape sessions found' });
   }
 
   // 2. Get per-account stats from scrape logs
