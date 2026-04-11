@@ -55,6 +55,7 @@ import {
   Building2,
   Settings,
   ChevronDown,
+  KeyRound,
 } from 'lucide-vue-next';
 
 const expandedSettings = ref(new Set<number>());
@@ -75,6 +76,19 @@ const credentialValues = ref<Record<string, string>>({});
 const credentialFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
 
 const selectedProvider = computed(() => PROVIDERS.find((p) => p.id === newCompanyId.value) ?? null);
+
+// Update credentials dialog
+const updateCredsAccount = ref<Account | null>(null);
+const showUpdateCredsDialog = ref(false);
+const updateCredsValues = ref<Record<string, string>>({});
+const updateCredsFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
+const updateCredsSaving = ref(false);
+
+const updateCredsProvider = computed(() =>
+  updateCredsAccount.value
+    ? (PROVIDERS.find((p) => p.id === updateCredsAccount.value!.companyId) ?? null)
+    : null,
+);
 
 const bankAccounts = computed(() => accounts.value.filter((a) => a.accountType === 'bank'));
 const creditCardAccounts = computed(() =>
@@ -226,6 +240,45 @@ async function handleScrape(account: Account) {
     fetchAccounts();
   } catch (err) {
     window.alert(`Scrape failed: ${err instanceof Error ? err.message : err}`);
+  }
+}
+
+function openUpdateCreds(account: Account) {
+  updateCredsAccount.value = account;
+  updateCredsValues.value = {};
+  updateCredsFields.value = [{ key: '', value: '' }];
+  showUpdateCredsDialog.value = true;
+}
+
+function addUpdateCredField() {
+  updateCredsFields.value.push({ key: '', value: '' });
+}
+
+async function handleUpdateCreds() {
+  if (!updateCredsAccount.value) return;
+  const credentials: Record<string, string> = {};
+
+  if (updateCredsProvider.value && updateCredsProvider.value.fields.length > 0) {
+    for (const [key, value] of Object.entries(updateCredsValues.value)) {
+      if (value) credentials[key] = value;
+    }
+  } else {
+    for (const field of updateCredsFields.value) {
+      if (field.key && field.value) credentials[field.key] = field.value;
+    }
+  }
+
+  if (Object.keys(credentials).length === 0) return;
+
+  updateCredsSaving.value = true;
+  try {
+    await patchAccount(updateCredsAccount.value.id, { credentials });
+    showUpdateCredsDialog.value = false;
+    updateCredsAccount.value = null;
+  } catch (err) {
+    console.error('Failed to update credentials:', err);
+  } finally {
+    updateCredsSaving.value = false;
   }
 }
 
@@ -413,6 +466,19 @@ onMounted(() => {
                       />
                       <span class="text-[12px] text-text-secondary">days</span>
                     </div>
+                  </div>
+
+                  <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <div class="text-[13px] text-text-primary">Update credentials</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">
+                        Change the login credentials used for scraping
+                      </div>
+                    </div>
+                    <Button variant="secondary" size="sm" @click="openUpdateCreds(account)">
+                      <KeyRound class="h-3 w-3 mr-1.5" />
+                      Update
+                    </Button>
                   </div>
                 </div>
               </div>
@@ -637,6 +703,66 @@ onMounted(() => {
           >
             <Loader2 v-if="manualLoginSubmitting" class="h-4 w-4 mr-2 animate-spin" />
             {{ manualLoginSubmitting ? 'Confirming...' : "I've Logged In" }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
+
+    <!-- Update Credentials Dialog -->
+    <Dialog v-model:open="showUpdateCredsDialog">
+      <DialogContent class="sm:max-w-md">
+        <DialogHeader>
+          <DialogTitle>Update Credentials</DialogTitle>
+        </DialogHeader>
+
+        <div class="space-y-5 py-2">
+          <p class="text-[13px] text-text-secondary">
+            Enter new credentials for
+            <span class="font-medium text-text-primary">{{ updateCredsAccount?.displayName }}</span
+            >. Only fields you fill in will be updated.
+          </p>
+
+          <!-- Known provider: render labeled fields -->
+          <template v-if="updateCredsProvider && updateCredsProvider.fields.length > 0">
+            <div
+              v-for="field in updateCredsProvider.fields"
+              :key="field.key"
+              class="flex flex-col gap-2"
+            >
+              <label class="text-[13px] font-medium">{{ field.label }}</label>
+              <Input
+                v-model="updateCredsValues[field.key]"
+                type="password"
+                :placeholder="field.placeholder ?? ''"
+                autocomplete="off"
+              />
+              <p v-if="field.hint" class="text-[11px] text-text-tertiary">{{ field.hint }}</p>
+            </div>
+          </template>
+
+          <!-- Unknown provider: generic key-value fallback -->
+          <template v-else>
+            <div class="space-y-2">
+              <label class="text-[13px] font-medium">Credentials</label>
+              <div v-for="(field, i) in updateCredsFields" :key="i" class="flex gap-2">
+                <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
+                <Input v-model="field.value" type="password" placeholder="Value" />
+              </div>
+              <Button variant="secondary" size="sm" @click="addUpdateCredField">
+                <Plus class="h-3 w-3 mr-1.5" />
+                Add Field
+              </Button>
+            </div>
+          </template>
+        </div>
+
+        <DialogFooter>
+          <DialogClose as-child>
+            <Button variant="secondary">Cancel</Button>
+          </DialogClose>
+          <Button variant="filled" :disabled="updateCredsSaving" @click="handleUpdateCreds">
+            <Loader2 v-if="updateCredsSaving" class="h-4 w-4 mr-2 animate-spin" />
+            {{ updateCredsSaving ? 'Saving...' : 'Save Credentials' }}
           </Button>
         </DialogFooter>
       </DialogContent>
