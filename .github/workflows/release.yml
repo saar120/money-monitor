@@ -35,6 +35,8 @@ jobs:
 
       - name: Build and package
         run: npm run electron:prebuild && npx electron-builder --mac --publish never
+        env:
+          CSC_IDENTITY_AUTO_DISCOVERY: 'false'
 
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2

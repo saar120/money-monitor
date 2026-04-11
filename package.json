@@ -60,7 +60,6 @@
     "icon": "electron/icons/icon",
     "mac": {
       "target": "zip",
-      "identity": null,
       "icon": "electron/icons/icon.icns",
       "category": "public.app-category.finance",
       "artifactName": "Money-Monitor-${version}-${arch}-mac.${ext}"
