@@ -51,9 +51,9 @@ if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
 
 // ── Strip macOS quarantine from unpacked native modules on first launch ──────
 // When users download and extract the zip, macOS applies com.apple.quarantine
-// to all files.  The app itself may pass Gatekeeper (ad-hoc signed), but
-// unpacked native binaries (better-sqlite3, puppeteer-core) can still be
-// blocked.  Stripping the attribute early prevents "damaged" errors.
+// to all files.  The app itself is unsigned, so users must right-click → Open
+// on first launch.  Unpacked native binaries (better-sqlite3, puppeteer-core)
+// can still be blocked — stripping the attribute early prevents load errors.
 if (isMac && app.isPackaged) {
   const appUnpacked = join(process.resourcesPath, 'app.asar.unpacked');
   const quarantineDone = join(app.getPath('userData'), '.quarantine-stripped');
