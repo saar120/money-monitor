@@ -191,14 +191,24 @@ function loadCategoryTargets(): Map<string, OwnerTarget> {
       memberId: categories.defaultOwnerMemberId,
     })
     .from(categories)
-    .where(sql`${categories.defaultOwnerType} != 'unassigned'`)
+    .where(
+      or(
+        eq(categories.defaultOwnerType, 'shared'),
+        and(
+          eq(categories.defaultOwnerType, 'member'),
+          sql`${categories.defaultOwnerMemberId} IS NOT NULL`,
+        ),
+      ),
+    )
     .all();
 
   return new Map(
-    rows.map((category) => [
-      category.name,
-      { type: category.type as OwnerType, memberId: category.memberId },
-    ]),
+    rows
+      .filter((category) => category.type !== 'member' || category.memberId != null)
+      .map((category) => [
+        category.name,
+        { type: category.type as OwnerType, memberId: category.memberId },
+      ]),
   );
 }
 

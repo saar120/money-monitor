@@ -365,7 +365,10 @@ const barOption = computed(() => {
       </div>
 
       <!-- Cashflow Sankey -->
-      <CashflowSankey />
+      <CashflowSankey
+        :owner-type="ownerFilter.ownerType"
+        :owner-member-id="ownerFilter.ownerMemberId"
+      />
 
       <!-- Per Account -->
       <div v-if="accountSummary.loading.value" class="space-y-2">

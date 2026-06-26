@@ -29,7 +29,7 @@ export async function categoriesRoutes(app: FastifyInstance) {
     if (!data) return;
     const result = updateCategory(id, data);
     if (!result.ok) return sendServiceError(reply, result);
-    if (data.defaultOwnerType !== undefined || data.defaultOwnerMemberId !== undefined) {
+    if (result.ownerChanged) {
       applyOwnership({ categoryName: result.category.name });
     }
     return reply.send({ category: result.category });

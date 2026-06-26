@@ -25,6 +25,25 @@ ALTER TABLE `transactions` ADD `owner_confidence` real;
 --> statement-breakpoint
 ALTER TABLE `transactions` ADD `owner_review_reason` text;
 --> statement-breakpoint
+UPDATE `transactions`
+SET
+	`expense_owner_type` = 'member',
+	`expense_owner_member_id` = (
+		SELECT `member_id`
+		FROM `accounts`
+		WHERE `accounts`.`id` = `transactions`.`account_id`
+	),
+	`owner_source` = 'account',
+	`owner_confidence` = 1,
+	`owner_review_reason` = NULL
+WHERE `owner_source` = 'unassigned'
+	AND EXISTS (
+		SELECT 1
+		FROM `accounts`
+		WHERE `accounts`.`id` = `transactions`.`account_id`
+			AND `accounts`.`member_id` IS NOT NULL
+	);
+--> statement-breakpoint
 CREATE TABLE `ownership_rules` (
 	`id` integer PRIMARY KEY AUTOINCREMENT NOT NULL,
 	`name` text NOT NULL,

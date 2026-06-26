@@ -184,12 +184,12 @@ function ownerValue(cat: Category): string {
 
 function ownerLabel(value: string): string {
   if (value === 'shared') return 'Together';
-  if (value === 'unassigned') return 'Unassigned';
+  if (value === 'unassigned') return 'Account member';
   if (value.startsWith('member:')) {
     const id = Number(value.slice('member:'.length));
     return members.value.find((m) => m.id === id)?.name ?? 'Unknown member';
   }
-  return 'Unassigned';
+  return 'Account member';
 }
 
 async function toggleIgnored(cat: Category) {
@@ -244,7 +244,7 @@ onMounted(load);
             <SelectValue placeholder="Default owner" />
           </SelectTrigger>
           <SelectContent>
-            <SelectItem value="unassigned">Unassigned</SelectItem>
+            <SelectItem value="unassigned">Account member</SelectItem>
             <SelectItem value="shared">Together</SelectItem>
             <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
               {{ member.name }}
@@ -330,7 +330,7 @@ onMounted(load);
                         <SelectValue placeholder="Default owner" />
                       </SelectTrigger>
                       <SelectContent>
-                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        <SelectItem value="unassigned">Account member</SelectItem>
                         <SelectItem value="shared">Together</SelectItem>
                         <SelectItem
                           v-for="member in members"

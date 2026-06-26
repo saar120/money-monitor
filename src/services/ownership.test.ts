@@ -64,6 +64,23 @@ describe('ownership service', () => {
     expect(updated.ownerSource).toBe('category');
   });
 
+  it('ignores malformed member category defaults and falls back to account member', () => {
+    insertCategory(testDb.db, {
+      name: 'groceries',
+      label: 'Groceries',
+      defaultOwnerType: 'member',
+      defaultOwnerMemberId: null,
+    });
+    const account = insertAccount(testDb.db, { memberId: 1 });
+    const tx = insertTransaction(testDb.db, account.id, { category: 'groceries' });
+
+    applyOwnership({ ids: [tx.id] });
+
+    const [updated] = listTransactions({ ownerType: 'member', ownerMemberId: 1 }).transactions;
+    expect(updated.id).toBe(tx.id);
+    expect(updated.ownerSource).toBe('account');
+  });
+
   it('lets ownership rules override category defaults', () => {
     const member = insertMember(testDb.db, { name: 'Roni' });
     insertCategory(testDb.db, {

@@ -4,12 +4,20 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import * as schema from './schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, 'migrations');
 const journalPath = join(migrationsFolder, 'meta', '_journal.json');
+
+function applyMigrationFile(sqlite: Database.Database, tag: string) {
+  const migrationSql = readFileSync(join(migrationsFolder, `${tag}.sql`), 'utf-8');
+  for (const chunk of migrationSql.split('--> statement-breakpoint')) {
+    const statement = chunk.trim();
+    if (statement) sqlite.exec(statement);
+  }
+}
 
 describe('database migrations', () => {
   it('all migrations apply cleanly on a fresh database', () => {
@@ -202,6 +210,54 @@ describe('database migrations', () => {
         )
         .run();
     }).toThrow();
+
+    sqlite.close();
+  });
+
+  it('backfills existing transaction ownership from account members during household upgrade', () => {
+    const sqlite = new Database(':memory:');
+    sqlite.pragma('foreign_keys = ON');
+
+    const migrationTags = readdirSync(migrationsFolder)
+      .filter((file) => file.endsWith('.sql'))
+      .map((file) => file.replace(/\.sql$/, ''))
+      .sort();
+
+    for (const tag of migrationTags.filter((tag) => tag < '0020_household_ownership')) {
+      applyMigrationFile(sqlite, tag);
+    }
+
+    sqlite
+      .prepare(
+        "INSERT INTO accounts (company_id, display_name, credentials_ref) VALUES ('hapoalim', 'Main', 'cred-1')",
+      )
+      .run();
+    const accountId = sqlite.prepare('SELECT id FROM accounts').get() as { id: number };
+    sqlite
+      .prepare(
+        "INSERT INTO transactions (account_id, date, processed_date, original_amount, original_currency, charged_amount, description, hash) VALUES (?, '2026-01-01', '2026-01-01', -100, 'ILS', -100, 'test', 'hash1')",
+      )
+      .run(accountId.id);
+
+    applyMigrationFile(sqlite, '0020_household_ownership');
+
+    const tx = sqlite
+      .prepare(
+        'SELECT expense_owner_type, expense_owner_member_id, owner_source, owner_confidence FROM transactions',
+      )
+      .get() as {
+      expense_owner_type: string;
+      expense_owner_member_id: number | null;
+      owner_source: string;
+      owner_confidence: number | null;
+    };
+
+    expect(tx).toEqual({
+      expense_owner_type: 'member',
+      expense_owner_member_id: 1,
+      owner_source: 'account',
+      owner_confidence: 1,
+    });
 
     sqlite.close();
   });

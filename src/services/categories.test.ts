@@ -1,13 +1,22 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
-import { insertCategory, insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
+import {
+  insertCategory,
+  insertAccount,
+  insertTransaction,
+  insertMember,
+} from '../__tests__/helpers/fixtures.js';
 import * as schema from '../db/schema.js';
 
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -31,7 +40,7 @@ describe('categories service', () => {
       const result = listCategories();
       // Migration 0002 seeds 12 categories
       expect(result.length).toBeGreaterThanOrEqual(12);
-      const names = result.map(c => c.name);
+      const names = result.map((c) => c.name);
       expect(names).toContain('food');
       expect(names).toContain('transport');
     });
@@ -41,7 +50,7 @@ describe('categories service', () => {
       insertCategory(testDb.db, { name: 'custom-cat', label: 'Custom' });
       const after = listCategories();
       expect(after).toHaveLength(before + 1);
-      expect(after.map(c => c.name)).toContain('custom-cat');
+      expect(after.map((c) => c.name)).toContain('custom-cat');
     });
   });
 
@@ -78,11 +87,31 @@ describe('categories service', () => {
     });
 
     it('creates category with optional color and rules', () => {
-      const result = createCategory({ name: 'bills', label: 'Bills', color: '#ff0000', rules: 'electric|water' });
+      const result = createCategory({
+        name: 'bills',
+        label: 'Bills',
+        color: '#ff0000',
+        rules: 'electric|water',
+      });
       expect(result.ok).toBe(true);
       if (result.ok) {
         expect(result.category.color).toBe('#ff0000');
         expect(result.category.rules).toBe('electric|water');
+      }
+    });
+
+    it('does not accept a member default owner without an explicit owner type', () => {
+      const member = insertMember(testDb.db, { name: 'Saar' });
+
+      const result = createCategory({
+        name: 'personal',
+        label: 'Personal',
+        defaultOwnerMemberId: member.id,
+      });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(400);
       }
     });
   });
@@ -93,7 +122,7 @@ describe('categories service', () => {
     it('updates an existing category', () => {
       // 'food' is seeded with id=1
       const cats = listCategories();
-      const foodCat = cats.find(c => c.name === 'food')!;
+      const foodCat = cats.find((c) => c.name === 'food')!;
       const result = updateCategory(foodCat.id, { label: 'Food & Drink' });
       expect(result.ok).toBe(true);
       if (result.ok) {
@@ -111,7 +140,7 @@ describe('categories service', () => {
 
     it('propagates ignoredFromStats change to transactions', () => {
       const cats = listCategories();
-      const foodCat = cats.find(c => c.name === 'food')!;
+      const foodCat = cats.find((c) => c.name === 'food')!;
       const account = insertAccount(testDb.db);
       const tx = insertTransaction(testDb.db, account.id, { category: 'food' });
       expect(tx.ignored).toBe(false);
@@ -120,21 +149,75 @@ describe('categories service', () => {
 
       // Check the transaction is now ignored
       const allTx = testDb.db.select().from(schema.transactions).all();
-      const updated = allTx.find(t => t.id === tx.id);
+      const updated = allTx.find((t) => t.id === tx.id);
       expect(updated?.ignored).toBe(true);
     });
 
     it('does not modify transactions when ignoredFromStats is not in update', () => {
       const cats = listCategories();
-      const foodCat = cats.find(c => c.name === 'food')!;
+      const foodCat = cats.find((c) => c.name === 'food')!;
       const account = insertAccount(testDb.db);
       const tx = insertTransaction(testDb.db, account.id, { category: 'food' });
 
       updateCategory(foodCat.id, { label: 'New Label' });
 
       const allTx = testDb.db.select().from(schema.transactions).all();
-      const updated = allTx.find(t => t.id === tx.id);
+      const updated = allTx.find((t) => t.id === tx.id);
       expect(updated?.ignored).toBe(false);
+    });
+
+    it('preserves the category default owner when owner fields are omitted', () => {
+      const member = insertMember(testDb.db, { name: 'Saar' });
+      const category = insertCategory(testDb.db, {
+        name: 'member-cat',
+        label: 'Member Cat',
+        defaultOwnerType: 'member',
+        defaultOwnerMemberId: member.id,
+      });
+
+      const result = updateCategory(category.id, { label: 'Renamed' });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.ownerChanged).toBe(false);
+        expect(result.category.defaultOwnerType).toBe('member');
+        expect(result.category.defaultOwnerMemberId).toBe(member.id);
+      }
+    });
+
+    it('does not turn an unassigned category into a member default from member id alone', () => {
+      const member = insertMember(testDb.db, { name: 'Saar' });
+      const foodCat = listCategories().find((c) => c.name === 'food')!;
+
+      const result = updateCategory(foodCat.id, { defaultOwnerMemberId: member.id });
+
+      expect(result.ok).toBe(false);
+      if (!result.ok) {
+        expect(result.status).toBe(400);
+      }
+
+      const updated = listCategories().find((c) => c.name === 'food')!;
+      expect(updated.defaultOwnerType).toBe('unassigned');
+      expect(updated.defaultOwnerMemberId).toBeNull();
+    });
+
+    it('clears stale member ids when changing a category default to shared', () => {
+      const member = insertMember(testDb.db, { name: 'Saar' });
+      const category = insertCategory(testDb.db, {
+        name: 'old-member-cat',
+        label: 'Old Member Cat',
+        defaultOwnerType: 'member',
+        defaultOwnerMemberId: member.id,
+      });
+
+      const result = updateCategory(category.id, { defaultOwnerType: 'shared' });
+
+      expect(result.ok).toBe(true);
+      if (result.ok) {
+        expect(result.ownerChanged).toBe(true);
+        expect(result.category.defaultOwnerType).toBe('shared');
+        expect(result.category.defaultOwnerMemberId).toBeNull();
+      }
     });
   });
 
@@ -144,7 +227,7 @@ describe('categories service', () => {
     it('deletes an existing category', () => {
       const before = listCategories().length;
       const cats = listCategories();
-      const foodCat = cats.find(c => c.name === 'food')!;
+      const foodCat = cats.find((c) => c.name === 'food')!;
       const result = deleteCategory(foodCat.id);
       expect(result.ok).toBe(true);
       expect(listCategories()).toHaveLength(before - 1);
