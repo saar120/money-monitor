@@ -1,10 +1,15 @@
 import type { FastifyInstance } from 'fastify';
-import { listCategories, createCategory, updateCategory, deleteCategory } from '../services/categories.js';
+import {
+  listCategories,
+  createCategory,
+  updateCategory,
+  deleteCategory,
+} from '../services/categories.js';
 import { createCategorySchema, updateCategorySchema } from './validation.js';
 import { parseIntParam, validateBody, sendServiceError } from './helpers.js';
+import { applyOwnership } from '../services/ownership.js';
 
 export async function categoriesRoutes(app: FastifyInstance) {
-
   app.get('/api/categories', async (_request, reply) => {
     return reply.send({ categories: listCategories() });
   });
@@ -24,6 +29,9 @@ export async function categoriesRoutes(app: FastifyInstance) {
     if (!data) return;
     const result = updateCategory(id, data);
     if (!result.ok) return sendServiceError(reply, result);
+    if (data.defaultOwnerType !== undefined || data.defaultOwnerMemberId !== undefined) {
+      applyOwnership({ categoryName: result.category.name });
+    }
     return reply.send({ category: result.category });
   });
 

@@ -4,6 +4,8 @@ import { db } from '../db/connection.js';
 import { accounts, transactions } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
 import { isCategoryIgnored } from './categories.js';
+import { applyOwnership, ownerFilterConditions } from './ownership.js';
+import type { OwnerType } from '../shared/types.js';
 
 // ── Filter builder (moved from helpers.ts) ──
 
@@ -13,6 +15,8 @@ export interface TransactionFilterParams {
   startDate?: string;
   endDate?: string;
   expensesOnly?: boolean;
+  ownerType?: OwnerType | 'all';
+  ownerMemberId?: number;
 }
 
 export interface TransactionFilterResult {
@@ -40,6 +44,12 @@ export function buildTransactionFilters(params: TransactionFilterParams): Transa
   if (params.expensesOnly) {
     conditions.push(lt(transactions.chargedAmount, 0));
   }
+  conditions.push(
+    ...ownerFilterConditions({
+      ownerType: params.ownerType,
+      ownerMemberId: params.ownerMemberId,
+    }),
+  );
 
   return { conditions, empty: false };
 }
@@ -147,13 +157,15 @@ export function getNeedsReviewCount(): number {
 // ── Writes ──
 
 export function resolveReview(id: number, category: string) {
-  const [updated] = db
+  const [initial] = db
     .update(transactions)
     .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
     .where(eq(transactions.id, id))
     .returning()
     .all();
-  return updated ?? null;
+  if (!initial) return null;
+  applyOwnership({ ids: [id] });
+  return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
 }
 
 export function setTransactionIgnored(id: number, ignored: boolean) {
@@ -167,13 +179,15 @@ export function setTransactionIgnored(id: number, ignored: boolean) {
 }
 
 export function updateTransactionCategory(id: number, category: string | null) {
-  const [updated] = db
+  const [initial] = db
     .update(transactions)
     .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
     .where(eq(transactions.id, id))
     .returning()
     .all();
-  return updated ?? null;
+  if (!initial) return null;
+  applyOwnership({ ids: [id] });
+  return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
 }
 
 export function categorizeTransaction(input: {
@@ -201,6 +215,7 @@ export function categorizeTransaction(input: {
     })
     .where(eq(transactions.id, input.transactionId))
     .run();
+  applyOwnership({ ids: [input.transactionId] });
 
   return { ok: true as const, transactionId: input.transactionId, category: input.category };
 }

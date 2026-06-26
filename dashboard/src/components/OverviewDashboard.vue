@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { onMounted, computed, watch } from 'vue';
+import { onMounted, computed, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -7,12 +7,19 @@ import { PieChart, BarChart } from 'echarts/charts';
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
-import { getSummary, getAccounts } from '../api/client';
+import { getSummary, getAccounts, getMembers, type OwnerType } from '../api/client';
 import CashflowSankey from './CashflowSankey.vue';
 import { useApi } from '../composables/useApi';
 import { useSseConnection } from '../composables/useSseConnection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/format';
 import { useChartTheme } from '@/composables/useChartTheme';
@@ -23,6 +30,7 @@ use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, Grid
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 
 const route = useRoute();
+const selectedOwner = ref('all');
 
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
@@ -35,21 +43,36 @@ const lastMonthStart = israelDate(new Date(y, m - 2, 1));
 const lastMonthEnd = israelDate(new Date(y, m - 1, 0));
 
 const accountsData = useApi(() => getAccounts());
+const membersData = useApi(() => getMembers());
+const ownerFilter = computed(() => ({
+  ownerType: selectedOwner.value.startsWith('member:')
+    ? ('member' as OwnerType)
+    : selectedOwner.value !== 'all'
+      ? (selectedOwner.value as OwnerType)
+      : undefined,
+  ownerMemberId: selectedOwner.value.startsWith('member:')
+    ? Number(selectedOwner.value.slice('member:'.length))
+    : undefined,
+}));
 const categorySummary = useApi(() =>
   getSummary({
     groupBy: 'category',
     startDate: thisMonthStart,
     endDate: thisMonthEnd,
     expensesOnly: true,
+    ...ownerFilter.value,
   }),
 );
-const monthlySummary = useApi(() => getSummary({ groupBy: 'month', expensesOnly: true }));
+const monthlySummary = useApi(() =>
+  getSummary({ groupBy: 'month', expensesOnly: true, ...ownerFilter.value }),
+);
 const accountSummary = useApi(() =>
   getSummary({
     groupBy: 'account',
     startDate: thisMonthStart,
     endDate: thisMonthEnd,
     expensesOnly: true,
+    ...ownerFilter.value,
   }),
 );
 const lastMonthSummary = useApi(() =>
@@ -58,6 +81,7 @@ const lastMonthSummary = useApi(() =>
     startDate: lastMonthStart,
     endDate: lastMonthEnd,
     expensesOnly: true,
+    ...ownerFilter.value,
   }),
 );
 const bankAccounts = computed(() =>
@@ -66,6 +90,7 @@ const bankAccounts = computed(() =>
 
 function refreshAll() {
   accountsData.execute();
+  membersData.execute();
   categorySummary.execute();
   monthlySummary.execute();
   accountSummary.execute();
@@ -78,6 +103,10 @@ const throttledRefresh = useThrottleFn(refreshAll, 2000);
 const { connect: connectSse } = useSseConnection({
   'account-scrape-done': throttledRefresh,
   'session-completed': throttledRefresh,
+});
+
+watch(selectedOwner, () => {
+  refreshAll();
 });
 
 // Refresh when window regains focus (catches any external data changes)
@@ -192,6 +221,25 @@ const barOption = computed(() => {
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+    <Teleport to="#toolbar-actions">
+      <Select v-model="selectedOwner">
+        <SelectTrigger class="w-40 h-8">
+          <SelectValue placeholder="All owners" />
+        </SelectTrigger>
+        <SelectContent>
+          <SelectItem value="all">All owners</SelectItem>
+          <SelectItem value="shared">Together</SelectItem>
+          <SelectItem
+            v-for="member in membersData.data.value?.members.filter((m) => m.isActive) ?? []"
+            :key="member.id"
+            :value="`member:${member.id}`"
+          >
+            {{ member.name }}
+          </SelectItem>
+          <SelectItem value="unassigned">Unassigned</SelectItem>
+        </SelectContent>
+      </Select>
+    </Teleport>
     <div class="flex-1 min-h-0 overflow-y-auto space-y-5">
       <!-- Bank Balances + Spending — compact top row -->
       <div class="grid grid-cols-[auto_1fr] gap-4 items-end">

@@ -5,11 +5,15 @@ import {
   getAccounts,
   ignoreTransaction,
   getCategories,
+  getMembers,
   updateTransactionCategory,
+  updateTransactionOwner,
   type Transaction,
   type TransactionFilters,
   type Category,
   type Account,
+  type Member,
+  type OwnerType,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -44,6 +48,7 @@ const transactions = ref<Transaction[]>([]);
 const total = ref(0);
 const loading = ref(false);
 const allAccounts = ref<Account[]>([]);
+const members = ref<Member[]>([]);
 const accountTypeFilter = ref<string>('all');
 
 const accountMap = computed(() => {
@@ -68,11 +73,13 @@ const selectedAccount = ref<string>('all');
 const startDate = ref('');
 const endDate = ref('');
 const selectedCategory = ref('all');
+const selectedOwner = ref('all');
 
 const availableCategories = ref<Category[]>([]);
 const categoryMap = computed(() => buildCategoryMap(availableCategories.value));
 const updatingCategoryFor = ref<number | null>(null);
 const editingCategoryFor = ref<number | null>(null);
+const updatingOwnerFor = ref<number | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
@@ -91,6 +98,14 @@ async function fetchTransactions() {
       startDate: startDate.value || undefined,
       endDate: endDate.value || undefined,
       category: selectedCategory.value !== 'all' ? selectedCategory.value : undefined,
+      ownerType: selectedOwner.value.startsWith('member:')
+        ? 'member'
+        : selectedOwner.value !== 'all'
+          ? (selectedOwner.value as OwnerType)
+          : undefined,
+      ownerMemberId: selectedOwner.value.startsWith('member:')
+        ? Number(selectedOwner.value.slice('member:'.length))
+        : undefined,
     };
     const result = await getTransactions(params);
     transactions.value = result.transactions;
@@ -157,6 +172,36 @@ async function updateCategory(txn: Transaction, newCategory: string | null) {
   }
 }
 
+function ownerLabel(txn: Transaction): string {
+  if (txn.expenseOwnerType === 'shared') return 'Together';
+  if (txn.expenseOwnerType === 'unassigned') return 'Unassigned';
+  return members.value.find((m) => m.id === txn.expenseOwnerMemberId)?.name ?? 'Unknown member';
+}
+
+function ownerSelectValue(txn: Transaction): string {
+  if (txn.expenseOwnerType === 'member' && txn.expenseOwnerMemberId != null) {
+    return `member:${txn.expenseOwnerMemberId}`;
+  }
+  return txn.expenseOwnerType;
+}
+
+async function updateOwner(txn: Transaction, value: string) {
+  updatingOwnerFor.value = txn.id;
+  try {
+    const ownerType: OwnerType = value.startsWith('member:') ? 'member' : (value as OwnerType);
+    const ownerMemberId = value.startsWith('member:')
+      ? Number(value.slice('member:'.length))
+      : null;
+    const result = await updateTransactionOwner(txn.id, { ownerType, ownerMemberId });
+    const idx = transactions.value.findIndex((t) => t.id === txn.id);
+    if (idx !== -1) transactions.value[idx] = result.transaction;
+  } catch (err) {
+    console.error('Failed to update owner:', err);
+  } finally {
+    updatingOwnerFor.value = null;
+  }
+}
+
 async function toggleIgnore() {
   if (!contextMenu.value) return;
   const { txn } = contextMenu.value;
@@ -176,9 +221,14 @@ function handleKeydown(e: KeyboardEvent) {
 }
 
 onMounted(async () => {
-  const [accountData, catData] = await Promise.all([getAccounts(), getCategories()]);
+  const [accountData, catData, memberData] = await Promise.all([
+    getAccounts(),
+    getCategories(),
+    getMembers(),
+  ]);
   allAccounts.value = accountData.accounts;
   availableCategories.value = catData.categories;
+  members.value = memberData.members.filter((m) => m.isActive);
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
   document.addEventListener('keydown', handleKeydown);
@@ -244,6 +294,20 @@ onUnmounted(() => {
             </SelectItem>
           </SelectContent>
         </Select>
+
+        <Select v-model="selectedOwner" @update:model-value="applyFilters">
+          <SelectTrigger class="w-40">
+            <SelectValue placeholder="All owners" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All owners</SelectItem>
+            <SelectItem value="shared">Together</SelectItem>
+            <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
+              {{ member.name }}
+            </SelectItem>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+          </SelectContent>
+        </Select>
       </div>
 
       <div class="flex items-center gap-2.5">
@@ -299,6 +363,7 @@ onUnmounted(() => {
                   </span>
                 </TableHead>
                 <TableHead>Category</TableHead>
+                <TableHead>Owner</TableHead>
                 <TableHead>Status</TableHead>
                 <TableHead>Account</TableHead>
               </TableRow>
@@ -310,12 +375,13 @@ onUnmounted(() => {
                   <TableCell><Skeleton class="h-4 w-48" /></TableCell>
                   <TableCell class="text-right"><Skeleton class="h-4 w-16 ml-auto" /></TableCell>
                   <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                  <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
                   <TableCell><Skeleton class="h-5 w-16 rounded-full" /></TableCell>
                   <TableCell><Skeleton class="h-4 w-12" /></TableCell>
                 </TableRow>
               </template>
               <TableRow v-else-if="transactions.length === 0">
-                <TableCell colspan="6" class="text-center py-16">
+                <TableCell colspan="7" class="text-center py-16">
                   <div class="flex flex-col items-center">
                     <Receipt class="h-10 w-10 text-text-tertiary mb-3" />
                     <p class="text-text-primary text-[14px] font-medium mb-1">
@@ -417,6 +483,35 @@ onUnmounted(() => {
                     </Badge>
                     <span v-else class="text-text-tertiary">—</span>
                   </button>
+                </TableCell>
+                <TableCell @click.stop>
+                  <Select
+                    :model-value="ownerSelectValue(txn)"
+                    :disabled="updatingOwnerFor === txn.id"
+                    @update:model-value="(val) => updateOwner(txn, String(val))"
+                  >
+                    <SelectTrigger
+                      class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
+                      :class="updatingOwnerFor === txn.id ? 'opacity-50' : ''"
+                    >
+                      <SelectValue>
+                        <Badge variant="secondary" class="text-[11px]">
+                          {{ ownerLabel(txn) }}
+                        </Badge>
+                      </SelectValue>
+                    </SelectTrigger>
+                    <SelectContent>
+                      <SelectItem value="shared">Together</SelectItem>
+                      <SelectItem
+                        v-for="member in members"
+                        :key="member.id"
+                        :value="`member:${member.id}`"
+                      >
+                        {{ member.name }}
+                      </SelectItem>
+                      <SelectItem value="unassigned">Unassigned</SelectItem>
+                    </SelectContent>
+                  </Select>
                 </TableCell>
                 <TableCell>
                   <Badge

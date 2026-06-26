@@ -18,6 +18,7 @@ import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
+import { applyOwnership } from '../services/ownership.js';
 import { ensureChromium } from './chromium.js';
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
@@ -303,7 +304,14 @@ export async function scrapeAccount(
         try {
           const insertResult = db
             .insert(transactions)
-            .values({ ...mapped, scrapeSessionId: sessionId ?? null })
+            .values({
+              ...mapped,
+              expenseOwnerType: targetAccount.memberId != null ? 'member' : 'unassigned',
+              expenseOwnerMemberId: targetAccount.memberId ?? null,
+              ownerSource: targetAccount.memberId != null ? 'account' : 'unassigned',
+              ownerConfidence: targetAccount.memberId != null ? 1 : null,
+              scrapeSessionId: sessionId ?? null,
+            })
             .onConflictDoNothing({ target: transactions.hash })
             .run();
           if (insertResult.changes > 0) {
@@ -351,7 +359,9 @@ export async function scrapeAccount(
     const categorizePending: Promise<void> | null =
       newIds.length > 0
         ? batchCategorize(newIds.length, newIds)
-            .then(() => {})
+            .then(() => {
+              applyOwnership({ ids: newIds });
+            })
             .catch((err) => {
               console.error(
                 '[Scrape] Background categorization failed:',

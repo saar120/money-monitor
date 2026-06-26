@@ -2,15 +2,25 @@
 import { ref, onMounted } from 'vue';
 import {
   getCategories,
+  getMembers,
   createCategory,
   updateCategory,
   deleteCategory,
   aiRecategorize,
   type Category,
+  type Member,
+  type OwnerType,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Textarea } from '@/components/ui/textarea';
+import {
+  Select,
+  SelectContent,
+  SelectItem,
+  SelectTrigger,
+  SelectValue,
+} from '@/components/ui/select';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import {
@@ -28,6 +38,7 @@ import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
 
 const categories = ref<Category[]>([]);
+const members = ref<Member[]>([]);
 const loading = ref(false);
 const error = ref('');
 
@@ -36,12 +47,14 @@ const editingId = ref<number | null>(null);
 const editLabel = ref('');
 const editColor = ref('');
 const editRules = ref('');
+const editOwner = ref('unassigned');
 
 // New category form
 const newName = ref('');
 const newLabel = ref('');
 const newColor = ref(DEFAULT_CATEGORY_COLOR);
 const newRules = ref('');
+const newOwner = ref('unassigned');
 const showNewForm = ref(false);
 const saving = ref(false);
 
@@ -72,8 +85,9 @@ async function runRecategorize() {
 async function load() {
   loading.value = true;
   try {
-    const res = await getCategories();
+    const [res, memberRes] = await Promise.all([getCategories(), getMembers()]);
     categories.value = res.categories;
+    members.value = memberRes.members.filter((m) => m.isActive);
   } catch {
     error.value = 'Failed to load categories';
   } finally {
@@ -86,6 +100,10 @@ function startEdit(cat: Category) {
   editLabel.value = cat.label;
   editColor.value = cat.color ?? DEFAULT_CATEGORY_COLOR;
   editRules.value = cat.rules ?? '';
+  editOwner.value =
+    cat.defaultOwnerType === 'member' && cat.defaultOwnerMemberId
+      ? `member:${cat.defaultOwnerMemberId}`
+      : cat.defaultOwnerType;
 }
 
 function cancelEdit() {
@@ -98,6 +116,8 @@ async function saveEdit(cat: Category) {
       label: editLabel.value,
       color: editColor.value,
       rules: editRules.value || null,
+      defaultOwnerType: ownerTypeFromValue(editOwner.value),
+      defaultOwnerMemberId: ownerMemberIdFromValue(editOwner.value),
     });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
@@ -131,18 +151,45 @@ async function addCategory() {
       label: newLabel.value,
       color: newColor.value,
       rules: newRules.value || undefined,
+      defaultOwnerType: ownerTypeFromValue(newOwner.value),
+      defaultOwnerMemberId: ownerMemberIdFromValue(newOwner.value),
     });
     categories.value.push(res.category);
     newName.value = '';
     newLabel.value = '';
     newColor.value = DEFAULT_CATEGORY_COLOR;
     newRules.value = '';
+    newOwner.value = 'unassigned';
     showNewForm.value = false;
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to create';
   } finally {
     saving.value = false;
   }
+}
+
+function ownerTypeFromValue(value: string): OwnerType {
+  return value.startsWith('member:') ? 'member' : (value as OwnerType);
+}
+
+function ownerMemberIdFromValue(value: string): number | null {
+  return value.startsWith('member:') ? Number(value.slice('member:'.length)) : null;
+}
+
+function ownerValue(cat: Category): string {
+  return cat.defaultOwnerType === 'member' && cat.defaultOwnerMemberId
+    ? `member:${cat.defaultOwnerMemberId}`
+    : cat.defaultOwnerType;
+}
+
+function ownerLabel(value: string): string {
+  if (value === 'shared') return 'Together';
+  if (value === 'unassigned') return 'Unassigned';
+  if (value.startsWith('member:')) {
+    const id = Number(value.slice('member:'.length));
+    return members.value.find((m) => m.id === id)?.name ?? 'Unknown member';
+  }
+  return 'Unassigned';
 }
 
 async function toggleIgnored(cat: Category) {
@@ -191,6 +238,20 @@ onMounted(load);
           class="min-h-[60px] resize-y"
         />
       </SettingsRow>
+      <SettingsRow label="Default Owner">
+        <Select v-model="newOwner">
+          <SelectTrigger class="w-44">
+            <SelectValue placeholder="Default owner" />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="unassigned">Unassigned</SelectItem>
+            <SelectItem value="shared">Together</SelectItem>
+            <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
+              {{ member.name }}
+            </SelectItem>
+          </SelectContent>
+        </Select>
+      </SettingsRow>
       <SettingsRow>
         <div class="flex items-center gap-2 ml-auto">
           <Button size="sm" variant="secondary" @click="showNewForm = false">Cancel</Button>
@@ -211,6 +272,7 @@ onMounted(load);
               <TableHead>Name</TableHead>
               <TableHead>Label</TableHead>
               <TableHead>Rules</TableHead>
+              <TableHead>Default Owner</TableHead>
               <TableHead>Ignored</TableHead>
               <TableHead class="text-right">Actions</TableHead>
             </TableRow>
@@ -222,6 +284,7 @@ onMounted(load);
                 <TableCell><Skeleton class="h-4 w-24" /></TableCell>
                 <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
                 <TableCell><Skeleton class="h-4 w-40" /></TableCell>
+                <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
                 <TableCell class="text-right"><Skeleton class="h-4 w-14 ml-auto" /></TableCell>
               </TableRow>
             </template>
@@ -262,6 +325,22 @@ onMounted(load);
                       placeholder="LLM categorization rules..."
                       class="text-[11px] min-h-[40px] resize-y"
                     />
+                    <Select v-model="editOwner">
+                      <SelectTrigger class="h-8 w-44">
+                        <SelectValue placeholder="Default owner" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem value="unassigned">Unassigned</SelectItem>
+                        <SelectItem value="shared">Together</SelectItem>
+                        <SelectItem
+                          v-for="member in members"
+                          :key="member.id"
+                          :value="`member:${member.id}`"
+                        >
+                          {{ member.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
                   </div>
                 </template>
                 <template v-else>
@@ -275,6 +354,11 @@ onMounted(load);
                 :title="cat.rules ?? ''"
               >
                 {{ cat.rules ?? '—' }}
+              </TableCell>
+              <TableCell>
+                <Badge variant="secondary" class="text-[11px]">
+                  {{ ownerLabel(ownerValue(cat)) }}
+                </Badge>
               </TableCell>
               <TableCell>
                 <Switch

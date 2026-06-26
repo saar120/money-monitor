@@ -2,11 +2,13 @@
 import { ref, computed, watch, onMounted } from 'vue';
 import {
   getAccounts,
+  getMembers,
   createAccount,
   updateAccount,
   deleteAccount,
   triggerScrape,
   type Account,
+  type Member,
 } from '../api/client';
 import { useOtpFlow } from '../composables/useOtpFlow';
 import { useSseConnection } from '../composables/useSseConnection';
@@ -63,6 +65,7 @@ const expandedSettings = ref(new Set<number>());
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
 const accounts = ref<Account[]>([]);
+const members = ref<Member[]>([]);
 const loading = ref(false);
 const showAddDialog = ref(false);
 const editingNameId = ref<number | null>(null);
@@ -70,6 +73,7 @@ const editNameValue = ref('');
 
 const newCompanyId = ref('');
 const newDisplayName = ref('');
+const newMemberId = ref<string>('');
 // For providers with known schema
 const credentialValues = ref<Record<string, string>>({});
 // For providers with unknown schema (generic fallback)
@@ -101,6 +105,9 @@ const accountSections = computed(() =>
     { type: 'credit_card' as const, label: 'Credit Cards', accounts: creditCardAccounts.value },
   ].filter((s) => s.accounts.length > 0),
 );
+
+const activeMembers = computed(() => members.value.filter((m) => m.isActive));
+const memberMap = computed(() => new Map(members.value.map((member) => [member.id, member.name])));
 
 watch(newCompanyId, () => {
   credentialValues.value = {};
@@ -161,8 +168,12 @@ const { connect: connectSse } = useSseConnection({
 async function fetchAccounts() {
   loading.value = true;
   try {
-    const result = await getAccounts();
+    const [result, memberResult] = await Promise.all([getAccounts(), getMembers()]);
     accounts.value = result.accounts;
+    members.value = memberResult.members;
+    if (!newMemberId.value && activeMembers.value[0]) {
+      newMemberId.value = String(activeMembers.value[0].id);
+    }
   } finally {
     loading.value = false;
   }
@@ -186,11 +197,13 @@ async function handleAdd() {
   await createAccount({
     companyId: newCompanyId.value,
     displayName: newDisplayName.value,
+    memberId: Number(newMemberId.value),
     credentials,
   });
 
   newCompanyId.value = '';
   newDisplayName.value = '';
+  newMemberId.value = activeMembers.value[0] ? String(activeMembers.value[0].id) : '';
   credentialValues.value = {};
   credentialFields.value = [{ key: '', value: '' }];
   showAddDialog.value = false;
@@ -361,6 +374,13 @@ onMounted(() => {
                   >
                     {{ account.isActive ? 'Active' : 'Inactive' }}
                   </Badge>
+                  <Badge variant="secondary" class="text-[11px]">
+                    {{
+                      account.memberId
+                        ? (memberMap.get(account.memberId) ?? 'Unknown member')
+                        : 'No member'
+                    }}
+                  </Badge>
                 </div>
                 <CardDescription class="text-[13px]">
                   {{ PROVIDERS.find((p) => p.id === account.companyId)?.name ?? account.companyId }}
@@ -400,6 +420,32 @@ onMounted(() => {
                   v-if="expandedSettings.has(account.id)"
                   class="mt-3 rounded-lg border border-separator/60 divide-y divide-separator/40 overflow-hidden"
                 >
+                  <div class="px-4 py-3 flex items-center justify-between">
+                    <div>
+                      <div class="text-[13px] text-text-primary">Member</div>
+                      <div class="text-[11px] text-text-secondary mt-0.5">
+                        New transactions from this account inherit this owner
+                      </div>
+                    </div>
+                    <Select
+                      :model-value="account.memberId ? String(account.memberId) : undefined"
+                      @update:model-value="patchAccount(account.id, { memberId: Number($event) })"
+                    >
+                      <SelectTrigger class="w-36 h-8">
+                        <SelectValue placeholder="Select member" />
+                      </SelectTrigger>
+                      <SelectContent>
+                        <SelectItem
+                          v-for="member in activeMembers"
+                          :key="member.id"
+                          :value="String(member.id)"
+                        >
+                          {{ member.name }}
+                        </SelectItem>
+                      </SelectContent>
+                    </Select>
+                  </div>
+
                   <div
                     v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)"
                     class="px-4 py-3 flex items-center justify-between"
@@ -578,6 +624,24 @@ onMounted(() => {
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
 
+          <div class="flex flex-col gap-2">
+            <label class="text-[13px] font-medium">Member</label>
+            <Select v-model="newMemberId">
+              <SelectTrigger>
+                <SelectValue placeholder="Select member..." />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem
+                  v-for="member in activeMembers"
+                  :key="member.id"
+                  :value="String(member.id)"
+                >
+                  {{ member.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+
           <div v-if="newCompanyId" class="space-y-4">
             <!-- OTP note banner (e.g. OneZero) -->
             <div
@@ -626,7 +690,11 @@ onMounted(() => {
           <DialogClose as-child>
             <Button variant="secondary">Cancel</Button>
           </DialogClose>
-          <Button variant="filled" :disabled="!newCompanyId || !newDisplayName" @click="handleAdd">
+          <Button
+            variant="filled"
+            :disabled="!newCompanyId || !newDisplayName || !newMemberId"
+            @click="handleAdd"
+          >
             Save Account
           </Button>
         </DialogFooter>

@@ -11,6 +11,7 @@ import {
   type AIProvider,
 } from '../api/client';
 import { useOAuth } from '../composables/useOAuth';
+import HouseholdSettings from './HouseholdSettings.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
@@ -282,6 +283,8 @@ async function save() {
   <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-20 space-y-5 animate-fade-in-up">
     <div v-if="loading" class="text-text-secondary">Loading settings...</div>
 
+    <HouseholdSettings v-if="!loading" />
+
     <template v-else-if="!isElectron">
       <Card>
         <CardContent class="pt-6">
@@ -310,7 +313,6 @@ async function save() {
           </Button>
         </div>
       </Teleport>
-
       <!-- AI Configuration -->
       <SettingsGroup title="AI Configuration" description="Choose your AI provider and model">
         <SettingsRow class="bg-bg-secondary/50">

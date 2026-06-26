@@ -4,6 +4,7 @@ import type { AssistantMessage, UserMessage, Message, ImageContent } from '@mari
 import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, getBatchModelSpec } from '../config.js';
+import { applyOwnership } from '../services/ownership.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
 import { db } from '../db/connection.js';
 import { transactions, categories } from '../db/schema.js';
@@ -390,6 +391,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
         .run();
       categorized++;
     }
+    if (categorized > 0) applyOwnership({ ids: txns.map((t) => t.id) });
   } catch (err) {
     console.error(
       '[AI] Failed to process categorization results:',
