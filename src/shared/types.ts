@@ -1,11 +1,22 @@
 import type { InferSelectModel, InferInsertModel } from 'drizzle-orm';
-import type { accounts, transactions, scrapeLogs, scrapeSessions } from '../db/schema.js';
+import type {
+  accounts,
+  transactions,
+  scrapeLogs,
+  scrapeSessions,
+  members,
+  ownershipRules,
+} from '../db/schema.js';
 
 // DB row types
 export type Account = InferSelectModel<typeof accounts>;
 export type NewAccount = InferInsertModel<typeof accounts>;
 export type Transaction = InferSelectModel<typeof transactions>;
 export type NewTransaction = InferInsertModel<typeof transactions>;
+export type Member = InferSelectModel<typeof members>;
+export type NewMember = InferInsertModel<typeof members>;
+export type OwnershipRule = InferSelectModel<typeof ownershipRules>;
+export type NewOwnershipRule = InferInsertModel<typeof ownershipRules>;
 export type ScrapeLog = InferSelectModel<typeof scrapeLogs>;
 export type NewScrapeLog = InferInsertModel<typeof scrapeLogs>;
 export type ScrapeSession = InferSelectModel<typeof scrapeSessions>;
@@ -44,15 +55,36 @@ export interface ScraperResult {
 }
 
 // Net worth type enums
-export const ASSET_TYPES = ['brokerage', 'pension', 'keren_hishtalmut', 'crypto', 'fund', 'real_estate'] as const;
+export const ASSET_TYPES = [
+  'brokerage',
+  'pension',
+  'keren_hishtalmut',
+  'crypto',
+  'fund',
+  'real_estate',
+] as const;
 export const LIQUIDITY_TYPES = ['liquid', 'restricted', 'locked'] as const;
 export const HOLDING_TYPES = ['stock', 'etf', 'cash', 'fund_units', 'crypto', 'balance'] as const;
-export const MOVEMENT_TYPES = ['deposit', 'withdrawal', 'buy', 'sell', 'dividend', 'fee', 'adjustment', 'contribution', 'rent_income'] as const;
+export const MOVEMENT_TYPES = [
+  'deposit',
+  'withdrawal',
+  'buy',
+  'sell',
+  'dividend',
+  'fee',
+  'adjustment',
+  'contribution',
+  'rent_income',
+] as const;
 
 /** Holding types where current value = quantity × lastPrice */
 const PRICED_HOLDING_TYPES: ReadonlySet<string> = new Set(['stock', 'etf', 'fund_units']);
 
-export function holdingNeedsPrice(type: string, currency: string, rates: Record<string, number>): boolean {
+export function holdingNeedsPrice(
+  type: string,
+  currency: string,
+  rates: Record<string, number>,
+): boolean {
   if (PRICED_HOLDING_TYPES.has(type)) return true;
   if (type === 'crypto' && !(currency in rates)) return true;
   return false;
@@ -74,7 +106,10 @@ export function getAssetCategory(assetType: string): AssetCategory {
 }
 
 // Movement types allowed per category
-export const CATEGORY_MOVEMENT_TYPES: Record<AssetCategory, readonly (typeof MOVEMENT_TYPES[number])[]> = {
+export const CATEGORY_MOVEMENT_TYPES: Record<
+  AssetCategory,
+  readonly (typeof MOVEMENT_TYPES)[number][]
+> = {
   simple_value: ['contribution'],
   real_estate: ['rent_income'],
   crypto: ['buy', 'sell'],
@@ -84,13 +119,27 @@ export const LIABILITY_TYPES = ['loan', 'mortgage', 'credit_line', 'other'] as c
 
 // Supported company IDs (from israeli-bank-scrapers CompanyTypes)
 export const COMPANY_IDS = [
-  'hapoalim', 'leumi', 'discount', 'mizrahi', 'otsarHahayal',
-  'mercantile', 'massad', 'beinleumi', 'union',
-  'isracard', 'amex', 'max', 'visaCal',
-  'beyahadBishvilha', 'yahav', 'oneZero', 'behatsdaa', 'pagi',
+  'hapoalim',
+  'leumi',
+  'discount',
+  'mizrahi',
+  'otsarHahayal',
+  'mercantile',
+  'massad',
+  'beinleumi',
+  'union',
+  'isracard',
+  'amex',
+  'max',
+  'visaCal',
+  'beyahadBishvilha',
+  'yahav',
+  'oneZero',
+  'behatsdaa',
+  'pagi',
 ] as const;
 
-export type CompanyId = typeof COMPANY_IDS[number];
+export type CompanyId = (typeof COMPANY_IDS)[number];
 
 export type AccountType = 'bank' | 'credit_card';
 
@@ -119,12 +168,31 @@ export function getAccountType(companyId: CompanyId): AccountType {
   return ACCOUNT_TYPE_MAP[companyId];
 }
 
+export const OWNER_TYPES = ['member', 'shared', 'unassigned'] as const;
+export type OwnerType = (typeof OWNER_TYPES)[number];
+
+export const OWNER_SOURCES = ['manual', 'rule', 'category', 'account', 'unassigned'] as const;
+export type OwnerSource = (typeof OWNER_SOURCES)[number];
+
+export interface OwnerTarget {
+  type: OwnerType;
+  memberId?: number | null;
+}
+
+export function normalizeOwnerTarget(target: OwnerTarget): OwnerTarget {
+  if (target.type === 'member') return { type: 'member', memberId: target.memberId ?? null };
+  return { type: target.type, memberId: null };
+}
+
 export interface TransactionMeta {
   bankCategory?: string;
 }
 
 export function parseMeta(raw: string | null): TransactionMeta {
   if (!raw) return {};
-  try { return JSON.parse(raw); }
-  catch { return {}; }
+  try {
+    return JSON.parse(raw);
+  } catch {
+    return {};
+  }
 }

@@ -6,7 +6,7 @@ import { CanvasRenderer } from 'echarts/renderers';
 import { SankeyChart } from 'echarts/charts';
 import { TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { getCashflowDetail, getCategories } from '../api/client';
+import { getCashflowDetail, getCategories, type OwnerType } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +28,10 @@ use([CanvasRenderer, SankeyChart, TooltipComponent]);
 const { textPrimary, bgPrimary, separator } = useChartTheme();
 
 const route = useRoute();
+const props = defineProps<{
+  ownerType?: OwnerType;
+  ownerMemberId?: number;
+}>();
 
 // ── Period selector ──
 
@@ -63,14 +67,22 @@ const dateRange = computed(() => {
 
 const categoriesData = useApi(() => getCategories());
 const cashflowData = useApi(() =>
-  getCashflowDetail({ startDate: dateRange.value.startDate, endDate: dateRange.value.endDate }),
+  getCashflowDetail({
+    startDate: dateRange.value.startDate,
+    endDate: dateRange.value.endDate,
+    ownerType: props.ownerType,
+    ownerMemberId: props.ownerMemberId,
+  }),
 );
 
 function refresh() {
   cashflowData.execute();
 }
 
-watch([periodMode, selectedDays, selectedMonth], refresh);
+watch(
+  [periodMode, selectedDays, selectedMonth, () => props.ownerType, () => props.ownerMemberId],
+  refresh,
+);
 
 onMounted(() => {
   categoriesData.execute();

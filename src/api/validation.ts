@@ -6,6 +6,7 @@ import {
   HOLDING_TYPES,
   LIABILITY_TYPES,
   MOVEMENT_TYPES,
+  OWNER_TYPES,
 } from '../shared/types.js';
 
 // ─── Accounts ───
@@ -13,6 +14,7 @@ import {
 export const createAccountSchema = z.object({
   companyId: z.enum(COMPANY_IDS),
   displayName: z.string().min(1).max(100),
+  memberId: z.number().int().positive().optional(),
   credentials: z
     .record(z.string().min(1), z.string())
     .refine((obj) => Object.keys(obj).length > 0, 'At least one credential field is required'),
@@ -20,6 +22,7 @@ export const createAccountSchema = z.object({
 
 export const updateAccountSchema = z.object({
   displayName: z.string().min(1).max(100).optional(),
+  memberId: z.number().int().positive().optional(),
   isActive: z.boolean().optional(),
   manualLogin: z.boolean().optional(),
   showBrowser: z.boolean().optional(),
@@ -29,6 +32,7 @@ export const updateAccountSchema = z.object({
 });
 
 const accountTypeEnum = z.enum(['bank', 'credit_card']);
+const ownerTypeEnum = z.enum(OWNER_TYPES);
 
 // ─── Transactions Query ───
 
@@ -49,6 +53,8 @@ export const transactionQuerySchema = z.object({
   minAmount: z.coerce.number().optional(),
   maxAmount: z.coerce.number().optional(),
   search: z.string().max(200).optional(),
+  ownerType: z.enum(['all', ...OWNER_TYPES]).optional(),
+  ownerMemberId: z.coerce.number().int().positive().optional(),
   offset: z.coerce.number().int().min(0).default(0),
   limit: z.coerce.number().int().min(1).max(500).default(50),
   sortBy: z.enum(['date', 'chargedAmount', 'description', 'processedDate']).default('date'),
@@ -73,8 +79,10 @@ export const summaryQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
   groupBy: z
-    .enum(['category', 'month', 'account', 'cashflow', 'cashflow-detail'])
+    .enum(['category', 'month', 'account', 'expense-owner', 'cashflow', 'cashflow-detail'])
     .default('category'),
+  ownerType: z.enum(['all', ...OWNER_TYPES]).optional(),
+  ownerMemberId: z.coerce.number().int().positive().optional(),
   expensesOnly: z
     .enum(['true', 'false'])
     .transform((v) => v === 'true')
@@ -138,6 +146,8 @@ export const createCategorySchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .optional(),
   rules: z.string().max(500).optional(),
+  defaultOwnerType: ownerTypeEnum.optional(),
+  defaultOwnerMemberId: z.number().int().positive().nullable().optional(),
 });
 
 export const updateCategorySchema = z.object({
@@ -147,6 +157,8 @@ export const updateCategorySchema = z.object({
     .regex(/^#[0-9a-fA-F]{6}$/)
     .optional(),
   rules: z.string().max(500).nullable().optional(),
+  defaultOwnerType: ownerTypeEnum.optional(),
+  defaultOwnerMemberId: z.number().int().positive().nullable().optional(),
   ignoredFromStats: z.boolean().optional(),
 });
 
@@ -155,6 +167,52 @@ export const updateCategorySchema = z.object({
 export const updateTransactionSchema = z.object({
   category: z.string().min(1).max(50).nullable(),
 });
+
+export const updateTransactionOwnerSchema = z.object({
+  ownerType: ownerTypeEnum,
+  ownerMemberId: z.number().int().positive().nullable().optional(),
+});
+
+// ─── Members ───
+
+export const createMemberSchema = z.object({
+  name: z.string().min(1).max(100),
+});
+
+export const updateMemberSchema = z.object({
+  name: z.string().min(1).max(100).optional(),
+  isActive: z.boolean().optional(),
+});
+
+// ─── Ownership Rules ───
+
+export const ownershipRulesQuerySchema = z.object({
+  startDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
+  endDate: z
+    .string()
+    .regex(/^\d{4}-\d{2}-\d{2}/)
+    .optional(),
+  force: z.coerce.boolean().default(false),
+});
+
+export const createOwnershipRuleSchema = z.object({
+  name: z.string().min(1).max(100),
+  priority: z.number().int().min(0).default(100),
+  enabled: z.boolean().default(true),
+  accountId: z.number().int().positive().nullable().optional(),
+  accountMemberId: z.number().int().positive().nullable().optional(),
+  categoryName: z.string().min(1).max(50).nullable().optional(),
+  descriptionContains: z.string().min(1).max(200).nullable().optional(),
+  minAmount: z.number().nullable().optional(),
+  maxAmount: z.number().nullable().optional(),
+  targetOwnerType: ownerTypeEnum,
+  targetOwnerMemberId: z.number().int().positive().nullable().optional(),
+});
+
+export const updateOwnershipRuleSchema = createOwnershipRuleSchema.partial();
 
 export const resolveReviewSchema = z.object({
   category: z.string().min(1).max(50),

@@ -1,13 +1,17 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
-import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
+import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -24,7 +28,13 @@ vi.mock('../scraper/scraper.service.js', () => ({
 }));
 
 vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
+  getExchangeRates: vi
+    .fn()
+    .mockResolvedValue({
+      rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+      stale: false,
+      fetchedAt: new Date().toISOString(),
+    }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -81,8 +91,16 @@ describe('transactions routes', () => {
 
     it('supports query filters', async () => {
       const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { category: 'food', date: '2026-01-15', processedDate: '2026-01-15' });
-      insertTransaction(testDb.db, account.id, { category: 'transport', date: '2026-02-15', processedDate: '2026-02-15' });
+      insertTransaction(testDb.db, account.id, {
+        category: 'food',
+        date: '2026-01-15',
+        processedDate: '2026-01-15',
+      });
+      insertTransaction(testDb.db, account.id, {
+        category: 'transport',
+        date: '2026-02-15',
+        processedDate: '2026-02-15',
+      });
 
       const res = await server.inject({
         method: 'GET',
@@ -97,8 +115,16 @@ describe('transactions routes', () => {
 
     it('supports sorting', async () => {
       const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { chargedAmount: -50, date: '2026-01-10', processedDate: '2026-01-10' });
-      insertTransaction(testDb.db, account.id, { chargedAmount: -200, date: '2026-01-20', processedDate: '2026-01-20' });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -50,
+        date: '2026-01-10',
+        processedDate: '2026-01-10',
+      });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -200,
+        date: '2026-01-20',
+        processedDate: '2026-01-20',
+      });
 
       const res = await server.inject({
         method: 'GET',
@@ -167,6 +193,29 @@ describe('transactions routes', () => {
         payload: { category: 'food' },
       });
       expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // ── PATCH /api/transactions/:id/owner ──
+
+  describe('PATCH /api/transactions/:id/owner', () => {
+    it('sets manual transaction owner', async () => {
+      const member = insertMember(testDb.db, { name: 'Dana' });
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id);
+
+      const res = await server.inject({
+        method: 'PATCH',
+        url: `/api/transactions/${tx.id}/owner`,
+        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        payload: { ownerType: 'member', ownerMemberId: member.id },
+      });
+
+      expect(res.statusCode).toBe(200);
+      const body = JSON.parse(res.body);
+      expect(body.transaction.expenseOwnerType).toBe('member');
+      expect(body.transaction.expenseOwnerMemberId).toBe(member.id);
+      expect(body.transaction.ownerSource).toBe('manual');
     });
   });
 

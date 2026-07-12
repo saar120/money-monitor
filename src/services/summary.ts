@@ -1,6 +1,6 @@
 import { and, eq, gte, lte, sql } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { transactions, accounts } from '../db/schema.js';
+import { transactions, accounts, members } from '../db/schema.js';
 import { buildTransactionFilters, type TransactionFilterParams } from './transactions.js';
 import { monthsAgoStart, toIsraelDateStr } from '../shared/dates.js';
 
@@ -22,7 +22,7 @@ function normalizeDescription(desc: string): string {
 
 export function getSpendingSummary(
   filters: TransactionFilterParams,
-  groupBy: 'category' | 'month' | 'account' | 'cashflow' | 'cashflow-detail',
+  groupBy: 'category' | 'month' | 'account' | 'expense-owner' | 'cashflow' | 'cashflow-detail',
 ) {
   const { conditions, empty } = buildTransactionFilters(filters);
   if (empty) {
@@ -128,6 +128,24 @@ export function getSpendingSummary(
       .groupBy(transactions.accountId)
       .all();
     return { groupBy: 'account' as const, summary: rows };
+  }
+
+  if (groupBy === 'expense-owner') {
+    const rows = db
+      .select({
+        ownerType: transactions.expenseOwnerType,
+        ownerMemberId: transactions.expenseOwnerMemberId,
+        memberName: sql<string | null>`members.name`.as('member_name'),
+        totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
+        transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
+      })
+      .from(transactions)
+      .leftJoin(members, eq(members.id, transactions.expenseOwnerMemberId))
+      .where(where)
+      .groupBy(transactions.expenseOwnerType, transactions.expenseOwnerMemberId)
+      .orderBy(sql`total_amount desc`)
+      .all();
+    return { groupBy: 'expense-owner' as const, summary: rows };
   }
 
   // Default: category

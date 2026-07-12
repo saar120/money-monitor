@@ -17,6 +17,8 @@ import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
 import { netWorthRoutes } from './api/net-worth.routes.js';
 import { settingsRoutes } from './api/settings.routes.js';
+import { membersRoutes } from './api/members.routes.js';
+import { ownershipRoutes } from './api/ownership.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { alertsRoutes } from './api/alerts.routes.js';
 import { budgetsRoutes } from './api/budgets.routes.js';
@@ -131,6 +133,8 @@ export async function createServer() {
   await app.register(liabilitiesRoutes);
   await app.register(netWorthRoutes);
   await app.register(settingsRoutes);
+  await app.register(membersRoutes);
+  await app.register(ownershipRoutes);
   await app.register(alertsRoutes);
   await app.register(budgetsRoutes);
   await app.register(demoRoutes);

@@ -3,6 +3,7 @@ import { sql } from 'drizzle-orm';
 
 export const accounts = sqliteTable('accounts', {
   id: integer('id').primaryKey({ autoIncrement: true }),
+  memberId: integer('member_id').references(() => members.id),
   companyId: text('company_id').notNull(),
   displayName: text('display_name').notNull(),
   accountNumber: text('account_number'),
@@ -40,6 +41,13 @@ export const transactions = sqliteTable(
     installmentNumber: integer('installment_number'),
     installmentTotal: integer('installment_total'),
     category: text('category'),
+    expenseOwnerType: text('expense_owner_type').notNull().default('unassigned'),
+    expenseOwnerMemberId: integer('expense_owner_member_id').references(() => members.id, {
+      onDelete: 'set null',
+    }),
+    ownerSource: text('owner_source').notNull().default('unassigned'),
+    ownerConfidence: real('owner_confidence'),
+    ownerReviewReason: text('owner_review_reason'),
     meta: text('meta'),
     ignored: integer('ignored', { mode: 'boolean' }).notNull().default(false),
     needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false),
@@ -60,9 +68,24 @@ export const transactions = sqliteTable(
     index('idx_transactions_date_ignored').on(table.date, table.ignored),
     index('idx_transactions_account_date').on(table.accountId, table.date),
     index('idx_transactions_category_date').on(table.category, table.date),
+    index('idx_transactions_owner').on(table.expenseOwnerType, table.expenseOwnerMemberId),
+    index('idx_transactions_owner_date').on(
+      table.expenseOwnerType,
+      table.expenseOwnerMemberId,
+      table.date,
+    ),
     index('idx_transactions_scrape_session_id').on(table.scrapeSessionId),
   ],
 );
+
+export const members = sqliteTable('members', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  name: text('name').notNull(),
+  isActive: integer('is_active', { mode: 'boolean' }).notNull().default(true),
+  createdAt: text('created_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
 
 export const scrapeSessions = sqliteTable('scrape_sessions', {
   id: integer('id').primaryKey({ autoIncrement: true }),
@@ -99,11 +122,46 @@ export const categories = sqliteTable('categories', {
   label: text('label').notNull(),
   color: text('color'),
   rules: text('rules'),
+  defaultOwnerType: text('default_owner_type').notNull().default('unassigned'),
+  defaultOwnerMemberId: integer('default_owner_member_id').references(() => members.id, {
+    onDelete: 'set null',
+  }),
   ignoredFromStats: integer('ignored_from_stats', { mode: 'boolean' }).notNull().default(false),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
 });
+
+export const ownershipRules = sqliteTable(
+  'ownership_rules',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    name: text('name').notNull(),
+    priority: integer('priority').notNull().default(100),
+    enabled: integer('enabled', { mode: 'boolean' }).notNull().default(true),
+    accountId: integer('account_id').references(() => accounts.id, { onDelete: 'cascade' }),
+    accountMemberId: integer('account_member_id').references(() => members.id, {
+      onDelete: 'set null',
+    }),
+    categoryName: text('category_name'),
+    descriptionContains: text('description_contains'),
+    minAmount: real('min_amount'),
+    maxAmount: real('max_amount'),
+    targetOwnerType: text('target_owner_type').notNull(),
+    targetOwnerMemberId: integer('target_owner_member_id').references(() => members.id, {
+      onDelete: 'set null',
+    }),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    index('idx_ownership_rules_enabled_priority').on(table.enabled, table.priority),
+    index('idx_ownership_rules_account').on(table.accountId),
+    index('idx_ownership_rules_account_member').on(table.accountMemberId),
+    index('idx_ownership_rules_category').on(table.categoryName),
+  ],
+);
 
 export const assets = sqliteTable('assets', {
   id: integer('id').primaryKey({ autoIncrement: true }),

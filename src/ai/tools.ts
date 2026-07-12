@@ -2,7 +2,7 @@ import { Type } from '@sinclair/typebox';
 import { StringEnum } from '@mariozechner/pi-ai';
 import { sql, eq, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { accounts, transactions, scrapeSessions, scrapeLogs } from '../db/schema.js';
+import { accounts, members, transactions, scrapeSessions, scrapeLogs } from '../db/schema.js';
 import { appendMemory, writeMemory } from './memory.js';
 import {
   listTransactions,
@@ -55,11 +55,19 @@ export function buildQueryTransactionsTool() {
             'Filter by review status. true = transactions needing review (low confidence), false = already reviewed/confirmed transactions',
         }),
       ),
+      owner_type: Type.Optional(
+        StringEnum(['member', 'shared', 'unassigned'], {
+          description: 'Filter by transaction owner type. Use member with owner_member_id.',
+        }),
+      ),
+      owner_member_id: Type.Optional(
+        Type.Number({ description: 'Member ID when owner_type is member' }),
+      ),
       limit: Type.Optional(
         Type.Number({ description: 'Max results to return (default 50, max 200)' }),
       ),
     }),
-    execute: async (args) => queryTransactions(args),
+    execute: async (args) => queryTransactions(args as Parameters<typeof queryTransactions>[0]),
   });
 }
 
@@ -67,17 +75,25 @@ export function buildGetSpendingSummaryTool() {
   return createAgentTool({
     name: 'get_spending_summary',
     description:
-      'Get aggregated spending totals. Group by category, month, or account to understand spending patterns.',
+      'Get aggregated spending totals. Group by category, month, account, or expense-owner to understand spending patterns.',
     label: 'Analyzing spending',
     parameters: Type.Object({
       group_by: Type.Optional(
-        StringEnum(['category', 'month', 'account'], {
+        StringEnum(['category', 'month', 'account', 'expense-owner'], {
           description: 'How to group the results (default: category)',
         }),
       ),
       account_id: Type.Optional(Type.Number({ description: 'Filter by account ID' })),
       start_date: Type.Optional(Type.String({ description: 'Start date (ISO string)' })),
       end_date: Type.Optional(Type.String({ description: 'End date (ISO string)' })),
+      owner_type: Type.Optional(
+        StringEnum(['member', 'shared', 'unassigned'], {
+          description: 'Filter by transaction owner type. Use member with owner_member_id.',
+        }),
+      ),
+      owner_member_id: Type.Optional(
+        Type.Number({ description: 'Member ID when owner_type is member' }),
+      ),
     }),
     execute: async (args) => getSpendingSummary(args as Parameters<typeof getSpendingSummary>[0]),
   });
@@ -340,6 +356,8 @@ export function queryTransactions(input: {
   max_amount?: number;
   search?: string;
   needs_review?: boolean;
+  owner_type?: 'member' | 'shared' | 'unassigned';
+  owner_member_id?: number;
   limit?: number;
 }): string {
   const limit = Math.min(input.limit ?? 50, 200);
@@ -354,6 +372,8 @@ export function queryTransactions(input: {
       maxAmount: input.max_amount,
       search: input.search,
       needsReview: input.needs_review,
+      ownerType: input.owner_type,
+      ownerMemberId: input.owner_member_id,
     },
     { limit, sortBy: 'date', sortOrder: 'desc' },
   );
@@ -402,13 +422,21 @@ export function updateCategoryRules(input: { category_name: string; rules: strin
 }
 
 export function getSpendingSummary(input: {
-  group_by?: 'category' | 'month' | 'account';
+  group_by?: 'category' | 'month' | 'account' | 'expense-owner';
   account_id?: number;
   start_date?: string;
   end_date?: string;
+  owner_type?: 'member' | 'shared' | 'unassigned';
+  owner_member_id?: number;
 }): string {
   const result = getSpendingSummaryService(
-    { accountId: input.account_id, startDate: input.start_date, endDate: input.end_date },
+    {
+      accountId: input.account_id,
+      startDate: input.start_date,
+      endDate: input.end_date,
+      ownerType: input.owner_type,
+      ownerMemberId: input.owner_member_id,
+    },
     input.group_by ?? 'category',
   );
   return JSON.stringify(result);
@@ -502,6 +530,8 @@ export function getAccountBalances(): string {
       id: accounts.id,
       companyId: accounts.companyId,
       displayName: accounts.displayName,
+      memberId: accounts.memberId,
+      memberName: members.name,
       accountNumber: accounts.accountNumber,
       isActive: accounts.isActive,
       lastScrapedAt: accounts.lastScrapedAt,
@@ -515,6 +545,7 @@ export function getAccountBalances(): string {
         ),
     })
     .from(accounts)
+    .leftJoin(members, eq(members.id, accounts.memberId))
     .all();
 
   return JSON.stringify({ accounts: rows });
@@ -564,10 +595,15 @@ export function getLatestScrapeTransactions(): string {
       needsReview: transactions.needsReview,
       confidence: transactions.confidence,
       reviewReason: transactions.reviewReason,
+      expenseOwnerType: transactions.expenseOwnerType,
+      expenseOwnerMemberId: transactions.expenseOwnerMemberId,
+      ownerSource: transactions.ownerSource,
+      ownerMemberName: members.name,
       accountName: accounts.displayName,
     })
     .from(transactions)
     .leftJoin(accounts, eq(transactions.accountId, accounts.id))
+    .leftJoin(members, eq(members.id, transactions.expenseOwnerMemberId))
     .where(eq(transactions.scrapeSessionId, session.id))
     .orderBy(desc(transactions.date))
     .limit(MAX_TRANSACTIONS + 1)

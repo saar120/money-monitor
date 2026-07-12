@@ -4,12 +4,20 @@ import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { readFileSync } from 'node:fs';
+import { readdirSync, readFileSync } from 'node:fs';
 import * as schema from './schema.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, 'migrations');
 const journalPath = join(migrationsFolder, 'meta', '_journal.json');
+
+function applyMigrationFile(sqlite: Database.Database, tag: string) {
+  const migrationSql = readFileSync(join(migrationsFolder, `${tag}.sql`), 'utf-8');
+  for (const chunk of migrationSql.split('--> statement-breakpoint')) {
+    const statement = chunk.trim();
+    if (statement) sqlite.exec(statement);
+  }
+}
 
 describe('database migrations', () => {
   it('all migrations apply cleanly on a fresh database', () => {
@@ -36,8 +44,10 @@ describe('database migrations', () => {
     const entries: Array<{ idx: number; when: number; tag: string }> = journal.entries;
 
     for (let i = 1; i < entries.length; i++) {
-      expect(entries[i].when, `${entries[i].tag} must have timestamp > ${entries[i - 1].tag}`)
-        .toBeGreaterThan(entries[i - 1].when);
+      expect(
+        entries[i].when,
+        `${entries[i].tag} must have timestamp > ${entries[i - 1].tag}`,
+      ).toBeGreaterThan(entries[i - 1].when);
     }
   });
 
@@ -56,7 +66,10 @@ describe('database migrations', () => {
 
     for (const entry of entries) {
       const sqlPath = join(migrationsFolder, `${entry.tag}.sql`);
-      expect(() => readFileSync(sqlPath, 'utf-8'), `Missing migration file: ${entry.tag}.sql`).not.toThrow();
+      expect(
+        () => readFileSync(sqlPath, 'utf-8'),
+        `Missing migration file: ${entry.tag}.sql`,
+      ).not.toThrow();
     }
   });
 
@@ -67,10 +80,12 @@ describe('database migrations', () => {
     migrate(db, { migrationsFolder });
 
     const tables = sqlite
-      .prepare("SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name")
+      .prepare(
+        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name",
+      )
       .all() as Array<{ name: string }>;
 
-    const tableNames = tables.map(t => t.name);
+    const tableNames = tables.map((t) => t.name);
 
     const expectedTables = [
       'accounts',
@@ -81,6 +96,8 @@ describe('database migrations', () => {
       'categories',
       'holdings',
       'liabilities',
+      'members',
+      'ownership_rules',
       'scrape_logs',
       'transactions',
     ];
@@ -99,34 +116,59 @@ describe('database migrations', () => {
     migrate(db, { migrationsFolder });
 
     // Spot-check critical columns on key tables
-    const accountCols = sqlite.prepare("PRAGMA table_info('accounts')").all() as Array<{ name: string }>;
-    const accountColNames = accountCols.map(c => c.name);
+    const accountCols = sqlite.prepare("PRAGMA table_info('accounts')").all() as Array<{
+      name: string;
+    }>;
+    const accountColNames = accountCols.map((c) => c.name);
     expect(accountColNames).toContain('id');
     expect(accountColNames).toContain('company_id');
     expect(accountColNames).toContain('display_name');
+    expect(accountColNames).toContain('member_id');
     expect(accountColNames).toContain('account_type');
     expect(accountColNames).toContain('balance');
     expect(accountColNames).toContain('is_active');
 
-    const txCols = sqlite.prepare("PRAGMA table_info('transactions')").all() as Array<{ name: string }>;
-    const txColNames = txCols.map(c => c.name);
+    const txCols = sqlite.prepare("PRAGMA table_info('transactions')").all() as Array<{
+      name: string;
+    }>;
+    const txColNames = txCols.map((c) => c.name);
     expect(txColNames).toContain('id');
     expect(txColNames).toContain('account_id');
     expect(txColNames).toContain('date');
     expect(txColNames).toContain('charged_amount');
     expect(txColNames).toContain('description');
     expect(txColNames).toContain('category');
+    expect(txColNames).toContain('expense_owner_type');
+    expect(txColNames).toContain('expense_owner_member_id');
+    expect(txColNames).toContain('owner_source');
     expect(txColNames).toContain('ignored');
     expect(txColNames).toContain('needs_review');
     expect(txColNames).toContain('hash');
 
-    const liabCols = sqlite.prepare("PRAGMA table_info('liabilities')").all() as Array<{ name: string }>;
-    const liabColNames = liabCols.map(c => c.name);
+    const liabCols = sqlite.prepare("PRAGMA table_info('liabilities')").all() as Array<{
+      name: string;
+    }>;
+    const liabColNames = liabCols.map((c) => c.name);
     expect(liabColNames).toContain('id');
     expect(liabColNames).toContain('name');
     expect(liabColNames).toContain('currency');
     expect(liabColNames).toContain('current_balance');
     expect(liabColNames).toContain('is_active');
+
+    const memberCols = sqlite.prepare("PRAGMA table_info('members')").all() as Array<{
+      name: string;
+    }>;
+    const memberColNames = memberCols.map((c) => c.name);
+    expect(memberColNames).toContain('id');
+    expect(memberColNames).toContain('name');
+    expect(memberColNames).toContain('is_active');
+
+    const ruleCols = sqlite.prepare("PRAGMA table_info('ownership_rules')").all() as Array<{
+      name: string;
+    }>;
+    const ruleColNames = ruleCols.map((c) => c.name);
+    expect(ruleColNames).toContain('target_owner_type');
+    expect(ruleColNames).toContain('description_contains');
 
     sqlite.close();
   });
@@ -162,10 +204,60 @@ describe('database migrations', () => {
     migrate(db, { migrationsFolder });
 
     expect(() => {
-      sqlite.prepare(
-        "INSERT INTO transactions (account_id, date, processed_date, original_amount, original_currency, charged_amount, description, hash) VALUES (99999, '2026-01-01', '2026-01-01', -100, 'ILS', -100, 'test', 'hash1')"
-      ).run();
+      sqlite
+        .prepare(
+          "INSERT INTO transactions (account_id, date, processed_date, original_amount, original_currency, charged_amount, description, hash) VALUES (99999, '2026-01-01', '2026-01-01', -100, 'ILS', -100, 'test', 'hash1')",
+        )
+        .run();
     }).toThrow();
+
+    sqlite.close();
+  });
+
+  it('backfills existing transaction ownership from account members during household upgrade', () => {
+    const sqlite = new Database(':memory:');
+    sqlite.pragma('foreign_keys = ON');
+
+    const migrationTags = readdirSync(migrationsFolder)
+      .filter((file) => file.endsWith('.sql'))
+      .map((file) => file.replace(/\.sql$/, ''))
+      .sort();
+
+    for (const tag of migrationTags.filter((tag) => tag < '0020_household_ownership')) {
+      applyMigrationFile(sqlite, tag);
+    }
+
+    sqlite
+      .prepare(
+        "INSERT INTO accounts (company_id, display_name, credentials_ref) VALUES ('hapoalim', 'Main', 'cred-1')",
+      )
+      .run();
+    const accountId = sqlite.prepare('SELECT id FROM accounts').get() as { id: number };
+    sqlite
+      .prepare(
+        "INSERT INTO transactions (account_id, date, processed_date, original_amount, original_currency, charged_amount, description, hash) VALUES (?, '2026-01-01', '2026-01-01', -100, 'ILS', -100, 'test', 'hash1')",
+      )
+      .run(accountId.id);
+
+    applyMigrationFile(sqlite, '0020_household_ownership');
+
+    const tx = sqlite
+      .prepare(
+        'SELECT expense_owner_type, expense_owner_member_id, owner_source, owner_confidence FROM transactions',
+      )
+      .get() as {
+      expense_owner_type: string;
+      expense_owner_member_id: number | null;
+      owner_source: string;
+      owner_confidence: number | null;
+    };
+
+    expect(tx).toEqual({
+      expense_owner_type: 'member',
+      expense_owner_member_id: 1,
+      owner_source: 'account',
+      owner_confidence: 1,
+    });
 
     sqlite.close();
   });

@@ -44,8 +44,18 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
 
 // ─── Accounts ───
 
+export type OwnerType = 'member' | 'shared' | 'unassigned';
+
+export interface Member {
+  id: number;
+  name: string;
+  isActive: boolean;
+  createdAt: string;
+}
+
 export interface Account {
   id: number;
+  memberId: number | null;
   companyId: string;
   displayName: string;
   accountNumber: string | null;
@@ -67,6 +77,7 @@ export function getAccounts() {
 export function createAccount(data: {
   companyId: string;
   displayName: string;
+  memberId?: number;
   credentials: Record<string, string>;
 }) {
   return request<{ account: Account }>('/accounts', { method: 'POST', body: JSON.stringify(data) });
@@ -76,6 +87,7 @@ export function updateAccount(
   id: number,
   data: {
     displayName?: string;
+    memberId?: number;
     isActive?: boolean;
     manualLogin?: boolean;
     showBrowser?: boolean;
@@ -114,6 +126,11 @@ export interface Transaction {
   installmentNumber: number | null;
   installmentTotal: number | null;
   category: string | null;
+  expenseOwnerType: OwnerType;
+  expenseOwnerMemberId: number | null;
+  ownerSource: string;
+  ownerConfidence: number | null;
+  ownerReviewReason: string | null;
   ignored: boolean;
   needsReview: boolean;
   reviewReason: string | null;
@@ -140,6 +157,8 @@ export interface TransactionFilters {
   minAmount?: number;
   maxAmount?: number;
   search?: string;
+  ownerType?: OwnerType | 'all';
+  ownerMemberId?: number;
   offset?: number;
   limit?: number;
   sortBy?: string;
@@ -170,6 +189,16 @@ export function resolveTransaction(id: number, category: string) {
   });
 }
 
+export function updateTransactionOwner(
+  id: number,
+  data: { ownerType: OwnerType; ownerMemberId?: number | null },
+) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/owner`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
 export function getNeedsReviewCount() {
   return request<{ count: number }>('/transactions/needs-review/count');
 }
@@ -181,6 +210,9 @@ export interface SummaryItem {
   month?: string;
   accountId?: number;
   displayName?: string;
+  ownerType?: OwnerType;
+  ownerMemberId?: number | null;
+  memberName?: string | null;
   totalAmount: number;
   transactionCount: number;
 }
@@ -192,12 +224,14 @@ export interface CashflowItem {
 }
 
 export interface SummaryFilters {
-  groupBy?: 'category' | 'month' | 'account' | 'cashflow' | 'cashflow-detail';
+  groupBy?: 'category' | 'month' | 'account' | 'expense-owner' | 'cashflow' | 'cashflow-detail';
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
   startDate?: string;
   endDate?: string;
   expensesOnly?: boolean;
+  ownerType?: OwnerType | 'all';
+  ownerMemberId?: number;
 }
 
 export function getSummary(params: SummaryFilters = {}) {
@@ -320,6 +354,8 @@ export interface Category {
   label: string;
   color: string | null;
   rules: string | null;
+  defaultOwnerType: OwnerType;
+  defaultOwnerMemberId: number | null;
   ignoredFromStats: boolean;
   createdAt: string;
 }
@@ -333,6 +369,8 @@ export function createCategory(data: {
   label: string;
   color?: string;
   rules?: string;
+  defaultOwnerType?: OwnerType;
+  defaultOwnerMemberId?: number | null;
 }) {
   return request<{ category: Category }>('/categories', {
     method: 'POST',
@@ -342,7 +380,14 @@ export function createCategory(data: {
 
 export function updateCategory(
   id: number,
-  data: { label?: string; color?: string; rules?: string | null; ignoredFromStats?: boolean },
+  data: {
+    label?: string;
+    color?: string;
+    rules?: string | null;
+    defaultOwnerType?: OwnerType;
+    defaultOwnerMemberId?: number | null;
+    ignoredFromStats?: boolean;
+  },
 ) {
   return request<{ category: Category }>(`/categories/${id}`, {
     method: 'PATCH',
@@ -358,6 +403,87 @@ export function updateTransactionCategory(id: number, category: string | null) {
   return request<{ transaction: Transaction }>(`/transactions/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ category }),
+  });
+}
+
+// ─── Members & Ownership ───
+
+export function getMembers() {
+  return request<{ members: Member[] }>('/members');
+}
+
+export function createMember(data: { name: string }) {
+  return request<{ member: Member }>('/members', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateMember(id: number, data: { name?: string; isActive?: boolean }) {
+  return request<{ member: Member }>(`/members/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteMember(id: number) {
+  return request<{ member: Member }>(`/members/${id}`, { method: 'DELETE' });
+}
+
+export interface OwnershipRule {
+  id: number;
+  name: string;
+  priority: number;
+  enabled: boolean;
+  accountId: number | null;
+  accountMemberId: number | null;
+  categoryName: string | null;
+  descriptionContains: string | null;
+  minAmount: number | null;
+  maxAmount: number | null;
+  targetOwnerType: OwnerType;
+  targetOwnerMemberId: number | null;
+  createdAt: string;
+}
+
+export type OwnershipRuleInput = Omit<OwnershipRule, 'id' | 'createdAt'>;
+
+export function getOwnershipRules() {
+  return request<{ rules: OwnershipRule[] }>('/ownership/rules');
+}
+
+export function createOwnershipRule(data: OwnershipRuleInput) {
+  return request<{ rule: OwnershipRule }>('/ownership/rules', {
+    method: 'POST',
+    body: JSON.stringify(data),
+  });
+}
+
+export function updateOwnershipRule(id: number, data: Partial<OwnershipRuleInput>) {
+  return request<{ rule: OwnershipRule }>(`/ownership/rules/${id}`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function deleteOwnershipRule(id: number) {
+  return request<{ deleted: boolean }>(`/ownership/rules/${id}`, { method: 'DELETE' });
+}
+
+export function applyOwnershipRules(
+  params: {
+    startDate?: string;
+    endDate?: string;
+    force?: boolean;
+  } = {},
+) {
+  const query = new URLSearchParams();
+  Object.entries(params).forEach(([key, value]) => {
+    if (value !== undefined) query.set(key, String(value));
+  });
+  const qs = query.toString();
+  return request<{ updated: number }>(`/ownership/apply${qs ? `?${qs}` : ''}`, {
+    method: 'POST',
   });
 }
 

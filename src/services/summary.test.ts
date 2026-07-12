@@ -89,6 +89,28 @@ describe('summary service', () => {
       expect(bankA.totalAmount).toBe(-100);
     });
 
+    it('groups by expense owner', () => {
+      const account = insertAccount(testDb.db, { memberId: 1 });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -100,
+        expenseOwnerType: 'member',
+        expenseOwnerMemberId: 1,
+        ownerSource: 'account',
+      });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -200,
+        expenseOwnerType: 'shared',
+        expenseOwnerMemberId: null,
+        ownerSource: 'category',
+      });
+
+      const result = getSpendingSummary({}, 'expense-owner');
+      expect(result.groupBy).toBe('expense-owner');
+      const rows = result.summary as any[];
+      expect(rows.find((r) => r.ownerType === 'member')?.totalAmount).toBe(-100);
+      expect(rows.find((r) => r.ownerType === 'shared')?.totalAmount).toBe(-200);
+    });
+
     it('groups by cashflow showing income and expense', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, {
