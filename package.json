@@ -93,13 +93,12 @@
     }
   },
   "dependencies": {
+    "@earendil-works/pi-agent-core": "0.80.6",
+    "@earendil-works/pi-ai": "0.80.6",
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
-    "@mariozechner/pi-agent-core": "^0.57.1",
-    "@mariozechner/pi-ai": "^0.57.1",
     "@modelcontextprotocol/sdk": "^1.27.1",
     "@puppeteer/browsers": "^2.3.0",
-    "@sinclair/typebox": "^0.34.48",
     "better-sqlite3": "^12.6.2",
     "cron-parser": "^5.5.0",
     "dotenv": "^17.3.1",

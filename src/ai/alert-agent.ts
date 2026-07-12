@@ -1,5 +1,5 @@
-import { Agent } from '@mariozechner/pi-agent-core';
-import type { AgentEvent } from '@mariozechner/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
+import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import { resolveApiKey } from './auth.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
 import {

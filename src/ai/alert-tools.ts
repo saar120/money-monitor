@@ -1,4 +1,4 @@
-import { Type } from '@sinclair/typebox';
+import { Type } from '@earendil-works/pi-ai';
 import { createAgentTool } from './tool-adapter.js';
 import {
   updateAlertSettings,

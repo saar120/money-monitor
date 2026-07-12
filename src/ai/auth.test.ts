@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 // Mock pi-ai/oauth
 const mockGetOAuthApiKey = vi.fn();
-vi.mock('@mariozechner/pi-ai/oauth', () => ({
+vi.mock('@earendil-works/pi-ai/oauth', () => ({
   getOAuthApiKey: mockGetOAuthApiKey,
   loginAnthropic: vi.fn(),
   loginOpenAICodex: vi.fn(),
@@ -15,9 +15,10 @@ vi.mock('../paths.js', () => ({
 
 // Mock filesystem (prevent actual disk writes)
 const mockReadFileSync = vi.fn().mockReturnValue('{}');
+const mockWriteFileSync = vi.fn();
 vi.mock('node:fs', () => ({
   readFileSync: mockReadFileSync,
-  writeFileSync: vi.fn(),
+  writeFileSync: mockWriteFileSync,
   mkdirSync: vi.fn(),
 }));
 
@@ -34,7 +35,14 @@ vi.mock('../config.js', () => ({
 }));
 
 // Import after all mocks are set up
-const { resolveApiKey, PROVIDER_KEY_MAP, loadCredentials } = await import('./auth.js');
+const {
+  resolveApiKey,
+  PROVIDER_KEY_MAP,
+  loadCredentials,
+  completeOpenAICodexOAuth,
+  logoutOpenAICodexOAuth,
+  hasOpenAICodexOAuth,
+} = await import('./auth.js');
 
 function resetConfig() {
   Object.assign(mockConfig, {
@@ -66,6 +74,8 @@ describe('resolveApiKey', () => {
   beforeEach(() => {
     resetConfig();
     mockGetOAuthApiKey.mockReset();
+    mockReadFileSync.mockReturnValue('{}');
+    mockWriteFileSync.mockReset();
     loadCredentials(); // resets internal credentials to {}
   });
 
@@ -125,5 +135,60 @@ describe('resolveApiKey', () => {
     mockGetOAuthApiKey.mockResolvedValue(null);
     mockConfig.ANTHROPIC_API_KEY = '';
     expect(await resolveApiKey('anthropic')).toBeUndefined();
+  });
+});
+
+describe('OAuth logout', () => {
+  beforeEach(() => {
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({
+        anthropic: { refresh: 'anthropic-refresh' },
+        'openai-codex': { refresh: 'openai-refresh' },
+      }),
+    );
+    mockWriteFileSync.mockReset();
+    loadCredentials();
+  });
+
+  it('removes only the ChatGPT credentials and persists the change', () => {
+    expect(hasOpenAICodexOAuth()).toBe(true);
+
+    logoutOpenAICodexOAuth();
+
+    expect(hasOpenAICodexOAuth()).toBe(false);
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      '/tmp/test-auth/oauth-credentials.json',
+      JSON.stringify({ anthropic: { refresh: 'anthropic-refresh' } }, null, 2),
+      { mode: 0o600 },
+    );
+  });
+
+  it('is safe to call when already logged out', () => {
+    logoutOpenAICodexOAuth();
+    mockWriteFileSync.mockClear();
+
+    logoutOpenAICodexOAuth();
+
+    expect(mockWriteFileSync).not.toHaveBeenCalled();
+  });
+});
+
+describe('OAuth completion', () => {
+  it('succeeds when the browser callback already stored ChatGPT credentials', async () => {
+    mockReadFileSync.mockReturnValue(
+      JSON.stringify({ 'openai-codex': { refresh: 'openai-refresh' } }),
+    );
+    loadCredentials();
+
+    await expect(completeOpenAICodexOAuth('already-consumed-code')).resolves.toBeUndefined();
+  });
+
+  it('still rejects when there is no active flow or stored credential', async () => {
+    mockReadFileSync.mockReturnValue('{}');
+    loadCredentials();
+
+    await expect(completeOpenAICodexOAuth('orphaned-code')).rejects.toThrow(
+      'No OAuth flow in progress',
+    );
   });
 });

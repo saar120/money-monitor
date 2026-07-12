@@ -1,5 +1,5 @@
 import { Bot, InputFile, type Context } from 'grammy';
-import type { ImageContent } from '@mariozechner/pi-ai';
+import type { ImageContent } from '@earendil-works/pi-ai';
 import { config } from '../config.js';
 import { drainPendingImages } from '../ai/image-tools.js';
 import { chat } from '../ai/agent.js';

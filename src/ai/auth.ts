@@ -1,7 +1,7 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loginAnthropic, loginOpenAICodex, getOAuthApiKey } from '@mariozechner/pi-ai/oauth';
-import type { OAuthCredentials } from '@mariozechner/pi-ai/oauth';
+import { loginAnthropic, loginOpenAICodex, getOAuthApiKey } from '@earendil-works/pi-ai/oauth';
+import type { OAuthCredentials } from '@earendil-works/pi-ai/oauth';
 import { dataDir } from '../paths.js';
 import { config, type Config } from '../config.js';
 
@@ -43,6 +43,7 @@ export interface OAuthFlow {
   start(): Promise<string>;
   complete(code: string): Promise<void>;
   cancel(): void;
+  logout(): void;
   hasOAuth(): boolean;
 }
 
@@ -80,6 +81,9 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
 
   async function complete(code: string): Promise<void> {
     if (!pendingResolve) {
+      // OpenAI Codex can finish through its localhost callback before the UI
+      // submits the manually pasted code. Treat that successful race as done.
+      if (hasOAuth()) return;
       throw new Error('No OAuth flow in progress');
     }
     pendingResolve(code);
@@ -101,13 +105,23 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
     return !!credentials[providerKey]?.refresh;
   }
 
-  return { start, complete, cancel, hasOAuth };
+  function logout(): void {
+    if (!(providerKey in credentials)) return;
+    delete credentials[providerKey];
+    saveCredentials();
+  }
+
+  return { start, complete, cancel, logout, hasOAuth };
 }
 
 // ── Provider flows ─────────────────────────────────────────────────────────
 
 const anthropicFlow = createOAuthFlow('anthropic', (onUrl, getCode) =>
-  loginAnthropic(onUrl, getCode),
+  loginAnthropic({
+    onAuth: (info) => onUrl(info.url),
+    onPrompt: getCode,
+    onManualCodeInput: getCode,
+  }),
 );
 
 const openaiCodexFlow = createOAuthFlow('openai-codex', (onUrl, getCode) =>
@@ -121,11 +135,13 @@ const openaiCodexFlow = createOAuthFlow('openai-codex', (onUrl, getCode) =>
 export const startAnthropicOAuth = anthropicFlow.start;
 export const completeAnthropicOAuth = anthropicFlow.complete;
 export const cancelAnthropicOAuth = anthropicFlow.cancel;
+export const logoutAnthropicOAuth = anthropicFlow.logout;
 export const hasAnthropicOAuth = anthropicFlow.hasOAuth;
 
 export const startOpenAICodexOAuth = openaiCodexFlow.start;
 export const completeOpenAICodexOAuth = openaiCodexFlow.complete;
 export const cancelOpenAICodexOAuth = openaiCodexFlow.cancel;
+export const logoutOpenAICodexOAuth = openaiCodexFlow.logout;
 export const hasOpenAICodexOAuth = openaiCodexFlow.hasOAuth;
 
 /** Maps provider IDs to their config API key field names. */

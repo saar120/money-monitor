@@ -115,6 +115,8 @@ describe('settings routes', () => {
       const codex = providers.find((p: any) => p.id === 'openai-codex');
       expect(codex.authTypes).toEqual(['oauth']);
       expect(codex.apiKeyField).toBe('OPENAI_API_KEY');
+      expect(codex.models.map((model: { id: string }) => model.id)).toContain('gpt-5.4');
+      expect(codex.models.map((model: { id: string }) => model.id)).not.toContain('gpt-5.3-codex');
 
       // Other providers support API key only
       for (const id of ['openai', 'google', 'openrouter']) {
@@ -170,6 +172,32 @@ describe('settings routes', () => {
       expect(res.statusCode).toBe(400);
       const body = JSON.parse(res.body);
       expect(body.error).toContain('Electron mode');
+    });
+  });
+
+  describe('POST /api/settings/oauth/openai-codex/logout', () => {
+    it('logs out successfully even when no ChatGPT credentials are stored', async () => {
+      const res = await server.inject({
+        method: 'POST',
+        url: '/api/settings/oauth/openai-codex/logout',
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(JSON.parse(res.body)).toEqual({ success: true });
+    });
+  });
+
+  describe('GET /api/settings/oauth/openai-codex/status', () => {
+    it('reports whether ChatGPT credentials are connected', async () => {
+      const res = await server.inject({
+        method: 'GET',
+        url: '/api/settings/oauth/openai-codex/status',
+        headers: authHeaders(),
+      });
+
+      expect(res.statusCode).toBe(200);
+      expect(typeof JSON.parse(res.body).connected).toBe('boolean');
     });
   });
 });

@@ -1,6 +1,6 @@
 import type { FastifyInstance } from 'fastify';
-import { getModels } from '@mariozechner/pi-ai';
-import type { KnownProvider } from '@mariozechner/pi-ai';
+import { getModels } from '@earendil-works/pi-ai/compat';
+import type { KnownProvider } from '@earendil-works/pi-ai';
 import {
   config,
   isElectronMode,
@@ -15,10 +15,12 @@ import {
   startAnthropicOAuth,
   completeAnthropicOAuth,
   cancelAnthropicOAuth,
+  logoutAnthropicOAuth,
   hasOpenAICodexOAuth,
   startOpenAICodexOAuth,
   completeOpenAICodexOAuth,
   cancelOpenAICodexOAuth,
+  logoutOpenAICodexOAuth,
   PROVIDER_KEY_MAP,
 } from '../ai/auth.js';
 import { isDemoMode } from '../db/connection.js';
@@ -181,18 +183,29 @@ export async function settingsRoutes(app: FastifyInstance) {
       flow.cancel();
       return reply.send({ success: true });
     });
+
+    app.post(`/api/settings/oauth/${provider}/logout`, async (_request, reply) => {
+      flow.logout();
+      return reply.send({ success: true });
+    });
+
+    app.get(`/api/settings/oauth/${provider}/status`, async (_request, reply) => {
+      return reply.send({ connected: flow.hasOAuth() });
+    });
   }
 
   registerOAuthRoutes('anthropic', {
     start: startAnthropicOAuth,
     complete: completeAnthropicOAuth,
     cancel: cancelAnthropicOAuth,
+    logout: logoutAnthropicOAuth,
     hasOAuth: hasAnthropicOAuth,
   });
   registerOAuthRoutes('openai-codex', {
     start: startOpenAICodexOAuth,
     complete: completeOpenAICodexOAuth,
     cancel: cancelOpenAICodexOAuth,
+    logout: logoutOpenAICodexOAuth,
     hasOAuth: hasOpenAICodexOAuth,
   });
 

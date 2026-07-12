@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox';
-import { StringEnum } from '@mariozechner/pi-ai';
+import { Type } from '@earendil-works/pi-ai';
+import { StringEnum } from '@earendil-works/pi-ai';
 import { createAgentTool } from './tool-adapter.js';
 import { renderHtmlToImage, screenshotDashboard } from '../services/html-to-image.js';
 import {

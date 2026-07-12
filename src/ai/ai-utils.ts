@@ -1,6 +1,6 @@
-import { getModel } from '@mariozechner/pi-ai';
-import type { AssistantMessage } from '@mariozechner/pi-ai';
-import type { AgentMessage } from '@mariozechner/pi-agent-core';
+import { getModel } from '@earendil-works/pi-ai/compat';
+import type { AssistantMessage } from '@earendil-works/pi-ai';
+import type { AgentMessage } from '@earendil-works/pi-agent-core';
 import { parseModelSpec, getAIModelSpec } from '../config.js';
 
 /** Extract text from the last assistant message in a list. */

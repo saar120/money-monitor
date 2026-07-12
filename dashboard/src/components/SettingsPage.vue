@@ -219,6 +219,7 @@ const { oauthStep, oauthCode, oauthError, startOAuth, submitOAuthCode, cancelOAu
 );
 
 const openaiCodexOAuthConnected = computed(() => data.value?.oauth?.['openai-codex'] ?? false);
+const loggingOutOpenai = ref(false);
 const {
   oauthStep: openaiOAuthStep,
   oauthCode: openaiOAuthCode,
@@ -231,6 +232,19 @@ const {
     if (data.value) data.value.oauth['openai-codex'] = true;
   },
 });
+
+async function logoutOpenaiOAuth() {
+  loggingOutOpenai.value = true;
+  error.value = '';
+  try {
+    await openaiCodexOAuth.logout();
+    if (data.value) data.value.oauth['openai-codex'] = false;
+  } catch (e) {
+    error.value = e instanceof Error ? e.message : 'Failed to log out of ChatGPT';
+  } finally {
+    loggingOutOpenai.value = false;
+  }
+}
 
 // ── Save ─────────────────────────────────────────────────────────────────────
 
@@ -466,12 +480,20 @@ async function save() {
           <!-- OpenAI Codex (ChatGPT subscription) OAuth section -->
           <template v-if="form.AI_PROVIDER === 'openai-codex'">
             <SettingsRow vertical>
-              <div
-                v-if="openaiCodexOAuthConnected && openaiOAuthStep === 'idle'"
-                class="flex items-center gap-2 text-[13px]"
-              >
-                <CheckCircle class="h-4 w-4 text-green-500" />
-                <span class="text-text-secondary">ChatGPT subscription connected</span>
+              <div v-if="openaiCodexOAuthConnected && openaiOAuthStep === 'idle'" class="space-y-2">
+                <div class="flex items-center gap-2 text-[13px]">
+                  <CheckCircle class="h-4 w-4 text-green-500" />
+                  <span class="text-text-secondary">ChatGPT subscription connected</span>
+                </div>
+                <Button
+                  variant="secondary"
+                  size="sm"
+                  class="w-full"
+                  :disabled="loggingOutOpenai"
+                  @click="logoutOpenaiOAuth"
+                >
+                  {{ loggingOutOpenai ? 'Logging out...' : 'Log out of ChatGPT' }}
+                </Button>
               </div>
 
               <div v-else-if="openaiOAuthStep === 'idle'" class="space-y-1.5">
