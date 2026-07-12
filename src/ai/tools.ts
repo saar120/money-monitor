@@ -1,5 +1,5 @@
-import { Type } from '@sinclair/typebox';
-import { StringEnum } from '@mariozechner/pi-ai';
+import { Type } from '@earendil-works/pi-ai';
+import { StringEnum } from '@earendil-works/pi-ai';
 import { sql, eq, desc } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, members, transactions, scrapeSessions, scrapeLogs } from '../db/schema.js';

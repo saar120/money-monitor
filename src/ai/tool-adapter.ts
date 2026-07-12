@@ -1,5 +1,5 @@
-import type { TSchema, Static } from '@sinclair/typebox';
-import type { AgentTool, AgentToolResult } from '@mariozechner/pi-agent-core';
+import type { TSchema, Static } from '@earendil-works/pi-ai';
+import type { AgentTool } from '@earendil-works/pi-agent-core';
 
 /**
  * Create a Pi AgentTool from simple arguments.

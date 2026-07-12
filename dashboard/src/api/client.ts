@@ -985,6 +985,8 @@ export interface OAuthClient {
   start(): Promise<{ url: string }>;
   complete(code: string): Promise<{ success: boolean }>;
   cancel(): Promise<{ success: boolean }>;
+  logout(): Promise<{ success: boolean }>;
+  status(): Promise<{ connected: boolean }>;
 }
 
 function createOAuthClient(provider: string): OAuthClient {
@@ -997,6 +999,9 @@ function createOAuthClient(provider: string): OAuthClient {
       }),
     cancel: () =>
       request<{ success: boolean }>(`/settings/oauth/${provider}/cancel`, { method: 'POST' }),
+    logout: () =>
+      request<{ success: boolean }>(`/settings/oauth/${provider}/logout`, { method: 'POST' }),
+    status: () => request<{ connected: boolean }>(`/settings/oauth/${provider}/status`),
   };
 }
 

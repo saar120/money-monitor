@@ -5,7 +5,7 @@ const mockPrompt = vi.fn();
 const mockSubscribe = vi.fn();
 const mockAbort = vi.fn();
 
-vi.mock('@mariozechner/pi-agent-core', () => {
+vi.mock('@earendil-works/pi-agent-core', () => {
   return {
     Agent: class MockAgent {
       prompt = mockPrompt;
@@ -16,7 +16,7 @@ vi.mock('@mariozechner/pi-agent-core', () => {
   };
 });
 
-vi.mock('@mariozechner/pi-ai', () => ({
+vi.mock('@earendil-works/pi-ai', () => ({
   getModel: vi.fn().mockReturnValue({}),
 }));
 

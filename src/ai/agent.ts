@@ -1,7 +1,7 @@
-import { Agent } from '@mariozechner/pi-agent-core';
-import { completeSimple } from '@mariozechner/pi-ai';
-import type { AssistantMessage, UserMessage, Message, ImageContent } from '@mariozechner/pi-ai';
-import type { AgentMessage, AgentEvent } from '@mariozechner/pi-agent-core';
+import { Agent } from '@earendil-works/pi-agent-core';
+import { completeSimple } from '@earendil-works/pi-ai/compat';
+import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
+import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
 import { config, getBatchModelSpec } from '../config.js';
 import { applyOwnership } from '../services/ownership.js';
@@ -307,7 +307,7 @@ export async function* chat(
   // Load conversation history as proper multi-turn messages
   const priorMessages = convertHistoryToMessages(conversationHistory.slice(0, -1));
   if (priorMessages.length > 0) {
-    agent.replaceMessages(priorMessages as AgentMessage[]);
+    agent.state.messages = priorMessages as AgentMessage[];
   }
 
   const lastMsg = conversationHistory[conversationHistory.length - 1];
