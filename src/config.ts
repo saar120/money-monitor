@@ -8,6 +8,7 @@ import {
   decryptSecret,
   isEncrypted,
 } from './safe-storage.js';
+import { hardenOwnerOnlyFile } from './user-data-permissions.js';
 
 export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
 
@@ -81,9 +82,11 @@ export function saveConfigFile(settings: Record<string, string>): void {
   }
   const merged = { ...existing, ...toWrite };
   writeFileSync(configPath, JSON.stringify(merged, null, 2), { mode: 0o600 });
+  if (isElectronMode) hardenOwnerOnlyFile(configPath);
   _configFileExists = true;
   // Update process.env with plaintext values and re-parse config
   for (const [key, value] of Object.entries(settings)) {
+    if (!isKnownConfigEnvironmentKey(key)) continue;
     process.env[key] = String(value);
   }
   config = envSchema.parse(process.env);
@@ -130,6 +133,37 @@ const envSchema = z.object({
   MOBILE_PUBLIC_ID_KEY: z.string().min(32).optional(),
 });
 
+const CONFIG_ENVIRONMENT_KEYS = new Set(Object.keys(envSchema.shape));
+
+function isKnownConfigEnvironmentKey(key: string): boolean {
+  return CONFIG_ENVIRONMENT_KEYS.has(key);
+}
+
+/** Apply only schema-owned config fields; unknown fields remain untouched on disk. */
+export function applyConfigFileToEnvironment(
+  raw: Readonly<Record<string, string>>,
+  environment: NodeJS.ProcessEnv = process.env,
+): void {
+  for (const [key, value] of Object.entries(raw)) {
+    if (!isKnownConfigEnvironmentKey(key)) continue;
+    // Don't override env vars set by the Electron main process.
+    if (value == null || environment[key]) continue;
+    let plain = value;
+    if (SECRET_KEYS.has(key) && isEncrypted(value)) {
+      try {
+        plain = decryptSecret(value);
+      } catch (err) {
+        console.error(
+          `[Config] Failed to decrypt ${key}:`,
+          err instanceof Error ? err.message : err,
+        );
+        continue; // skip corrupted value
+      }
+    }
+    environment[key] = String(plain);
+  }
+}
+
 export type Config = z.infer<typeof envSchema>;
 export let config: Config;
 
@@ -143,23 +177,7 @@ if (!isElectronMode) {
   // Electron: load config.json into process.env (single disk read for both load and migration)
   const raw = loadRawConfigFile();
   if (raw) {
-    for (const [key, value] of Object.entries(raw)) {
-      // Don't override env vars set by the Electron main process
-      if (value == null || process.env[key]) continue;
-      let plain = value;
-      if (SECRET_KEYS.has(key) && isEncrypted(value)) {
-        try {
-          plain = decryptSecret(value);
-        } catch (err) {
-          console.error(
-            `[Config] Failed to decrypt ${key}:`,
-            err instanceof Error ? err.message : err,
-          );
-          continue; // skip corrupted value
-        }
-      }
-      process.env[key] = String(plain);
-    }
+    applyConfigFileToEnvironment(raw);
   }
   // Auto-generate CREDENTIALS_MASTER_KEY if not set (first launch)
   if (!process.env.CREDENTIALS_MASTER_KEY) {
