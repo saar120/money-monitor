@@ -10,18 +10,44 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            switch environment.connectionState {
-            case .connected:
-                MainTabView()
-            case .notConfigured, .connecting, .failed:
-                NavigationStack {
-                    ConnectMacView(scannerFactory: scannerFactory)
+            if environment.pairingState == .restoring {
+                RestoringConnectionView()
+            } else {
+                switch environment.connectionState {
+                case .connected:
+                    MainTabView()
+                case .notConfigured, .connecting, .failed:
+                    NavigationStack {
+                        ConnectMacView(scannerFactory: scannerFactory)
+                    }
                 }
             }
         }
         .task {
             await environment.restoreSavedConnection()
         }
+    }
+}
+
+private struct RestoringConnectionView: View {
+    var body: some View {
+        VStack(spacing: MoneyMonitorTheme.Spacing.medium) {
+            ProgressView()
+                .controlSize(.large)
+
+            Text("Checking saved connection…")
+                .font(.headline)
+
+            Text("Verifying secure access to your Mac.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+        }
+        .multilineTextAlignment(.center)
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("Checking saved connection")
+        .accessibilityIdentifier("restoring-saved-connection")
     }
 }
 

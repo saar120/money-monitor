@@ -329,6 +329,32 @@ private func pairingFlowCredential(
 struct AppEnvironmentTests {
     @MainActor
     @Test
+    func launchStartsRestoringThenEmptyKeychainShowsOnboarding() async throws {
+        let store = PairingFlowProfileStore()
+        let apiClient = PairingFlowAPIClient(behavior: .success(try pairingFlowBootstrap()))
+        let pairingClient = PairingFlowClient(
+            credential: try pairingFlowCredential(),
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+
+        #expect(environment.connectionState == .connecting)
+        #expect(environment.pairingState == .restoring)
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .idle)
+        #expect(await apiClient.bootstrapCalls() == 0)
+    }
+
+    @MainActor
+    @Test
     func acceptsAPathScopedTailscaleHTTPSBaseURL() async {
         let client = RecordingMobileAPIClient()
         let environment = AppEnvironment(apiClient: client)

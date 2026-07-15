@@ -183,7 +183,7 @@ Acceptance:
 ### P0-ARC-01 — Choose and document stable endpoint ownership
 
 Owner: Mac + backend architecture  
-Status: **In progress**  
+Status: **Done**  
 Priority: Must  
 Dependencies: P0-PRD-01
 
@@ -198,14 +198,14 @@ How:
 Acceptance:
 
 - [x] Stable public-to-Tailnet URL ownership and cleanup behavior are unambiguous.
-- [ ] Two Mac restarts with different Fastify ports remain addressable through the same private URL.
+- [x] Two Mac restarts with different Fastify ports remain addressable through the same private URL.
 - [x] Missing/logged-out Tailscale does not prevent the desktop app from launching.
 - [x] Disabling Mobile Access removes only Money Monitor-owned exposure.
 
 ### P0-MAC-01 — Implement Tailscale Serve/mobile-gateway coordinator
 
 Owner: Mac/Electron  
-Status: **In progress**  
+Status: **Done**  
 Priority: Must  
 Dependencies: P0-ARC-01
 
@@ -223,7 +223,7 @@ How:
 
 Acceptance:
 
-- [ ] Stable HTTPS route reaches the current random port across repeated restarts.
+- [x] Stable HTTPS route reaches the current random port across repeated restarts.
 - [x] Fastify still listens only on loopback.
 - [x] Unrelated Serve configuration is preserved byte-for-byte or semantically unchanged.
 - [x] Desktop-only users see no startup regression.
@@ -459,7 +459,7 @@ Acceptance:
 
 - [x] Fresh physical iPhone pairs with a packaged Mac on the same Tailnet.
 - [ ] Pairing remains valid after both devices and apps restart.
-- [ ] Mac backend port changes while the stable private URL still works.
+- [x] Mac backend port changes while the stable private URL still works.
 - [ ] A LAN-only client cannot reach Fastify.
 - [ ] Revoked phone cannot call bootstrap; desktop routes reject its token.
 - [ ] Logs, database/config files, and iOS container pass token/credential/full-account-number scans.

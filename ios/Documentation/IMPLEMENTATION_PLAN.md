@@ -20,14 +20,14 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 - Manual HTTPS address field and typed `GET /api/mobile/v1/health` smoke client.
 - Semantic design tokens and placeholder feature states.
 
-### Mac mobile bridge — In progress
+### Mac mobile bridge — Acceptance in progress
 
-- Publish an isolated loopback mobile server through a stable private Tailscale HTTPS route. **Implemented; live Tailnet acceptance pending.**
+- Publish an isolated loopback mobile server through a stable private Tailscale HTTPS route. **Implemented and verified across two packaged-app cold restarts with distinct random ports.**
 - Add QR pairing, claimant-bound status/exchange, device approval, rotation, and revocation. **Production routes, Mac controls, single-mint retry hardening, and trusted same-device re-pair rotation are implemented.**
 - Issue a `mobile.read` token instead of the full desktop bearer token. **Digest-only registry, restart persistence, capability enforcement, and revocation are implemented.**
 - Add `/api/mobile/v1/bootstrap` with masked, stable DTOs. **Production service ports and adapter are implemented with opaque IDs, charged currency, Jerusalem finance dates, future-row filtering, and safe partials.**
 - Add shared server/Swift fixtures and compatibility tests. **Bootstrap and pairing fixtures are shared, the generated Draft 2020-12 bootstrap schema is drift-checked, and the updated Xcode simulator suite passes with every fixture.**
-- Package and sign the Mac physical harness. **Ready at `dist/mac-arm64/Money Monitor.app`; physical iPhone acceptance remains.**
+- Package and sign the Mac physical harness. **Ready at `dist/mac-arm64/Money Monitor.app`; fresh physical pairing and iOS app cold-launch persistence passed.**
 
 **Exit criteria:** a physical iPhone can pair, store the device token in Keychain, call health and bootstrap, and remain paired across a Mac app restart without exposing Fastify to the LAN.
 
@@ -106,10 +106,12 @@ Screens: Advisor home and conversation.
 
 ## First development tickets
 
-1. Restart both apps and verify the existing Keychain pairing reconnects through the stable Tailnet URL without scanning another QR.
-2. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
-3. Repeat with a new random backend port and both apps restarted; verify the stable URL and Keychain credential persist.
+1. Install the launch-state update, reboot and unlock the physical iPhone, then verify it opens the authenticated shell through the saved Keychain pairing without another QR scan.
+2. Verify a LAN-only client cannot reach either loopback Fastify listener.
+3. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
 4. Revoke the phone and run the final token/credential/account-number evidence scan.
+
+The stable transport restart gate is complete: two packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy.
 
 The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are already complete; see the detailed Phase 0 status for their evidence.
 
