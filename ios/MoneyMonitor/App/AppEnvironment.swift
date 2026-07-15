@@ -2,8 +2,8 @@ import Foundation
 
 @MainActor
 final class AppEnvironment: ObservableObject {
-    @Published private(set) var connectionState: ConnectionState = .notConfigured
-    @Published private(set) var pairingState: PairingFlowState = .idle
+    @Published private(set) var connectionState: ConnectionState = .connecting
+    @Published private(set) var pairingState: PairingFlowState = .restoring
     @Published private(set) var serverURL: URL?
     @Published private(set) var latestBootstrap: BootstrapSuccessEnvelope?
 
