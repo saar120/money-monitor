@@ -36,6 +36,7 @@ vi.mock('../config.js', () => ({
 }));
 
 vi.mock('../paths.js', () => ({
+  usesElectronUserData: false,
   dataDir: '/tmp/test-money-monitor',
   dbPath: ':memory:',
   credentialsPath: '/tmp/test-money-monitor/credentials.enc',
