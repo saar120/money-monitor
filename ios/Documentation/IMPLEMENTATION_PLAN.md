@@ -106,12 +106,12 @@ Screens: Advisor home and conversation.
 
 ## First development tickets
 
-1. Install the launch-state update, reboot and unlock the physical iPhone, then verify it opens the authenticated shell through the saved Keychain pairing without another QR scan.
+1. Unlock and cold-launch the installed launch-state update, then reboot/unlock/open the physical iPhone and verify it reaches the authenticated shell through the saved Keychain pairing without another QR scan.
 2. Verify a LAN-only client cannot reach either loopback Fastify listener.
 3. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
 4. Revoke the phone and run the final token/credential/account-number evidence scan.
 
-The stable transport restart gate is complete: two packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy.
+The stable transport restart gate is complete: repeated packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
 
 The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are already complete; see the detailed Phase 0 status for their evidence.
 
