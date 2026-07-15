@@ -20,6 +20,7 @@ import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
 import { applyOwnership } from '../services/ownership.js';
 import { ensureChromium } from './chromium.js';
+import { resolveChargedCurrency } from './transaction-currency.js';
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
@@ -40,6 +41,7 @@ function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransact
     originalAmount: txn.originalAmount,
     originalCurrency: txn.originalCurrency,
     chargedAmount: txn.chargedAmount,
+    chargedCurrency: resolveChargedCurrency(txn),
     description: txn.description,
     memo: txn.memo ?? null,
     type: txn.type,

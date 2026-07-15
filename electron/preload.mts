@@ -1,5 +1,21 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+function isTrustedDocument(): boolean {
+  const trustedOrigin = process.env.MM_RENDERER_ORIGIN;
+  if (!trustedOrigin) return false;
+
+  try {
+    const current = new URL(window.location.href);
+    return (
+      current.origin === trustedOrigin &&
+      current.username.length === 0 &&
+      current.password.length === 0
+    );
+  } catch {
+    return false;
+  }
+}
+
 // Add the 'electron' and platform classes once the DOM is available.
 // document.documentElement is null when preload runs before page load.
 document.addEventListener('DOMContentLoaded', () => {
@@ -27,14 +43,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
 contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => process.env.MM_APP_VERSION ?? 'unknown',
-  getAuthToken: () => process.env.API_TOKEN ?? '',
-  getDataPath: () => process.env.MONEY_MONITOR_DATA_DIR ?? '',
+  getAuthToken: () => (isTrustedDocument() ? (process.env.API_TOKEN ?? '') : ''),
+  getDataPath: () => (isTrustedDocument() ? (process.env.MONEY_MONITOR_DATA_DIR ?? '') : ''),
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('auto-update:check'),
   installUpdate: () => ipcRenderer.invoke('auto-update:install'),
   getAutoUpdateEnabled: () => ipcRenderer.invoke('auto-update:get-enabled'),
   setAutoUpdateEnabled: (enabled: boolean) =>
     ipcRenderer.invoke('auto-update:set-enabled', enabled),
+  // Mobile Access — every payload is sanitized in the main-process control
+  // surface before crossing this boundary.
+  getMobileAccessState: () => ipcRenderer.invoke('mobile-access:get-state'),
+  setMobileAccessEnabled: (enabled: boolean) =>
+    ipcRenderer.invoke('mobile-access:set-enabled', enabled),
+  retryMobileAccess: () => ipcRenderer.invoke('mobile-access:retry'),
+  createMobilePairing: (replacementDeviceId?: string) =>
+    ipcRenderer.invoke('mobile-access:create-pairing', replacementDeviceId),
+  approveMobilePairing: (pairingId: string) =>
+    ipcRenderer.invoke('mobile-access:approve-pairing', pairingId),
+  rejectMobilePairing: (pairingId: string) =>
+    ipcRenderer.invoke('mobile-access:reject-pairing', pairingId),
+  revokeMobileDevice: (deviceId: string) =>
+    ipcRenderer.invoke('mobile-access:revoke-device', deviceId),
   onUpdateStatus: (
     callback: (status: {
       status: string;

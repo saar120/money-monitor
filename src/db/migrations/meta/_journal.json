@@ -155,6 +155,20 @@
       "when": 1787825036110,
       "tag": "0021_robust_gideon",
       "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1787825036111,
+      "tag": "0022_mobile_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1787825036112,
+      "tag": "0023_charged_currency",
+      "breakpoints": true
     }
   ]
 }
