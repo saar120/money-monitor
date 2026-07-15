@@ -5,7 +5,8 @@ import * as schema from './schema.js';
 import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
-import { dbPath, demoDbPath } from '../paths.js';
+import { dbPath, demoDbPath, usesElectronUserData } from '../paths.js';
+import { hardenOwnerOnlySqliteFiles } from '../user-data-permissions.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, 'migrations');
@@ -37,7 +38,9 @@ for (const file of sqlFiles) {
 // --- Real database (always initialized) ---
 
 const realSqlite: BetterSqlite3Database = new Database(dbPath);
+if (usesElectronUserData) hardenOwnerOnlySqliteFiles(dbPath);
 realSqlite.pragma('journal_mode = WAL');
+if (usesElectronUserData) hardenOwnerOnlySqliteFiles(dbPath);
 realSqlite.pragma('foreign_keys = ON');
 
 const realDb = drizzle(realSqlite, { schema });
@@ -46,6 +49,7 @@ migrate(realDb, { migrationsFolder });
 
 import { runBackfills } from './backfills.js';
 runBackfills(realDb, realSqlite);
+if (usesElectronUserData) hardenOwnerOnlySqliteFiles(dbPath);
 
 // --- Mutable exports (live bindings allow runtime swap) ---
 
@@ -66,12 +70,15 @@ export function swapToDemo(): void {
 
   const newSqlite = new Database(demoDbPath);
   try {
+    if (usesElectronUserData) hardenOwnerOnlySqliteFiles(demoDbPath);
     newSqlite.pragma('journal_mode = WAL');
+    if (usesElectronUserData) hardenOwnerOnlySqliteFiles(demoDbPath);
     newSqlite.pragma('foreign_keys = ON');
     const newDb = drizzle(newSqlite, { schema });
 
     migrate(newDb, { migrationsFolder });
     runBackfills(newDb, newSqlite);
+    if (usesElectronUserData) hardenOwnerOnlySqliteFiles(demoDbPath);
 
     // Only commit state after everything succeeds
     demoSqlite = newSqlite;
