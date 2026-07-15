@@ -1,0 +1,811 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 77;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		03482FAD2F16D425BD63A163 /* AdvisorView.swift in Sources */ = {isa = PBXBuildFile; fileRef = F716CCD8D4DB516D2E22B93B /* AdvisorView.swift */; };
+		04A80739371145D79C4C522C /* APIEndpointTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1212A043B7E830A01E98677F /* APIEndpointTests.swift */; };
+		0AC074756EE1AD6AB75C5732 /* SecureItemClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = F5805774225F7A81353A0B3E /* SecureItemClient.swift */; };
+		0ADA9EB2BD38D886157C900D /* PairingModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7DC40058FEF8F831775FA932 /* PairingModels.swift */; };
+		10F9E741918C945B84C76D62 /* RootView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 11FF430F6C71FBBABFA6555C /* RootView.swift */; };
+		17A0A42542AB6A9DE4867F34 /* MobileHTTPTransport.swift in Sources */ = {isa = PBXBuildFile; fileRef = 25FA27402293EAE7E2AC6704 /* MobileHTTPTransport.swift */; };
+		2199E0B49F97D3E77E6FEF96 /* ActivityView.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2A5171C80FA1D355A599451 /* ActivityView.swift */; };
+		2FA69E0656FADB6F82E49B81 /* MobilePairing in Resources */ = {isa = PBXBuildFile; fileRef = 3AFEA5FF4B4EAF7A7CE7E4E1 /* MobilePairing */; };
+		33D069B46618622CE650C256 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F7F996B9B0D3043E9A11BD /* PlanView.swift */; };
+		3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */; };
+		5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B14234E69D03441C0E0E38 /* ConnectMacView.swift */; };
+		5ABA35F8510FE4979480B507 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */; };
+		70ADCA9837EAB25246487FA5 /* PairingQRScannerStateTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = E0C2102EAFFDAA625639EE7F /* PairingQRScannerStateTests.swift */; };
+		70E4DC72183CA8EF3F28053E /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50ECA720B4C95421DA6E880F /* AppEnvironment.swift */; };
+		71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */; };
+		728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */; };
+		7D721163F0FBAC06B5BFAED5 /* PairingQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */; };
+		7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */; };
+		7F052AC076A2A6E5DF5B3C71 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */; };
+		81E5D60B265B5781CCBD6929 /* PairedMacCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */; };
+		8357C4C29A051F32CEB3829B /* MobileClientError.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1F729F0B394ACAE161346DC6 /* MobileClientError.swift */; };
+		93C17CB5ED96A4D5F58372AD /* KeychainPairedProfileStore.swift in Sources */ = {isa = PBXBuildFile; fileRef = 71BB21A8A060955889668C8E /* KeychainPairedProfileStore.swift */; };
+		95B00A93E6B5C1DB02C850D7 /* APIEndpoint.swift in Sources */ = {isa = PBXBuildFile; fileRef = 0FF2F2FACC1376743EC08E7D /* APIEndpoint.swift */; };
+		975CDFC9129407B1130FAF0E /* MobileRequestFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40D1B327F057265E1CB21C63 /* MobileRequestFactory.swift */; };
+		9A72FB63B1413D57C1B1B02B /* MoneyMonitorApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */; };
+		9B2A4E42DC2D101E4054A251 /* PairingQRScannerState.swift in Sources */ = {isa = PBXBuildFile; fileRef = C5A2A2AD72B86547C6F76FCD /* PairingQRScannerState.swift */; };
+		A1F1DF811E331549CF42A903 /* AppEnvironmentTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9134E698C17470BA8DEAFA33 /* AppEnvironmentTests.swift */; };
+		A70359B432A28E035454B98B /* MobilePairingClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = E2839141C81C9046022DDAE9 /* MobilePairingClient.swift */; };
+		AAA324AB2448F24574750F01 /* MoneyMonitorUITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = B323DAD803194452F179885B /* MoneyMonitorUITests.swift */; };
+		B805CBD77845982044E9FBC9 /* MobileAPIClient.swift in Sources */ = {isa = PBXBuildFile; fileRef = 40B580C813C8AA247459146E /* MobileAPIClient.swift */; };
+		BB2258A3D4A0493209270335 /* MoneyMonitorTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = F4666F1D7349ACE2B784877D /* MoneyMonitorTheme.swift */; };
+		CAE9237CAC7C7199AA1AA6CE /* HealthResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = D09F0DA76CF6F330EB5C2A86 /* HealthResponse.swift */; };
+		CB4312AFF291EE2E386CD2AF /* MobileAPIClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 3785A80B8904A2FC585452B1 /* MobileAPIClientTests.swift */; };
+		CF9A80999026F898CA3236EA /* PairingFlowState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 945AD5A7A62022BB42ED12C8 /* PairingFlowState.swift */; };
+		CFA05DEE75526E4E19FCA543 /* TransactionSearchView.swift in Sources */ = {isa = PBXBuildFile; fileRef = A839D76D2788A1EE7EB038F6 /* TransactionSearchView.swift */; };
+		D8EE52F1D00B4E3096634123 /* MobilePairingClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439850C5236B5B6CE83AEAE9 /* MobilePairingClientTests.swift */; };
+		DD61B8A2EABE199806670FE6 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 852898A30196C020329CC8CE /* HomeView.swift */; };
+		E41FE0F99AF810BDF84D351E /* MobileBootstrap in Resources */ = {isa = PBXBuildFile; fileRef = 943F75BB795B80837FB113A4 /* MobileBootstrap */; };
+		E5E227B2403728C7EB2D44FC /* PairingScannerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */; };
+		EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D8AAFD34E5B02A00BF45B40 /* FeaturePlaceholderView.swift */; };
+		F0AEE6F85CBB2BDBCFD2C863 /* ConnectionState.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FEC87727F45228DC194DB89 /* ConnectionState.swift */; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		89554BBD7D0E836E9753D7ED /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B9DE11FD7F2AB4BCEBBE5055 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B2A3C62BD8671BB8ABB944BE;
+			remoteInfo = MoneyMonitor;
+		};
+		9C832A6BB3D019C3A88A8468 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = B9DE11FD7F2AB4BCEBBE5055 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = B2A3C62BD8671BB8ABB944BE;
+			remoteInfo = MoneyMonitor;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXFileReference section */
+		0FF2F2FACC1376743EC08E7D /* APIEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEndpoint.swift; sourceTree = "<group>"; };
+		11FF430F6C71FBBABFA6555C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
+		1212A043B7E830A01E98677F /* APIEndpointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEndpointTests.swift; sourceTree = "<group>"; };
+		17B14234E69D03441C0E0E38 /* ConnectMacView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectMacView.swift; sourceTree = "<group>"; };
+		1F729F0B394ACAE161346DC6 /* MobileClientError.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileClientError.swift; sourceTree = "<group>"; };
+		25FA27402293EAE7E2AC6704 /* MobileHTTPTransport.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileHTTPTransport.swift; sourceTree = "<group>"; };
+		264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRCodeScannerView.swift; sourceTree = "<group>"; };
+		3785A80B8904A2FC585452B1 /* MobileAPIClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIClientTests.swift; sourceTree = "<group>"; };
+		3AFEA5FF4B4EAF7A7CE7E4E1 /* MobilePairing */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MobilePairing; path = Fixtures/MobilePairing; sourceTree = SOURCE_ROOT; };
+		40B580C813C8AA247459146E /* MobileAPIClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileAPIClient.swift; sourceTree = "<group>"; };
+		40D1B327F057265E1CB21C63 /* MobileRequestFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileRequestFactory.swift; sourceTree = "<group>"; };
+		439850C5236B5B6CE83AEAE9 /* MobilePairingClientTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePairingClientTests.swift; sourceTree = "<group>"; };
+		50ECA720B4C95421DA6E880F /* AppEnvironment.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironment.swift; sourceTree = "<group>"; };
+		55D395177E01503E00113D11 /* MoneyMonitorTests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneyMonitorTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		5FEC87727F45228DC194DB89 /* ConnectionState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectionState.swift; sourceTree = "<group>"; };
+		71BB21A8A060955889668C8E /* KeychainPairedProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStore.swift; sourceTree = "<group>"; };
+		72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorApp.swift; sourceTree = "<group>"; };
+		7DC40058FEF8F831775FA932 /* PairingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingModels.swift; sourceTree = "<group>"; };
+		852898A30196C020329CC8CE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
+		862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerViewFactory.swift; sourceTree = "<group>"; };
+		8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapResponse.swift; sourceTree = "<group>"; };
+		901101A9249EB4A1026E288D /* MoneyMonitorUITests.xctest */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.cfbundle; path = MoneyMonitorUITests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		9134E698C17470BA8DEAFA33 /* AppEnvironmentTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppEnvironmentTests.swift; sourceTree = "<group>"; };
+		943F75BB795B80837FB113A4 /* MobileBootstrap */ = {isa = PBXFileReference; lastKnownFileType = folder; name = MobileBootstrap; path = Fixtures/MobileBootstrap; sourceTree = SOURCE_ROOT; };
+		945AD5A7A62022BB42ED12C8 /* PairingFlowState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingFlowState.swift; sourceTree = "<group>"; };
+		94F7F996B9B0D3043E9A11BD /* PlanView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PlanView.swift; sourceTree = "<group>"; };
+		9D8AAFD34E5B02A00BF45B40 /* FeaturePlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePlaceholderView.swift; sourceTree = "<group>"; };
+		A839D76D2788A1EE7EB038F6 /* TransactionSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSearchView.swift; sourceTree = "<group>"; };
+		ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
+		B323DAD803194452F179885B /* MoneyMonitorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorUITests.swift; sourceTree = "<group>"; };
+		BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedMacCredential.swift; sourceTree = "<group>"; };
+		BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStoreTests.swift; sourceTree = "<group>"; };
+		C5A2A2AD72B86547C6F76FCD /* PairingQRScannerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerState.swift; sourceTree = "<group>"; };
+		D09F0DA76CF6F330EB5C2A86 /* HealthResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthResponse.swift; sourceTree = "<group>"; };
+		D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoneyMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapPayloadDecoder.swift; sourceTree = "<group>"; };
+		DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		E0C2102EAFFDAA625639EE7F /* PairingQRScannerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerStateTests.swift; sourceTree = "<group>"; };
+		E2839141C81C9046022DDAE9 /* MobilePairingClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobilePairingClient.swift; sourceTree = "<group>"; };
+		E2A5171C80FA1D355A599451 /* ActivityView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityView.swift; sourceTree = "<group>"; };
+		F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapResponseTests.swift; sourceTree = "<group>"; };
+		F4666F1D7349ACE2B784877D /* MoneyMonitorTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorTheme.swift; sourceTree = "<group>"; };
+		F5805774225F7A81353A0B3E /* SecureItemClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureItemClient.swift; sourceTree = "<group>"; };
+		F716CCD8D4DB516D2E22B93B /* AdvisorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisorView.swift; sourceTree = "<group>"; };
+/* End PBXFileReference section */
+
+/* Begin PBXGroup section */
+		00C5FE381BDEC5DD2CCEF5EB /* Onboarding */ = {
+			isa = PBXGroup;
+			children = (
+				17B14234E69D03441C0E0E38 /* ConnectMacView.swift */,
+				862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */,
+			);
+			path = Onboarding;
+			sourceTree = "<group>";
+		};
+		03BAD1C343E708C4EE6D42AF /* Activity */ = {
+			isa = PBXGroup;
+			children = (
+				E2A5171C80FA1D355A599451 /* ActivityView.swift */,
+				A839D76D2788A1EE7EB038F6 /* TransactionSearchView.swift */,
+			);
+			path = Activity;
+			sourceTree = "<group>";
+		};
+		12AFB8A19A646729E3CC0A3E /* Camera */ = {
+			isa = PBXGroup;
+			children = (
+				C5A2A2AD72B86547C6F76FCD /* PairingQRScannerState.swift */,
+			);
+			path = Camera;
+			sourceTree = "<group>";
+		};
+		3440811E36E88D2E9497AE32 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */,
+				8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */,
+				5FEC87727F45228DC194DB89 /* ConnectionState.swift */,
+				D09F0DA76CF6F330EB5C2A86 /* HealthResponse.swift */,
+				BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */,
+				945AD5A7A62022BB42ED12C8 /* PairingFlowState.swift */,
+				7DC40058FEF8F831775FA932 /* PairingModels.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		4051EA592F34FF8602562498 /* Resources */ = {
+			isa = PBXGroup;
+			children = (
+				DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */,
+			);
+			path = Resources;
+			sourceTree = "<group>";
+		};
+		4D61D0612612261250AB9903 /* Core */ = {
+			isa = PBXGroup;
+			children = (
+				12AFB8A19A646729E3CC0A3E /* Camera */,
+				CEBBD0C11B02B0D2B41CD5AD /* DesignSystem */,
+				3440811E36E88D2E9497AE32 /* Models */,
+				7E1628BD80D06B08031CA1B6 /* Networking */,
+				E8202634C12430CD01B4C2D5 /* Security */,
+			);
+			path = Core;
+			sourceTree = "<group>";
+		};
+		5E8DCBA9B6973F747D9A6AED /* Components */ = {
+			isa = PBXGroup;
+			children = (
+				9D8AAFD34E5B02A00BF45B40 /* FeaturePlaceholderView.swift */,
+				264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */,
+			);
+			path = Components;
+			sourceTree = "<group>";
+		};
+		7E1628BD80D06B08031CA1B6 /* Networking */ = {
+			isa = PBXGroup;
+			children = (
+				0FF2F2FACC1376743EC08E7D /* APIEndpoint.swift */,
+				40B580C813C8AA247459146E /* MobileAPIClient.swift */,
+				1F729F0B394ACAE161346DC6 /* MobileClientError.swift */,
+				25FA27402293EAE7E2AC6704 /* MobileHTTPTransport.swift */,
+				E2839141C81C9046022DDAE9 /* MobilePairingClient.swift */,
+				40D1B327F057265E1CB21C63 /* MobileRequestFactory.swift */,
+			);
+			path = Networking;
+			sourceTree = "<group>";
+		};
+		82AAFE15DFD3F881BCFD14D7 /* MoneyMonitor */ = {
+			isa = PBXGroup;
+			children = (
+				AA9315EBE6300B8555FF013B /* App */,
+				4D61D0612612261250AB9903 /* Core */,
+				CE086B4784053E1A04F22599 /* Features */,
+				4051EA592F34FF8602562498 /* Resources */,
+				9268084DA539C83762AAF3E3 /* Shared */,
+			);
+			path = MoneyMonitor;
+			sourceTree = "<group>";
+		};
+		9268084DA539C83762AAF3E3 /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				5E8DCBA9B6973F747D9A6AED /* Components */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		9BAAF6A5CD3BE8D43A72CF21 /* MoneyMonitorTests */ = {
+			isa = PBXGroup;
+			children = (
+				1212A043B7E830A01E98677F /* APIEndpointTests.swift */,
+				9134E698C17470BA8DEAFA33 /* AppEnvironmentTests.swift */,
+				F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */,
+				BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */,
+				3785A80B8904A2FC585452B1 /* MobileAPIClientTests.swift */,
+				439850C5236B5B6CE83AEAE9 /* MobilePairingClientTests.swift */,
+				E0C2102EAFFDAA625639EE7F /* PairingQRScannerStateTests.swift */,
+			);
+			path = MoneyMonitorTests;
+			sourceTree = "<group>";
+		};
+		AA9315EBE6300B8555FF013B /* App */ = {
+			isa = PBXGroup;
+			children = (
+				50ECA720B4C95421DA6E880F /* AppEnvironment.swift */,
+				ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */,
+				72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */,
+				11FF430F6C71FBBABFA6555C /* RootView.swift */,
+			);
+			path = App;
+			sourceTree = "<group>";
+		};
+		B1C00A6E67AE6F97C8A6D50B /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */,
+				55D395177E01503E00113D11 /* MoneyMonitorTests.xctest */,
+				901101A9249EB4A1026E288D /* MoneyMonitorUITests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		C124AFD0D8D546A0914496EB /* Home */ = {
+			isa = PBXGroup;
+			children = (
+				852898A30196C020329CC8CE /* HomeView.swift */,
+			);
+			path = Home;
+			sourceTree = "<group>";
+		};
+		CB5142E60385ED0E4007B181 /* MoneyMonitorUITests */ = {
+			isa = PBXGroup;
+			children = (
+				B323DAD803194452F179885B /* MoneyMonitorUITests.swift */,
+			);
+			path = MoneyMonitorUITests;
+			sourceTree = "<group>";
+		};
+		CC254359CA72EC541F43434D /* Plan */ = {
+			isa = PBXGroup;
+			children = (
+				94F7F996B9B0D3043E9A11BD /* PlanView.swift */,
+			);
+			path = Plan;
+			sourceTree = "<group>";
+		};
+		CE086B4784053E1A04F22599 /* Features */ = {
+			isa = PBXGroup;
+			children = (
+				03BAD1C343E708C4EE6D42AF /* Activity */,
+				F65B91B1F011FC6809A94490 /* Advisor */,
+				C124AFD0D8D546A0914496EB /* Home */,
+				00C5FE381BDEC5DD2CCEF5EB /* Onboarding */,
+				CC254359CA72EC541F43434D /* Plan */,
+			);
+			path = Features;
+			sourceTree = "<group>";
+		};
+		CEBBD0C11B02B0D2B41CD5AD /* DesignSystem */ = {
+			isa = PBXGroup;
+			children = (
+				F4666F1D7349ACE2B784877D /* MoneyMonitorTheme.swift */,
+			);
+			path = DesignSystem;
+			sourceTree = "<group>";
+		};
+		E8202634C12430CD01B4C2D5 /* Security */ = {
+			isa = PBXGroup;
+			children = (
+				71BB21A8A060955889668C8E /* KeychainPairedProfileStore.swift */,
+				F5805774225F7A81353A0B3E /* SecureItemClient.swift */,
+			);
+			path = Security;
+			sourceTree = "<group>";
+		};
+		E96F5F3F4E603838B5701C17 = {
+			isa = PBXGroup;
+			children = (
+				F2861CD218846F2F5C386A9A /* Fixtures */,
+				82AAFE15DFD3F881BCFD14D7 /* MoneyMonitor */,
+				9BAAF6A5CD3BE8D43A72CF21 /* MoneyMonitorTests */,
+				CB5142E60385ED0E4007B181 /* MoneyMonitorUITests */,
+				B1C00A6E67AE6F97C8A6D50B /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		F2861CD218846F2F5C386A9A /* Fixtures */ = {
+			isa = PBXGroup;
+			children = (
+				943F75BB795B80837FB113A4 /* MobileBootstrap */,
+				3AFEA5FF4B4EAF7A7CE7E4E1 /* MobilePairing */,
+			);
+			path = Fixtures;
+			sourceTree = "<group>";
+		};
+		F65B91B1F011FC6809A94490 /* Advisor */ = {
+			isa = PBXGroup;
+			children = (
+				F716CCD8D4DB516D2E22B93B /* AdvisorView.swift */,
+			);
+			path = Advisor;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		65C3BB5B7F1318B1A348F3FC /* MoneyMonitorTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = CAE1B683624444F960C03BA3 /* Build configuration list for PBXNativeTarget "MoneyMonitorTests" */;
+			buildPhases = (
+				F10722095F3979D02180C33B /* Sources */,
+				920120DBAE13B8F576C39C90 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				E7166843B56FA11B5AB2A8EF /* PBXTargetDependency */,
+			);
+			name = MoneyMonitorTests;
+			packageProductDependencies = (
+			);
+			productName = MoneyMonitorTests;
+			productReference = 55D395177E01503E00113D11 /* MoneyMonitorTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		9B86035E3442E472FBE21C98 /* MoneyMonitorUITests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 3B5F8B929BB9D5DCB69577CC /* Build configuration list for PBXNativeTarget "MoneyMonitorUITests" */;
+			buildPhases = (
+				3E9DBDC8204E5BE2D6B41733 /* Sources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				8490883D3C70E88983B37B35 /* PBXTargetDependency */,
+			);
+			name = MoneyMonitorUITests;
+			packageProductDependencies = (
+			);
+			productName = MoneyMonitorUITests;
+			productReference = 901101A9249EB4A1026E288D /* MoneyMonitorUITests.xctest */;
+			productType = "com.apple.product-type.bundle.ui-testing";
+		};
+		B2A3C62BD8671BB8ABB944BE /* MoneyMonitor */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = 99C50E10D8AE1F03EAD6773C /* Build configuration list for PBXNativeTarget "MoneyMonitor" */;
+			buildPhases = (
+				F9BB7EE3583A4C4E2512072E /* Sources */,
+				7198232965CC76653A3962A2 /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = MoneyMonitor;
+			packageProductDependencies = (
+			);
+			productName = MoneyMonitor;
+			productReference = D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */;
+			productType = "com.apple.product-type.application";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		B9DE11FD7F2AB4BCEBBE5055 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = YES;
+				LastUpgradeCheck = 1430;
+				TargetAttributes = {
+					65C3BB5B7F1318B1A348F3FC = {
+						ProvisioningStyle = Automatic;
+					};
+					9B86035E3442E472FBE21C98 = {
+						ProvisioningStyle = Automatic;
+						TestTargetID = B2A3C62BD8671BB8ABB944BE;
+					};
+					B2A3C62BD8671BB8ABB944BE = {
+						ProvisioningStyle = Automatic;
+					};
+				};
+			};
+			buildConfigurationList = 77082ECE652A9C1870FA0CD7 /* Build configuration list for PBXProject "MoneyMonitor" */;
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				Base,
+				en,
+			);
+			mainGroup = E96F5F3F4E603838B5701C17;
+			minimizedProjectReferenceProxies = 1;
+			preferredProjectObjectVersion = 77;
+			productRefGroup = B1C00A6E67AE6F97C8A6D50B /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				B2A3C62BD8671BB8ABB944BE /* MoneyMonitor */,
+				65C3BB5B7F1318B1A348F3FC /* MoneyMonitorTests */,
+				9B86035E3442E472FBE21C98 /* MoneyMonitorUITests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		7198232965CC76653A3962A2 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				7F052AC076A2A6E5DF5B3C71 /* Assets.xcassets in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		920120DBAE13B8F576C39C90 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E41FE0F99AF810BDF84D351E /* MobileBootstrap in Resources */,
+				2FA69E0656FADB6F82E49B81 /* MobilePairing in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		3E9DBDC8204E5BE2D6B41733 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				AAA324AB2448F24574750F01 /* MoneyMonitorUITests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F10722095F3979D02180C33B /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				04A80739371145D79C4C522C /* APIEndpointTests.swift in Sources */,
+				A1F1DF811E331549CF42A903 /* AppEnvironmentTests.swift in Sources */,
+				71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */,
+				3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */,
+				CB4312AFF291EE2E386CD2AF /* MobileAPIClientTests.swift in Sources */,
+				D8EE52F1D00B4E3096634123 /* MobilePairingClientTests.swift in Sources */,
+				70ADCA9837EAB25246487FA5 /* PairingQRScannerStateTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		F9BB7EE3583A4C4E2512072E /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				95B00A93E6B5C1DB02C850D7 /* APIEndpoint.swift in Sources */,
+				2199E0B49F97D3E77E6FEF96 /* ActivityView.swift in Sources */,
+				03482FAD2F16D425BD63A163 /* AdvisorView.swift in Sources */,
+				70E4DC72183CA8EF3F28053E /* AppEnvironment.swift in Sources */,
+				5ABA35F8510FE4979480B507 /* AppTab.swift in Sources */,
+				7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */,
+				728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */,
+				5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */,
+				F0AEE6F85CBB2BDBCFD2C863 /* ConnectionState.swift in Sources */,
+				EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */,
+				CAE9237CAC7C7199AA1AA6CE /* HealthResponse.swift in Sources */,
+				DD61B8A2EABE199806670FE6 /* HomeView.swift in Sources */,
+				93C17CB5ED96A4D5F58372AD /* KeychainPairedProfileStore.swift in Sources */,
+				B805CBD77845982044E9FBC9 /* MobileAPIClient.swift in Sources */,
+				8357C4C29A051F32CEB3829B /* MobileClientError.swift in Sources */,
+				17A0A42542AB6A9DE4867F34 /* MobileHTTPTransport.swift in Sources */,
+				A70359B432A28E035454B98B /* MobilePairingClient.swift in Sources */,
+				975CDFC9129407B1130FAF0E /* MobileRequestFactory.swift in Sources */,
+				9A72FB63B1413D57C1B1B02B /* MoneyMonitorApp.swift in Sources */,
+				BB2258A3D4A0493209270335 /* MoneyMonitorTheme.swift in Sources */,
+				81E5D60B265B5781CCBD6929 /* PairedMacCredential.swift in Sources */,
+				CF9A80999026F898CA3236EA /* PairingFlowState.swift in Sources */,
+				0ADA9EB2BD38D886157C900D /* PairingModels.swift in Sources */,
+				7D721163F0FBAC06B5BFAED5 /* PairingQRCodeScannerView.swift in Sources */,
+				9B2A4E42DC2D101E4054A251 /* PairingQRScannerState.swift in Sources */,
+				E5E227B2403728C7EB2D44FC /* PairingScannerViewFactory.swift in Sources */,
+				33D069B46618622CE650C256 /* PlanView.swift in Sources */,
+				10F9E741918C945B84C76D62 /* RootView.swift in Sources */,
+				0AC074756EE1AD6AB75C5732 /* SecureItemClient.swift in Sources */,
+				CFA05DEE75526E4E19FCA543 /* TransactionSearchView.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		8490883D3C70E88983B37B35 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B2A3C62BD8671BB8ABB944BE /* MoneyMonitor */;
+			targetProxy = 89554BBD7D0E836E9753D7ED /* PBXContainerItemProxy */;
+		};
+		E7166843B56FA11B5AB2A8EF /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = B2A3C62BD8671BB8ABB944BE /* MoneyMonitor */;
+			targetProxy = 9C832A6BB3D019C3A88A8468 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		4C6053DC53F8B949F7B5AB8A /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"$(inherited)",
+					"DEBUG=1",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = DEBUG;
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Debug;
+		};
+		699B83FCDA05F5C0230763AA /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Money Monitor";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the pairing QR code displayed by Money Monitor on your Mac.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitor;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		8F8D3237B49A2C791E0A2C72 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitorTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MoneyMonitor.app/MoneyMonitor";
+			};
+			name = Release;
+		};
+		939BBC6B0F9FCD0990CF5FDE /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitorUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MoneyMonitor;
+			};
+			name = Release;
+		};
+		A7ED26C5072254DBB58868F5 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitorUITests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_TARGET_NAME = MoneyMonitor;
+			};
+			name = Debug;
+		};
+		A86F9CCACBBE68201CE907C9 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				GENERATE_INFOPLIST_FILE = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@loader_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitorTests;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/MoneyMonitor.app/MoneyMonitor";
+			};
+			name = Debug;
+		};
+		D8BF276264BEE2A29576EAAD /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++14";
+				CLANG_CXX_LIBRARY = "libc++";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_ENABLE_OBJC_WEAK = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				CODE_SIGN_STYLE = Automatic;
+				COPY_PHASE_STRIP = NO;
+				CURRENT_PROJECT_VERSION = 1;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu11;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 18.0;
+				MARKETING_VERSION = 0.1.0;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				SWIFT_OPTIMIZATION_LEVEL = "-O";
+				SWIFT_VERSION = 6.0;
+			};
+			name = Release;
+		};
+		EDCE6F382523683E38D65949 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_IDENTITY = "iPhone Developer";
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_KEY_CFBundleDisplayName = "Money Monitor";
+				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the pairing QR code displayed by Money Monitor on your Mac.";
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				PRODUCT_BUNDLE_IDENTIFIER = com.example.MoneyMonitor;
+				SDKROOT = iphoneos;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		3B5F8B929BB9D5DCB69577CC /* Build configuration list for PBXNativeTarget "MoneyMonitorUITests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A7ED26C5072254DBB58868F5 /* Debug */,
+				939BBC6B0F9FCD0990CF5FDE /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		77082ECE652A9C1870FA0CD7 /* Build configuration list for PBXProject "MoneyMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				4C6053DC53F8B949F7B5AB8A /* Debug */,
+				D8BF276264BEE2A29576EAAD /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		99C50E10D8AE1F03EAD6773C /* Build configuration list for PBXNativeTarget "MoneyMonitor" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				EDCE6F382523683E38D65949 /* Debug */,
+				699B83FCDA05F5C0230763AA /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+		CAE1B683624444F960C03BA3 /* Build configuration list for PBXNativeTarget "MoneyMonitorTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				A86F9CCACBBE68201CE907C9 /* Debug */,
+				8F8D3237B49A2C791E0A2C72 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Debug;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = B9DE11FD7F2AB4BCEBBE5055 /* Project object */;
+}

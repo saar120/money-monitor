@@ -1,0 +1,89 @@
+name: MoneyMonitor
+
+options:
+  bundleIdPrefix: com.example
+  createIntermediateGroups: true
+  deploymentTarget:
+    iOS: '18.0'
+
+configs:
+  Debug: debug
+  Release: release
+
+settings:
+  base:
+    CURRENT_PROJECT_VERSION: 1
+    MARKETING_VERSION: 0.1.0
+    SWIFT_VERSION: 6.0
+    CODE_SIGN_STYLE: Automatic
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+
+targets:
+  MoneyMonitor:
+    type: application
+    platform: iOS
+    sources:
+      - path: MoneyMonitor
+        excludes:
+          - '**/*.md'
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MoneyMonitor
+        GENERATE_INFOPLIST_FILE: YES
+        INFOPLIST_KEY_CFBundleDisplayName: Money Monitor
+        INFOPLIST_KEY_NSCameraUsageDescription: Scan the pairing QR code displayed by Money Monitor on your Mac.
+        INFOPLIST_KEY_UILaunchScreen_Generation: YES
+        INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents: YES
+        ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+        TARGETED_DEVICE_FAMILY: '1,2'
+
+  MoneyMonitorTests:
+    type: bundle.unit-test
+    platform: iOS
+    sources:
+      - path: MoneyMonitorTests
+      - path: Fixtures/MobileBootstrap
+        type: folder
+        buildPhase: resources
+      - path: Fixtures/MobilePairing
+        type: folder
+        buildPhase: resources
+    dependencies:
+      - target: MoneyMonitor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MoneyMonitorTests
+        GENERATE_INFOPLIST_FILE: YES
+
+  MoneyMonitorUITests:
+    type: bundle.ui-testing
+    platform: iOS
+    sources:
+      - path: MoneyMonitorUITests
+    dependencies:
+      - target: MoneyMonitor
+    settings:
+      base:
+        PRODUCT_BUNDLE_IDENTIFIER: com.example.MoneyMonitorUITests
+        GENERATE_INFOPLIST_FILE: YES
+
+schemes:
+  MoneyMonitor:
+    build:
+      targets:
+        MoneyMonitor: all
+        MoneyMonitorTests: [test]
+        MoneyMonitorUITests: [test]
+    run:
+      config: Debug
+    test:
+      config: Debug
+      targets:
+        - MoneyMonitorTests
+        - MoneyMonitorUITests
+    profile:
+      config: Release
+    analyze:
+      config: Debug
+    archive:
+      config: Release

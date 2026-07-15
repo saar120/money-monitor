@@ -13,7 +13,19 @@ const {
   getConfiguredBatchThinkingLevel,
   getConfiguredThinkingLevel,
   config,
+  SECRET_KEYS,
 } = await vi.importActual<typeof import('./config.js')>('./config.js');
+
+describe('mobile access defaults', () => {
+  it('is opt-in and owns the documented HTTPS listener', () => {
+    expect(config.MOBILE_ACCESS_ENABLED).toBe(false);
+    expect(config.MOBILE_ACCESS_HTTPS_PORT).toBe(8443);
+  });
+
+  it('treats the mobile public-ID key as an encrypted secret', () => {
+    expect(SECRET_KEYS.has('MOBILE_PUBLIC_ID_KEY')).toBe(true);
+  });
+});
 
 // ── parseModelSpec ───────────────────────────────────────────────────────────
 
