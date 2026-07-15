@@ -31,6 +31,7 @@ import { MobileAccessRuntime } from './mobile-access/mobile-access-runtime.js';
 import { FileServeOwnershipStore } from './mobile-access/serve-ownership-store.js';
 import { resolveTailscaleExecutable } from './mobile-access/tailscale-executable.js';
 import { TailscaleServeCoordinator } from './mobile-access/tailscale-serve-coordinator.js';
+import { startDesktopServer } from './security/desktop-server-bind-policy.js';
 import { isTrustedRendererURL, safeExternalURL } from './security/trusted-renderer.js';
 
 const execFileAsync = promisify(execFile);
@@ -774,7 +775,7 @@ app.whenReady().then(async () => {
     // Start server import
     const { createServer } = await import('../dist/server.js');
     const { start, shutdown, onResume } = await createServer();
-    const port = await start({ port: 0 });
+    const port = await startDesktopServer(start);
 
     console.log(`[Electron] Server started on port ${port}`);
 
