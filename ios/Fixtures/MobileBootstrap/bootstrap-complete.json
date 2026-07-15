@@ -1,0 +1,110 @@
+{
+  "data": {
+    "home": {
+      "primaryCurrencyCode": "ILS",
+      "aggregates": {
+        "netWorth": {
+          "amount": { "value": "128430.27", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-15", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-07-14", "endDate": "2026-07-14" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "income": {
+          "amount": { "value": "12500.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-06-01", "endDate": "2026-06-15" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "spending": {
+          "amount": { "value": "4560.30", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-06-01", "endDate": "2026-06-15" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        }
+      }
+    },
+    "budgetPulse": {
+      "status": "on_track",
+      "spent": { "value": "4560.30", "currencyCode": "ILS" },
+      "limit": { "value": "9000.00", "currencyCode": "ILS" },
+      "remaining": { "value": "4439.70", "currencyCode": "ILS" },
+      "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+      "calculatedAt": "2026-07-15T10:00:00.000Z"
+    },
+    "review": {
+      "count": 3,
+      "calculatedAt": "2026-07-15T10:00:00.000Z"
+    },
+    "recentTransactions": [
+      {
+        "id": "transaction_01",
+        "occurredOn": "2026-07-15",
+        "displayName": "Neighborhood Market",
+        "amount": { "value": "245.90", "currencyCode": "ILS" },
+        "direction": "debit",
+        "status": "posted",
+        "category": { "id": "category_food_01", "label": "Groceries" },
+        "account": {
+          "id": "account_checking_01",
+          "displayName": "Everyday Checking",
+          "identifierMask": "•••• 4321"
+        }
+      },
+      {
+        "id": "transaction_02",
+        "occurredOn": "2026-07-14",
+        "displayName": "Monthly salary",
+        "amount": { "value": "12500.00", "currencyCode": "ILS" },
+        "direction": "credit",
+        "status": "posted",
+        "category": null,
+        "account": {
+          "id": "account_checking_01",
+          "displayName": "Everyday Checking",
+          "identifierMask": "•••• 4321"
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "id": "account_checking_01",
+        "displayName": "Everyday Checking",
+        "institutionName": "Example Bank",
+        "type": "checking",
+        "currencyCode": "ILS",
+        "identifierMask": "•••• 4321",
+        "freshness": {
+          "status": "fresh",
+          "lastSuccessfulSyncAt": "2026-07-15T09:58:00.000Z"
+        }
+      }
+    ],
+    "latestSync": {
+      "status": "succeeded",
+      "startedAt": "2026-07-15T09:56:00.000Z",
+      "completedAt": "2026-07-15T09:58:00.000Z",
+      "accountsSucceeded": 1,
+      "accountsFailed": 0
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "calculatedAt": "2026-07-15T10:00:00.000Z",
+    "financialDate": "2026-07-15",
+    "source": "live",
+    "bootstrapSchemaVersion": 1,
+    "snapshotId": "snapshot_complete_01",
+    "server": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "displayName": "Saar’s Mac",
+      "serverVersion": "0.3.5",
+      "protocolVersion": 1,
+      "minimumClientVersion": "0.1.0",
+      "capabilities": ["mobile.read"],
+      "compatibility": { "status": "not_evaluated", "reason": null }
+    },
+    "cacheability": { "status": "cacheable", "maxAgeSeconds": 300 },
+    "completeness": { "status": "complete", "sectionErrors": [] }
+  }
+}

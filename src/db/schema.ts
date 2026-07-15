@@ -34,6 +34,7 @@ export const transactions = sqliteTable(
     originalAmount: real('original_amount').notNull(),
     originalCurrency: text('original_currency').notNull().default('ILS'),
     chargedAmount: real('charged_amount').notNull(),
+    chargedCurrency: text('charged_currency').notNull().default('ILS'),
     description: text('description').notNull(),
     memo: text('memo'),
     type: text('type').notNull().default('normal'),
@@ -286,3 +287,31 @@ export const liabilities = sqliteTable('liabilities', {
     .notNull()
     .default(sql`(datetime('now'))`),
 });
+
+/**
+ * Individually revocable credentials for approved mobile devices.
+ * `tokenDigest` is a one-way digest; the raw bearer token is never persisted
+ * by the Mac application.
+ */
+export const mobileDevices = sqliteTable(
+  'mobile_devices',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    tokenDigest: text('token_digest').notNull(),
+    capabilities: text('capabilities').notNull().default('["mobile.read"]'),
+    protocolVersion: integer('protocol_version').notNull().default(1),
+    tokenVersion: integer('token_version').notNull().default(1),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    lastUsedAt: text('last_used_at'),
+    expiresAt: text('expires_at'),
+    rotatedAt: text('rotated_at'),
+    revokedAt: text('revoked_at'),
+  },
+  (table) => [
+    uniqueIndex('idx_mobile_devices_token_digest').on(table.tokenDigest),
+    index('idx_mobile_devices_revoked_at').on(table.revokedAt),
+  ],
+);

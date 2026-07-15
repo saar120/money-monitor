@@ -119,6 +119,7 @@ export interface Transaction {
   originalAmount: number;
   originalCurrency: string;
   chargedAmount: number;
+  chargedCurrency: string;
   description: string;
   memo: string | null;
   type: string;

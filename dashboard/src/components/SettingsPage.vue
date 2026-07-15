@@ -12,6 +12,7 @@ import {
 } from '../api/client';
 import { useOAuth } from '../composables/useOAuth';
 import HouseholdSettings from './HouseholdSettings.vue';
+import MobileAccessSettings from './MobileAccessSettings.vue';
 import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
@@ -328,6 +329,8 @@ async function save() {
             </Button>
           </div>
         </Teleport>
+
+        <MobileAccessSettings />
         <!-- AI Configuration -->
         <SettingsGroup title="AI Configuration" description="Choose your AI provider and model">
           <SettingsRow class="bg-bg-secondary/50">

@@ -1,12 +1,24 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // Ensure required env var is set before importing the real module
-process.env.CREDENTIALS_MASTER_KEY = process.env.CREDENTIALS_MASTER_KEY || 'test-config-functions-key';
+process.env.CREDENTIALS_MASTER_KEY =
+  process.env.CREDENTIALS_MASTER_KEY || 'test-config-functions-key';
 
 // Import actual implementations (bypassing the global mock from setup.ts)
 // config.ts has top-level await but works fine in vitest's ESM environment.
-const { parseModelSpec, getAIModelSpec, getBatchModelSpec, config } =
+const { parseModelSpec, getAIModelSpec, getBatchModelSpec, config, SECRET_KEYS } =
   await vi.importActual<typeof import('./config.js')>('./config.js');
+
+describe('mobile access defaults', () => {
+  it('is opt-in and owns the documented HTTPS listener', () => {
+    expect(config.MOBILE_ACCESS_ENABLED).toBe(false);
+    expect(config.MOBILE_ACCESS_HTTPS_PORT).toBe(8443);
+  });
+
+  it('treats the mobile public-ID key as an encrypted secret', () => {
+    expect(SECRET_KEYS.has('MOBILE_PUBLIC_ID_KEY')).toBe(true);
+  });
+});
 
 // ── parseModelSpec ───────────────────────────────────────────────────────────
 
@@ -16,7 +28,10 @@ describe('parseModelSpec', () => {
   });
 
   it('defaults to anthropic when no colon', () => {
-    expect(parseModelSpec('claude-sonnet-4-6')).toEqual({ provider: 'anthropic', model: 'claude-sonnet-4-6' });
+    expect(parseModelSpec('claude-sonnet-4-6')).toEqual({
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+    });
   });
 
   it('handles multiple colons (only splits on first)', () => {
