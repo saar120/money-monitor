@@ -17,6 +17,9 @@ import {
 type MoneyMonitorDatabase = BetterSQLite3Database<typeof schema>;
 type Awaitable<T> = T | Promise<T>;
 const ISO_CURRENCY_CODES = new Set(Intl.supportedValuesOf('currency'));
+const LEGACY_CURRENCY_CODE_PROJECTION: Readonly<Record<string, string>> = {
+  '₪': 'ILS',
+};
 
 export { MOBILE_FINANCE_TIME_ZONE } from './bootstrap-contract.js';
 
@@ -46,6 +49,10 @@ function decimalMoney(value: number, currencyCode = 'ILS'): MobileMoneyReadModel
   }
   const normalized = Math.abs(value) < 0.005 ? 0 : Math.round(value * 100) / 100;
   return { value: normalized.toFixed(2), currencyCode };
+}
+
+function projectedCurrencyCode(persistedCurrency: string): string {
+  return LEGACY_CURRENCY_CODE_PROJECTION[persistedCurrency] ?? persistedCurrency;
 }
 
 function normalizeInstant(value: string | null): string | null {
@@ -300,7 +307,10 @@ export function createProductionMobileBootstrapPorts(
           publicId: publicId('transaction', row.transactionId),
           occurredOn: row.occurredOn.slice(0, 10),
           displayName: bounded(row.description, 'Transaction', 160),
-          amount: decimalMoney(Math.abs(row.chargedAmount), row.chargedCurrency),
+          amount: decimalMoney(
+            Math.abs(row.chargedAmount),
+            projectedCurrencyCode(row.chargedCurrency),
+          ),
           direction: row.chargedAmount < 0 ? 'debit' : row.chargedAmount > 0 ? 'credit' : 'unknown',
           status:
             row.transactionStatus === 'pending'
