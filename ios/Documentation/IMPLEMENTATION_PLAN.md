@@ -112,9 +112,10 @@ Screens: Advisor home and conversation.
 
 ## Next development tickets
 
-1. Pull forward the standalone `P1-SEC-02` inactive/app-switcher privacy cover and lifecycle tests.
-2. Implement the `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date output, and partial-section suppression.
-3. Replace the Home placeholder with the live in-memory `P2-IOS-02` presentation plus refresh and fixture-driven tests.
+1. **Implemented:** standalone `P1-SEC-02` inactive/app-switcher privacy cover and lifecycle policy tests.
+2. **Implemented:** `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date/sign output, strict decoder validation, and partial-section suppression.
+3. **Implemented:** live in-memory `P2-IOS-02` Home presentation with single-flight refresh and fixture-driven tests.
+4. **Next:** install the current build on the paired physical iPhone and complete the Phase 2A live-data, refresh-failure, relaunch, and app-switcher acceptance checks.
 
 Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 

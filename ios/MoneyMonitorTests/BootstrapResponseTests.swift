@@ -321,6 +321,313 @@ struct BootstrapResponseTests {
         }
     }
 
+    @Test
+    func activeMoneyRequiresCanonicalDecimalAndRecognizedCurrency() throws {
+        for invalidValue in ["01.00", "+1.00", "1.", "1.00000", "1e2"] {
+            let data = try mutatedHomeMoney(value: invalidValue)
+            #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+                try decoder.decodeSuccess(from: data)
+            }
+        }
+
+        let unknownCurrency = try mutatedHomeMoney(currencyCode: "ZZZ")
+        #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+            try decoder.decodeSuccess(from: unknownCurrency)
+        }
+    }
+
+    @Test
+    func activeCalendarDatesMustRoundTripAndPeriodsMustBeOrdered() throws {
+        let impossibleDate = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            guard
+                var payload = object["data"] as? [String: Any],
+                var transactions = payload["recentTransactions"] as? [[String: Any]],
+                !transactions.isEmpty
+            else {
+                throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+            }
+            transactions[0]["occurredOn"] = "2026-02-30"
+            payload["recentTransactions"] = transactions
+            object["data"] = payload
+        }
+        let reversedPeriod = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            guard
+                var payload = object["data"] as? [String: Any],
+                var home = payload["home"] as? [String: Any],
+                var aggregates = home["aggregates"] as? [String: Any],
+                var spending = aggregates["spending"] as? [String: Any]
+            else {
+                throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+            }
+            spending["period"] = ["startDate": "2026-07-15", "endDate": "2026-07-01"]
+            aggregates["spending"] = spending
+            home["aggregates"] = aggregates
+            payload["home"] = home
+            object["data"] = payload
+        }
+
+        for data in [impossibleDate, reversedPeriod] {
+            #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+                try decoder.decodeSuccess(from: data)
+            }
+        }
+    }
+
+    @Test
+    func activeReviewAccountsAndLatestSyncRejectInvalidFinancialState() throws {
+        let negativeReview = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                var review = try requiredDictionary(payload["review"])
+                review["count"] = -1
+                payload["review"] = review
+            }
+        }
+        let unknownAccountCurrency = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                var accounts = payload["accounts"] as? [[String: Any]] ?? []
+                guard !accounts.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                accounts[0]["currencyCode"] = "ZZZ"
+                payload["accounts"] = accounts
+            }
+        }
+        let negativeSyncCount = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                var latestSync = try requiredDictionary(payload["latestSync"])
+                latestSync["accountsSucceeded"] = -1
+                payload["latestSync"] = latestSync
+            }
+        }
+
+        for data in [negativeReview, unknownAccountCurrency, negativeSyncCount] {
+            #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+                try decoder.decodeSuccess(from: data)
+            }
+        }
+    }
+
+    @Test
+    func successfulEnvelopeRequiresTheCanonicalLiveSource() throws {
+        let data = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            guard var meta = object["meta"] as? [String: Any] else {
+                throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+            }
+            meta["source"] = "future_source"
+            object["meta"] = meta
+        }
+
+        #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+            try decoder.decodeSuccess(from: data)
+        }
+    }
+
+    @Test
+    func internalOrUnmaskedIdentifiersAreRejectedAtTheMobileBoundary() throws {
+        let numericSnapshotID = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            var meta = try requiredDictionary(object["meta"])
+            meta["snapshotId"] = "42"
+            object["meta"] = meta
+        }
+        let numericTransactionAccountID = try mutatedBootstrapFixture(
+            "bootstrap-complete.json"
+        ) { object in
+            try mutatePayload(&object) { payload in
+                var transactions = payload["recentTransactions"] as? [[String: Any]] ?? []
+                guard !transactions.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                var account = try requiredDictionary(transactions[0]["account"])
+                account["id"] = "42"
+                transactions[0]["account"] = account
+                payload["recentTransactions"] = transactions
+            }
+        }
+        let unmaskedTransactionAccount = try mutatedBootstrapFixture(
+            "bootstrap-complete.json"
+        ) { object in
+            try mutatePayload(&object) { payload in
+                var transactions = payload["recentTransactions"] as? [[String: Any]] ?? []
+                guard !transactions.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                var account = try requiredDictionary(transactions[0]["account"])
+                account["identifierMask"] = "1234567890"
+                transactions[0]["account"] = account
+                payload["recentTransactions"] = transactions
+            }
+        }
+        let unmaskedSummaryAccount = try mutatedBootstrapFixture(
+            "bootstrap-complete.json"
+        ) { object in
+            try mutatePayload(&object) { payload in
+                var accounts = payload["accounts"] as? [[String: Any]] ?? []
+                guard !accounts.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                accounts[0]["identifierMask"] = "1234567890"
+                payload["accounts"] = accounts
+            }
+        }
+
+        for data in [
+            numericSnapshotID,
+            numericTransactionAccountID,
+            unmaskedTransactionAccount,
+            unmaskedSummaryAccount,
+        ] {
+            #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+                try decoder.decodeSuccess(from: data)
+            }
+        }
+    }
+
+    @Test
+    func recentTransactionsRequireUniqueIDsAndTheContractRowLimit() throws {
+        let duplicateID = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                var transactions = payload["recentTransactions"] as? [[String: Any]] ?? []
+                guard let first = transactions.first else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                transactions.append(first)
+                payload["recentTransactions"] = transactions
+            }
+        }
+        let oversized = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                let transactions = payload["recentTransactions"] as? [[String: Any]] ?? []
+                guard let first = transactions.first else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                payload["recentTransactions"] = (0 ..< 21).map { index in
+                    var transaction = first
+                    transaction["id"] = String(format: "txn_item_%02d", index)
+                    return transaction
+                }
+            }
+        }
+
+        for data in [duplicateID, oversized] {
+            #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+                try decoder.decodeSuccess(from: data)
+            }
+        }
+    }
+
+    @Test
+    func unknownFailedSectionIsRejected() throws {
+        let data = try mutatedBootstrapFixture("bootstrap-partial-error.json") { object in
+            guard
+                var meta = object["meta"] as? [String: Any],
+                var completeness = meta["completeness"] as? [String: Any]
+            else {
+                throw BootstrapFixtureError.invalidObject("bootstrap-partial-error.json")
+            }
+            completeness["sectionErrors"] = [
+                ["section": "future_section", "code": "source_timeout", "retryable": true],
+            ]
+            meta["completeness"] = completeness
+            object["meta"] = meta
+        }
+
+        #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+            try decoder.decodeSuccess(from: data)
+        }
+    }
+
+    @Test
+    func explicitlyFailedSectionsStillRequireCanonicalTransportContent() throws {
+        let data = try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            guard var meta = object["meta"] as? [String: Any] else {
+                throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+            }
+            meta["cacheability"] = ["status": "not_cacheable", "maxAgeSeconds": 0]
+            meta["completeness"] = [
+                "status": "partial",
+                "sectionErrors": [
+                    ["section": "budget_pulse", "code": "calculation_failed", "retryable": true],
+                    ["section": "review", "code": "source_timeout", "retryable": true],
+                    ["section": "recent_transactions", "code": "source_timeout", "retryable": true],
+                    ["section": "accounts", "code": "source_timeout", "retryable": true],
+                    ["section": "latest_sync", "code": "source_timeout", "retryable": true],
+                ],
+            ]
+            object["meta"] = meta
+
+            try mutatePayload(&object) { payload in
+                var budget = try requiredDictionary(payload["budgetPulse"])
+                budget["status"] = "unavailable"
+                budget["spent"] = ["value": "01.00", "currencyCode": "ZZZ"]
+                budget["period"] = ["startDate": "2026-02-30", "endDate": "2026-02-01"]
+                payload["budgetPulse"] = budget
+
+                var review = try requiredDictionary(payload["review"])
+                review["count"] = -1
+                payload["review"] = review
+
+                var transactions = payload["recentTransactions"] as? [[String: Any]] ?? []
+                guard !transactions.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                transactions[0]["occurredOn"] = "2026-02-30"
+                transactions[0]["amount"] = ["value": "01.00", "currencyCode": "ZZZ"]
+                payload["recentTransactions"] = transactions
+
+                var accounts = payload["accounts"] as? [[String: Any]] ?? []
+                guard !accounts.isEmpty else {
+                    throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+                }
+                accounts[0]["currencyCode"] = "ZZZ"
+                payload["accounts"] = accounts
+
+                var latestSync = try requiredDictionary(payload["latestSync"])
+                latestSync["accountsSucceeded"] = -1
+                payload["latestSync"] = latestSync
+            }
+        }
+
+        #expect(throws: BootstrapPayloadDecoderError.invalidSuccessEnvelope) {
+            try decoder.decodeSuccess(from: data)
+        }
+    }
+
+    private func mutatedHomeMoney(
+        value: String? = nil,
+        currencyCode: String? = nil
+    ) throws -> Data {
+        try mutatedBootstrapFixture("bootstrap-complete.json") { object in
+            try mutatePayload(&object) { payload in
+                var home = try requiredDictionary(payload["home"])
+                var aggregates = try requiredDictionary(home["aggregates"])
+                var spending = try requiredDictionary(aggregates["spending"])
+                var amount = try requiredDictionary(spending["amount"])
+                if let value { amount["value"] = value }
+                if let currencyCode { amount["currencyCode"] = currencyCode }
+                spending["amount"] = amount
+                aggregates["spending"] = spending
+                home["aggregates"] = aggregates
+                payload["home"] = home
+            }
+        }
+    }
+
+    private func mutatePayload(
+        _ object: inout [String: Any],
+        mutate: (inout [String: Any]) throws -> Void
+    ) throws {
+        var payload = try requiredDictionary(object["data"])
+        try mutate(&payload)
+        object["data"] = payload
+    }
+
+    private func requiredDictionary(_ value: Any?) throws -> [String: Any] {
+        guard let dictionary = value as? [String: Any] else {
+            throw BootstrapFixtureError.invalidObject("bootstrap-complete.json")
+        }
+        return dictionary
+    }
+
     private func midnightFixture(calculatedAt: String, financialDate: String) throws -> Data {
         try mutatedBootstrapFixture("bootstrap-empty.json") { object in
             guard

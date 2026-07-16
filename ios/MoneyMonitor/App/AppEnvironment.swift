@@ -6,6 +6,7 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var pairingState: PairingFlowState = .restoring
     @Published private(set) var serverURL: URL?
     @Published private(set) var latestBootstrap: BootstrapSuccessEnvelope?
+    @Published private(set) var bootstrapRefreshState: BootstrapRefreshState = .idle
 
     private let apiClient: any MobileAPIClient
     private let pairingClient: any MobilePairingClient
@@ -13,6 +14,7 @@ final class AppEnvironment: ObservableObject {
     private let clock: @Sendable () -> Date
     private let sleep: @Sendable (TimeInterval) async throws -> Void
     private var activeOperationID: UUID?
+    private var activeRefreshOperationID: UUID?
 
     init() {
         let store = KeychainPairedProfileStore()
@@ -53,7 +55,9 @@ final class AppEnvironment: ObservableObject {
     }
 
     func connect(to rawAddress: String) async {
+        guard !isRefreshRevocationCleanupInProgress else { return }
         activeOperationID = nil
+        invalidateBootstrapRefresh()
         pairingState = .idle
         latestBootstrap = nil
 
@@ -83,6 +87,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func restoreSavedConnection() async {
+        guard !isRefreshRevocationCleanupInProgress else { return }
         let operationID = beginOperation(state: .restoring)
 
         do {
@@ -127,6 +132,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func pair(qrPayload: Data, deviceName: String) async {
+        guard !isRefreshRevocationCleanupInProgress else { return }
         let operationID = beginOperation(state: .starting)
         var credentialWasStored = false
 
@@ -188,9 +194,57 @@ final class AppEnvironment: ObservableObject {
         }
     }
 
+    func refreshBootstrap() async {
+        guard
+            activeOperationID == nil,
+            activeRefreshOperationID == nil,
+            case .connected = connectionState
+        else {
+            return
+        }
+
+        let operationID = UUID()
+        activeRefreshOperationID = operationID
+        bootstrapRefreshState = .refreshing
+
+        do {
+            let credential = try await profileStore.load()
+            try ensureActiveRefresh(operationID)
+            guard let credential else {
+                finishRefreshAsNotConfigured(operationID: operationID)
+                return
+            }
+
+            let bootstrap = try await apiClient.bootstrap(credential: credential)
+            try ensureActiveRefresh(operationID)
+            finishRefreshConnected(
+                credential: credential,
+                bootstrap: bootstrap,
+                operationID: operationID
+            )
+        } catch {
+            guard activeRefreshOperationID == operationID else { return }
+
+            if Self.isAuthoritativeRevocation(error) {
+                await finishRefreshAsRevoked(operationID: operationID)
+                return
+            }
+
+            if Task.isCancelled || Self.isCancellation(error) {
+                activeRefreshOperationID = nil
+                bootstrapRefreshState = .idle
+                return
+            }
+
+            activeRefreshOperationID = nil
+            bootstrapRefreshState = .failed(Self.bootstrapRefreshFailure(for: error))
+        }
+    }
+
     func cancelPairing() {
         guard pairingState.isCancellable else { return }
         activeOperationID = nil
+        invalidateBootstrapRefresh()
         pairingState = .idle
         connectionState = .notConfigured
         serverURL = nil
@@ -198,6 +252,7 @@ final class AppEnvironment: ObservableObject {
     }
 
     func disconnect() async {
+        guard !isRefreshRevocationCleanupInProgress else { return }
         let operationID = beginOperation(state: .disconnecting)
         do {
             try await profileStore.delete()
@@ -214,6 +269,7 @@ final class AppEnvironment: ObservableObject {
 
     private func beginOperation(state: PairingFlowState) -> UUID {
         let operationID = UUID()
+        invalidateBootstrapRefresh()
         activeOperationID = operationID
         pairingState = state
         connectionState = .connecting
@@ -226,6 +282,71 @@ final class AppEnvironment: ObservableObject {
         try Task.checkCancellation()
         guard activeOperationID == operationID else {
             throw CancellationError()
+        }
+    }
+
+    private func ensureActiveRefresh(_ operationID: UUID) throws {
+        try Task.checkCancellation()
+        guard activeRefreshOperationID == operationID, activeOperationID == nil else {
+            throw CancellationError()
+        }
+    }
+
+    private func invalidateBootstrapRefresh() {
+        activeRefreshOperationID = nil
+        bootstrapRefreshState = .idle
+    }
+
+    private var isRefreshRevocationCleanupInProgress: Bool {
+        activeRefreshOperationID != nil && pairingState == .disconnecting
+    }
+
+    private func finishRefreshConnected(
+        credential: PairedMacCredential,
+        bootstrap: BootstrapSuccessEnvelope,
+        operationID: UUID
+    ) {
+        guard activeRefreshOperationID == operationID else { return }
+        activeRefreshOperationID = nil
+        serverURL = credential.profile.baseURL
+        latestBootstrap = bootstrap
+        connectionState = .connected(lastCheckedAt: bootstrap.meta.generatedAt)
+        bootstrapRefreshState = .idle
+    }
+
+    private func finishRefreshAsNotConfigured(operationID: UUID) {
+        guard activeRefreshOperationID == operationID else { return }
+        activeRefreshOperationID = nil
+        serverURL = nil
+        latestBootstrap = nil
+        pairingState = .idle
+        connectionState = .notConfigured
+        bootstrapRefreshState = .failed(.missingCredential)
+    }
+
+    private func finishRefreshAsRevoked(operationID: UUID) async {
+        guard activeRefreshOperationID == operationID else { return }
+
+        // Clear financial memory immediately, but keep setup blocked until the
+        // revoked credential has actually been removed from Keychain.
+        serverURL = nil
+        latestBootstrap = nil
+        pairingState = .disconnecting
+        connectionState = .connecting
+
+        do {
+            try await profileStore.delete()
+            guard activeRefreshOperationID == operationID else { return }
+            activeRefreshOperationID = nil
+            pairingState = .failed(.savedAccessRevoked)
+            connectionState = .notConfigured
+            bootstrapRefreshState = .failed(.accessRevoked)
+        } catch {
+            guard activeRefreshOperationID == operationID else { return }
+            activeRefreshOperationID = nil
+            pairingState = .failed(.secureStorageUnavailable)
+            connectionState = .failed(message: PairingFlowFailure.secureStorageUnavailable.message)
+            bootstrapRefreshState = .failed(.secureStorageUnavailable)
         }
     }
 
@@ -290,6 +411,28 @@ final class AppEnvironment: ObservableObject {
             return true
         default:
             return false
+        }
+    }
+
+    private static func bootstrapRefreshFailure(
+        for error: any Error
+    ) -> BootstrapRefreshFailure {
+        if error is SecureItemError || error is PairedProfileStoreError {
+            return .secureStorageUnavailable
+        }
+
+        guard let error = error as? MobileClientError else {
+            return .unavailable
+        }
+
+        switch error {
+        case .transport, .rateLimited, .server:
+            return .unavailable
+        case .upgradeRequired:
+            return .incompatible
+        case .invalidRequest, .invalidResponse, .invalidPayload, .identityMismatch,
+             .authentication, .authorization, .pairing, .credentialStorageFailed:
+            return .invalidResponse
         }
     }
 
