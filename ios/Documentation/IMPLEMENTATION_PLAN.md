@@ -37,7 +37,7 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 
 Screens: Welcome, Connect to Mac, Face ID, Connected, Mac unavailable.
 
-D-018 postpones this phase for the current sole technical owner. It remains required before offline storage or broader dogfood. Only the opaque app-switcher cover is pulled forward into Phase 2A.
+D-018 postpones this phase for the current sole technical owner, and D-019 extends that exception only through the live, memory-only Phase 2B transaction browser. Phase 1 remains required before offline storage or broader dogfood. Only the opaque app-switcher cover is pulled forward into the technical lane.
 
 - QR scanner and manual-address fallback.
 - Pairing approval and clear failure recovery.
@@ -48,14 +48,18 @@ D-018 postpones this phase for the current sole technical owner. It remains requ
 
 **Exit criteria:** a paired user always knows whether data is live or saved, can browse the saved snapshot offline, and cannot expose financial content from the app switcher when locked.
 
-## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A accepted
+## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A accepted; Phase 2B in progress
 
 Screens: Home, Activity, Search, Transaction detail, Filters.
 
-- Live bootstrap-driven Home with summary, cash flow, budget pulse, review count, calculation time, and recent activity.
-- Memory-only financial DTOs; no snapshot, URL cache, `UserDefaults`, or search-recents persistence.
+- Accepted live bootstrap-driven Home with summary, cash flow, budget pulse, review count, calculation time, and recent activity.
+- Memory-only financial DTOs; no snapshot, URL cache, `UserDefaults`, search-recents, query, filter, cursor, or detail persistence.
 - Opaque app-switcher cover before any real amount renders.
-- Transaction pagination, search debounce, filters, and detail.
+- Phase 2B adds authenticated `GET /api/mobile/v1/transactions` and `GET /api/mobile/v1/transactions/:id`, where the detail ID is opaque and every response is an allow-listed mobile DTO.
+- Fixed-size opaque cursor pagination, chronological Activity, and inline append retry without desktop offsets.
+- Exactly 300 ms Search debounce with cancellation and no production query diagnostics.
+- Supported Phase 2B filters are direction, status, date range, opaque account ID, review state, and excluded state.
+- Transfer-specific behavior, category/owner filters, search recents, and every transaction edit control remain deferred.
 - Pull to refresh with validated in-memory replacement; cached/offline replacement remains deferred.
 - Locale-aware ILS values and mixed Hebrew/English merchant content.
 - Loading, empty, partial, retry, offline, and decode-failure states.
@@ -63,6 +67,8 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 **Phase 2A exit criteria:** live Home renders only validated, non-failed sections, uses truthful money/date labels, covers inactive scenes, persists no financial DTO, and exposes no mutation. Full Phase 2 still requires Phase 1, Activity/Search/Detail, cached fixtures, and the accessibility matrix.
 
 Accepted on 2026-07-16 after the signed Mac/iPhone path passed live-data, refresh, recoverable Tailscale-off failure, app-switcher concealment, and force-quit/relaunch checks without adding financial persistence.
+
+**Phase 2B exit criteria:** shared server/Swift fixtures prove allow-listed list/detail DTOs and redaction; cursor, duplicate, search-cancellation, filter, append-failure, revocation, and no-persistence tests pass; the full simulator suite stays green; then one consolidated physical-iPhone block validates Activity → Search/Filter → Detail → return, app-switcher concealment, network interruption, and relaunch refetch. Phase 2B still does not claim cached/offline browsing, Phase 1, or the full Phase 2 gate.
 
 ## [Phase 3 — Planning, wealth, and connected data](../Specification/PHASE_3_PLANNING_AND_ACCOUNTS.md)
 
@@ -118,7 +124,8 @@ Screens: Advisor home and conversation.
 2. **Implemented:** `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date/sign output, strict decoder validation, and partial-section suppression.
 3. **Implemented:** live in-memory `P2-IOS-02` Home presentation with single-flight refresh and fixture-driven tests.
 4. **Accepted:** the paired physical iPhone passed Phase 2A live-data, refresh-failure, relaunch, and app-switcher acceptance checks.
-5. **Next decision:** either extend D-018 to another live, memory-only Phase 2 feature slice or resume Phase 1 trust/resilience before expanding scope.
+5. **In progress under D-019:** shared transaction list/detail contract, fixed opaque cursor, allow-listed projection, authenticated routes, and redaction/abuse tests.
+6. **Next in the same batch:** memory-only Activity/Search/filter/detail state, exact 300 ms cancellation, simulator/UI regression, and one consolidated owner validation block.
 
 Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 
@@ -128,7 +135,7 @@ The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are
 
 The complete cross-phase definition and release evidence rules are in [Quality gates](../Specification/QUALITY_GATES.md); screen-to-story/task coverage is maintained in [Traceability](../Specification/TRACEABILITY.md).
 
-Phase 2A is an internal technical-owner exception and does not claim the full definition below. Security boundaries, redaction, native semantics, flexible layout, and read-only contracts still apply; offline/resilience and complete accessibility certification are deferred, not waived for release.
+Phase 2A and Phase 2B are internal technical-owner exceptions and do not claim the full definition below. Security boundaries, redaction, native semantics, flexible layout, and read-only contracts still apply; offline/resilience and complete accessibility certification are deferred, not waived for release.
 
 - Matches the approved screen hierarchy and semantic tokens.
 - Handles live, loading, empty, cached/stale, offline, authentication, and server-error states.

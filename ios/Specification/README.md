@@ -4,7 +4,7 @@ This folder is the canonical implementation specification for the native iOS app
 
 Status: **Draft for implementation review**  
 Last updated: **2026-07-16**\
-Current milestone: **Phase 2A live Home accepted for the sole technical owner; choose whether to extend the technical lane or resume deferred Phase 1 before the next feature slice**
+Current milestone: **Phase 2B live, memory-only Activity, Search, supported filters, and transaction detail are in progress for the sole technical owner under D-019**
 
 ## How to read the specification
 
@@ -16,15 +16,15 @@ Current milestone: **Phase 2A live Home accepted for the sole technical owner; c
 
 ## Phase documents
 
-| Phase | Outcome | Specification | Delivery checkpoint |
-| --- | --- | --- | --- |
-| 0 | A real iPhone can securely reach a stable, mobile-safe Mac API | [Foundation and private bridge](PHASE_0_FOUNDATION.md) | Internal connectivity prototype |
-| 1 | Deferred: app lock, truthful freshness, polished recovery, and encrypted offline viewing | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Later private dogfood gate |
-| 2 | Phase 2A live Home accepted; full phase adds Activity, Search, filters, detail, and cached behavior | [Everyday money](PHASE_2_EVERYDAY_MONEY.md) | Technical-owner live slice, then daily-use read-only slice |
-| 3 | Budgets, net worth, assets, accounts, and sync history work read-only | [Planning and connected data](PHASE_3_PLANNING_AND_ACCOUNTS.md) | Recommended read-only MVP |
-| 4 | Explicitly approved commands can safely mutate Mac-owned data | [Mobile commands](PHASE_4_MOBILE_COMMANDS.md) | Trusted command release |
-| 5 | Advisor works with streaming, freshness disclosure, and a safe tool policy | [Advisor](PHASE_5_ADVISOR.md) | Full mockup capability parity |
-| 6 | The app is accessible, localized, resilient, signed, and distributable | [Release readiness](PHASE_6_RELEASE_READINESS.md) | Release candidate |
+| Phase | Outcome                                                                                                                                         | Specification                                                      | Delivery checkpoint                                         |
+| ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
+| 0     | A real iPhone can securely reach a stable, mobile-safe Mac API                                                                                  | [Foundation and private bridge](PHASE_0_FOUNDATION.md)             | Internal connectivity prototype                             |
+| 1     | Deferred: app lock, truthful freshness, polished recovery, and encrypted offline viewing                                                        | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Later private dogfood gate                                  |
+| 2     | Phase 2A live Home accepted; Phase 2B live transaction browsing in progress; full phase later adds cached/offline behavior and deferred filters | [Everyday money](PHASE_2_EVERYDAY_MONEY.md)                        | Technical-owner live slices, then daily-use read-only slice |
+| 3     | Budgets, net worth, assets, accounts, and sync history work read-only                                                                           | [Planning and connected data](PHASE_3_PLANNING_AND_ACCOUNTS.md)    | Recommended read-only MVP                                   |
+| 4     | Explicitly approved commands can safely mutate Mac-owned data                                                                                   | [Mobile commands](PHASE_4_MOBILE_COMMANDS.md)                      | Trusted command release                                     |
+| 5     | Advisor works with streaming, freshness disclosure, and a safe tool policy                                                                      | [Advisor](PHASE_5_ADVISOR.md)                                      | Full mockup capability parity                               |
+| 6     | The app is accessible, localized, resilient, signed, and distributable                                                                          | [Release readiness](PHASE_6_RELEASE_READINESS.md)                  | Release candidate                                           |
 
 ## Dependency flow
 
@@ -33,7 +33,8 @@ flowchart LR
     P0["Phase 0: private bridge"] --> P1["Phase 1: trust and cache"]
     P1 --> P2["Phase 2: everyday money"]
     P0 -. "D-018 technical lane" .-> P2A["Phase 2A: live Home"]
-    P2A -. "later integrates" .-> P2
+    P2A -. "D-019 extension" .-> P2B["Phase 2B: live transactions"]
+    P2B -. "later integrates" .-> P2
     P2 --> P3["Phase 3: planning and accounts"]
     P3 --> MVP["Read-only MVP gate"]
     MVP --> P4["Phase 4: commands"]
@@ -42,25 +43,25 @@ flowchart LR
     P5 --> P6
 ```
 
-D-018 permitted only the sole technical owner to start Phase 2A from Phase 0; that slice is now accepted. The lane remains live-only and memory-only, pulls forward the app-switcher cover, and cannot claim Phase 1, full Phase 2, private dogfood, or release readiness. The solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
+D-018 permitted only the sole technical owner to start Phase 2A from Phase 0; that Home slice is accepted. D-019 extends the same live-only, memory-only, read-only lane into Activity, 300 ms Search, direction/status/date/account/review/excluded filters, fixed opaque cursor pagination, and opaque-ID transaction detail. It does not permit persistence, search recents, mutations, transfer/category/owner filters, or editable transaction controls. Neither decision claims Phase 1, full Phase 2, private dogfood, or release readiness; the solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
 
 ## Task identifiers
 
 Task IDs follow `P{phase}-{area}-{number}`.
 
-| Area | Meaning |
-| --- | --- |
-| `PRD` | Product decision or specification |
-| `DES` | Interaction, visual, or content design |
-| `ARC` | Cross-system architecture |
-| `MAC` | Electron/Mac lifecycle and desktop UI |
-| `API` | Fastify route, contract, DTO, or service boundary |
-| `SEC` | Pairing, authentication, authorization, privacy, or Keychain |
-| `DAT` | iOS snapshot persistence, migration, and data repository |
-| `IOS` | Swift/SwiftUI application work |
-| `AI` | Advisor agent, session, or streaming work |
-| `QA` | Automated, manual, performance, accessibility, or security validation |
-| `REL` | Signing, distribution, operations, and release work |
+| Area  | Meaning                                                               |
+| ----- | --------------------------------------------------------------------- |
+| `PRD` | Product decision or specification                                     |
+| `DES` | Interaction, visual, or content design                                |
+| `ARC` | Cross-system architecture                                             |
+| `MAC` | Electron/Mac lifecycle and desktop UI                                 |
+| `API` | Fastify route, contract, DTO, or service boundary                     |
+| `SEC` | Pairing, authentication, authorization, privacy, or Keychain          |
+| `DAT` | iOS snapshot persistence, migration, and data repository              |
+| `IOS` | Swift/SwiftUI application work                                        |
+| `AI`  | Advisor agent, session, or streaming work                             |
+| `QA`  | Automated, manual, performance, accessibility, or security validation |
+| `REL` | Signing, distribution, operations, and release work                   |
 
 User stories use `US-P{phase}-{number}`. Global requirements use `REQ-{domain}-{number}` and are mapped in [Traceability](TRACEABILITY.md).
 
