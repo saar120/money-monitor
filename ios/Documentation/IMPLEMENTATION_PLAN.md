@@ -106,7 +106,7 @@ Screens: Advisor home and conversation.
 
 ## First development tickets
 
-1. Unlock and cold-launch the installed launch-state update, then reboot/unlock/open the physical iPhone and verify it reaches the authenticated shell through the saved Keychain pairing without another QR scan.
+1. Confirm the current physical-iPhone launch reached the authenticated shell without flashing the scanner, then reboot/unlock/open it and verify the saved Keychain pairing still works without another QR scan.
 2. Verify a LAN-only client cannot reach either loopback Fastify listener.
 3. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
 4. Revoke the phone and run the final token/credential/account-number evidence scan.
