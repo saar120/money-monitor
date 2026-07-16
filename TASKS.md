@@ -2,7 +2,7 @@
 
 ## Active
 
-- [ ] **Complete Phase 2A physical resilience checks** - Live Home, Recent activity compatibility, and Search scoping passed on the paired iPhone. Next verify pull-to-refresh, Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
+- [ ] **Complete Phase 2A physical resilience checks** - Live Home, Recent activity compatibility, Search scoping, and pull-to-refresh passed on the paired iPhone. Next verify Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
 
 ## Waiting On
 
