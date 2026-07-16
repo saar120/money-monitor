@@ -15,7 +15,7 @@ struct RootView: View {
             } else {
                 switch environment.connectionState {
                 case .connected:
-                    MainTabView()
+                    MainTabView(scannerFactory: scannerFactory)
                 case .notConfigured, .connecting, .failed:
                     NavigationStack {
                         ConnectMacView(scannerFactory: scannerFactory)
@@ -54,12 +54,13 @@ private struct RestoringConnectionView: View {
 private struct MainTabView: View {
     @State private var selection: AppTab = .home
     @State private var searchText = ""
+    let scannerFactory: PairingScannerViewFactory
 
     var body: some View {
         TabView(selection: $selection) {
             Tab("Home", systemImage: "house", value: .home) {
                 NavigationStack {
-                    HomeView()
+                    HomeView(scannerFactory: scannerFactory)
                 }
             }
 
