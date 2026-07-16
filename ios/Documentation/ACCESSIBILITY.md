@@ -2,7 +2,7 @@
 
 Accessibility is part of each feature's definition of done, not a release-end audit.
 
-**Current Phase 2A exception:** D-018 defers completion of the full manual matrix below only for sole-owner technical dogfood on a passcode-protected, non-shared personal iPhone. Phase 2A code must still use native semantics, flexible layouts, non-color status meaning, and labels for essential controls. The exception does not waive this plan for a full phase gate, broader dogfood, offline storage, or release acceptance.
+**Current scope:** the historical D-018/D-019 sole-owner exception ended with accepted Phase 2A/2B. D-020 plans trusted-circle use, so core native semantics, flexible layouts, non-color status meaning, large text, and VoiceOver remain feature gates. The private release matrix covers supported iPhones only; iPad optimization and full Hebrew UI localization are out of scope.
 
 ## Required support
 
@@ -13,7 +13,7 @@ Accessibility is part of each feature's definition of done, not a release-end au
 - Reduce Transparency and Reduce Motion.
 - Switch Control and Voice Control for primary flows.
 - System Light/Dark Mode.
-- Mixed Hebrew/English merchant content and future RTL localization.
+- Mixed Hebrew/English merchant and financial content inside the English UI; full RTL localization is out of scope.
 
 ## Component rules
 
@@ -37,7 +37,7 @@ Accessibility is part of each feature's definition of done, not a release-end au
 
 System components automatically respond to Reduce Transparency, Increased Contrast, and Reduce Motion. Custom translucent controls must read the corresponding environment values and provide an opaque, high-contrast fallback. Financial content is already opaque by design.
 
-## Text and localization
+## Text and mixed-direction content
 
 - Use SwiftUI text styles instead of fixed sizes.
 - Allow multiline labels and avoid fixed-height text containers.
@@ -55,8 +55,8 @@ For each phase, test at minimum:
 | Text | Default, largest accessibility size, Bold Text |
 | Motion/material | Default, Reduce Motion, Reduce Transparency |
 | Input | Touch, VoiceOver, Switch Control for critical path |
-| Device | Small iPhone, current Pro size, physical iPhone, iPad/landscape checkpoint |
-| Language content | English UI with Hebrew merchant data; future full RTL locale |
+| Device | Small iPhone, current Pro size, physical iPhone, functional landscape |
+| Language content | English UI with mixed Hebrew/English merchant and financial data |
 | Connectivity | Live, slow, cached, Mac unavailable, token revoked |
 
 ## Feature acceptance questions

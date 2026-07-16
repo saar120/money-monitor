@@ -5,7 +5,7 @@
 The owner can understand budgets, net worth, assets, liabilities, account balances/freshness, and recent Mac sync outcomes from one coherent live or saved read model.
 
 Delivery checkpoint: **recommended private read-only MVP**  
-Phase status: **planned**  
+Phase status: **product policy accepted under D-023; implementation planned**
 Depends on: **Phase 2 DTO/repository, formatting, navigation, and state patterns**
 
 ## User stories
@@ -38,27 +38,30 @@ Budget Edit, asset Edit, account administration, and “Sync now” are not Phas
 ### Budget read model
 
 - list and detail/progress use one normalized envelope;
-- budget period, limit, spent, remaining/overspend, pace, included categories, and calculation time are explicit;
+- support existing monthly/yearly category budgets; budget period, limit, spent, remaining/overspend, pace, included categories, and calculation time are explicit;
 - current and comparison period semantics are frozen in fixtures;
-- exactly-at-limit, inactive, no transactions, refund/negative spend, and over-limit cases are defined.
+- current periods end today and completed periods use the full month/year;
+- exactly at limit is distinct from over; positive credits do not reduce v1 budget spend;
+- overlapping budgets remain independent and are never summed into one total-remaining claim.
 
 ### Wealth read model
 
-- current net worth and historical series share base currency and calculation time;
+- current net worth and historical series use ILS base currency and declare calculation time;
 - assets, liabilities, banks/liquid total, allocation, and movement reconcile;
 - source-currency values and exchange-rate timestamp remain available in detail;
-- range/granularity are explicit and zero/one/negative series are valid.
+- ranges are 3M/6M/1Y/All with 1Y default; server-selected granularity is explicit and zero/one/negative series are valid;
+- rates older than 72 hours are labeled stale, missing rates make aggregates partial rather than zero, and current-rate historical values are labeled Estimated.
 
 ### Account read model
 
-Existing `GET /api/accounts` is not safe for reuse: it remains database-shaped and may expose unmasked `accountNumber` plus configuration flags. Mobile DTOs mask identifiers server-side and expose only public institution/name, account type, balance/due semantics, freshness, and approved recent activity.
+Existing `GET /api/accounts` is not safe for reuse: it remains database-shaped and may expose unmasked `accountNumber` plus configuration flags. Mobile DTOs identify an account by institution, safe type/display name, and server-masked last four characters. Bank accounts may expose Balance; credit cards expose identity/freshness only until the Mac has a trustworthy amount-due model.
 
 ### Sync-history read model
 
 Do not expose raw scrape sessions/logs. A translation service maps internal events to safe public states:
 
 ```text
-queued | running | completed | partiallyFailed | attentionNeeded | cancelled | failed
+neverRun | queued | running | completed | partial | attentionNeeded | cancelled | failed
 ```
 
 Messages may say that the Mac needs attention, but the first read-only release never requests bank credentials, OTP, selectors, browser actions, or manual-login input on iPhone.
@@ -67,7 +70,7 @@ Messages may say that the Mac needs attention, but the first read-only release n
 
 | ID | Owner | Status | Task — how and acceptance |
 | --- | --- | --- | --- |
-| P3-PRD-01 | Product + finance logic | Blocked | Freeze budget periods/pace, net-worth ranges, base/mixed-currency behavior, rate-age disclosure, account masking, and public sync taxonomy. Acceptance: calculation/masking examples exist as fixtures and user copy. |
+| P3-PRD-01 | Product + finance logic | Done — accepted under D-023 | Monthly/yearly budget behavior, overlapping-budget limits, 3M/6M/1Y/All wealth ranges, ILS/mixed-currency disclosure, rate age, account masking/wording, and public sync taxonomy are locked in fixtures and copy. |
 | P3-API-01 | Shared API | Planned | Define budget list/detail/progress DTOs with period, comparison, pace, categories, recent activity, and `calculatedAt`; validate identical server/Swift fixtures. |
 | P3-API-02 | Shared API + backend | Planned | Define/implement current and historical net-worth DTOs with base currency, source context, range/granularity, allocation, rate timestamp, and one calculation point. |
 | P3-API-03 | Backend | Planned | Add safe asset list/detail/history DTOs with accepted liquidity, linked liability, and net equity fields. Exclude notes/internal linked IDs and all edit data unless explicitly required. |
@@ -129,4 +132,3 @@ Phase 3 and the recommended read-only MVP pass only when:
 - no Phase 3 UI or device token can edit budgets/assets/accounts or start scraping;
 - Home and transaction usability targets plus accessibility/performance gates pass on physical devices;
 - deferred controls are absent or explicitly unavailable, not visually functional placeholders.
-

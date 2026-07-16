@@ -4,7 +4,7 @@ The canonical product definition is [`docs/ios-mockups/PRODUCT.md`](../../docs/i
 
 ## Product promise
 
-Give an existing Money Monitor owner a fast, calm, and private view of their finances on iPhone without moving bank credentials, scraping, or authoritative storage off the Mac.
+Give the maintainer and a small trusted circle of family and friends a fast, calm, and private iPhone view without moving bank credentials, scraping, or authoritative storage off the Mac.
 
 The app succeeds when a person can:
 
@@ -35,24 +35,26 @@ The app succeeds when a person can:
 ## Initial scope
 
 - Native SwiftUI app for iOS 18 and later.
-- iPhone-first layouts with iPad and landscape resilience.
+- iPhone-only, portrait-first layouts with functional landscape.
 - Private connection to a paired Mac over Tailscale HTTPS.
+- One paired Mac per phone; many individually approved and revocable phones per Mac, with no roles or cloud accounts.
 - Read-only financial experience first.
 - Light and Dark Mode from semantic tokens.
 - Dynamic Type, VoiceOver, Bold Text, Increased Contrast, Reduce Transparency, and Reduce Motion.
-- Hebrew merchant names and mixed right-to-left content inside the otherwise localized layout.
+- Hebrew merchant names and mixed-direction financial content inside the English UI.
 
-## Deferred until explicitly specified
+## Explicitly out of scope for the self-use plan
 
 - Cloud-hosted data or scraper execution.
 - Bank login or credential entry on iPhone.
 - Offline mutation queues.
-- Household permissions and multi-Mac switching.
-- Push notification delivery architecture.
-- App Store distribution and production bundle identity.
+- Household permissions and simultaneous multi-Mac profiles.
+- APNs/native iPhone notifications; existing Telegram alerts remain Mac-owned.
+- App Store distribution, iPad optimization, and full UI localization.
 - Destructive or administrative desktop operations from iPhone.
+
+The production identity and private distribution lane are now locked in [Locked product policy](LOCKED_PRODUCT_POLICY.md): direct Xcode development, private TestFlight for family/friends, and no App Store. Reintroducing any out-of-scope item requires a superseding product decision.
 
 ## Mutation rule
 
 The approved screens imply edits to transactions, budgets, categories, alerts, assets, accounts, and sync. Those actions are not automatically authorized by the mobile product promise. Each command needs a product decision, scoped server capability, confirmation behavior, audit event, and offline rule before implementation.
-

@@ -6,10 +6,10 @@
 | --- | --- |
 | Product | Money Monitor for iOS |
 | Platform | Native SwiftUI app, iOS 18+ |
-| Status | Draft for implementation review |
+| Status | Product policy accepted; implementation phased |
 | Product source | [`docs/ios-mockups/PRODUCT.md`](../../docs/ios-mockups/PRODUCT.md) |
 | Design source | [`docs/ios-mockups/DESIGN.md`](../../docs/ios-mockups/DESIGN.md) |
-| Recommended first release scope | Phases 0–3, private read-only MVP |
+| Recommended first release scope | Phases 0–3, private trusted-circle read-only MVP |
 | Source of truth | Money Monitor Mac app and local SQLite |
 | First transport | Private Tailscale HTTPS connection to the Mac |
 
@@ -26,6 +26,7 @@ Confirmed inputs:
 - The user requires bank credentials and scraping to stay on the Mac.
 - The Mac app and local SQLite are authoritative.
 - Tailscale-first, fully local connectivity is preferred before any cloud work.
+- The intended audience is the maintainer plus a small trusted circle of family and friends; this is not a public or multi-tenant service.
 - The approved mockup set contains 26 screens across setup, daily review, planning, Advisor, control, resilience, and appearance.
 - The packaged Electron app currently uses a random loopback port and a process-scoped full-access token, so a stable mobile pairing boundary does not yet exist.
 
@@ -38,9 +39,9 @@ Product hypotheses to validate during dogfood:
 
 ## 3. Users and use contexts
 
-### Primary persona — Mac owner
+### Primary persona — trusted-circle user
 
-Runs and administers Money Monitor on a trusted Mac, owns the financial data, and wants quick private access from a personal iPhone. This persona can approve devices and revoke access.
+Uses a personally approved iPhone to access one trusted Money Monitor Mac. The Mac owner explicitly approves and can revoke every phone; approved users receive the same product surface without accounts or roles.
 
 Typical contexts:
 
@@ -49,10 +50,6 @@ Typical contexts:
 - checking a budget before spending;
 - confirming whether the latest scrape succeeded;
 - browsing the last saved picture while the Mac sleeps or is unreachable.
-
-### Secondary persona — trusted household member
-
-Needs a shared or limited financial view but may not have the same administrative authority. Household roles are not defined in the current backend, so this persona is a future consideration unless the owner explicitly approves an owner-equivalent device model for the first release.
 
 ### Operational actor — Mac owner approving a device
 
@@ -129,7 +126,7 @@ Phase 5. Adds safe streaming conversations after the financial read model is rel
 
 ### Increment E — Distribution candidate
 
-Phase 6. Completes accessibility, localization, resilience, privacy, signing, and release readiness for the chosen distribution channel.
+Phase 6. Completes scoped accessibility, mixed Hebrew/English content checks, resilience, privacy, signing, and release readiness for private distribution.
 
 ## 10. Critical user journeys
 
@@ -147,7 +144,7 @@ Failure branches: expired code, wrong Tailnet, Mac unavailable, approval denied,
 
 ### Journey B — Daily check
 
-1. User authenticates if app lock is enabled.
+1. User authenticates on cold launch or after the accepted two-minute background grace.
 2. Home immediately shows the valid saved snapshot, if present.
 3. App refreshes privately when the Mac is reachable.
 4. Content updates atomically and shows a current timestamp.
@@ -198,7 +195,7 @@ Failure branches: expired code, wrong Tailnet, Mac unavailable, approval denied,
 | US-G-07 | Must | As a VoiceOver or large-text user, I want the same financial meaning and task completion as a sighted default-text user. | All |
 | US-G-08 | Must | As an iPhone user, I want errors to preserve valid content and explain recovery so that a temporary connection problem is not a dead end. | All |
 | US-G-09 | Should | As a Mac owner, I want safe diagnostics without financial content so that pairing or sync problems can be debugged privately. | 0–6 |
-| US-G-10 | Future | As a trusted household member, I want access limited to my role so that sharing does not require owner-level authority. | Future |
+| US-G-10 | Must | As a trusted-circle user, I want my phone individually approved and revocable so that private sharing requires no cloud account or household-role system. | 0–1 |
 
 Phase-specific stories live in each phase file.
 
@@ -235,18 +232,18 @@ Phase-specific stories live in each phase file.
 | REQ-NET-02 | Retry behavior uses bounded backoff and cancels when the app or task no longer needs the request. |
 | REQ-UI-03 | Navigation state, search query, filters, and scroll position survive ordinary detail navigation. |
 | REQ-A11Y-02 | Swift Charts expose text summaries and Audio Graphs where appropriate. |
-| REQ-L10N-01 | English UI correctly lays out Hebrew merchant content and bidirectional punctuation before full localization. |
+| REQ-L10N-01 | English UI correctly lays out Hebrew merchant content, signed values, and bidirectional punctuation without requiring full UI localization. |
 | REQ-OBS-01 | Performance and reliability measurement is privacy-safe and disabled from sending financial content by construction. |
 
-### Future considerations
+### Explicit out-of-scope constraints
 
 | ID | Requirement |
 | --- | --- |
-| REQ-ROLE-01 | Household roles may limit accounts, categories, and commands per paired identity. |
-| REQ-CLOUD-01 | A future transport may host the same mobile contract without changing feature views. |
-| REQ-PUSH-01 | Notification delivery may be added only after a local-first APNs/background architecture is accepted. |
-| REQ-MULTI-01 | Multiple Mac sources may be supported only with explicit source selection and snapshot separation. |
-| REQ-OFFCMD-01 | Offline command queues require a separate conflict, expiry, and authorization specification. |
+| REQ-ROLE-01 | No household roles or per-person permissions; every approved trusted device receives the accepted product surface. |
+| REQ-CLOUD-01 | No Money Monitor cloud transport, identity, storage, or scraper execution. |
+| REQ-PUSH-01 | No APNs/native iPhone push; Telegram alerts remain Mac-owned. |
+| REQ-MULTI-01 | One paired Mac per iPhone installation; switching requires Disconnect and fresh pairing. |
+| REQ-OFFCMD-01 | No offline command queue. Commands require a live Mac. |
 
 ## 13. Non-functional requirements
 
@@ -302,13 +299,13 @@ Disallowed analytics payloads:
 
 ## 15. Assumptions and dependencies
 
-- The Mac is powered on and reachable for the current Phase 2A live-only lane; deferred Phase 1 saved data will cover temporary unavailability in the broader MVP.
+- The Mac is powered on and reachable for the accepted Phase 2A/2B live lane; Phase 1 saved data will cover temporary unavailability in the broader MVP.
 - Both devices can use the same Tailnet for the first implementation.
 - Existing services remain the calculation source behind mobile DTOs.
 - The iOS app can require iOS 18 while building with the stable iOS 26 SDK.
 - A physical iPhone is available for Phase 0 and Phase 1 acceptance.
 - The owner can update the Mac app when a compatible mobile gateway is introduced.
-- No distribution date is committed; sequencing is dependency-driven.
+- Direct Xcode installation remains the development lane; private TestFlight is the family/friend distribution target after the read-only gate.
 
 ## 16. Risks and mitigations
 
@@ -320,31 +317,32 @@ Disallowed analytics payloads:
 | Offline snapshot is mistaken for live data | Incorrect financial decisions | Generated timestamp and root freshness state in visual and spoken output |
 | Scope expands to mutations before read model stabilizes | Slow delivery and unsafe authorization | Make Phases 0–3 a standalone release gate; block Phase 4 on capability matrix |
 | Advisor can call mutating tools | Unapproved data changes | Read-only tool allowlist first; confirmation contract before any command |
-| Full accessibility acceptance is deferred for technical-owner dogfood | Expensive rework before broader use | Continue native semantics/flexible layouts now; complete the full matrix before broader distribution under D-018 |
+| Trusted-circle use expands beyond one technical owner | Private financial data is shown without sufficient protection | Resume Phase 1 before family/friend distribution and keep native accessibility checks in every feature |
 | No cloud telemetry hides reliability issues | Slow debugging | Redacted local diagnostics and structured dogfood scripts |
 
-## 17. Open questions
+## 17. Resolved product questions
 
-| ID | Blocking before | Owner | Question | Recommended default |
-| --- | --- | --- | --- | --- |
-| OQ-01 | Phase 0 contract | Product | Is the first release owner-only, or may a household member receive owner-equivalent read access? | Owner-only until a role model exists |
-| OQ-02 | Phase 0 security | Security/Engineering | What are device-token lifetime, rotation, and revocation semantics? | Long-lived per-device token, rotatable and immediately revocable; never reuse desktop token |
-| OQ-03 | Phase 1 cache | Product/Security | How long is the saved snapshot retained, and what happens on revocation? | Deferred under D-018; blocks offline storage/broader dogfood, not memory-only Phase 2A. Later default: wipe on explicit unpair; lock on remote revocation until policy is confirmed |
-| OQ-04 | Phase 1 app lock | Product | Is Face ID optional, default-on, or mandatory? What is the background grace interval? | Deferred under D-018; blocks broader dogfood, not sole-owner Phase 2A. Later default: device authentication with passcode fallback and short grace period |
-| OQ-05 | Phase 2 finance | Product/Engineering | Which periods and comparison rules define Home cash flow? | Match current desktop calculations, then freeze them in mobile fixtures |
-| OQ-06 | Phase 3 currency | Product | How should mixed-currency net worth and assets disclose conversion rate age? | Display base-currency total plus source currency and rate timestamp in detail |
-| OQ-07 | Phase 4 commands | Product/Security | Which mobile commands are allowed? | Begin with low-risk review/category/budget actions only after individual approval; keep credentials/deletion Mac-only |
-| OQ-08 | Phase 4 sync | Product/Engineering | May iPhone trigger a Mac scrape that could require OTP/manual attention? | Allow only as an explicit Mac command with attention states; never run scraper on phone |
-| OQ-09 | Phase 5 Advisor | Product/AI | Is v1 Advisor strictly read-only? | Yes |
-| OQ-10 | Phase 6 release | Product | Personal installation, TestFlight, or App Store? | Dogfood with Personal Team/TestFlight decision deferred until read-only MVP |
-| OQ-11 | Future | Product/Architecture | Are cloud access, push notifications, multi-Mac, or household roles needed next? | Evaluate only after local read-only MVP usage |
+| ID | Resolution | Decision |
+| --- | --- | --- |
+| OQ-01 | Trusted-circle owner-equivalent access | D-020 |
+| OQ-02 | Long-lived, per-device, rotatable, individually revocable mobile credentials | D-014/D-020 |
+| OQ-03 | Latest encrypted snapshot, 30-day retention, 24-hour stale threshold, explicit wipe rules | D-021 |
+| OQ-04 | Mandatory system device authentication, passcode fallback, two-minute background grace | D-021 |
+| OQ-05 | Jerusalem month-to-date, matching prior-month elapsed days, ILS, Mac-owned conversion | D-022 |
+| OQ-06 | Mac-owned ILS conversion with original value/rate timestamp and stale/partial disclosure | D-023 |
+| OQ-07 | Narrow live-only review/transaction/budget/category/Telegram/sync command allowlist | D-024 |
+| OQ-08 | iPhone may request Mac sync; OTP/manual attention stays on Mac | D-024 |
+| OQ-09 | Advisor v1 is read-only with no AI memory writes or direct actions | D-025 |
+| OQ-10 | Direct Xcode development, then private TestFlight; no App Store | D-026 |
+| OQ-11 | Cloud, native push, roles, and simultaneous multi-Mac profiles are out of scope | D-020/D-026 |
+
+The exact accepted behavior is centralized in [Locked product policy](../Documentation/LOCKED_PRODUCT_POLICY.md).
 
 ## 18. Timeline considerations
 
-- No broader distribution commitment should be made until the deferred Phase 1 policy and security gates are resolved.
-- Phase 2A may proceed from accepted Phase 0 only for the sole technical owner on a passcode-protected, non-shared personal iPhone; it keeps financial DTOs memory-only and pulls forward the app-switcher cover. Foregrounding does not add a second app-authentication prompt until Phase 1 resumes.
-- Phase 1 still requires coordinated Mac/iOS work before offline storage or wider dogfood.
+- Phase 2A and Phase 2B are accepted historical live-only slices. Their sole-owner exception is superseded by D-020 for planned trusted-circle use.
+- Phase 1 product policy is resolved and its coordinated Mac/iOS implementation is next before family/friend distribution or offline storage.
 - Phase 2 can begin against frozen fixtures while Phase 0 server work proceeds, but live integration cannot pass early.
 - Phase 3 should reuse the Phase 2 repository/state patterns rather than create separate networking behavior.
-- Phase 4 and Phase 5 may be deferred independently without invalidating the read-only MVP.
+- Phase 4 and Phase 5 policies are accepted but their implementation may ship after the private read-only MVP.
 - Phase 6 accessibility and reliability tasks are partly continuous quality gates; only final matrix completion waits until the end.
