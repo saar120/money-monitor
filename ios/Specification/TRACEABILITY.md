@@ -2,7 +2,7 @@
 
 This matrix connects product requirements and user stories to the approved mockups, implementation tasks, mobile contracts, and evidence required to call the work complete. It is the coverage ledger for issue planning and release review; it does not replace the detailed acceptance criteria in each phase.
 
-Status: **Draft baseline; Phase 2B technical-owner transaction lane in progress under D-019**
+Status: **Draft baseline; Phase 2B automated gate passed under D-019, consolidated physical acceptance pending**
 Canonical screen inventory: [Screen map](../Documentation/SCREEN_MAP.md)  
 Contract baseline: [Mobile API contract](../Documentation/API_CONTRACT.md)  
 Global gates: [Quality gates](QUALITY_GATES.md)
@@ -19,6 +19,19 @@ Global gates: [Quality gates](QUALITY_GATES.md)
 | `A`  | Accessibility, Dynamic Type, contrast, motion, or localization evidence   |
 | `S`  | Security/privacy negative test, threat review, or secret scan             |
 | `R`  | Signed archive, installation, update, compatibility, or rollback evidence |
+
+## Phase 2B evidence snapshot — 2026-07-16
+
+The implementation, automated gate, and clean signed-harness verification are complete, but Phase 2B is not accepted until the consolidated physical-iPhone journey passes.
+
+- Backend evidence: authenticated GET-only allowlisted list/detail contracts, HMAC IDs, encrypted filter/snapshot-bound keyset cursors, redaction, and adjacent-route negatives; 49 files/555 tests plus main/Electron TypeScript typechecks, lint, and Prettier passed.
+- iOS evidence: memory-only Activity/Search/supported filters/read-only detail; exact 300 ms debounce; NFKC plus shared ECMAScript whitespace/UTF-16 vectors; pagination/dedupe/retry; strict nested/nullables/enums/UTC decoding; detail ID/server identity binding; Keychain credential use; epoch-guarded revocation/re-pair races; sheet privacy cover; calendar-only dates; and no persistence, mutations, or edit controls.
+- Build/review evidence: the iPhone 17 Pro iOS 26.5 simulator passed 140 tests/165 parameterized executions with zero failures; the generic simulator production build passed; independent security and UI reviews reported no findings; and the source scan found no financial/query/filter/cursor/detail persistence or logging path.
+- Shared canonical fixtures: `transaction-list-live.json`, `transaction-detail-live.json`, and `transaction-search-normalization.json` are consumed by TypeScript and Swift.
+- Signed-harness evidence: the clean Apple Development-signed app is valid on disk, satisfies its designated requirement, and uses hardened runtime, timestamp, and sealed resources. Gatekeeper rejection is limited to the expected lack of notarization for this local development build.
+- Remaining evidence: physically validate Activity → filters/Search → detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recents.
+
+Phase 1 and broader/offline dogfood remain deferred and gated exactly by D-019.
 
 ## User story ownership
 
@@ -94,7 +107,7 @@ Every approved mockup has a product story, owning implementation task, data/comm
 | 3   | [Protect with Face ID](../../docs/ios-mockups/rendered/screens/faceid.png)                  | US-P1-03, US-P1-08/09                  | P1-IOS-02, P1-SEC-01                         | LocalAuthentication policy; accepted passcode/fallback behavior                                                | UI, P, A, S          |
 | 4   | [Connected and ready](../../docs/ios-mockups/rendered/screens/ready.png)                    | US-P0-04/05, US-P1-07                  | P0-IOS-05, P1-IOS-02/03                      | Authenticated compatibility/bootstrap must pass before “ready”                                                 | C, I, UI, P          |
 | 5   | [Home](../../docs/ios-mockups/rendered/screens/home.png)                                    | US-P2-01, US-P2-05/06/08               | P2-PRD-01, P2-API-02, P2-IOS-02, P2-DAT-01   | `GET /bootstrap`; one coherent snapshot/time                                                                   | C, U, I, UI, P, A    |
-| 6   | [Activity](../../docs/ios-mockups/rendered/screens/activity.png)                            | US-P2-02, US-P2-05/06/08               | P2-API-03, P2-IOS-03, P2-DAT-01              | `GET /transactions`; bounded pages, opaque cursor, safe memory-only DTO                                        | C, I, UI, P, A, S    |
+| 6   | [Activity](../../docs/ios-mockups/rendered/screens/activity.png)                            | US-P2-02, US-P2-05/06/08               | P2-API-03, P2-IOS-03, P2-DAT-01              | `GET /transactions`; bounded keyset pages (30 default/50 max), opaque cursor, safe memory-only DTO              | C, I, UI, P, A, S    |
 | 7   | [Search](../../docs/ios-mockups/rendered/screens/search.png)                                | US-P2-03/08; US-P2-07 deferred         | P2-API-03, P2-IOS-05, P2-QA-02               | `GET /transactions?q=…`; exactly 300 ms debounce, cancellable, query excluded from diagnostics and persistence | C, U, UI, S, A       |
 | 8   | [Transaction detail](../../docs/ios-mockups/rendered/screens/transaction.png)               | US-P2-04/08; US-P4-03 when writes ship | P2-API-04, P2-IOS-06; P4-API-03/P4-IOS-03    | `GET /transactions/:id` with opaque ID; all note/recurring/options/category/owner/review edit controls hidden  | C, I, UI, S, A       |
 | 9   | [Filters sheet](../../docs/ios-mockups/rendered/screens/filters.png)                        | US-P2-03/08                            | P2-IOS-04, P2-DES-01/02                      | Draft vs applied direction/status/date/account/review/excluded state; transfer/category/owner filters deferred | C, U, UI, A, S       |
@@ -137,7 +150,7 @@ D-018 adds a non-cumulative technical-owner execution lane for live Home, and D-
 | --------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Internal connectivity prototype   | Phase 0                                       | Real private route, explicit approval, scoped Keychain credential, mobile-safe bootstrap contract                                                                                                                                                 |
 | Technical-owner live Home         | Phase 0 + Phase 2A subset                     | Trusted sole-owner device, app-switcher cover, live validated bootstrap, memory-only financial DTOs, read-only/privacy-negative tests                                                                                                             |
-| Technical-owner live transactions | Phase 0 + accepted Phase 2A + Phase 2B subset | `mobile.read` list/opaque detail, bounded keyset cursor, 300 ms Search, supported direction/status/date/account/review/excluded filters, memory-only state, no recents/mutations, automated abuse/privacy tests, consolidated physical validation |
+| Technical-owner live transactions | Phase 0 + accepted Phase 2A + Phase 2B subset | Automated and signed-harness gates passed: `mobile.read` list/opaque detail, bounded encrypted keyset cursor, 300 ms Search, supported direction/status/date/account/review/excluded filters, memory-only state, no recents/mutations, abuse/privacy tests, and strict local bundle verification. Pending: consolidated physical validation. |
 | Private dogfood                   | Phases 0–1                                    | App lock/privacy cover, encrypted atomic snapshot, truthful recovery states, physical fault matrix                                                                                                                                                |
 | Daily-use read-only slice         | Phases 0–2                                    | Home/Activity/Search/Detail, coherent calculations, paging/state restoration, cached daily journey                                                                                                                                                |
 | Recommended read-only MVP         | Phases 0–3                                    | Planning/accounts/safe sync read models, reconciled financial fixtures, accessible charts, no credential/config leakage                                                                                                                           |

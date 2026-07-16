@@ -48,7 +48,7 @@ D-018 postpones this phase for the current sole technical owner, and D-019 exten
 
 **Exit criteria:** a paired user always knows whether data is live or saved, can browse the saved snapshot offline, and cannot expose financial content from the app switcher when locked.
 
-## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A accepted; Phase 2B in progress
+## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A accepted; Phase 2B automated gate passed, physical acceptance pending
 
 Screens: Home, Activity, Search, Transaction detail, Filters.
 
@@ -56,7 +56,7 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 - Memory-only financial DTOs; no snapshot, URL cache, `UserDefaults`, search-recents, query, filter, cursor, or detail persistence.
 - Opaque app-switcher cover before any real amount renders.
 - Phase 2B adds authenticated `GET /api/mobile/v1/transactions` and `GET /api/mobile/v1/transactions/:id`, where the detail ID is opaque and every response is an allow-listed mobile DTO.
-- Fixed-size opaque cursor pagination, chronological Activity, and inline append retry without desktop offsets.
+- Bounded opaque keyset-cursor pages (30 by default, 50 maximum), chronological Activity, deduplication, and inline append retry without desktop offsets.
 - Exactly 300 ms Search debounce with cancellation and no production query diagnostics.
 - Supported Phase 2B filters are direction, status, date range, opaque account ID, review state, and excluded state.
 - Transfer-specific behavior, category/owner filters, search recents, and every transaction edit control remain deferred.
@@ -69,6 +69,8 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 Accepted on 2026-07-16 after the signed Mac/iPhone path passed live-data, refresh, recoverable Tailscale-off failure, app-switcher concealment, and force-quit/relaunch checks without adding financial persistence.
 
 **Phase 2B exit criteria:** shared server/Swift fixtures prove allow-listed list/detail DTOs and redaction; cursor, duplicate, search-cancellation, filter, append-failure, revocation, and no-persistence tests pass; the full simulator suite stays green; then one consolidated physical-iPhone block validates Activity → Search/Filter → Detail → return, app-switcher concealment, network interruption, and relaunch refetch. Phase 2B still does not claim cached/offline browsing, Phase 1, or the full Phase 2 gate.
+
+**Automated gate passed 2026-07-16:** the authenticated GET-only backend exposes exact allowlisted list/detail contracts with HMAC IDs, encrypted filter/snapshot-bound keyset cursors, redaction, and no adjacent routes. The full backend passed 49 files/555 tests plus main/Electron typechecks, lint, and Prettier. Native iOS now provides memory-only Activity, Search, supported filters, and read-only detail with exact 300 ms debounce; NFKC and shared ECMAScript whitespace/UTF-16 vectors; pagination/dedupe/retry; strict nested/nullables/enums/UTC decoding; detail ID/server identity binding; Keychain credential use; epoch-guarded revocation/re-pair races; sheet privacy cover; calendar-only dates; and no persistence, mutation, or edit controls. The iPhone 17 Pro iOS 26.5 simulator passed 140 tests/165 parameterized executions with zero failures, the generic simulator production build passed, independent security and UI reviews found no issues, and the source scan found no financial/query/filter/cursor/detail persistence or logging path. Shared canonical fixtures are `transaction-list-live.json`, `transaction-detail-live.json`, and `transaction-search-normalization.json`.
 
 ## [Phase 3 — Planning, wealth, and connected data](../Specification/PHASE_3_PLANNING_AND_ACCOUNTS.md)
 
@@ -124,8 +126,8 @@ Screens: Advisor home and conversation.
 2. **Implemented:** `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date/sign output, strict decoder validation, and partial-section suppression.
 3. **Implemented:** live in-memory `P2-IOS-02` Home presentation with single-flight refresh and fixture-driven tests.
 4. **Accepted:** the paired physical iPhone passed Phase 2A live-data, refresh-failure, relaunch, and app-switcher acceptance checks.
-5. **In progress under D-019:** shared transaction list/detail contract, fixed opaque cursor, allow-listed projection, authenticated routes, and redaction/abuse tests.
-6. **Next in the same batch:** memory-only Activity/Search/filter/detail state, exact 300 ms cancellation, simulator/UI regression, and one consolidated owner validation block.
+5. **Implemented; automated gate passed:** shared transaction list/detail contracts, bounded opaque keyset cursors, allow-listed projection, authenticated GET-only routes, memory-only native browsing, and redaction/abuse/race/persistence tests.
+6. **Verified:** the clean Apple Development-signed Mac harness is valid on disk and satisfies its designated requirement. **Next:** run one consolidated physical-iPhone block covering Activity → filters/Search → detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recents.
 
 Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 
