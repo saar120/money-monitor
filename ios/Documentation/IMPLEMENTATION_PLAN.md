@@ -6,13 +6,14 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 
 ## Status legend
 
+- **Accepted:** implementation and required evidence gates passed.
 - **Ready:** committed foundation exists in this folder.
 - **Planned:** specified here but not implemented.
 - **Blocked:** depends on a product or architecture decision.
 
 ## [Phase 0 — Foundation and private bridge](../Specification/PHASE_0_FOUNDATION.md)
 
-### iOS foundation — Ready
+### iOS foundation — Accepted
 
 - Buildable SwiftUI application, unit-test, and UI-test targets.
 - Feature-first source folders and dependency seams.
@@ -20,16 +21,16 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 - Manual HTTPS address field and typed `GET /api/mobile/v1/health` smoke client.
 - Semantic design tokens and placeholder feature states.
 
-### Mac mobile bridge — Acceptance in progress
+### Mac mobile bridge — Accepted
 
 - Publish an isolated loopback mobile server through a stable private Tailscale HTTPS route. **Implemented and verified across two packaged-app cold restarts with distinct random ports.**
-- Add QR pairing, claimant-bound status/exchange, device approval, rotation, and revocation. **Production routes, Mac/iPhone controls, single-mint retry hardening, and trusted same-device re-pair rotation are implemented and physically accepted.**
+- Add QR pairing, claimant-bound status/exchange, device approval, rotation, and revocation. **Production routes, Mac/iPhone controls, single-mint retry hardening, same-device rotation, physical revocation, and fresh recovery pairing are implemented and accepted.**
 - Issue a `mobile.read` token instead of the full desktop bearer token. **Digest-only registry, restart persistence, capability enforcement, and revocation are implemented.**
 - Add `/api/mobile/v1/bootstrap` with masked, stable DTOs. **Production service ports and adapter are implemented with opaque IDs, charged currency, Jerusalem finance dates, future-row filtering, and safe partials.**
 - Add shared server/Swift fixtures and compatibility tests. **Bootstrap and pairing fixtures are shared, the generated Draft 2020-12 bootstrap schema is drift-checked, and the updated Xcode simulator suite passes with every fixture.**
 - Package and sign the Mac physical harness. **Ready at `dist/mac-arm64/Money Monitor.app`; fresh physical pairing and iOS app cold-launch persistence passed.**
 
-**Exit criteria:** a physical iPhone can pair, store the device token in Keychain, call health and bootstrap, and remain paired across a Mac app restart without exposing Fastify to the LAN.
+**Exit criteria passed 2026-07-16:** a physical iPhone paired and stored its scoped token in Keychain; stable health followed random-port Mac restarts, and a later physical cold launch authenticated bootstrap from the saved credential. The bridge remained isolated from the LAN, rejected a revoked credential, and recovered through a fresh approved pairing. Final count-only scans found no registered-token, Bearer, private-route, or known-account leakage in inspected artifacts.
 
 ## [Phase 1 — Trust, security, and resilience](../Specification/PHASE_1_TRUST_AND_RESILIENCE.md)
 
@@ -104,11 +105,13 @@ Screens: Advisor home and conversation.
 - Network interruption, Mac sleep/wake, token revocation, schema migration, and corrupted-cache tests.
 - Privacy manifest, app icon, launch assets, production bundle ID, signing, and distribution plan.
 
-## First development tickets
+## Next development tickets
 
-1. Revoke the phone and run the final token/credential/account-number evidence scan.
+1. Accept `P1-PRD-01`: app-lock, freshness, encrypted-snapshot retention, disconnect/revocation, and wipe behavior.
+2. Implement the pure root-state coordinator and exhaustive transition tests.
+3. Add the app-switcher privacy cover, LocalAuthentication seam, and encrypted snapshot container.
 
-The restart, external-LAN, and re-pair gates are complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, and approved same-device re-pair atomically rotated the token while preserving device identity. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
+Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 
 The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are already complete; see the detailed Phase 0 status for their evidence.
 
