@@ -10,21 +10,28 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if environment.pairingState == .restoring {
-                RestoringConnectionView()
-            } else {
-                switch environment.connectionState {
-                case .connected:
-                    MainTabView(scannerFactory: scannerFactory)
-                case .notConfigured, .connecting, .failed:
-                    NavigationStack {
-                        ConnectMacView(scannerFactory: scannerFactory)
-                    }
-                }
+            ScenePrivacyProtectionContainer {
+                appContent
             }
         }
         .task {
             await environment.restoreSavedConnection()
+        }
+    }
+
+    @ViewBuilder
+    private var appContent: some View {
+        if environment.pairingState == .restoring {
+            RestoringConnectionView()
+        } else {
+            switch environment.connectionState {
+            case .connected:
+                MainTabView(scannerFactory: scannerFactory)
+            case .notConfigured, .connecting, .failed:
+                NavigationStack {
+                    ConnectMacView(scannerFactory: scannerFactory)
+                }
+            }
         }
     }
 }
