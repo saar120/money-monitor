@@ -14,6 +14,7 @@ import {
   type ProductionMobileAccess,
 } from './production-mobile-access.js';
 import { createMobileServer } from './mobile-server.js';
+import { createMobilePublicIdProjector } from './mobile-public-id.js';
 
 const NOW = new Date('2026-07-15T10:00:00.000Z');
 const SERVER_ID = '11111111-1111-4111-8111-aaaaaaaaaaaa';
@@ -99,7 +100,7 @@ describe('production mobile access composition', () => {
     databases.splice(0).forEach((database) => database.close());
   });
 
-  it('composes the production bootstrap ports, safe adapter, registry, and authenticator', async () => {
+  it('composes production read ports, safe adapters, registry, and one authenticator', async () => {
     const { access } = createHarness();
 
     const bootstrap = await access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE);
@@ -125,9 +126,25 @@ describe('production mobile access composition', () => {
       },
     });
     expect(access.bootstrapDependencies.authenticator).toBe(access.deviceRegistry);
+    expect(access.transactionDependencies.authenticator).toBe(access.deviceRegistry);
+    expect(access.transactionDependencies.server).toEqual({
+      id: SERVER_ID,
+      protocolVersion: MOBILE_PROTOCOL_VERSION,
+    });
+    expect(
+      await access.transactionDependencies.list(
+        { limit: 30, includeExcluded: false },
+        { generatedAt: NOW.toISOString(), financialDate: '2026-07-15' },
+        AUTHENTICATED_DEVICE,
+      ),
+    ).toEqual({
+      financialDate: '2026-07-15',
+      transactions: [],
+      page: { hasMore: false, nextCursor: null },
+    });
   });
 
-  it('fails the complete bootstrap closed when the desktop data source is unavailable', async () => {
+  it('fails bootstrap, transaction list, and detail closed when the desktop source is unavailable', async () => {
     const database = createTestDb();
     databases.push(database);
     let available = true;
@@ -145,13 +162,26 @@ describe('production mobile access composition', () => {
         netWorthReads += 1;
         return 123;
       },
-      isBootstrapAvailable: () => available,
+      isMobileReadAvailable: () => available,
       clock: () => NOW,
     });
 
     await expect(access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).resolves.toBeDefined();
+    const context = { generatedAt: NOW.toISOString(), financialDate: '2026-07-15' };
+    const query = { limit: 30, includeExcluded: false };
+    expect(access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toBeDefined();
+    const missingTransactionId = createMobilePublicIdProjector(PUBLIC_ID_KEY)('transaction', 999);
+    expect(
+      access.transactionDependencies.detail(missingTransactionId, context, AUTHENTICATED_DEVICE),
+    ).toBeNull();
     available = false;
     expect(() => access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).toThrow('unavailable');
+    expect(() => access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toThrow(
+      'unavailable',
+    );
+    expect(() =>
+      access.transactionDependencies.detail(missingTransactionId, context, AUTHENTICATED_DEVICE),
+    ).toThrow('unavailable');
     expect(netWorthReads).toBe(1);
   });
 
