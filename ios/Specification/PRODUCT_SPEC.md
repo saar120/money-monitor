@@ -28,7 +28,7 @@ Confirmed inputs:
 - Tailscale-first, fully local connectivity is preferred before any cloud work.
 - The intended audience is the maintainer plus a small trusted circle of family and friends; this is not a public or multi-tenant service.
 - The approved mockup set contains 26 screens across setup, daily review, planning, Advisor, control, resilience, and appearance.
-- The packaged Electron app currently uses a random loopback port and a process-scoped full-access token, so a stable mobile pairing boundary does not yet exist.
+- The packaged Electron app has an isolated loopback mobile gateway with a stable private Tailscale route, explicit Mac approval, and scoped device credentials; it remains the only supported pairing boundary.
 
 Product hypotheses to validate during dogfood:
 
@@ -180,7 +180,7 @@ Failure branches: expired code, wrong Tailnet, Mac unavailable, approval denied,
 2. User starts or resumes a session.
 3. Response streams with cancel/retry behavior.
 4. Read-only answers cite the relevant period/context in plain language.
-5. Any later action requires an explicit, narrow confirmation before execution.
+5. Advisor may only propose a structured future Phase 4 command; the ordinary Phase 4 UI provides the explicit, narrow confirmation before execution.
 
 ## 11. Cross-app user stories
 
@@ -221,8 +221,8 @@ Phase-specific stories live in each phase file.
 | REQ-A11Y-01 | Core workflows support Dynamic Type, VoiceOver, Bold Text, Increased Contrast, Reduce Transparency, Reduce Motion, Switch Control, and non-color status meaning. |
 | REQ-FMT-01 | Money carries decimal value and currency; dates distinguish financial dates from UTC instants; formatting is locale-aware. |
 | REQ-CMD-01 | Commands are unavailable offline and require an explicit capability; no general desktop CRUD token is accepted. |
-| REQ-AI-01 | Advisor cannot perform an unconfirmed mutation and must disclose unavailable/stale context. |
-| REQ-COMP-01 | Incompatible required API versions preserve the prior snapshot and direct the user to update rather than decoding partially. |
+| REQ-AI-01 | Advisor/model remains read-only, may only propose a structured Phase 4 command, and must disclose unavailable/stale context. |
+| REQ-COMP-01 | Preserve compatible snapshots; discard an incompatible snapshot and live-refetch after both apps update or fresh-pair when required, rather than decoding it partially. |
 
 ### Should-have requirements
 
@@ -304,7 +304,7 @@ Disallowed analytics payloads:
 - Existing services remain the calculation source behind mobile DTOs.
 - The iOS app can require iOS 18 while building with the stable iOS 26 SDK.
 - A physical iPhone is available for Phase 0 and Phase 1 acceptance.
-- The owner can update the Mac app when a compatible mobile gateway is introduced.
+- The owner can update both apps or fresh-pair when the current pairing/mobile API contract requires it.
 - Direct Xcode installation remains the development lane; private TestFlight is the family/friend distribution target after the read-only gate.
 
 ## 16. Risks and mitigations
@@ -316,7 +316,7 @@ Disallowed analytics payloads:
 | DTOs mirror SQLite rows | Client breakage and sensitive field leakage | Explicit schemas, allowlisted serialization, fixture/secret scans |
 | Offline snapshot is mistaken for live data | Incorrect financial decisions | Generated timestamp and root freshness state in visual and spoken output |
 | Scope expands to mutations before read model stabilizes | Slow delivery and unsafe authorization | Make Phases 0–3 a standalone release gate; block Phase 4 on capability matrix |
-| Advisor can call mutating tools | Unapproved data changes | Read-only tool allowlist first; confirmation contract before any command |
+| Advisor can call mutating tools | Unapproved data changes | Read-only tool allowlist; Advisor only proposes a structured command that ordinary Phase 4 UI confirms |
 | Trusted-circle use expands beyond one technical owner | Private financial data is shown without sufficient protection | Resume Phase 1 before family/friend distribution and keep native accessibility checks in every feature |
 | No cloud telemetry hides reliability issues | Slow debugging | Redacted local diagnostics and structured dogfood scripts |
 

@@ -10,7 +10,7 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 - **Ready:** committed foundation exists in this folder.
 - **Planned:** specified here but not implemented.
 - **Blocked:** depends on a product or architecture decision.
-- **Deferred:** intentionally moved outside the current technical-owner checkpoint.
+- **Deferred:** intentionally sequenced outside the current implementation milestone.
 
 ## [Phase 0 — Foundation and private bridge](../Specification/PHASE_0_FOUNDATION.md)
 
@@ -64,7 +64,7 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 - Locale-aware ILS values and mixed Hebrew/English merchant content.
 - Loading, empty, partial, retry, offline, and decode-failure states.
 
-**Phase 2A exit criteria:** live Home renders only validated, non-failed sections, uses truthful money/date labels, covers inactive scenes, persists no financial DTO, and exposes no mutation. Full Phase 2 still requires Phase 1, Activity/Search/Detail, cached fixtures, and the accessibility matrix.
+**Phase 2A exit criteria:** live Home renders only validated, non-failed sections, uses truthful money/date labels, covers inactive scenes, persists no financial DTO, and exposes no mutation. Full Phase 2 still requires Phase 1, cached/offline browsing, locked finance semantics and filters, and the accessibility matrix.
 
 Accepted on 2026-07-16 after the signed Mac/iPhone path passed live-data, refresh, recoverable Tailscale-off failure, app-switcher concealment, and force-quit/relaunch checks without adding financial persistence.
 
@@ -96,7 +96,7 @@ D-024 accepts the live-only review/transaction/budget/category/Telegram/sync all
 
 - Add one narrow capability per command.
 - Disable commands in cached/offline mode.
-- Confirm destructive or consequential changes.
+- Use explicit Save for reversible changes; require destructive confirmation only for budget/category deletion.
 - Surface server validation, conflicts, partial failures, and retry behavior.
 - Audit device, command, target, timestamp, and outcome on the Mac.
 
@@ -109,7 +109,7 @@ Screens: Advisor home and conversation.
 - Session list and conversation history.
 - SSE streaming, cancel, retry, and provider-unavailable states.
 - Freshness disclosure for data used in an answer.
-- Read-only tool allowlist first; confirmations for any later action.
+- Read-only tool allowlist first; any future structured command proposal goes through the ordinary Phase 4 command UI for confirmation.
 - Offline state clearly disables Advisor without blocking saved financial data.
 
 D-025 locks a read-only, provider-disclosed, device-private Advisor with no AI memory writes or direct actions.
@@ -123,7 +123,7 @@ D-025 locks a read-only, provider-disclosed, device-private Advisor with no AI m
 - VoiceOver, Switch Control, Bold Text, Increased Contrast, Reduce Transparency, and Reduce Motion.
 - supported iPhone sizes and functional landscape; iPad is out of scope.
 - English UI plus mixed Hebrew/English and bidirectional financial-content audit; full Hebrew UI is out of scope.
-- Network interruption, Mac sleep/wake, token revocation, schema migration, and corrupted-cache tests.
+- Network interruption, Mac sleep/wake, token revocation, compatible-snapshot preservation, incompatible-snapshot discard/live-refetch, and corrupted-cache tests.
 - Privacy manifest, app icon, launch assets, locked `com.saaramrani.moneymonitor` identity, signing, direct-install, and private-TestFlight plan.
 
 ## Next development tickets

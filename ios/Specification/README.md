@@ -58,7 +58,7 @@ Task IDs follow `P{phase}-{area}-{number}`.
 | `MAC` | Electron/Mac lifecycle and desktop UI                                 |
 | `API` | Fastify route, contract, DTO, or service boundary                     |
 | `SEC` | Pairing, authentication, authorization, privacy, or Keychain          |
-| `DAT` | iOS snapshot persistence, migration, and data repository              |
+| `DAT` | iOS snapshot persistence, compatibility validation, and data repository |
 | `IOS` | Swift/SwiftUI application work                                        |
 | `AI`  | Advisor agent, session, or streaming work                             |
 | `QA`  | Automated, manual, performance, accessibility, or security validation |

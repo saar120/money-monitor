@@ -36,7 +36,7 @@ Every remote-content feature must decide whether each state is applicable and pr
 | Empty | Explain what belongs here and give one relevant next action. |
 | Offline/unreachable | Use valid snapshot or a no-snapshot recovery state. |
 | Authentication revoked | Stop sending the token, protect content per policy, and offer re-pairing. |
-| Incompatible version | Preserve compatible snapshot and explain which app must update. |
+| Incompatible version | Preserve a compatible snapshot; discard an incompatible snapshot and live-refetch after both apps update or fresh-pair when required. |
 | Decode/schema failure | Reject response; retain prior snapshot; attach safe request ID. |
 | Server failure | Plain-language error and bounded retry; no raw provider/server details. |
 | Cancelled | Stop work promptly and leave a coherent prior state. |
@@ -58,7 +58,7 @@ Lists additionally cover first page, pagination, append error, filtered empty, n
 - Pure presentation state/reducer logic.
 - Money/date/freshness formatting with fixed locale and clock.
 - URL/request/error classification without live networking.
-- Cache validation, encryption/decryption, migration, and atomic replacement.
+- Cache validation, encryption/decryption, compatibility handling, and atomic replacement.
 - Capability and command policy logic.
 - SSE frame parsing and event de-duplication.
 
@@ -166,7 +166,7 @@ No status may rely only on blue, green, red, orange, opacity, or animation.
 - Aggregate screens state calculation range and timestamp.
 - One coherent snapshot ID/timestamp spans sections expected to reconcile.
 - A response is cacheable only after full envelope/schema/identity validation.
-- Atomic write failure, corruption, wrong server identity, missing key, and unknown schema preserve or safely discard according to policy without fabricating data.
+- Atomic write failure, corruption, wrong server identity, missing key, and unknown schema preserve a compatible snapshot or discard an incompatible one for live refetch, without fabricating data.
 - UI totals reconcile against server fixtures and calculation expectations.
 
 ## 9. Performance budgets

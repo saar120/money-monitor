@@ -15,7 +15,7 @@ Welcome → Connect to Mac → Mac approval → Device protection → Connected 
 ### Find a transaction
 
 ```text
-Search tab → query/suggestion → results → transaction detail
+Search tab → query/static guidance or filter shortcut → results → transaction detail
 Activity → filters sheet → filtered results → transaction detail
 ```
 
@@ -46,7 +46,7 @@ Period changes update the title, comparison label, chart, and freshness as one c
 Advisor → suggestion/new question → streaming conversation → complete/cancel/retry
 ```
 
-The composer is disabled while offline. A saved conversation remains readable. Any action proposed by Advisor must disclose and confirm the exact change before execution.
+The composer is disabled while offline. A saved conversation remains readable. Advisor may only propose a structured future Phase 4 command; the ordinary Phase 4 command UI discloses and confirms the exact change before execution.
 
 ## Universal remote-content states
 
@@ -66,7 +66,7 @@ The composer is disabled while offline. A saved conversation remains readable. A
 
 ## Lists and search
 
-- Empty query: focus search and show useful suggestions/recent items.
+- Empty query: focus search and show static guidance plus supported filter shortcuts; do not show recents.
 - No results: echo the query, show active filters, and offer clear/reset.
 - Pagination: append without losing scroll position; retry an append failure inline.
 - Filtered empty: distinguish from a genuinely empty account.
@@ -83,7 +83,7 @@ idle → validating → submitting → confirmed
 
 - Disable submission while cached/offline.
 - Keep user-entered values after a recoverable error.
-- Use confirmation for destructive or consequential actions.
+- Reversible edits use an explicit Save action without an extra confirmation; budget and category deletion require destructive confirmation.
 - Never optimistically present an authoritative financial change unless conflict recovery is defined.
 - Do not queue offline commands in the first release.
 
@@ -102,7 +102,7 @@ Distinguish queued, running, completed, partially failed, waiting for OTP/manual
 ## Sheets, navigation, and gestures
 
 - Details use system back navigation and interactive swipe-back.
-- Edits use medium/large sheets with Cancel and Done.
-- Destructive actions use confirmation dialogs.
+- Edits use medium/large sheets with Cancel and explicit Save.
+- Budget and category deletion use destructive confirmation dialogs.
 - Do not hide essential actions behind custom gestures.
 - Keyboard focus, dismissal, and safe-area behavior follow native controls.
