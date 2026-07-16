@@ -48,7 +48,7 @@ D-018 postpones this phase for the current sole technical owner. It remains requ
 
 **Exit criteria:** a paired user always knows whether data is live or saved, can browse the saved snapshot offline, and cannot expose financial content from the app switcher when locked.
 
-## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A active
+## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A accepted
 
 Screens: Home, Activity, Search, Transaction detail, Filters.
 
@@ -61,6 +61,8 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 - Loading, empty, partial, retry, offline, and decode-failure states.
 
 **Phase 2A exit criteria:** live Home renders only validated, non-failed sections, uses truthful money/date labels, covers inactive scenes, persists no financial DTO, and exposes no mutation. Full Phase 2 still requires Phase 1, Activity/Search/Detail, cached fixtures, and the accessibility matrix.
+
+Accepted on 2026-07-16 after the signed Mac/iPhone path passed live-data, refresh, recoverable Tailscale-off failure, app-switcher concealment, and force-quit/relaunch checks without adding financial persistence.
 
 ## [Phase 3 — Planning, wealth, and connected data](../Specification/PHASE_3_PLANNING_AND_ACCOUNTS.md)
 
@@ -115,7 +117,8 @@ Screens: Advisor home and conversation.
 1. **Implemented:** standalone `P1-SEC-02` inactive/app-switcher privacy cover and lifecycle policy tests.
 2. **Implemented:** `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date/sign output, strict decoder validation, and partial-section suppression.
 3. **Implemented:** live in-memory `P2-IOS-02` Home presentation with single-flight refresh and fixture-driven tests.
-4. **Next:** install the current build on the paired physical iPhone and complete the Phase 2A live-data, refresh-failure, relaunch, and app-switcher acceptance checks.
+4. **Accepted:** the paired physical iPhone passed Phase 2A live-data, refresh-failure, relaunch, and app-switcher acceptance checks.
+5. **Next decision:** either extend D-018 to another live, memory-only Phase 2 feature slice or resume Phase 1 trust/resilience before expanding scope.
 
 Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 

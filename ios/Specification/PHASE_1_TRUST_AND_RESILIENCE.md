@@ -217,7 +217,7 @@ Acceptance:
 ### P1-SEC-02 — Add scene/app-switcher privacy cover
 
 Owner: iOS + design  
-Status: **Phase 2A subset code complete — physical snapshot acceptance pending**\
+Status: **Phase 2A subset physically accepted — full Phase 1 integration deferred**\
 Priority: Must  
 Dependencies: Phase 2A standalone cover depends on P0-IOS-02; full lock/coordinator integration depends on P1-IOS-03
 
@@ -232,10 +232,10 @@ How:
 
 Acceptance:
 
-- [ ] App-switcher snapshot contains zero financial content.
+- [x] App-switcher snapshot contains zero financial content.
 - [ ] VoiceOver cannot focus covered content.
 - [ ] Rapid lifecycle changes produce no one-frame data flash.
-- [ ] Cover does not permanently block an already authorized return.
+- [x] Cover does not permanently block an already authorized return.
 
 ### P1-DAT-01 — Define and implement encrypted snapshot container
 

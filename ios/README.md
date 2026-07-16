@@ -17,7 +17,7 @@ The iPhone is a private client of the Mac app. The Mac remains the credential ho
 | Private Mac bridge                          | Hardened signed harness is live; both servers are loopback-only, external-LAN refusal passed, and the private route is healthy            |
 | Bootstrap contract                          | Production allow-listed DTO adapter, generated JSON Schema, shared TypeScript/Swift fixtures, and authenticated native client implemented |
 | Stable Mac pairing endpoint                 | Phase 0 accepted: pairing, no-flash restoration, reboot persistence, rotation, revocation, recovery pairing, and final security QA passed |
-| Feature data and final screens              | Phase 2A live, in-memory Home is code-complete and ready for physical local testing; offline cache, app lock, polished recovery, and full accessibility acceptance are deferred |
+| Feature data and final screens              | Phase 2A live, in-memory Home passed signed physical acceptance; offline cache, app lock, polished recovery, remaining Phase 2 screens, and full accessibility acceptance are deferred |
 
 The packaged Mac app still keeps its desktop Fastify listener and rotating full-access bearer token private. The Phase 0 mobile bridge is a second loopback-only listener, mapped through a dedicated private Tailscale HTTPS path and protected by revocable per-device `mobile.read` tokens. See [Architecture](Documentation/ARCHITECTURE.md), [API contract](Documentation/API_CONTRACT.md), and the live [implementation ledger](IMPLEMENTATION_LEDGER.md).
 
