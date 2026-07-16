@@ -36,7 +36,7 @@ The full desktop bearer token never enters the pairing payload or iPhone. Bindin
 | `App` | App lifecycle, environment, top-level routing, privacy cover |
 | `Core/Networking` | Base URL, authentication, decoding, retries, typed endpoints |
 | `Core/Models` | Stable mobile DTOs and freshness metadata |
-| `Core/Persistence` | Encrypted last-known snapshot and schema migration |
+| `Core/Persistence` | Encrypted last-known snapshot and schema-version compatibility validation |
 | `Core/Security` | Keychain, Face ID, app lock, pairing state |
 | `Core/DesignSystem` | Semantic colors, spacing, typography, motion |
 | `Features` | Feature-first SwiftUI screens and presentation state |
@@ -64,6 +64,7 @@ unpaired → pairing → live
 - Encrypt the snapshot at rest using a key protected by Keychain.
 - Store the snapshot schema version and generated timestamp with the payload.
 - Replace snapshots atomically after a complete successful refresh.
+- Preserve compatible snapshots across app updates; discard an incompatible snapshot and live-refetch rather than migrating a cache chain.
 - Permit browsing while offline; disable network-only or mutating features.
 - Keep one snapshot for at most 30 days, mark it stale after 24 hours, exclude it from backup, and apply D-021 wipe/re-pair behavior.
 

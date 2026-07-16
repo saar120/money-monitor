@@ -29,7 +29,7 @@ The app succeeds when a person can:
 | Bank and institution credentials | A revocable, device-scoped API token in Keychain |
 | Scraper and browser automation | A private Tailscale HTTPS address |
 | Authoritative SQLite database | An encrypted, timestamped read-model snapshot |
-| Credential encryption keys | Face ID preference and non-sensitive UI preferences |
+| Credential encryption keys | Non-sensitive local UI/authentication state; device authentication is mandatory once financial snapshots exist |
 | Full desktop administration API | Mobile-safe DTOs and explicitly allowed commands |
 
 ## Initial scope

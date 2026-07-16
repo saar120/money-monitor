@@ -88,9 +88,9 @@ Bootstrap plus the Phase 2B transaction list/detail slice are implemented. The o
 | `GET /net-worth/history`        | Planned     | Chart series with explicit period and currency.                                                                                                 |
 | `GET /assets` and `/assets/:id` | Planned     | Safe asset summaries and history.                                                                                                               |
 | `GET /liabilities`              | Planned     | Safe liability summaries.                                                                                                                       |
-| `GET /categories`               | Category labels, symbols, and semantic colors.                                                                                                  |
-| `GET /alert-settings`           | Read-only alert preferences until notification architecture is decided.                                                                         |
-| `GET /sync-history`             | Human-readable account freshness and recent Mac scrape outcomes.                                                                                |
+| `GET /categories`               | Planned     | Category labels, symbols, and semantic colors.                                                                                                  |
+| `GET /alert-settings`           | Planned     | Read-only Mac-owned Telegram alert preferences.                                                                                                 |
+| `GET /sync-history`             | Planned     | Human-readable account freshness and recent Mac scrape outcomes.                                                                                |
 
 `/bootstrap` is the first feature endpoint because the desktop Home screen currently assembles several requests. A coherent snapshot reduces latency, avoids mixed timestamps, and makes offline replacement atomic.
 

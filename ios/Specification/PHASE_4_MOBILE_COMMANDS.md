@@ -74,7 +74,7 @@ Resolved design/backend boundaries:
 
 - Categories use immutable opaque IDs, editable case-insensitively unique labels, explicit order, and replacement-before-delete for used categories.
 - Alerts expose only supported Mac-owned Telegram preferences and never imply native iPhone delivery.
-- Settings shows Household, which is outside current product scope.
+- Household and unsupported settings controls remain hidden.
 - Asset detail shows Edit, but no mobile-safe asset command is specified.
 - Raw scrape routes include OTP/manual operations that must remain Mac-only in the initial command release.
 
@@ -110,16 +110,16 @@ Timeout after submission is not automatically a failure: the server may have com
 | P4-API-03 | Backend transaction | Planned | Add only accepted category/owner/exclusion commands. Reject unsupported note/recurring fields rather than ignoring them. |
 | P4-API-04 | Backend budgets | Planned | Add mobile budget create/update/delete with validation, versioning, deletion confirmation metadata, and audit. Responses return authoritative refreshed DTO. |
 | P4-API-05 | Backend categories | Planned | Implement accepted category operations and schema/order migration. Prevent orphaned transactions and ambiguous duplicate labels. |
-| P4-API-06 | Backend alerts/settings | Planned | Expose only accepted Telegram settings with explicit local-vs-Mac ownership. Never reuse general `/api/settings` or claim iPhone notification delivery. |
-| P4-API-07 | Backend sync | Planned | Add mobile-safe sync start/status/optional cancel facade. Translate already-running, demo-disabled, attention-needed, partial, and completion; never authorize OTP/manual-confirm/credential routes. |
-| P4-API-08 | Backend device/settings | Planned | Add safe paired-device/Mac/app status and accepted account-preference endpoints. General provider, secret, credential, and destructive settings remain absent. |
+| P4-API-06 | Backend alerts/settings | Planned | Expose only accepted Mac-owned Telegram settings. Never reuse general `/api/settings` or claim iPhone notification delivery. |
+| P4-API-07 | Backend sync | Planned | Add mobile-safe sync start/status facade. Translate already-running, demo-disabled, attention-needed, partial, and completion; never authorize OTP/manual-confirm/credential routes. |
+| P4-API-08 | Backend device/settings | Planned | Add safe paired-device/Mac/app status endpoints. General provider, secret, credential, personal-preference, and destructive settings remain absent. |
 | P4-IOS-01 | iOS command infra | Planned | Implement reusable state machine: clean/dirty → validating → submitting → confirmed or validation/conflict/forbidden/revoked/unknown. Preserve user input after recoverable error and never queue offline. |
 | P4-IOS-02 | iOS Review | Planned | Build Review queue with category/owner choice as approved, skip, count/position, server-confirmed advancement, conflict refresh, and cached/offline disabled state. |
-| P4-IOS-03 | iOS transaction | Planned | Enable only accepted transaction rows with explicit save/confirmation. Hide unsupported notes/recurring/options. Refresh detail/list authoritatively after success. |
+| P4-IOS-03 | iOS transaction | Planned | Enable only accepted transaction rows with explicit Save. Hide unsupported notes/recurring/options. Refresh detail/list authoritatively after success. |
 | P4-IOS-04 | iOS budgets | Planned | Build create/edit sheet with validation, dirty-dismiss confirmation, server conflict, successful refresh, and destructive delete dialog. |
 | P4-IOS-05 | iOS Categories | Planned | Implement approved label/order/create/delete/reassignment behavior and keep opaque identity distinct from display label. |
-| P4-IOS-06 | iOS Alerts/Settings | Planned | Render only accepted Telegram settings. Local Face ID/appearance/cache preferences update locally; Mac preferences use scoped commands. Hide Household, push, and unsupported controls. |
-| P4-IOS-07 | iOS sync | Planned | Enable account/all sync with status, background navigation, safe attention messaging, duplicate-start behavior, and optional cancel. Phone submits a command only; Mac performs scraping. |
+| P4-IOS-06 | iOS Alerts/Settings | Planned | Render connection status, Disconnect, redacted diagnostics, and accepted Mac-owned Telegram settings. Hide Household, push, Face ID/cache-policy settings, and unsupported controls. |
+| P4-IOS-07 | iOS sync | Planned | Enable account/all sync with status, background navigation, safe attention messaging, and duplicate-start behavior. Phone submits a command only; Mac performs scraping. |
 | P4-DES-01 | Design + UX writing | Planned | Specify validation, dirty dismissal, destructive confirmation, conflict, forbidden/revoked, timeout-before/after commit, unknown outcome, success, offline-disabled, and attention-needed states. |
 | P4-QA-01 | Security QA | Planned | For every capability, prove intended command succeeds and every undeclared desktop/mobile route is forbidden. Test stolen/revoked/expired/wrong-capability tokens. |
 | P4-QA-02 | Reliability QA | Planned | Inject timeout before and after commit; same idempotency key never executes twice and UI can reconcile unknown outcome. Test concurrent edits/conflicts. |

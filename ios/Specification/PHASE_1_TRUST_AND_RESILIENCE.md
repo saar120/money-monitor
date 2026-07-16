@@ -213,7 +213,7 @@ Acceptance:
 - [ ] Cold start and background return follow policy exactly.
 - [ ] Failed/cancelled authentication reveals no underlying data or VoiceOver elements.
 - [ ] Lockout/fallback cannot trap the user outside the documented recovery.
-- [ ] “Not now” onboarding choice persists according to the accepted policy.
+- [ ] Once cached financial data exists, there is no permanent skip; unavailable or lockout cases provide the documented safe recovery.
 
 ### P1-SEC-02 — Add scene/app-switcher privacy cover
 

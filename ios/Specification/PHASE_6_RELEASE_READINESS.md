@@ -19,7 +19,7 @@ Phase 6 is a hardening and evidence phase, not a place to add new product capabi
 | US-P6-03 | Must | As a user whose financial data contains Hebrew, I want mixed Hebrew/English names and values to remain correctly ordered and unambiguous inside the English UI. |
 | US-P6-04 | Must | As an owner whose Mac sleeps or network changes, I want recovery to be safe and understandable without losing cached data or duplicating commands. |
 | US-P6-05 | Must | As a privacy-conscious owner, I want release artifacts, logs, diagnostics, screenshots, and caches to exclude credentials and avoid unnecessary financial exposure. |
-| US-P6-06 | Must | As a tester installing an update, I want a Mac/iPhone contract mismatch explained without corrupting or silently discarding my last good snapshot. |
+| US-P6-06 | Must | As a tester installing an update, I want a Mac/iPhone contract mismatch explained while a compatible snapshot remains available and an incompatible one is safely discarded. |
 | US-P6-07 | Must | As the maintainer, I want a signed, reproducible archive with tested installation, update, and fresh-pair recovery procedures. |
 | US-P6-08 | Should | As a family or friend tester, I want one short guide for installation, pairing, updates, recovery, and contacting the maintainer. |
 
@@ -56,7 +56,7 @@ Private TestFlight email invitations are the family/friend distribution lane whe
 | P6-IOS-04 | iOS bidirectional content | Planned | Verify signed values, currencies, dates, account suffixes, charts, and mixed Hebrew/English merchant names inside the English UI. Full interface mirroring and Hebrew localization are out of scope. |
 | P6-IOS-05 | iOS adaptation | Planned | Verify supported iPhone sizes, portrait/functional-landscape policy, sheets, safe areas, keyboard, and content-size changes. iPad adaptation is out of scope. |
 | P6-REL-01 | iOS + Mac reliability | Planned | Harden recovery across Wi-Fi/cellular/VPN changes, Tailscale unavailable/reconnected, Mac sleep/wake, server restart, app background/foreground, token revocation, and clock skew. Retries are bounded and commands never repeat silently. |
-| P6-DAT-01 | iOS persistence | Planned | Add forward-only cache migration tests plus corrupt database, partial write, disk-full, protected-data-unavailable, Keychain-missing, server-identity-change, and fresh-install/update recovery. Preserve the last verified snapshot unless the user explicitly wipes it. |
+| P6-DAT-01 | iOS persistence | Planned | Test compatible-snapshot preservation plus incompatible-snapshot discard/live-refetch, corrupt database, partial write, disk-full, protected-data-unavailable, Keychain-missing, server-identity-change, and fresh-install/update recovery. Preserve the last verified compatible snapshot unless the user explicitly wipes it. |
 | P6-API-01 | Backend + iOS | Planned | Maintain fixtures for the current mobile contract, unknown additive fields, missing required fields, and explicit incompatible-version responses. The private product updates Mac/iPhone together and makes no previous-contract promise. |
 | P6-SEC-01 | Security | Planned | Perform a final threat/privacy review of pairing, device registry, token scopes, commands, Advisor, cache, backup/file protection, lock-screen behavior, deep links, pasteboard, screenshots, diagnostics, and revocation. Resolve all high-risk findings. |
 | P6-SEC-02 | Security + QA | Planned | Run automated secret/PII scans over source-controlled fixtures, logs, crash reports, diagnostic exports, streamed events, and release archive contents. No token, provider key, local path, raw account number, or unintended financial payload is present. |
@@ -80,7 +80,7 @@ The selected lane must document exact devices and OS versions. At minimum, exerc
 | Locale/content | English UI, mixed Hebrew/English content, bidirectional-value cases, and a locale using different number/date separators |
 | Connectivity | Live, offline cached, slow, interrupted, Tailscale reconnect, Mac asleep, Mac server restart |
 | Identity | Fresh pair, expired/revoked token, replaced Mac identity, incompatible companion version |
-| Data | Empty, typical, large history, stale cache, corrupt cache, migration from previous release |
+| Data | Empty, typical, large history, stale cache, corrupt cache, compatible snapshot, and incompatible-snapshot discard/live-refetch |
 | Lifecycle | Clean install, update, background/foreground, device reboot, and reinstall/wipe with fresh pairing |
 
 ## Acceptance scenarios
@@ -99,7 +99,7 @@ Given the last verified snapshot and a sleeping Mac, when the app opens and Tail
 
 ### Safe update and compatibility failure
 
-Given an existing paired installation, when the app updates and encounters either a supported cache migration or an unsupported companion API, then migration is atomic, the last good snapshot survives, and incompatibility is explained with a safe upgrade path rather than a crash or destructive reset.
+Given an existing paired installation, when the app updates, then a compatible snapshot remains available. When the snapshot or companion API is incompatible, the app discards that snapshot, live-refetches after both apps update, or offers fresh pairing when required, rather than crashing or silently decoding incompatible data.
 
 ### Distributed artifact rehearsal
 
@@ -113,7 +113,7 @@ Phase 6 passes only when:
 - all included phase exit gates and the global Definition of Done pass with traceable evidence;
 - critical journeys pass at largest text size with VoiceOver and non-gesture alternatives;
 - English UI and mixed Hebrew/English financial content render unambiguously;
-- compatibility, migration, corruption, sleep/reconnect, and update scenarios preserve the last verified snapshot and avoid duplicate commands;
+- compatibility, incompatible-snapshot discard/live-refetch, corruption, sleep/reconnect, and update scenarios preserve the last verified compatible snapshot and avoid duplicate commands;
 - the final threat/privacy review has no unresolved high-risk finding and scans find no forbidden secret/data leakage;
 - performance budgets pass on the oldest supported physical device or have an explicit accepted exception;
 - a clean signed distributed artifact—not only a debug build—passes installation and end-to-end smoke testing;

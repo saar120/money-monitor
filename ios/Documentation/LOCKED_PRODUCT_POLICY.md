@@ -155,8 +155,8 @@ Commands are a later live-only phase, but their scope is no longer a product blo
 - CI owns monotonically increasing build numbers; marketing versions are set per private release.
 - Minimum iOS version is iOS 18. The product is iPhone-only and portrait-first; landscape must remain functional. iPad optimization is out of scope.
 - UI ships in English with correct mixed Hebrew/English and bidirectional financial content. Full Hebrew UI localization is out of scope for the private release.
-- Support only the current pairing/mobile API contract. On mismatch, return the explicit upgrade screen and update the older Mac or iPhone app; there is no previous-version compatibility promise or migration matrix for private use.
-- Preserve Keychain pairing and compatible snapshots across ordinary app updates. A breaking contract/cache change may require a documented re-pair; it must never silently decode incompatible data.
+- Support only the current pairing/mobile API contract. On mismatch, return the explicit upgrade screen and update both apps or fresh-pair when required; there is no previous-version compatibility promise or migration matrix for private use.
+- Preserve Keychain pairing and compatible snapshots across ordinary app updates. Discard an incompatible snapshot and live-refetch; never silently decode incompatible data or promise a cache-migration chain.
 - The first private TestFlight feature set is the read-only product through Phase 3. Commands and Advisor ship later as independently tested additions.
 
 ## Privacy and support operations
