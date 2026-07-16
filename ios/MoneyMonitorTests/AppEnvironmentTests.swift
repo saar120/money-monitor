@@ -480,6 +480,48 @@ struct AppEnvironmentTests {
 
     @MainActor
     @Test
+    func cancelledRepairPreservesTheExistingCredentialWithoutDeletingIt() async throws {
+        let original = try pairingFlowCredential(token: "A", deviceName: "Registered iPhone")
+        let rotated = try pairingFlowCredential(token: "B", deviceName: "Registered iPhone")
+        let store = PairingFlowProfileStore(credential: original)
+        let pairingClient = PairingFlowClient(
+            credential: rotated,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(300),
+            approvesOnStatus: false
+        )
+        let apiClient = PairingFlowAPIClient(behavior: .success(try pairingFlowBootstrap()))
+        let sleeper = BlockingPairingSleeper()
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store,
+            clock: { pairingFlowNow },
+            sleep: { _ in try await sleeper.sleep() }
+        )
+
+        let qrPayload = try pairingFlowQRPayload()
+        let task = Task {
+            await environment.pair(
+                qrPayload: qrPayload,
+                deviceName: "Personal iPhone"
+            )
+        }
+        for _ in 0 ..< 100 where !(await sleeper.hasStarted()) {
+            await Task.yield()
+        }
+        #expect(await sleeper.hasStarted())
+
+        task.cancel()
+        await task.value
+
+        #expect(await pairingClient.calls().exchange == 0)
+        #expect(await store.load() == original)
+        #expect(await store.deletes() == 0)
+    }
+
+    @MainActor
+    @Test
     func expiredSessionStopsBeforePollingOrExchange() async throws {
         let store = PairingFlowProfileStore()
         let pairingClient = PairingFlowClient(
@@ -604,6 +646,7 @@ struct AppEnvironmentTests {
 
         #expect(await pairingClient.calls().startDeviceNames == ["Registered iPhone"])
         #expect(await store.load() == rotated)
+        #expect(await store.deletes() == 0)
         guard case .connected = environment.connectionState else {
             Issue.record("Expected same-device repair to complete")
             return
