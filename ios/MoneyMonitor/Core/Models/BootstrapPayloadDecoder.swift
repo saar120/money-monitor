@@ -53,24 +53,11 @@ struct BootstrapPayloadDecoder: Sendable {
             [.compatible, .notEvaluated].contains(meta.server.compatibility.status),
             meta.server.compatibility.reason == nil,
             meta.calculatedAt <= meta.generatedAt,
+            isValidFinancialDate(meta.financialDate),
             meta.financialDate == financialDateInJerusalem(for: meta.calculatedAt),
-            data.home.aggregates.netWorth.calculatedAt == meta.calculatedAt,
-            data.home.aggregates.income.calculatedAt == meta.calculatedAt,
-            data.home.aggregates.spending.calculatedAt == meta.calculatedAt,
-            data.budgetPulse.calculatedAt == meta.calculatedAt,
-            data.review.calculatedAt == meta.calculatedAt
+            meta.source == .live,
+            isValidOpaqueID(meta.snapshotId)
         else {
-            throw BootstrapPayloadDecoderError.invalidSuccessEnvelope
-        }
-
-        let businessDatesAreCurrent = [
-            data.home.aggregates.netWorth.period.endDate,
-            data.home.aggregates.income.period.endDate,
-            data.home.aggregates.spending.period.endDate,
-            data.budgetPulse.period.endDate,
-        ].allSatisfy { $0 <= meta.financialDate }
-            && data.recentTransactions.allSatisfy { $0.occurredOn <= meta.financialDate }
-        guard businessDatesAreCurrent else {
             throw BootstrapPayloadDecoderError.invalidSuccessEnvelope
         }
 
@@ -98,6 +85,7 @@ struct BootstrapPayloadDecoder: Sendable {
             guard
                 !errors.isEmpty,
                 uniqueSections.count == errors.count,
+                !errors.contains(where: { $0.section == .unknown }),
                 meta.cacheability.status == .notCacheable
             else {
                 throw BootstrapPayloadDecoderError.invalidSuccessEnvelope
@@ -110,6 +98,171 @@ struct BootstrapPayloadDecoder: Sendable {
         case .unknown:
             throw BootstrapPayloadDecoderError.invalidSuccessEnvelope
         }
+
+        try validateSections(data, meta: meta)
+    }
+
+    private func validateSections(
+        _ data: BootstrapData,
+        meta: BootstrapMetadata
+    ) throws {
+        let aggregates = [
+            data.home.aggregates.netWorth,
+            data.home.aggregates.income,
+            data.home.aggregates.spending,
+        ]
+        guard
+            isValidCurrency(data.home.primaryCurrencyCode),
+            aggregates.allSatisfy({ aggregate in
+                aggregate.calculatedAt == meta.calculatedAt
+                    && aggregate.period.endDate <= meta.financialDate
+                    && isValidMoney(aggregate.amount)
+                    && aggregate.amount.currencyCode == data.home.primaryCurrencyCode
+                    && isValidPeriod(aggregate.period)
+                    && isValidComparisonPeriod(
+                        aggregate.comparisonPeriod,
+                        primaryPeriod: aggregate.period
+                    )
+            }),
+            data.budgetPulse.calculatedAt == meta.calculatedAt,
+            data.budgetPulse.period.endDate <= meta.financialDate,
+            isValidPeriod(data.budgetPulse.period),
+            isValidBudgetPulse(data.budgetPulse),
+            data.review.calculatedAt == meta.calculatedAt,
+            data.review.count >= 0,
+            data.recentTransactions.count <= 20,
+            Set(data.recentTransactions.map(\.id)).count == data.recentTransactions.count,
+            data.recentTransactions.allSatisfy({ transaction in
+                isValidOpaqueID(transaction.id)
+                    && isValidFinancialDate(transaction.occurredOn)
+                    && transaction.occurredOn <= meta.financialDate
+                    && isValidMoney(transaction.amount)
+                    && (transaction.category.map { isValidOpaqueID($0.id) } ?? true)
+                    && isValidOpaqueID(transaction.account.id)
+                    && isValidIdentifierMask(transaction.account.identifierMask)
+            }),
+            data.accounts.allSatisfy({ account in
+                isValidOpaqueID(account.id)
+                    && isValidCurrency(account.currencyCode)
+                    && isValidIdentifierMask(account.identifierMask)
+                    && isValidAccountFreshness(account.freshness, generatedAt: meta.generatedAt)
+            }),
+            isValidLatestSync(data.latestSync, generatedAt: meta.generatedAt)
+        else {
+            throw BootstrapPayloadDecoderError.invalidSuccessEnvelope
+        }
+    }
+
+    private func isValidMoney(_ money: BootstrapMoney) -> Bool {
+        matches(#"^-?(?:0|[1-9]\d*)(?:\.\d{1,4})?$"#, in: money.value)
+            && Decimal(string: money.value, locale: Locale(identifier: "en_US_POSIX")) != nil
+            && isValidCurrency(money.currencyCode)
+    }
+
+    private func isValidCurrency(_ value: String) -> Bool {
+        matches(#"^[A-Z]{3}$"#, in: value)
+            && Locale.commonISOCurrencyCodes.contains(value)
+    }
+
+    private func isValidOpaqueID(_ value: String) -> Bool {
+        matches(#"^(?!\d+$)[A-Za-z0-9_-]{8,128}$"#, in: value)
+    }
+
+    private func isValidIdentifierMask(_ value: String) -> Bool {
+        matches(#"^(?:••••|\*{4}) [A-Za-z0-9]{2,4}$"#, in: value)
+    }
+
+    private func isValidPeriod(_ period: BootstrapPeriod) -> Bool {
+        isValidFinancialDate(period.startDate)
+            && isValidFinancialDate(period.endDate)
+            && period.startDate <= period.endDate
+    }
+
+    private func isValidComparisonPeriod(
+        _ comparisonPeriod: BootstrapPeriod?,
+        primaryPeriod: BootstrapPeriod
+    ) -> Bool {
+        guard let comparisonPeriod else { return true }
+        return isValidPeriod(comparisonPeriod)
+            && comparisonPeriod.endDate < primaryPeriod.startDate
+    }
+
+    private func isValidBudgetPulse(_ pulse: BootstrapBudgetPulse) -> Bool {
+        let amounts = [pulse.spent, pulse.limit, pulse.remaining]
+        if pulse.status == .unavailable {
+            return amounts.allSatisfy { $0 == nil }
+        }
+        guard
+            let spent = pulse.spent,
+            let limit = pulse.limit,
+            let remaining = pulse.remaining,
+            [spent, limit, remaining].allSatisfy(isValidMoney)
+        else {
+            return false
+        }
+        return Set([spent.currencyCode, limit.currencyCode, remaining.currencyCode]).count == 1
+    }
+
+    private func isValidFinancialDate(_ value: String) -> Bool {
+        guard matches(#"^\d{4}-\d{2}-\d{2}$"#, in: value) else { return false }
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+        guard
+            parts.count == 3,
+            let year = Int(parts[0]),
+            let month = Int(parts[1]),
+            let day = Int(parts[2])
+        else {
+            return false
+        }
+
+        var calendar = Calendar(identifier: .gregorian)
+        guard let timeZone = TimeZone(secondsFromGMT: 0) else { return false }
+        calendar.timeZone = timeZone
+        guard let date = calendar.date(from: DateComponents(year: year, month: month, day: day)) else {
+            return false
+        }
+        let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
+        return roundTrip.year == year && roundTrip.month == month && roundTrip.day == day
+    }
+
+    private func isValidAccountFreshness(
+        _ freshness: BootstrapAccountFreshness,
+        generatedAt: Date
+    ) -> Bool {
+        if let lastSuccessfulSyncAt = freshness.lastSuccessfulSyncAt,
+           lastSuccessfulSyncAt > generatedAt
+        {
+            return false
+        }
+        switch freshness.status {
+        case .fresh, .stale:
+            return freshness.lastSuccessfulSyncAt != nil
+        case .neverSynced:
+            return freshness.lastSuccessfulSyncAt == nil
+        case .error, .unknown:
+            return true
+        }
+    }
+
+    private func isValidLatestSync(_ sync: BootstrapLatestSync, generatedAt: Date) -> Bool {
+        guard sync.accountsSucceeded >= 0, sync.accountsFailed >= 0 else { return false }
+        if sync.status == .neverRun {
+            return sync.startedAt == nil
+                && sync.completedAt == nil
+                && sync.accountsSucceeded == 0
+                && sync.accountsFailed == 0
+        }
+        guard
+            let startedAt = sync.startedAt,
+            let completedAt = sync.completedAt,
+            startedAt <= completedAt,
+            completedAt <= generatedAt
+        else {
+            return false
+        }
+        if sync.status == .succeeded { return sync.accountsFailed == 0 }
+        if sync.status == .partial || sync.status == .failed { return sync.accountsFailed > 0 }
+        return true
     }
 
     private func financialDateInJerusalem(for instant: Date) -> String {

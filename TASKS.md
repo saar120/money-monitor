@@ -2,7 +2,7 @@
 
 ## Active
 
-- [ ] **Build Phase 2A — live Home technical dogfood** - Pull forward the app-switcher privacy cover, then render the validated bootstrap in memory with truthful formatting, partial-section suppression, refresh, and no financial disk cache. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
+- [ ] **Validate Phase 2A — live Home technical dogfood** - Privacy-cover and live Home code are complete. Install the current Xcode build on the paired iPhone and confirm live values, pull-to-refresh, Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
 
 ## Waiting On
 

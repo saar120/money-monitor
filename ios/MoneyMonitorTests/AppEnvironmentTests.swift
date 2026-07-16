@@ -66,10 +66,79 @@ private actor PairingFlowAPIClient: MobileAPIClient {
     }
 }
 
+private enum ControlledBootstrapBehavior: Sendable {
+    case success(BootstrapSuccessEnvelope)
+    case failure(MobileClientError)
+    case suspended
+}
+
+private actor ControlledBootstrapAPIClient: MobileAPIClient {
+    private var behaviors: [ControlledBootstrapBehavior]
+    private var bootstrapCallCount = 0
+    private var pendingCalls: [
+        Int: CheckedContinuation<BootstrapSuccessEnvelope, any Error>
+    ] = [:]
+
+    init(behaviors: [ControlledBootstrapBehavior]) {
+        self.behaviors = behaviors
+    }
+
+    func health(baseURL _: URL) async throws -> HealthResponse {
+        throw MobileClientError.invalidRequest
+    }
+
+    func bootstrap(credential _: PairedMacCredential) async throws
+        -> BootstrapSuccessEnvelope
+    {
+        bootstrapCallCount += 1
+        let callNumber = bootstrapCallCount
+        guard !behaviors.isEmpty else {
+            throw MobileClientError.invalidRequest
+        }
+
+        switch behaviors.removeFirst() {
+        case let .success(bootstrap):
+            return bootstrap
+        case let .failure(error):
+            throw error
+        case .suspended:
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingCalls[callNumber] = continuation
+            }
+        }
+    }
+
+    func hasReceived(call number: Int) -> Bool {
+        bootstrapCallCount >= number
+    }
+
+    func calls() -> Int {
+        bootstrapCallCount
+    }
+
+    func resolve(
+        call number: Int,
+        with result: Result<BootstrapSuccessEnvelope, MobileClientError>
+    ) {
+        guard let continuation = pendingCalls.removeValue(forKey: number) else {
+            return
+        }
+        switch result {
+        case let .success(bootstrap):
+            continuation.resume(returning: bootstrap)
+        case let .failure(error):
+            continuation.resume(throwing: error)
+        }
+    }
+}
+
 private actor PairingFlowProfileStore: PairedProfileStore {
     private var credential: PairedMacCredential?
     private var deleteCallCount = 0
     private var deleteError: SecureItemError?
+    private var shouldBlockNextDelete = false
+    private var deleteIsBlocked = false
+    private var deleteContinuation: CheckedContinuation<Void, Never>?
 
     init(credential: PairedMacCredential? = nil) {
         self.credential = credential
@@ -99,10 +168,31 @@ private actor PairingFlowProfileStore: PairedProfileStore {
         self.credential = credential
     }
 
-    func delete() throws {
+    func delete() async throws {
         deleteCallCount += 1
+        if shouldBlockNextDelete {
+            shouldBlockNextDelete = false
+            deleteIsBlocked = true
+            await withCheckedContinuation { continuation in
+                deleteContinuation = continuation
+            }
+            deleteIsBlocked = false
+        }
         if let deleteError { throw deleteError }
         credential = nil
+    }
+
+    func blockNextDelete() {
+        shouldBlockNextDelete = true
+    }
+
+    func hasBlockedDelete() -> Bool {
+        deleteIsBlocked
+    }
+
+    func releaseDelete() {
+        deleteContinuation?.resume()
+        deleteContinuation = nil
     }
 
     func setDeleteError(_ error: SecureItemError?) {
@@ -111,6 +201,37 @@ private actor PairingFlowProfileStore: PairedProfileStore {
 
     func deletes() -> Int {
         deleteCallCount
+    }
+}
+
+private actor RefreshLoadFailureProfileStore: PairedProfileStore {
+    private var credential: PairedMacCredential?
+    private var loadCount = 0
+
+    init(credential: PairedMacCredential) {
+        self.credential = credential
+    }
+
+    func create(_ credential: PairedMacCredential) throws {
+        self.credential = credential
+    }
+
+    func load() throws -> PairedMacCredential? {
+        loadCount += 1
+        if loadCount > 1 { throw SecureItemError.inaccessible }
+        return credential
+    }
+
+    func replace(_ credential: PairedMacCredential) throws {
+        self.credential = credential
+    }
+
+    func savePairing(_ credential: PairedMacCredential) throws {
+        self.credential = credential
+    }
+
+    func delete() throws {
+        credential = nil
     }
 }
 
@@ -296,6 +417,40 @@ private func pairingFlowBootstrap() throws -> BootstrapSuccessEnvelope {
             subdirectory: "MobileBootstrap"
         )
     )
+}
+
+private func refreshBootstrapFixture(_ filename: String) throws
+    -> BootstrapSuccessEnvelope
+{
+    try BootstrapPayloadDecoder().decodeSuccess(
+        from: appEnvironmentFixtureData(
+            filename,
+            subdirectory: "MobileBootstrap"
+        )
+    )
+}
+
+private func waitForBootstrapCall(
+    _ number: Int,
+    client: ControlledBootstrapAPIClient
+) async {
+    for _ in 0 ..< 100 {
+        if await client.hasReceived(call: number) {
+            return
+        }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for bootstrap call \(number)")
+}
+
+private func waitForBlockedDelete(store: PairingFlowProfileStore) async {
+    for _ in 0 ..< 100 {
+        if await store.hasBlockedDelete() {
+            return
+        }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for credential deletion to block")
 }
 
 private func pairingFlowQRPayload() throws -> Data {
@@ -751,6 +906,439 @@ struct AppEnvironmentTests {
         #expect(environment.pairingState == .failed(.secureStorageUnavailable))
         guard case .failed = environment.connectionState else {
             Issue.record("Expected disconnect to fail closed")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func refreshRetainsConnectedSnapshotInFlightThenAtomicallyReplacesIt() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = try refreshBootstrapFixture("bootstrap-empty.json")
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .suspended]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        let connectedState = environment.connectionState
+
+        let refresh = Task { await environment.refreshBootstrap() }
+        await waitForBootstrapCall(2, client: apiClient)
+
+        #expect(environment.bootstrapRefreshState == .refreshing)
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.serverURL == credential.profile.baseURL)
+        #expect(environment.connectionState == connectedState)
+
+        await apiClient.resolve(call: 2, with: .success(replacement))
+        await refresh.value
+
+        #expect(environment.bootstrapRefreshState == .idle)
+        #expect(environment.latestBootstrap == replacement)
+        #expect(
+            environment.connectionState
+                == .connected(lastCheckedAt: replacement.meta.generatedAt)
+        )
+    }
+
+    @MainActor
+    @Test(
+        arguments: [
+            MobileClientError.transport(.offline),
+            MobileClientError.transport(.timeout),
+            MobileClientError.rateLimited,
+            MobileClientError.server(statusCode: 503),
+        ]
+    )
+    func unavailableRefreshRetainsTheAcceptedSnapshot(error: MobileClientError) async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(error)]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        let connectedState = environment.connectionState
+
+        await environment.refreshBootstrap()
+
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.serverURL == credential.profile.baseURL)
+        #expect(environment.connectionState == connectedState)
+        #expect(await store.load() == credential)
+    }
+
+    @MainActor
+    @Test(
+        arguments: [
+            MobileClientError.invalidResponse,
+            MobileClientError.invalidPayload,
+        ]
+    )
+    func malformedRefreshIsDistinctAndRetainsTheAcceptedSnapshot(
+        error: MobileClientError
+    ) async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(error)]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        let connectedState = environment.connectionState
+
+        await environment.refreshBootstrap()
+
+        #expect(environment.bootstrapRefreshState == .failed(.invalidResponse))
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.connectionState == connectedState)
+        #expect(await store.load() == credential)
+    }
+
+    @MainActor
+    @Test
+    func incompatibleRefreshIsDistinctAndRetainsTheAcceptedSnapshot() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(.upgradeRequired)]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        let connectedState = environment.connectionState
+
+        await environment.refreshBootstrap()
+
+        #expect(environment.bootstrapRefreshState == .failed(.incompatible))
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.connectionState == connectedState)
+        #expect(await store.load() == credential)
+    }
+
+    @MainActor
+    @Test
+    func credentialLoadFailureRetainsSnapshotAndReportsSecureStorage() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = RefreshLoadFailureProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(behaviors: [.success(original)])
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        let connectedState = environment.connectionState
+
+        await environment.refreshBootstrap()
+
+        #expect(await apiClient.calls() == 1)
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.connectionState == connectedState)
+        #expect(environment.bootstrapRefreshState == .failed(.secureStorageUnavailable))
+    }
+
+    @MainActor
+    @Test
+    func authoritativeRefreshRevocationDeletesCredentialAndRoutesToRecovery() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(.authentication(.revoked))]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        await environment.refreshBootstrap()
+
+        #expect(await store.load() == nil)
+        #expect(await store.deletes() == 1)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .failed(.savedAccessRevoked))
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+    }
+
+    @MainActor
+    @Test
+    func revocationCleanupBlocksRepairUntilTheOldCredentialIsDeleted() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        await store.blockNextDelete()
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(.authentication(.revoked))]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let refresh = Task { await environment.refreshBootstrap() }
+        await waitForBlockedDelete(store: store)
+
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.connectionState == .connecting)
+        #expect(environment.pairingState == .disconnecting)
+        #expect(environment.bootstrapRefreshState == .refreshing)
+
+        await environment.pair(
+            qrPayload: try pairingFlowQRPayload(),
+            deviceName: "Personal iPhone"
+        )
+        #expect(await pairingClient.calls().startDeviceNames.isEmpty)
+
+        await store.releaseDelete()
+        await refresh.value
+
+        #expect(await store.load() == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .failed(.savedAccessRevoked))
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+    }
+
+    @MainActor
+    @Test
+    func revocationCredentialDeletionFailureReportsSecureStorageUnavailable() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        await store.setDeleteError(.inaccessible)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .failure(.authentication(.expired))]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        await environment.refreshBootstrap()
+
+        #expect(await store.load() == credential)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.pairingState == .failed(.secureStorageUnavailable))
+        #expect(
+            environment.bootstrapRefreshState
+                == .failed(.secureStorageUnavailable)
+        )
+        guard case .failed = environment.connectionState else {
+            Issue.record("Expected credential cleanup failure to fail closed")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func missingRefreshCredentialFailsClosedWithoutMakingARequest() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(behaviors: [.success(original)])
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+        try await store.delete()
+
+        await environment.refreshBootstrap()
+
+        #expect(await apiClient.calls() == 1)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .idle)
+        #expect(environment.bootstrapRefreshState == .failed(.missingCredential))
+    }
+
+    @MainActor
+    @Test
+    func concurrentRefreshIsIgnoredWhileTheAcceptedRefreshIsInFlight() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = try refreshBootstrapFixture("bootstrap-empty.json")
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .suspended]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let firstRefresh = Task { await environment.refreshBootstrap() }
+        await waitForBootstrapCall(2, client: apiClient)
+        await environment.refreshBootstrap()
+
+        #expect(await apiClient.calls() == 2)
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.bootstrapRefreshState == .refreshing)
+
+        await apiClient.resolve(call: 2, with: .success(replacement))
+        await firstRefresh.value
+
+        #expect(environment.latestBootstrap == replacement)
+        #expect(environment.bootstrapRefreshState == .idle)
+    }
+
+    @MainActor
+    @Test
+    func concurrentRefreshCannotDisplaceAnInFlightAuthoritativeRevocation() async throws {
+        let original = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .suspended]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let revokingRefresh = Task { await environment.refreshBootstrap() }
+        await waitForBootstrapCall(2, client: apiClient)
+        await environment.refreshBootstrap()
+
+        #expect(await apiClient.calls() == 2)
+        await apiClient.resolve(
+            call: 2,
+            with: .failure(.authentication(.expired))
+        )
+        await revokingRefresh.value
+
+        #expect(await store.load() == nil)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+    }
+
+    @MainActor
+    @Test
+    func cancelledRefreshRetainsTheAcceptedSnapshotAndReturnsToIdle() async throws {
+        let original = try pairingFlowBootstrap()
+        let ignored = try refreshBootstrapFixture("bootstrap-empty.json")
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .suspended]
+        )
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let refresh = Task { await environment.refreshBootstrap() }
+        await waitForBootstrapCall(2, client: apiClient)
+        refresh.cancel()
+        await apiClient.resolve(call: 2, with: .success(ignored))
+        await refresh.value
+
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.serverURL == credential.profile.baseURL)
+        #expect(environment.bootstrapRefreshState == .idle)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected cancellation to preserve the connected state")
             return
         }
     }
