@@ -5,8 +5,19 @@
 A non-technical owner can complete the approved onboarding flow, protect financial content with device authentication, and browse an encrypted last-known snapshot with truthful live/cached/stale/revoked/incompatible states.
 
 Delivery checkpoint: **private dogfood build**  
-Phase status: **ready for `P1-PRD-01` policy approval**\
-Depends on: **Phase 0 exit gate — passed 2026-07-16**
+Phase status: **deferred for the current technical-owner dogfood under D-018**\
+Depends on: **Phase 0 exit gate — passed 2026-07-16; resumption timing intentionally postponed**
+
+## Deferral decision
+
+Phase 1 is postponed, not cancelled. The current owner is the sole technical tester, so Phase 2A may build a live-only, memory-only Home experience directly on the accepted Phase 0 bridge. The following remain outside the current delivery lane:
+
+- polished onboarding and manual recovery presentation;
+- Face ID/app-lock policy and background grace interval;
+- encrypted snapshot persistence, offline browsing, and retention/wipe policy;
+- the full VoiceOver, maximum Dynamic Type, localization, and resilience acceptance matrix.
+
+The app-switcher privacy-cover subset of `P1-SEC-02` is pulled forward before real financial values render. Basic native semantics and flexible layouts remain implementation defaults, but `US-P1-09` is not a gate for the current technical-only slice. All other task-local statuses below describe the work required when Phase 1 resumes.
 
 ## User stories
 
@@ -74,7 +85,7 @@ This prevents a timeout from disguising revocation or an upgrade requirement.
 ### P1-PRD-01 — Approve lock, freshness, retention, and wipe policy
 
 Owner: Product + security  
-Status: **Blocked pending approval**  
+Status: **Deferred under D-018**\
 Priority: Must  
 Dependencies: P0-PRD-01
 
@@ -206,12 +217,13 @@ Acceptance:
 ### P1-SEC-02 — Add scene/app-switcher privacy cover
 
 Owner: iOS + design  
-Status: **Planned**  
+Status: **In progress — Phase 2A privacy-cover subset pulled forward**\
 Priority: Must  
-Dependencies: P1-IOS-03
+Dependencies: Phase 2A standalone cover depends on P0-IOS-02; full lock/coordinator integration depends on P1-IOS-03
 
 How:
 
+- First implement a standalone opaque cover for inactive/background scenes in the technical lane; full lock/coordinator integration remains deferred.
 - Cover content immediately when a scene becomes inactive and before the OS captures a switcher snapshot.
 - Remove the cover only after the coordinator confirms the app may display unlocked data.
 - Use branding and neutral status only; no amount, merchant, chart, or freshness detail.

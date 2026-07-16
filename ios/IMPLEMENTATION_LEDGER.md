@@ -3,8 +3,8 @@
 This is the living execution record for the native iOS project. The [product specification](Specification/README.md) defines what must be built; this ledger records what is active, what changed, what evidence exists, and what is blocked.
 
 Last updated: **2026-07-16**  
-Current milestone: **Phase 1 — Trust, security, and resilience (next)**\
-Current checkpoint: **Phase 0 accepted — private bridge complete; Phase 1 policy approval is next**
+Current milestone: **Phase 2A — Live Home technical dogfood**\
+Current checkpoint: **Phase 0 accepted; Phase 1 deferred under D-018; privacy cover and memory-only Home are active**
 
 ## Update rules
 
@@ -20,8 +20,8 @@ Current checkpoint: **Phase 0 accepted — private bridge complete; Phase 1 poli
 | Phase | Delivery checkpoint             | Status                        | Progress note                                                                                                                         |
 | ----- | ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | Internal connectivity prototype | **Done**                      | Physical pairing, restart persistence, external-LAN refusal, rotation, revocation, recovery pairing, and final artifact scans passed. |
-| 1     | Private dogfood                 | **Ready for policy approval** | Phase 0 dependency is satisfied; lock, freshness, retention, and wipe policy approval is the first gate.                              |
-| 2     | Daily-use read-only slice       | Not started                   | Depends on Phase 1 trust/cache state model.                                                                                           |
+| 1     | Private dogfood                 | **Deferred**                  | App lock, encrypted snapshot, polished recovery, and full accessibility/resilience acceptance wait until broader dogfood.             |
+| 2     | Daily-use read-only slice       | **Phase 2A in progress**      | Live, memory-only Home may proceed for the sole technical owner; full Phase 2 still depends on Phase 1 and remaining feature routes.   |
 | 3     | Recommended read-only MVP       | Not started                   | Depends on stable read DTO conventions.                                                                                               |
 | 4     | Trusted commands                | Blocked by scope              | Requires explicit command capability matrix.                                                                                          |
 | 5     | Advisor                         | Not started                   | Requires read-only tool boundary and stable read model.                                                                               |
@@ -37,6 +37,8 @@ Current checkpoint: **Phase 0 accepted — private bridge complete; Phase 1 poli
 | Pairing and device identity | `P0-SEC-01`, `P0-SEC-02`              | **Done** | Public pairing is claimant-bound and single-mint; physical rotation preserved device identity, revocation denied the saved credential, and recovery created a distinct active row while retaining the revoked audit row.                       | Preserve rotation/revocation/recovery invariants as Phase 1 adds cached data.      |
 | Bootstrap contract          | `P0-API-02`, `P0-API-03`              | **Done** | Production reads project allow-listed DTOs with opaque IDs, server-side masks, charged currency, one Jerusalem finance date, safe partials, shared fixtures, and a generated schema.                                                            | Keep the deterministic schema drift check in regression.                          |
 | iPhone pairing slice        | `P0-IOS-04`, `P0-SEC-03`, `P0-IOS-05` | **Done** | The updated physical build restored without a scanner flash and authenticated after a full iPhone reboot with the existing Keychain credential. The registry remained one active device, so no replacement pairing occurred.                    | Preserve Keychain and restoration behavior while feature data is added.           |
+| Technical privacy cover     | `P1-SEC-02` subset                     | **In progress** | Standalone inactive/app-switcher coverage is pulled forward before any real amount renders; full app-lock/coordinator integration remains deferred.                                                                                               | Lifecycle tests prove no financial descendant is rendered while inactive.         |
+| Live Home                   | `P2-IOS-01/02`, `P2-DES-01`, `P2-QA-01` | **In progress** | Use the accepted bootstrap envelope directly from `AppEnvironment.latestBootstrap`; data remains memory-only and failed sections cannot masquerade as real zero values.                                                                          | Fixture-driven formatter/presentation tests and a disk-persistence negative scan. |
 
 ## Phase 0 task ledger
 
@@ -73,8 +75,8 @@ Current checkpoint: **Phase 0 accepted — private bridge complete; Phase 1 poli
 | Device token       | Opaque 256-bit token is persisted raw only in iOS Keychain and digest-only on Mac. Delivery retries from expiring process memory; approved re-pair atomically rotates the same device identity, and rotation/revocation invalidate prior access.            |
 | Capability         | `mobile.read` only for the read-only MVP. Newly added mobile routes are denied until classified.                                                                                                                                                            |
 | Identity/version   | Canonical stable UUID `serverId`; independent protocol/API/bootstrap schema v1. Successful bootstrap reports client-version compatibility as `not_evaluated` until a client version reaches the server; explicit incompatibility remains a data-free `426`. |
-| Snapshot coherence | One `calculatedAt` and explicit Asia/Jerusalem `financialDate` cover Home, budget, review, and future-row filtering; partial or unknown-cacheability payloads never replace saved data.                                                                     |
-| Revocation         | Connected requests fail immediately after revocation. A Mac cannot erase an offline iPhone; Phase 1 defines cached-data retention and lock behavior.                                                                                                        |
+| Snapshot coherence | One `calculatedAt` and explicit Asia/Jerusalem `financialDate` cover Home, budget, review, and future-row filtering. Phase 2A keeps the validated envelope in memory only; Phase 1 later defines atomic saved-data replacement.                            |
+| Revocation         | Connected requests fail immediately after revocation. Phase 2A clears in-memory financial data and re-pairs; Phase 1 later defines cached-data retention/lock behavior for offline phones.                                                                       |
 
 ## Evidence log
 
@@ -116,7 +118,7 @@ Current checkpoint: **Phase 0 accepted — private bridge complete; Phase 1 poli
 
 ### Current blockers requiring user involvement
 
-No Phase 0 blocker remains. Phase 1 begins with owner approval of the lock, freshness, retention, and wipe policy in `P1-PRD-01`.
+No blocker prevents the Phase 2A privacy-cover and live Home work. `P2-PRD-01` still blocks “available money” and comparison claims; Phase 1 policy remains deferred and must be resolved before offline storage or broader dogfood.
 
 ### Deferred decisions
 
@@ -146,3 +148,4 @@ No Phase 0 blocker remains. Phase 1 begins with owner approval of the lock, fres
 | 2026-07-16 | Closed the external-LAN isolation gate after a Tailscale-disabled physical iPhone failed to reach both loopback listeners through the Mac's Wi-Fi address.                                                                                                                                                  |
 | 2026-07-16 | Added a connected-state native re-pair scanner, installed the same-team build, and closed physical rotation acceptance: one device identity remained while token version/digest rotated and the new Keychain credential authenticated across a fresh launch.                                                |
 | 2026-07-16 | Closed Phase 0 after physical revocation denied the saved credential, fresh pairing recovered with a distinct active identity, the obsolete plaintext OAuth config key was removed, and count-only scans found no prohibited token, route, credential, or known account value in inspected artifacts.        |
+| 2026-07-16 | Accepted D-018: deferred Phase 1 for the sole technical owner and opened Phase 2A as a live, memory-only Home lane. Pulled forward the app-switcher privacy cover; offline cache, Face ID, polished recovery, and full accessibility acceptance remain Later and gate broader distribution.                       |

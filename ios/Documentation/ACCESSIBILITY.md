@@ -2,6 +2,8 @@
 
 Accessibility is part of each feature's definition of done, not a release-end audit.
 
+**Current Phase 2A exception:** D-018 defers completion of the full manual matrix below only for sole-owner technical dogfood on a passcode-protected, non-shared personal iPhone. Phase 2A code must still use native semantics, flexible layouts, non-color status meaning, and labels for essential controls. The exception does not waive this plan for a full phase gate, broader dogfood, offline storage, or release acceptance.
+
 ## Required support
 
 - Dynamic Type through accessibility sizes.
@@ -64,4 +66,3 @@ For each phase, test at minimum:
 3. Is live versus saved data unmistakable when spoken?
 4. Can a user recover from every error without a hidden gesture?
 5. Does hidden/locked financial content stay hidden from snapshots and assistive output?
-
