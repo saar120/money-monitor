@@ -5,8 +5,8 @@
 A non-technical owner can complete the approved onboarding flow, protect financial content with device authentication, and browse an encrypted last-known snapshot with truthful live/cached/stale/revoked/incompatible states.
 
 Delivery checkpoint: **private dogfood build**  
-Phase status: **planned**  
-Depends on: **Phase 0 exit gate**
+Phase status: **ready for `P1-PRD-01` policy approval**\
+Depends on: **Phase 0 exit gate — passed 2026-07-16**
 
 ## User stories
 
@@ -360,4 +360,3 @@ Phase 1 passes only when:
 - live, cached, stale, unavailable, revoked, incompatible, and corrupt states are visually and verbally distinct;
 - token, cache, disconnect, and re-pair cleanup follow the accepted policy;
 - the app is ready for Phase 2 screens to consume one repository/state model rather than feature-specific networking.
-

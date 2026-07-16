@@ -5,7 +5,7 @@
 A packaged Money Monitor Mac and a physical iPhone can establish a stable, authenticated, least-privilege connection over Tailscale HTTPS; the phone can load one versioned, masked bootstrap payload; Mac and iPhone restarts do not break the pairing.
 
 Delivery checkpoint: **internal connectivity prototype**  
-Current phase status: **in progress — implementation and signed physical harness ready; physical acceptance pending**
+Current phase status: **done — implementation, signed physical harness, and physical private-path acceptance passed on 2026-07-16**
 
 ## Why this phase exists
 
@@ -389,7 +389,7 @@ Acceptance:
 ### P0-SEC-03 — Store paired profile in Keychain
 
 Owner: iOS security  
-Status: **Done**
+Status: **Done**\
 Priority: Must  
 Dependencies: P0-IOS-04, P0-SEC-02
 
@@ -451,7 +451,7 @@ Acceptance:
 ### P0-QA-03 — Complete physical private-path acceptance
 
 Owner: QA + Mac + iOS  
-Status: **In progress**  
+Status: **Done**
 Priority: Must  
 Dependencies: all Phase 0 tasks
 
@@ -461,8 +461,8 @@ Acceptance:
 - [x] Pairing remains valid after both devices and apps restart.
 - [x] Mac backend port changes while the stable private URL still works.
 - [x] A LAN-only client cannot reach Fastify.
-- [ ] Revoked phone cannot call bootstrap; desktop routes reject its token.
-- [ ] Logs, database/config files, and iOS container pass token/credential/full-account-number scans.
+- [x] Revoked phone cannot call bootstrap; desktop routes reject its token.
+- [x] Logs, database/config files, and iOS container pass token/credential/full-account-number scans.
 
 ## Phase acceptance scenarios
 
