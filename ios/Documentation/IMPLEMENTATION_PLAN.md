@@ -23,7 +23,7 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 ### Mac mobile bridge — Acceptance in progress
 
 - Publish an isolated loopback mobile server through a stable private Tailscale HTTPS route. **Implemented and verified across two packaged-app cold restarts with distinct random ports.**
-- Add QR pairing, claimant-bound status/exchange, device approval, rotation, and revocation. **Production routes, Mac controls, single-mint retry hardening, and trusted same-device re-pair rotation are implemented.**
+- Add QR pairing, claimant-bound status/exchange, device approval, rotation, and revocation. **Production routes, Mac/iPhone controls, single-mint retry hardening, and trusted same-device re-pair rotation are implemented and physically accepted.**
 - Issue a `mobile.read` token instead of the full desktop bearer token. **Digest-only registry, restart persistence, capability enforcement, and revocation are implemented.**
 - Add `/api/mobile/v1/bootstrap` with masked, stable DTOs. **Production service ports and adapter are implemented with opaque IDs, charged currency, Jerusalem finance dates, future-row filtering, and safe partials.**
 - Add shared server/Swift fixtures and compatibility tests. **Bootstrap and pairing fixtures are shared, the generated Draft 2020-12 bootstrap schema is drift-checked, and the updated Xcode simulator suite passes with every fixture.**
@@ -106,10 +106,9 @@ Screens: Advisor home and conversation.
 
 ## First development tickets
 
-1. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
-2. Revoke the phone and run the final token/credential/account-number evidence scan.
+1. Revoke the phone and run the final token/credential/account-number evidence scan.
 
-The restart and external-LAN gates are complete: repeated packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy, a full physical-iPhone reboot preserved Keychain authentication without another QR, and a Tailscale-disabled iPhone could not reach either listener through the Mac's Wi-Fi address. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
+The restart, external-LAN, and re-pair gates are complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, and approved same-device re-pair atomically rotated the token while preserving device identity. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
 
 The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are already complete; see the detailed Phase 0 status for their evidence.
 
