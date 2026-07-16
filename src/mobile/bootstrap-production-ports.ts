@@ -1,4 +1,3 @@
-import { createHmac } from 'node:crypto';
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
@@ -10,18 +9,21 @@ import {
   type MobileBootstrapReadPorts,
   type MobileHomeReadModel,
   type MobileLatestSyncReadModel,
-  type MobileMoneyReadModel,
   type MobileRecentTransactionReadModel,
 } from './bootstrap-adapter.js';
+import { createMobilePublicIdProjector } from './mobile-public-id.js';
+import {
+  boundedMobileText,
+  maskAccountIdentifier,
+  projectMobileMoney,
+  projectMobileTransactionDirection,
+  projectMobileTransactionStatus,
+} from './mobile-transaction-projection.js';
 
 type MoneyMonitorDatabase = BetterSQLite3Database<typeof schema>;
 type Awaitable<T> = T | Promise<T>;
-const ISO_CURRENCY_CODES = new Set(Intl.supportedValuesOf('currency'));
-const LEGACY_CURRENCY_CODE_PROJECTION: Readonly<Record<string, string>> = {
-  '₪': 'ILS',
-};
-
 export { MOBILE_FINANCE_TIME_ZONE } from './bootstrap-contract.js';
+export { maskAccountIdentifier } from './mobile-transaction-projection.js';
 
 export interface ProductionMobileBootstrapPortOptions {
   db: MoneyMonitorDatabase;
@@ -33,26 +35,6 @@ export interface ProductionMobileBootstrapPortOptions {
 
 export function financialDateInIsrael(instant: Date): string {
   return mobileFinancialDateFor(instant);
-}
-
-function bounded(value: string, fallback: string, maximum: number): string {
-  const normalized = value.trim().replace(/\s+/g, ' ');
-  return (normalized || fallback).slice(0, maximum);
-}
-
-function decimalMoney(value: number, currencyCode = 'ILS'): MobileMoneyReadModel {
-  if (!Number.isFinite(value)) {
-    throw new MobileBootstrapSectionReadError('calculation_failed', false);
-  }
-  if (!/^[A-Z]{3}$/.test(currencyCode) || !ISO_CURRENCY_CODES.has(currencyCode)) {
-    throw new MobileBootstrapSectionReadError('source_unavailable', false);
-  }
-  const normalized = Math.abs(value) < 0.005 ? 0 : Math.round(value * 100) / 100;
-  return { value: normalized.toFixed(2), currencyCode };
-}
-
-function projectedCurrencyCode(persistedCurrency: string): string {
-  return LEGACY_CURRENCY_CODE_PROJECTION[persistedCurrency] ?? persistedCurrency;
 }
 
 function normalizeInstant(value: string | null): string | null {
@@ -89,15 +71,9 @@ const INSTITUTION_NAMES: Readonly<Record<string, string>> = {
 
 function institutionName(companyId: string): string {
   return (
-    INSTITUTION_NAMES[companyId] ?? bounded(companyId.replace(/[-_]+/g, ' '), 'Institution', 80)
+    INSTITUTION_NAMES[companyId] ??
+    boundedMobileText(companyId.replace(/[-_]+/g, ' '), 'Institution', 80)
   );
-}
-
-/** Produces a display-only suffix on the server; the raw identifier never crosses the port. */
-export function maskAccountIdentifier(accountNumber: string | null): string {
-  const characters = (accountNumber ?? '').replace(/[^A-Za-z0-9]/g, '');
-  const suffix = characters.length >= 2 ? characters.slice(-4) : 'NA';
-  return `•••• ${suffix}`;
 }
 
 function previousMonthPeriod(financialDate: string) {
@@ -136,13 +112,7 @@ export function createProductionMobileBootstrapPorts(
     throw new Error('Mobile public ID key must contain at least 32 characters');
   }
 
-  const publicId = (kind: 'account' | 'category' | 'transaction', localId: number | string) => {
-    const digest = createHmac('sha256', options.publicIdKey)
-      .update(`${kind}:${String(localId)}`)
-      .digest('base64url')
-      .slice(0, 22);
-    return `${kind}_${digest}`;
-  };
+  const publicId = createMobilePublicIdProjector(options.publicIdKey);
 
   function cashflow(period: { startDate: string; endDate: string }) {
     const result = options.db
@@ -172,7 +142,7 @@ export function createProductionMobileBootstrapPorts(
         return {
           primaryCurrencyCode: 'ILS',
           netWorth: {
-            amount: decimalMoney(netWorth),
+            amount: projectMobileMoney(netWorth),
             period: {
               startDate: context.financialDate,
               endDate: context.financialDate,
@@ -180,12 +150,12 @@ export function createProductionMobileBootstrapPorts(
             comparisonPeriod: null,
           },
           income: {
-            amount: decimalMoney(current.income),
+            amount: projectMobileMoney(current.income),
             period,
             comparisonPeriod,
           },
           spending: {
-            amount: decimalMoney(current.spending),
+            amount: projectMobileMoney(current.spending),
             period,
             comparisonPeriod,
           },
@@ -258,9 +228,9 @@ export function createProductionMobileBootstrapPorts(
               : ('on_track' as const);
         return {
           status,
-          spent: decimalMoney(spent),
-          limit: decimalMoney(budget.amount),
-          remaining: decimalMoney(remaining),
+          spent: projectMobileMoney(spent),
+          limit: projectMobileMoney(budget.amount),
+          remaining: projectMobileMoney(remaining),
           period,
         };
       }),
@@ -306,28 +276,20 @@ export function createProductionMobileBootstrapPorts(
         return rows.map((row) => ({
           publicId: publicId('transaction', row.transactionId),
           occurredOn: row.occurredOn.slice(0, 10),
-          displayName: bounded(row.description, 'Transaction', 160),
-          amount: decimalMoney(
-            Math.abs(row.chargedAmount),
-            projectedCurrencyCode(row.chargedCurrency),
-          ),
-          direction: row.chargedAmount < 0 ? 'debit' : row.chargedAmount > 0 ? 'credit' : 'unknown',
-          status:
-            row.transactionStatus === 'pending'
-              ? 'pending'
-              : row.transactionStatus === 'completed'
-                ? 'posted'
-                : 'unknown',
+          displayName: boundedMobileText(row.description, 'Transaction', 160),
+          amount: projectMobileMoney(Math.abs(row.chargedAmount), row.chargedCurrency),
+          direction: projectMobileTransactionDirection(row.chargedAmount),
+          status: projectMobileTransactionStatus(row.transactionStatus),
           category:
             row.categoryName && row.categoryId != null
               ? {
                   publicId: publicId('category', row.categoryId),
-                  label: bounded(row.categoryLabel ?? row.categoryName, 'Category', 80),
+                  label: boundedMobileText(row.categoryLabel ?? row.categoryName, 'Category', 80),
                 }
               : null,
           account: {
             publicId: publicId('account', row.accountId),
-            displayName: bounded(row.accountName, 'Account', 80),
+            displayName: boundedMobileText(row.accountName, 'Account', 80),
             identifierMask: maskAccountIdentifier(row.accountNumber),
           },
         }));
@@ -363,7 +325,7 @@ export function createProductionMobileBootstrapPorts(
           }
           return {
             publicId: publicId('account', row.id),
-            displayName: bounded(row.displayName, 'Account', 80),
+            displayName: boundedMobileText(row.displayName, 'Account', 80),
             institutionName: institutionName(row.companyId),
             type: accountType(row.accountType),
             currencyCode: 'ILS',
