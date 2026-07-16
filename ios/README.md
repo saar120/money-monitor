@@ -6,18 +6,18 @@ The iPhone is a private client of the Mac app. The Mac remains the credential ho
 
 ## Current status
 
-| Area                                        | Status                                                                                                                                      |
-| ------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------- |
-| Product and visual direction                | Approved; canonical files remain in [`docs/ios-mockups`](../docs/ios-mockups/README.md)                                                     |
-| Detailed product and delivery specification | Ready for implementation review in [`Specification/`](Specification/README.md)                                                              |
-| Implementation ledger                       | Active in [`IMPLEMENTATION_LEDGER.md`](IMPLEMENTATION_LEDGER.md)                                                                            |
-| Xcode project shell                         | Ready; generated from [`project.yml`](project.yml)                                                                                          |
-| Native navigation shell                     | Ready; Home, Activity, Plan, Advisor, and trailing Search destinations                                                                      |
-| Connectivity smoke test                     | Implemented against isolated `GET /api/mobile/v1/health`                                                                                    |
-| Private Mac bridge                          | Hardened signed harness is live; both servers are forced onto loopback and the private route is healthy on its latest random target         |
-| Bootstrap contract                          | Production allow-listed DTO adapter, generated JSON Schema, shared TypeScript/Swift fixtures, and authenticated native client implemented   |
-| Stable Mac pairing endpoint                 | Physical pairing and the updated saved-credential cold launch passed; visual no-flash confirmation, reboot, and remaining security QA await |
-| Feature data and final screens              | Planned, not implemented                                                                                                                    |
+| Area                                        | Status                                                                                                                                    |
+| ------------------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------- |
+| Product and visual direction                | Approved; canonical files remain in [`docs/ios-mockups`](../docs/ios-mockups/README.md)                                                   |
+| Detailed product and delivery specification | Ready for implementation review in [`Specification/`](Specification/README.md)                                                            |
+| Implementation ledger                       | Active in [`IMPLEMENTATION_LEDGER.md`](IMPLEMENTATION_LEDGER.md)                                                                          |
+| Xcode project shell                         | Ready; generated from [`project.yml`](project.yml)                                                                                        |
+| Native navigation shell                     | Ready; Home, Activity, Plan, Advisor, and trailing Search destinations                                                                    |
+| Connectivity smoke test                     | Implemented against isolated `GET /api/mobile/v1/health`                                                                                  |
+| Private Mac bridge                          | Hardened signed harness is live; both servers are forced onto loopback and the private route is healthy on its latest random target       |
+| Bootstrap contract                          | Production allow-listed DTO adapter, generated JSON Schema, shared TypeScript/Swift fixtures, and authenticated native client implemented |
+| Stable Mac pairing endpoint                 | Physical pairing, no-flash restoration, and saved-Keychain authentication after a full iPhone reboot passed; remaining security QA awaits |
+| Feature data and final screens              | Planned, not implemented                                                                                                                  |
 
 The packaged Mac app still keeps its desktop Fastify listener and rotating full-access bearer token private. The Phase 0 mobile bridge is a second loopback-only listener, mapped through a dedicated private Tailscale HTTPS path and protected by revocable per-device `mobile.read` tokens. See [Architecture](Documentation/ARCHITECTURE.md), [API contract](Documentation/API_CONTRACT.md), and the live [implementation ledger](IMPLEMENTATION_LEDGER.md).
 

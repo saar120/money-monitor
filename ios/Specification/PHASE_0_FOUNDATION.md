@@ -389,7 +389,7 @@ Acceptance:
 ### P0-SEC-03 — Store paired profile in Keychain
 
 Owner: iOS security  
-Status: **In progress**  
+Status: **Done**
 Priority: Must  
 Dependencies: P0-IOS-04, P0-SEC-02
 
@@ -403,7 +403,7 @@ How:
 
 Acceptance:
 
-- [ ] Pairing survives app/device restart and never falls back to `UserDefaults` for secrets.
+- [x] Pairing survives app/device restart and never falls back to `UserDefaults` for secrets.
 - [x] Keychain failure cannot report successful pairing.
 - [x] Disconnect deletes the credential/profile according to policy.
 - [x] Token is absent from logs, crash descriptions, previews, accessibility, and test snapshots.
@@ -458,7 +458,7 @@ Dependencies: all Phase 0 tasks
 Acceptance:
 
 - [x] Fresh physical iPhone pairs with a packaged Mac on the same Tailnet.
-- [ ] Pairing remains valid after both devices and apps restart.
+- [x] Pairing remains valid after both devices and apps restart.
 - [x] Mac backend port changes while the stable private URL still works.
 - [ ] A LAN-only client cannot reach Fastify.
 - [ ] Revoked phone cannot call bootstrap; desktop routes reject its token.
