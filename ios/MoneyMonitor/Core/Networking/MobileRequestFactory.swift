@@ -52,7 +52,7 @@ enum MobileRequestFactory {
         var request = URLRequest(
             url: endpoint.url(relativeTo: baseURL),
             cachePolicy: .reloadIgnoringLocalCacheData,
-            timeoutInterval: endpoint == .bootstrap ? 15 : 10
+            timeoutInterval: endpoint.isFinancialRead ? 15 : 10
         )
         request.httpMethod = endpoint.httpMethod
         request.setValue("application/json", forHTTPHeaderField: "Accept")
@@ -66,5 +66,16 @@ enum MobileRequestFactory {
         }
 
         return request
+    }
+}
+
+private extension APIEndpoint {
+    var isFinancialRead: Bool {
+        switch self {
+        case .bootstrap, .transactions, .transactionDetail:
+            true
+        case .health, .pairingStart, .pairingStatus, .pairingExchange:
+            false
+        }
     }
 }

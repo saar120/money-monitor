@@ -22,6 +22,14 @@ struct APIEndpointTests {
             (.pairingStatus, "/money-monitor/api/mobile/v1/pairing/status"),
             (.pairingExchange, "/money-monitor/api/mobile/v1/pairing/exchange"),
             (.bootstrap, "/money-monitor/api/mobile/v1/bootstrap"),
+            (
+                .transactions(MobileTransactionQuery()),
+                "/money-monitor/api/mobile/v1/transactions"
+            ),
+            (
+                .transactionDetail(id: "transaction_\(String(repeating: "T", count: 22))"),
+                "/money-monitor/api/mobile/v1/transactions/transaction_\(String(repeating: "T", count: 22))"
+            ),
         ]
 
         for (endpoint, expectedPath) in expectedPaths {
@@ -30,8 +38,17 @@ struct APIEndpointTests {
     }
 
     @Test
-    func onlyBootstrapAllowsDeviceAuthorization() {
+    func onlyFinancialReadEndpointsAllowDeviceAuthorization() {
         #expect(APIEndpoint.bootstrap.authorizationPolicy == .deviceBearer)
+        #expect(
+            APIEndpoint.transactions(MobileTransactionQuery()).authorizationPolicy
+                == .deviceBearer
+        )
+        #expect(
+            APIEndpoint.transactionDetail(
+                id: "transaction_\(String(repeating: "T", count: 22))"
+            ).authorizationPolicy == .deviceBearer
+        )
         #expect(APIEndpoint.health.authorizationPolicy == .none)
         #expect(APIEndpoint.pairingStart.authorizationPolicy == .none)
         #expect(APIEndpoint.pairingStatus.authorizationPolicy == .none)
@@ -96,5 +113,42 @@ struct APIEndpointTests {
         #expect(response.data.status == "ok")
         #expect(response.meta.apiVersion == "1")
         #expect(response.meta.source == "live")
+    }
+
+    @Test
+    func transactionQueryUsesExactWireNamesAndOmitsFalseFlags() throws {
+        let query = MobileTransactionQuery(
+            query: "  קפה & tea  ",
+            cursor: "cursor_v1_abc-DEF_123",
+            limit: 25,
+            startDate: "2026-07-01",
+            endDate: "2026-07-16",
+            direction: .debit,
+            status: .pending,
+            needsReview: true,
+            includeExcluded: false,
+            accountID: "account_\(String(repeating: "A", count: 22))"
+        )
+
+        let url = APIEndpoint.transactions(query).url(
+            relativeTo: URL(string: "https://money-monitor.example.ts.net:8443/money-monitor")!
+        )
+        let components = try #require(URLComponents(url: url, resolvingAgainstBaseURL: false))
+        let values = Dictionary(
+            uniqueKeysWithValues: (components.queryItems ?? []).compactMap { item in
+                item.value.map { (item.name, $0) }
+            }
+        )
+
+        #expect(values["q"] == "קפה & tea")
+        #expect(values["cursor"] == "cursor_v1_abc-DEF_123")
+        #expect(values["limit"] == "25")
+        #expect(values["startDate"] == "2026-07-01")
+        #expect(values["endDate"] == "2026-07-16")
+        #expect(values["direction"] == "debit")
+        #expect(values["status"] == "pending")
+        #expect(values["needsReview"] == "true")
+        #expect(values["includeExcluded"] == nil)
+        #expect(values["accountId"] == "account_\(String(repeating: "A", count: 22))")
     }
 }

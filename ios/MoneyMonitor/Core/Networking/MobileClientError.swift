@@ -44,6 +44,7 @@ enum MobileClientError: Error, Equatable, Sendable, CustomStringConvertible,
     case pairing(MobilePairingFailure)
     case upgradeRequired
     case rateLimited
+    case notFound
     case credentialStorageFailed
     case server(statusCode: Int)
 
@@ -69,6 +70,8 @@ enum MobileClientError: Error, Equatable, Sendable, CustomStringConvertible,
             "Money Monitor must be updated before this connection can continue."
         case .rateLimited:
             "Too many requests were made. Try again later."
+        case .notFound:
+            "The requested transaction is no longer available."
         case .credentialStorageFailed:
             "The paired device credential could not be stored securely."
         case let .server(statusCode):
@@ -120,6 +123,12 @@ enum MobileClientError: Error, Equatable, Sendable, CustomStringConvertible,
         }
         if statusCode == 429 || code == .rateLimited {
             return .rateLimited
+        }
+        if statusCode == 404,
+           code == .transactionNotFound,
+           case .transactionDetail = endpoint
+        {
+            return .notFound
         }
 
         if endpoint.isPairingEndpoint {
@@ -188,7 +197,7 @@ private extension APIEndpoint {
         switch self {
         case .pairingStart, .pairingStatus, .pairingExchange:
             true
-        case .health, .bootstrap:
+        case .health, .bootstrap, .transactions, .transactionDetail:
             false
         }
     }

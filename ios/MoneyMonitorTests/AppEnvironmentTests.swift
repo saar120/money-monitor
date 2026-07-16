@@ -481,6 +481,227 @@ private func pairingFlowCredential(
     )
 }
 
+private enum ControlledTransactionBehavior: Sendable {
+    case success(MobileTransactionListEnvelope)
+    case failure(MobileClientError)
+    case suspended
+}
+
+private enum ControlledTransactionDetailBehavior: Sendable {
+    case success(MobileTransactionDetailEnvelope)
+    case failure(MobileClientError)
+    case suspended
+}
+
+private actor ControlledMobileTransactionAPIClient: MobileTransactionAPIClient {
+    private var behaviors: [ControlledTransactionBehavior]
+    private var detailBehaviors: [ControlledTransactionDetailBehavior]
+    private var callCount = 0
+    private var detailCallCount = 0
+    private var recordedCredentials: [PairedMacCredential] = []
+    private var recordedDetailCredentials: [PairedMacCredential] = []
+    private var recordedDetailIDs: [String] = []
+    private var pendingCalls: [
+        Int: CheckedContinuation<MobileTransactionListEnvelope, any Error>
+    ] = [:]
+    private var pendingDetailCalls: [
+        Int: CheckedContinuation<MobileTransactionDetailEnvelope, any Error>
+    ] = [:]
+
+    init(
+        behaviors: [ControlledTransactionBehavior] = [],
+        detailBehaviors: [ControlledTransactionDetailBehavior] = []
+    ) {
+        self.behaviors = behaviors
+        self.detailBehaviors = detailBehaviors
+    }
+
+    func transactions(
+        query _: MobileTransactionQuery,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionListEnvelope {
+        recordedCredentials.append(credential)
+        callCount += 1
+        let callNumber = callCount
+        guard !behaviors.isEmpty else { throw MobileClientError.invalidRequest }
+        switch behaviors.removeFirst() {
+        case let .success(envelope):
+            return envelope
+        case let .failure(error):
+            throw error
+        case .suspended:
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingCalls[callNumber] = continuation
+            }
+        }
+    }
+
+    func transactionDetail(
+        id: String,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionDetailEnvelope {
+        recordedDetailIDs.append(id)
+        recordedDetailCredentials.append(credential)
+        detailCallCount += 1
+        let callNumber = detailCallCount
+        guard !detailBehaviors.isEmpty else { throw MobileClientError.invalidRequest }
+        switch detailBehaviors.removeFirst() {
+        case let .success(envelope):
+            return envelope
+        case let .failure(error):
+            throw error
+        case .suspended:
+            return try await withCheckedThrowingContinuation { continuation in
+                pendingDetailCalls[callNumber] = continuation
+            }
+        }
+    }
+
+    func hasReceived(call number: Int) -> Bool {
+        callCount >= number
+    }
+
+    func calls() -> Int {
+        callCount
+    }
+
+    func credentials() -> [PairedMacCredential] {
+        recordedCredentials
+    }
+
+    func detailCalls() -> Int {
+        detailCallCount
+    }
+
+    func detailCredentials() -> [PairedMacCredential] {
+        recordedDetailCredentials
+    }
+
+    func detailIDs() -> [String] {
+        recordedDetailIDs
+    }
+
+    func hasReceivedDetail(call number: Int) -> Bool {
+        detailCallCount >= number
+    }
+
+    func resolve(
+        call number: Int,
+        with result: Result<MobileTransactionListEnvelope, MobileClientError>
+    ) {
+        guard let continuation = pendingCalls.removeValue(forKey: number) else { return }
+        switch result {
+        case let .success(envelope):
+            continuation.resume(returning: envelope)
+        case let .failure(error):
+            continuation.resume(throwing: error)
+        }
+    }
+
+    func resolveDetail(
+        call number: Int,
+        with result: Result<MobileTransactionDetailEnvelope, MobileClientError>
+    ) {
+        guard let continuation = pendingDetailCalls.removeValue(forKey: number) else {
+            return
+        }
+        switch result {
+        case let .success(envelope):
+            continuation.resume(returning: envelope)
+        case let .failure(error):
+            continuation.resume(throwing: error)
+        }
+    }
+}
+
+private func appEnvironmentTransactionEnvelope(
+    transactionID: String = "transaction_\(String(repeating: "T", count: 22))"
+) -> MobileTransactionListEnvelope {
+    MobileTransactionListEnvelope(
+        data: MobileTransactionListData(
+            financialDate: "2026-07-16",
+            transactions: [
+                MobileTransaction(
+                    id: transactionID,
+                    occurredOn: "2026-07-15",
+                    displayName: "Coffee",
+                    amount: BootstrapMoney(value: "12.50", currencyCode: "ILS"),
+                    direction: .debit,
+                    status: .posted,
+                    category: BootstrapTransactionCategory(
+                        id: "category_\(String(repeating: "C", count: 22))",
+                        label: "Dining"
+                    ),
+                    account: BootstrapTransactionAccount(
+                        id: "account_\(String(repeating: "A", count: 22))",
+                        displayName: "Main Card",
+                        identifierMask: "•••• 4242"
+                    ),
+                    needsReview: false,
+                    excludedFromReports: false,
+                    owner: nil
+                ),
+            ],
+            page: MobileTransactionPage(hasMore: false, nextCursor: nil)
+        ),
+        meta: MobileTransactionMetadata(
+            apiVersion: "1",
+            generatedAt: pairingFlowNow,
+            source: .live,
+            server: MobileTransactionServer(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+                protocolVersion: 1
+            )
+        )
+    )
+}
+
+private func appEnvironmentTransactionDetailEnvelope(
+    transactionID: String = "transaction_\(String(repeating: "T", count: 22))"
+) -> MobileTransactionDetailEnvelope {
+    let listEnvelope = appEnvironmentTransactionEnvelope(transactionID: transactionID)
+    let item = listEnvelope.data.transactions[0]
+    let detail = MobileTransaction(
+        id: item.id,
+        occurredOn: item.occurredOn,
+        displayName: item.displayName,
+        amount: item.amount,
+        direction: item.direction,
+        status: item.status,
+        category: item.category,
+        account: item.account,
+        needsReview: item.needsReview,
+        excludedFromReports: item.excludedFromReports,
+        owner: MobileTransactionOwner(kind: .member, displayName: "Saar")
+    )
+    return MobileTransactionDetailEnvelope(
+        data: MobileTransactionDetailData(transaction: detail),
+        meta: listEnvelope.meta
+    )
+}
+
+private func waitForTransactionCall(
+    _ number: Int,
+    client: ControlledMobileTransactionAPIClient
+) async {
+    for _ in 0 ..< 100 {
+        if await client.hasReceived(call: number) { return }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for transaction call \(number)")
+}
+
+private func waitForTransactionDetailCall(
+    _ number: Int,
+    client: ControlledMobileTransactionAPIClient
+) async {
+    for _ in 0 ..< 100 {
+        if await client.hasReceivedDetail(call: number) { return }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for transaction detail call \(number)")
+}
+
 struct AppEnvironmentTests {
     @MainActor
     @Test
@@ -1339,6 +1560,339 @@ struct AppEnvironmentTests {
         #expect(environment.bootstrapRefreshState == .idle)
         guard case .connected = environment.connectionState else {
             Issue.record("Expected cancellation to preserve the connected state")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func connectedFeatureReadUsesTheKeychainCredentialAndReturnsLiveTransactions() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            behaviors: [.success(appEnvironmentTransactionEnvelope())]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let envelope = try await environment.transactions(query: MobileTransactionQuery())
+
+        #expect(envelope.data.transactions.count == 1)
+        #expect(await transactionClient.calls() == 1)
+        #expect(await transactionClient.credentials() == [credential])
+        #expect(await store.load() == credential)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected the accepted read to preserve the connection")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func authoritativeFeatureRevocationClearsKeychainAndFinancialMemory() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            behaviors: [.failure(.authentication(.revoked))]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        await #expect(throws: MobileClientError.authentication(.revoked)) {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+
+        #expect(await store.load() == nil)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .failed(.savedAccessRevoked))
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+    }
+
+    @MainActor
+    @Test
+    func lateFeatureSuccessCannotSurviveASimultaneousRevocation() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let accepted = appEnvironmentTransactionEnvelope()
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            behaviors: [
+                .suspended,
+                .failure(.authentication(.expired)),
+            ]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let lateRead = Task {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+        await waitForTransactionCall(1, client: transactionClient)
+
+        await #expect(throws: MobileClientError.authentication(.expired)) {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+        await transactionClient.resolve(call: 1, with: .success(accepted))
+
+        await #expect(throws: CancellationError.self) {
+            try await lateRead.value
+        }
+        #expect(await store.load() == nil)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.connectionState == .notConfigured)
+    }
+
+    @MainActor
+    @Test
+    func lateFeatureSuccessCannotCrossACompletedRepairSession() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let originalCredential = try pairingFlowCredential()
+        let replacementCredential = try pairingFlowCredential(token: "U")
+        let store = PairingFlowProfileStore(credential: originalCredential)
+        let transactionClient = ControlledMobileTransactionAPIClient(behaviors: [.suspended])
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: replacementCredential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            clock: { pairingFlowNow },
+            sleep: { _ in }
+        )
+        await environment.restoreSavedConnection()
+
+        let lateRead = Task {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+        await waitForTransactionCall(1, client: transactionClient)
+
+        await environment.pair(
+            qrPayload: try pairingFlowQRPayload(),
+            deviceName: replacementCredential.profile.deviceName
+        )
+        await transactionClient.resolve(
+            call: 1,
+            with: .success(appEnvironmentTransactionEnvelope())
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await lateRead.value
+        }
+        #expect(await store.load() == replacementCredential)
+        #expect(environment.latestBootstrap == bootstrap)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected re-pairing to establish the replacement session")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func staleFeatureRevocationCannotDeleteACompletedRepairSession() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let originalCredential = try pairingFlowCredential()
+        let replacementCredential = try pairingFlowCredential(token: "U")
+        let store = PairingFlowProfileStore(credential: originalCredential)
+        let transactionClient = ControlledMobileTransactionAPIClient(behaviors: [.suspended])
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: replacementCredential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            clock: { pairingFlowNow },
+            sleep: { _ in }
+        )
+        await environment.restoreSavedConnection()
+
+        let staleRead = Task {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+        await waitForTransactionCall(1, client: transactionClient)
+
+        await environment.pair(
+            qrPayload: try pairingFlowQRPayload(),
+            deviceName: replacementCredential.profile.deviceName
+        )
+        await transactionClient.resolve(
+            call: 1,
+            with: .failure(.authentication(.revoked))
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await staleRead.value
+        }
+        #expect(await store.load() == replacementCredential)
+        #expect(await store.deletes() == 0)
+        #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.serverURL == replacementCredential.profile.baseURL)
+        #expect(environment.bootstrapRefreshState == .idle)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected stale revocation to preserve the replacement session")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func connectedDetailReadForwardsTheLoadedKeychainCredential() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let detail = appEnvironmentTransactionDetailEnvelope()
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            detailBehaviors: [.success(detail)]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        let envelope = try await environment.transactionDetail(
+            id: detail.data.transaction.id
+        )
+
+        #expect(envelope == detail)
+        #expect(await transactionClient.detailCalls() == 1)
+        #expect(await transactionClient.detailCredentials() == [credential])
+        #expect(await transactionClient.detailIDs() == [detail.data.transaction.id])
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected the accepted detail read to preserve the connection")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func authoritativeDetailRevocationClearsKeychainAndFinancialMemory() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            detailBehaviors: [.failure(.authentication(.revoked))]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+        await environment.restoreSavedConnection()
+
+        await #expect(throws: MobileClientError.authentication(.revoked)) {
+            try await environment.transactionDetail(
+                id: "transaction_\(String(repeating: "T", count: 22))"
+            )
+        }
+
+        #expect(await transactionClient.detailCredentials() == [credential])
+        #expect(await store.load() == nil)
+        #expect(await store.deletes() == 1)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.serverURL == nil)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(environment.pairingState == .failed(.savedAccessRevoked))
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+    }
+
+    @MainActor
+    @Test
+    func staleDetailRevocationCannotDeleteACompletedRepairSession() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let originalCredential = try pairingFlowCredential()
+        let replacementCredential = try pairingFlowCredential(token: "U")
+        let store = PairingFlowProfileStore(credential: originalCredential)
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            detailBehaviors: [.suspended]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: replacementCredential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            clock: { pairingFlowNow },
+            sleep: { _ in }
+        )
+        await environment.restoreSavedConnection()
+        let transactionID = "transaction_\(String(repeating: "T", count: 22))"
+
+        let staleRead = Task {
+            try await environment.transactionDetail(id: transactionID)
+        }
+        await waitForTransactionDetailCall(1, client: transactionClient)
+
+        await environment.pair(
+            qrPayload: try pairingFlowQRPayload(),
+            deviceName: replacementCredential.profile.deviceName
+        )
+        await transactionClient.resolveDetail(
+            call: 1,
+            with: .failure(.authentication(.revoked))
+        )
+
+        await #expect(throws: CancellationError.self) {
+            try await staleRead.value
+        }
+        #expect(await transactionClient.detailCredentials() == [originalCredential])
+        #expect(await store.load() == replacementCredential)
+        #expect(await store.deletes() == 0)
+        #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.serverURL == replacementCredential.profile.baseURL)
+        #expect(environment.bootstrapRefreshState == .idle)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected stale detail revocation to preserve the replacement session")
             return
         }
     }
