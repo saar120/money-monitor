@@ -460,7 +460,7 @@ Acceptance:
 - [x] Fresh physical iPhone pairs with a packaged Mac on the same Tailnet.
 - [x] Pairing remains valid after both devices and apps restart.
 - [x] Mac backend port changes while the stable private URL still works.
-- [ ] A LAN-only client cannot reach Fastify.
+- [x] A LAN-only client cannot reach Fastify.
 - [ ] Revoked phone cannot call bootstrap; desktop routes reject its token.
 - [ ] Logs, database/config files, and iOS container pass token/credential/full-account-number scans.
 
