@@ -16,6 +16,10 @@ import {
   registerMobilePairingRoutes,
   type MobilePairingRouteDependencies,
 } from './pairing-routes.js';
+import {
+  registerMobileTransactionRoutes,
+  type MobileTransactionRouteDependencies,
+} from './transaction-routes.js';
 
 export const MOBILE_SERVER_HOST = '127.0.0.1' as const;
 
@@ -35,6 +39,7 @@ export interface MobileServerErrorEvent {
 export interface CreateMobileServerOptions {
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
+  transactions?: MobileTransactionRouteDependencies;
   clock?: () => Date;
   errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
   logger?: boolean;
@@ -140,6 +145,10 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
         return bootstrap.data;
       },
     );
+  }
+
+  if (options.transactions) {
+    registerMobileTransactionRoutes(app, options.transactions, clock);
   }
 
   async function start(startOptions: MobileServerStartOptions = {}): Promise<number> {

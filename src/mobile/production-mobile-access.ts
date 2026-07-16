@@ -22,6 +22,8 @@ import {
   type MobilePairingSessionManagerOptions,
 } from './pairing-session.js';
 import type { MobileBootstrapRouteDependencies } from './mobile-server.js';
+import { createProductionMobileTransactionPorts } from './transaction-production-ports.js';
+import type { MobileTransactionRouteDependencies } from './transaction-routes.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -42,7 +44,7 @@ export interface ProductionMobileAccessOptions {
   server: Omit<MobileBootstrapServerIdentity, 'id'>;
   readNetWorthIls: ProductionMobileBootstrapPortOptions['readNetWorthIls'];
   /** Fail closed when the desktop data source is not safe to expose. */
-  isBootstrapAvailable?: () => boolean;
+  isMobileReadAvailable?: () => boolean;
   fallbackCurrencyCode?: string;
   clock?: () => Date;
   /** Deterministic factories are accepted for tests; production uses CSPRNG defaults. */
@@ -52,6 +54,7 @@ export interface ProductionMobileAccessOptions {
 
 export interface ProductionMobileAccess {
   bootstrapDependencies: MobileBootstrapRouteDependencies;
+  transactionDependencies: MobileTransactionRouteDependencies;
   pairingDependencies: MobilePairingRouteDependencies;
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -86,6 +89,10 @@ export function createProductionMobileAccess(
     publicIdKey: options.publicIdKey,
     readNetWorthIls: options.readNetWorthIls,
   });
+  const transactionPorts = createProductionMobileTransactionPorts({
+    db: options.db,
+    publicIdKey: options.publicIdKey,
+  });
   const provideBootstrap = createMobileBootstrapAdapter({
     ports,
     // Keep the persisted composition identity authoritative even for an
@@ -95,15 +102,32 @@ export function createProductionMobileAccess(
     clock,
     financialDateFor: financialDateInIsrael,
   });
+  function assertMobileReadAvailable(): void {
+    if (options.isMobileReadAvailable && !options.isMobileReadAvailable()) {
+      throw new Error('Mobile read data is unavailable');
+    }
+  }
+
   const bootstrapDependencies: MobileBootstrapRouteDependencies = Object.freeze({
     authenticator: deviceRegistry,
     provide: () => {
-      if (options.isBootstrapAvailable && !options.isBootstrapAvailable()) {
-        throw new Error('Mobile bootstrap is unavailable');
-      }
+      assertMobileReadAvailable();
       return provideBootstrap();
     },
   });
+  const transactionDependencies: MobileTransactionRouteDependencies = {
+    authenticator: deviceRegistry,
+    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+    list: (query, context) => {
+      assertMobileReadAvailable();
+      return transactionPorts.list(query, context);
+    },
+    detail: (publicId, context) => {
+      assertMobileReadAvailable();
+      return transactionPorts.detail(publicId, context);
+    },
+  };
+  Object.freeze(transactionDependencies);
 
   let activeManager: PairingManager | null = null;
   let pairingGeneration = 0;
@@ -168,6 +192,7 @@ export function createProductionMobileAccess(
 
   return {
     bootstrapDependencies,
+    transactionDependencies,
     pairingDependencies,
     deviceRegistry,
     createPairingManager,

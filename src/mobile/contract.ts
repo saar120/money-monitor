@@ -91,6 +91,10 @@ export const MOBILE_ERROR_DEFINITIONS = {
     statusCode: 404,
     message: 'The requested mobile route does not exist.',
   },
+  transaction_not_found: {
+    statusCode: 404,
+    message: 'The requested transaction was not found.',
+  },
   payload_too_large: {
     statusCode: 413,
     message: 'The request is too large.',

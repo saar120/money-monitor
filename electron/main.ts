@@ -299,7 +299,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
       // The bootstrap ports intentionally retain the real database used for
       // device credentials. While the desktop swaps to its demo database,
       // fail the entire mobile snapshot closed instead of mixing sources.
-      isBootstrapAvailable: () => !connection.isDemoMode(),
+      isMobileReadAvailable: () => !connection.isDemoMode(),
     });
 
     const serveCoordinator = new TailscaleServeCoordinator({
@@ -317,6 +317,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
           const server = createMobileServer({
             bootstrap: production.bootstrapDependencies,
             pairing: production.pairingDependencies,
+            transactions: production.transactionDependencies,
           });
           try {
             const port = await server.start({ host });
