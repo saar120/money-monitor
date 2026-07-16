@@ -98,8 +98,8 @@ private struct MainTabView: View {
                 NavigationStack {
                     TransactionSearchView(query: $searchText)
                 }
+                .searchable(text: $searchText, prompt: "Search transactions")
             }
         }
-        .searchable(text: $searchText, prompt: "Search transactions")
     }
 }
