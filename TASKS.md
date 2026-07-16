@@ -2,7 +2,7 @@
 
 ## Active
 
-- [ ] **Validate Phase 2A — live Home technical dogfood** - Privacy-cover and live Home code are complete. Install the current Xcode build on the paired iPhone and confirm live values, pull-to-refresh, Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
+- [ ] **Validate Phase 2A — live Home technical dogfood** - The first paired-iPhone render passed with current Mac totals and exposed two follow-ups that are now fixed in code: legacy `₪` recent-activity projection and Search appearing on Home. Rebuild/restart the Mac harness and run the current iPhone build to confirm Recent activity renders and Home has no search field, then check pull-to-refresh, Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
 
 ## Waiting On
 

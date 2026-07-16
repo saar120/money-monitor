@@ -201,6 +201,26 @@ describe('production mobile bootstrap ports', () => {
     expect(transactions[0].publicId).not.toBe(String(occurred.id));
   });
 
+  it('normalizes the legacy shekel marker when projecting recent transaction money', async () => {
+    const db = database();
+    const account = insertAccount(db);
+    insertTransaction(db, account.id, {
+      date: CONTEXT.financialDate,
+      processedDate: CONTEXT.financialDate,
+      chargedAmount: -42.5,
+      chargedCurrency: '₪',
+    });
+    const ports = createProductionMobileBootstrapPorts({
+      db,
+      publicIdKey: KEY,
+      readNetWorthIls: () => 0,
+    });
+
+    const transactions = await ports.readRecentTransactions(CONTEXT);
+
+    expect(transactions[0].amount).toEqual({ value: '42.50', currencyCode: 'ILS' });
+  });
+
   it('degrades an unsupported persisted currency to a safe non-cacheable section error', async () => {
     const db = database();
     const account = insertAccount(db);
