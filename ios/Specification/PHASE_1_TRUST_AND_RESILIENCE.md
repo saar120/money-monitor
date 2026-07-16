@@ -217,7 +217,7 @@ Acceptance:
 ### P1-SEC-02 — Add scene/app-switcher privacy cover
 
 Owner: iOS + design  
-Status: **In progress — Phase 2A privacy-cover subset pulled forward**\
+Status: **Phase 2A subset code complete — physical snapshot acceptance pending**\
 Priority: Must  
 Dependencies: Phase 2A standalone cover depends on P0-IOS-02; full lock/coordinator integration depends on P1-IOS-03
 
@@ -225,7 +225,8 @@ How:
 
 - First implement a standalone opaque cover for inactive/background scenes in the technical lane; full lock/coordinator integration remains deferred.
 - Cover content immediately when a scene becomes inactive and before the OS captures a switcher snapshot.
-- Remove the cover only after the coordinator confirms the app may display unlocked data.
+- Apply the same protection inside every sheet, popover, full-screen cover, or other presentation host that can render above the root cover.
+- In Phase 2A, remove the cover only when the scene is active; full Phase 1 later adds lock-coordinator authorization.
 - Use branding and neutral status only; no amount, merchant, chart, or freshness detail.
 - Test rapid inactive/background/foreground transitions and supported multi-window behavior.
 

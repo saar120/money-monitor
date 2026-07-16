@@ -62,10 +62,12 @@ struct HomeView: View {
             }
         }
         .sheet(isPresented: $isRePairScannerPresented) {
-            scannerFactory.makeView(
-                onScanned: beginRePairing,
-                onCancel: { isRePairScannerPresented = false }
-            )
+            ScenePrivacyProtectionContainer {
+                scannerFactory.makeView(
+                    onScanned: beginRePairing,
+                    onCancel: { isRePairScannerPresented = false }
+                )
+            }
         }
     }
 

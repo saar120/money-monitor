@@ -61,10 +61,12 @@ struct ConnectMacView: View {
         .navigationTitle("Money Monitor")
         .navigationBarTitleDisplayMode(.inline)
         .sheet(isPresented: $isScannerPresented) {
-            scannerFactory.makeView(
-                onScanned: beginPairing,
-                onCancel: { isScannerPresented = false }
-            )
+            ScenePrivacyProtectionContainer {
+                scannerFactory.makeView(
+                    onScanned: beginPairing,
+                    onCancel: { isScannerPresented = false }
+                )
+            }
         }
         .onDisappear {
             cancelPairing()
