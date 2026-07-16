@@ -106,11 +106,10 @@ Screens: Advisor home and conversation.
 
 ## First development tickets
 
-1. Verify a LAN-only client cannot reach either loopback Fastify listener.
-2. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
-3. Revoke the phone and run the final token/credential/account-number evidence scan.
+1. Re-pair the existing phone and verify its device ID remains stable, its token version increments, and its previous token stops authenticating.
+2. Revoke the phone and run the final token/credential/account-number evidence scan.
 
-The full restart gate is complete: repeated packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy, and a full physical-iPhone reboot preserved Keychain authentication without another QR. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
+The restart and external-LAN gates are complete: repeated packaged Mac app cold restarts selected distinct random targets while the same private HTTPS URL remained healthy, a full physical-iPhone reboot preserved Keychain authentication without another QR, and a Tailscale-disabled iPhone could not reach either listener through the Mac's Wi-Fi address. The current hardened signed harness additionally forces loopback binds and owner-only local-data permissions.
 
 The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are already complete; see the detailed Phase 0 status for their evidence.
 

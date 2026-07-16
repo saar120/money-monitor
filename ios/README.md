@@ -14,7 +14,7 @@ The iPhone is a private client of the Mac app. The Mac remains the credential ho
 | Xcode project shell                         | Ready; generated from [`project.yml`](project.yml)                                                                                        |
 | Native navigation shell                     | Ready; Home, Activity, Plan, Advisor, and trailing Search destinations                                                                    |
 | Connectivity smoke test                     | Implemented against isolated `GET /api/mobile/v1/health`                                                                                  |
-| Private Mac bridge                          | Hardened signed harness is live; both servers are forced onto loopback and the private route is healthy on its latest random target       |
+| Private Mac bridge                          | Hardened signed harness is live; both servers are loopback-only, external-LAN refusal passed, and the private route is healthy            |
 | Bootstrap contract                          | Production allow-listed DTO adapter, generated JSON Schema, shared TypeScript/Swift fixtures, and authenticated native client implemented |
 | Stable Mac pairing endpoint                 | Physical pairing, no-flash restoration, and saved-Keychain authentication after a full iPhone reboot passed; remaining security QA awaits |
 | Feature data and final screens              | Planned, not implemented                                                                                                                  |
