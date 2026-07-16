@@ -4,7 +4,7 @@ This folder is the canonical implementation specification for the native iOS app
 
 Status: **Draft for implementation review**  
 Last updated: **2026-07-16**\
-Recommended current milestone: **Phase 2A live Home for the sole technical owner; broader private read-only MVP still requires deferred Phase 1**
+Current milestone: **Phase 2A live Home accepted for the sole technical owner; choose whether to extend the technical lane or resume deferred Phase 1 before the next feature slice**
 
 ## How to read the specification
 
@@ -20,7 +20,7 @@ Recommended current milestone: **Phase 2A live Home for the sole technical owner
 | --- | --- | --- | --- |
 | 0 | A real iPhone can securely reach a stable, mobile-safe Mac API | [Foundation and private bridge](PHASE_0_FOUNDATION.md) | Internal connectivity prototype |
 | 1 | Deferred: app lock, truthful freshness, polished recovery, and encrypted offline viewing | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Later private dogfood gate |
-| 2 | Phase 2A starts live Home now; full phase adds Activity, Search, filters, detail, and cached behavior | [Everyday money](PHASE_2_EVERYDAY_MONEY.md) | Technical-owner live slice, then daily-use read-only slice |
+| 2 | Phase 2A live Home accepted; full phase adds Activity, Search, filters, detail, and cached behavior | [Everyday money](PHASE_2_EVERYDAY_MONEY.md) | Technical-owner live slice, then daily-use read-only slice |
 | 3 | Budgets, net worth, assets, accounts, and sync history work read-only | [Planning and connected data](PHASE_3_PLANNING_AND_ACCOUNTS.md) | Recommended read-only MVP |
 | 4 | Explicitly approved commands can safely mutate Mac-owned data | [Mobile commands](PHASE_4_MOBILE_COMMANDS.md) | Trusted command release |
 | 5 | Advisor works with streaming, freshness disclosure, and a safe tool policy | [Advisor](PHASE_5_ADVISOR.md) | Full mockup capability parity |
@@ -42,7 +42,7 @@ flowchart LR
     P5 --> P6
 ```
 
-D-018 permits only the sole technical owner to start Phase 2A from Phase 0. That lane is live-only and memory-only, pulls forward the app-switcher cover, and cannot claim Phase 1, full Phase 2, private dogfood, or release readiness. The solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
+D-018 permitted only the sole technical owner to start Phase 2A from Phase 0; that slice is now accepted. The lane remains live-only and memory-only, pulls forward the app-switcher cover, and cannot claim Phase 1, full Phase 2, private dogfood, or release readiness. The solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
 
 ## Task identifiers
 

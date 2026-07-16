@@ -5,7 +5,7 @@
 The owner can use Home, Activity, Search, filters, and transaction detail against live or saved data without any mobile mutation capability.
 
 Delivery checkpoint: **daily-use read-only slice**  
-Phase status: **Phase 2A in progress — live Home for technical-owner dogfood; full Phase 2 remains planned**\
+Phase status: **Phase 2A accepted on 2026-07-16 — live Home for technical-owner dogfood; full Phase 2 remains planned**\
 Depends on: **Phase 0 bootstrap/client plus the app-switcher subset of P1-SEC-02 for Phase 2A; full Phase 2 still depends on Phase 1**
 
 ## User stories
@@ -49,6 +49,8 @@ Phase 2A acceptance:
 - refresh replaces the in-memory payload only after validation and preserves the current live payload on transport failure;
 - no financial DTO, search text, response body, or device token is persisted outside the existing Keychain credential;
 - all visible controls remain read-only.
+
+Accepted on 2026-07-16 after simulator/security regression, signed-harness verification, and physical checks for live rendering, Recent compatibility, Search scoping, pull-to-refresh, recoverable Tailscale-off retention, app-switcher concealment, and force-quit/relaunch refetch. This acceptance does not expand the slice beyond the limitations above.
 
 ## Screen scope
 
@@ -102,16 +104,16 @@ The exact definition of “available money” and desktop calculation parity mus
 | P2-API-03 | Backend | Planned | Implement cursor-paginated `/transactions` over service queries. Cursor is opaque/signed or server-defined, superseded requests are cheap to cancel, and append returns `hasMore`. Do not expose raw offset semantics. |
 | P2-API-04 | Backend | Planned | Implement `/transactions/:id` with allowlisted fields and safe `404 transaction_not_found`. Never serialize raw transaction rows or internal hashes/meta/scrape fields. |
 | P2-API-05 | Backend + QA | Planned | Add compatibility, redaction, Hebrew/English, long merchant, empty, partial, mixed-currency, unknown enum, malformed, and pagination-boundary fixtures. Secret sentinel scan must fail on forbidden fields/values. |
-| P2-IOS-01 | iOS models/formatting | In progress | Phase 2A Home subset is code-complete with strict decoder-boundary decimal/currency/date/ID/mask validation, locale-aware formatting, mixed-direction content, and failed-section suppression. Full transaction DTO and spoken-wording acceptance still depend on later Phase 2 work. |
-| P2-IOS-02 | iOS Home | In progress | Phase 2A live, memory-only Home and single-flight refresh are code-complete pending physical acceptance. It does not claim cached/offline behavior; the full repository-backed task remains dependent on Phase 1. |
+| P2-IOS-01 | iOS models/formatting | Phase 2A done; full task planned | The accepted Home subset enforces strict decoder-boundary decimal/currency/date/ID/mask validation, locale-aware formatting, mixed-direction content, and failed-section suppression. Full transaction DTO and spoken-wording acceptance still depend on later Phase 2 work. |
+| P2-IOS-02 | iOS Home | Phase 2A done; full task planned | The live, memory-only Home, single-flight refresh, recoverable failure retention, and relaunch refetch passed physical acceptance. It does not claim cached/offline browsing; the full repository-backed task remains dependent on Phase 1. |
 | P2-IOS-03 | iOS Activity | Planned | Build grouped Activity with initial load, incremental cursor append, refresh, preserved scroll position, inline append retry, and navigation to detail. Duplicate IDs must not render twice. |
 | P2-IOS-04 | iOS filters | Planned | Model filters as draft vs applied state. Apply changes results, Reset returns accepted defaults, Cancel changes nothing, and filtered-empty differs from genuinely empty activity. |
 | P2-IOS-05 | iOS Search | Planned | Implement 250–350 ms debounce, cancellation of superseded requests, query/filter preservation through detail navigation, no-results recovery, keyboard behavior, and optional clearable local recents. Search text never enters production diagnostics. |
 | P2-IOS-06 | iOS detail | Planned | Build read-only Transaction detail. Category/account/owner/status rows do not imply editability. Hide Options, note, recurring, and review actions until Phase 4/schema support exists. |
 | P2-DAT-01 | iOS data | Deferred | Full encrypted snapshot/repository and cached transaction window move with Phase 1; Phase 2A persists no financial DTOs. |
-| P2-DES-01 | Design + UX writing | In progress | Phase 2A flat native Home implements live, refreshing, partial, unavailable, revoked, and incompatible semantics; physical visual acceptance is pending, while cached/stale and remaining-screen matrices stay planned for the full phase. |
+| P2-DES-01 | Design + UX writing | Phase 2A done; full task planned | The flat native Home implements live, refreshing, partial, unavailable, revoked, and incompatible semantics and passed physical visual acceptance; cached/stale and remaining-screen matrices stay planned for the full phase. |
 | P2-DES-02 | Design + accessibility | Deferred | Full accessibility/design acceptance moves to the later Phase 1/6 hardening path; Phase 2A still uses native semantics, flexible layouts, and non-color meaning by default. |
-| P2-QA-01 | QA | In progress | Phase 2A fixture, refresh, privacy-boundary, and full simulator suites pass; source scan finds no financial persistence path. Physical live-data/app-switcher/relaunch evidence remains before this subset can be accepted; transaction contract and snapshot coverage remain planned. |
+| P2-QA-01 | QA | Phase 2A done; full task planned | Fixture, refresh, privacy-boundary, and full simulator suites pass; source scan finds no financial persistence path. Physical live-data, refresh-failure, app-switcher, and relaunch evidence passed; transaction-contract and encrypted-snapshot coverage remain planned. |
 | P2-QA-02 | QA | Planned | Automate Home → Activity → Filter/Search → Detail for live, cached, empty, slow, revoked, incompatible, and append-error states. Verify query/filter/scroll restoration. |
 | P2-QA-03 | Accessibility + performance QA | Deferred | Full VoiceOver, maximum Dynamic Type, cached/search, and representative-device matrix is deferred; targeted live Home performance checks may run without closing this task. |
 

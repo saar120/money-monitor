@@ -3,8 +3,8 @@
 This is the living execution record for the native iOS project. The [product specification](Specification/README.md) defines what must be built; this ledger records what is active, what changed, what evidence exists, and what is blocked.
 
 Last updated: **2026-07-16**  
-Current milestone: **Phase 2A — Live Home technical dogfood**\
-Current checkpoint: **Phase 0 accepted; Phase 1 deferred under D-018; physical live Home, refresh, offline-retention, and app-switcher-cover acceptance passed; relaunch refetch remains**
+Current milestone: **Phase 2A — Live Home technical dogfood accepted**\
+Current checkpoint: **Phase 0 and Phase 2A are accepted; Phase 1 remains deferred under D-018; the next feature lane requires an explicit scope decision**
 
 ## Update rules
 
@@ -21,7 +21,7 @@ Current checkpoint: **Phase 0 accepted; Phase 1 deferred under D-018; physical l
 | ----- | ------------------------------- | ----------------------------- | ------------------------------------------------------------------------------------------------------------------------------------- |
 | 0     | Internal connectivity prototype | **Done**                      | Physical pairing, restart persistence, external-LAN refusal, rotation, revocation, recovery pairing, and final artifact scans passed. |
 | 1     | Private dogfood                 | **Deferred**                  | App lock, encrypted snapshot, polished recovery, and full accessibility/resilience acceptance wait until broader dogfood.             |
-| 2     | Daily-use read-only slice       | **Phase 2A in progress**      | Live, memory-only Home may proceed for the sole technical owner; full Phase 2 still depends on Phase 1 and remaining feature routes.   |
+| 2     | Daily-use read-only slice       | **Phase 2A accepted**         | Live, memory-only Home passed physical technical-owner acceptance; full Phase 2 still depends on Phase 1 and remaining feature routes. |
 | 3     | Recommended read-only MVP       | Not started                   | Depends on stable read DTO conventions.                                                                                               |
 | 4     | Trusted commands                | Blocked by scope              | Requires explicit command capability matrix.                                                                                          |
 | 5     | Advisor                         | Not started                   | Requires read-only tool boundary and stable read model.                                                                               |
@@ -37,8 +37,8 @@ Current checkpoint: **Phase 0 accepted; Phase 1 deferred under D-018; physical l
 | Pairing and device identity | `P0-SEC-01`, `P0-SEC-02`              | **Done** | Public pairing is claimant-bound and single-mint; physical rotation preserved device identity, revocation denied the saved credential, and recovery created a distinct active row while retaining the revoked audit row.                       | Preserve rotation/revocation/recovery invariants as Phase 1 adds cached data.      |
 | Bootstrap contract          | `P0-API-02`, `P0-API-03`              | **Done** | Production reads project allow-listed DTOs with opaque IDs, server-side masks, charged currency, one Jerusalem finance date, safe partials, shared fixtures, and a generated schema.                                                            | Keep the deterministic schema drift check in regression.                          |
 | iPhone pairing slice        | `P0-IOS-04`, `P0-SEC-03`, `P0-IOS-05` | **Done** | The updated physical build restored without a scanner flash and authenticated after a full iPhone reboot with the existing Keychain credential. The registry remained one active device, so no replacement pairing occurred.                    | Preserve Keychain and restoration behavior while feature data is added.           |
-| Technical privacy cover     | `P1-SEC-02` subset                     | **Phase 2A physical app-switcher check passed** | The root and both scanner-sheet hosts hide mounted content visually, disable interaction, remove it from accessibility, and show an opaque neutral cover while inactive/background. The owner confirmed the physical app-switcher preview concealed financial content and returning to the app preserved the mounted in-memory view. Full app-lock/coordinator, rapid-transition, and VoiceOver acceptance remain deferred with Phase 1. | Preserve concealment behavior as later screens and Phase 1 controls are added. |
-| Live Home                   | `P2-IOS-01/02`, `P2-DES-01`, `P2-QA-01` | **Physical live, refresh, and offline retention passed — relaunch pending** | The paired physical iPhone renders current Mac totals, calculation time, and Recent activity through the live Tailnet route. Search scoping, legacy `₪` projection, and pull-to-refresh passed. With Tailscale disabled, a failed refresh kept the last accepted in-memory Home visible and reported the update failure; no database or financial persistence path was added. | Verify a force-quit/relaunch refetches live Home through the restored Keychain profile. |
+| Technical privacy cover     | `P1-SEC-02` subset                     | **Done for Phase 2A subset** | The root and both scanner-sheet hosts hide mounted content visually, disable interaction, remove it from accessibility, and show an opaque neutral cover while inactive/background. The physical app-switcher preview concealed financial content and returning to the app preserved the mounted in-memory view. Full app-lock/coordinator, rapid-transition, and VoiceOver acceptance remain deferred with Phase 1. | Preserve concealment behavior as later screens and Phase 1 controls are added. |
+| Live Home                   | `P2-IOS-01/02`, `P2-DES-01`, `P2-QA-01` | **Done — Phase 2A accepted** | The paired physical iPhone renders current Mac totals, calculation time, and Recent activity through the live Tailnet route. Search scoping, legacy `₪` projection, pull-to-refresh, Tailscale-off in-memory retention, app-switcher concealment, and force-quit/relaunch refetch passed. Relaunch restored the Keychain profile without QR and fetched a new live calculation; no financial persistence path was added. | Preserve the accepted live, memory-only, read-only boundary as later feature routes are considered. |
 
 ## Phase 0 task ledger
 
@@ -119,12 +119,13 @@ Current checkpoint: **Phase 0 accepted; Phase 1 deferred under D-018; physical l
 | 2026-07-16 | `P2-IOS-01/02`, `P2-DES-01`, `P2-QA-01` | Owner rerun of the refreshed signed Mac harness and current iPhone build over the paired Tailnet route | Passed — Recent activity rendered from the live Mac projection and the Home search field was absent. This closes the two screenshot follow-ups without expanding the mobile persistence boundary. Pull-to-refresh, Tailscale-off retention, relaunch refetch, and app-switcher concealment remain pending. |
 | 2026-07-16 | `P2-IOS-02`, `P2-QA-01` | Owner pull-to-refresh on the physical paired iPhone with the live Mac harness | Passed — the displayed calculation time advanced from 11:16 to 11:54 while accepted Home and Recent content remained available. Tailscale-off retention, relaunch refetch, and app-switcher concealment remain pending. |
 | 2026-07-16 | `P1-SEC-02` subset, `P2-IOS-02`, `P2-QA-01` | Combined physical app-switcher and Tailscale-off refresh check without force-quitting the iPhone app | Passed — the app-switcher preview concealed financial content. After Tailscale was disabled, the failed refresh retained the accepted 11:54 in-memory Home and surfaced the expected update warning; returning to the foreground restored the mounted view. No offline persistence claim is made. Relaunch refetch remains pending. |
+| 2026-07-16 | `P2-IOS-02`, `P2-QA-01` | Physical force-quit and relaunch with Tailscale restored and the existing Keychain profile | Passed — relaunch required no QR or replacement pairing, refetched populated live Home and Recent activity, and advanced beyond the prior 11:54 calculation. This closes Phase 2A without adding a financial snapshot or other persistence path. |
 
 ## Decisions and blockers
 
 ### Current blockers requiring user involvement
 
-No blocker prevents the Phase 2A privacy-cover and live Home work. `P2-PRD-01` still blocks “available money” and comparison claims; Phase 1 policy remains deferred and must be resolved before offline storage or broader dogfood.
+Phase 2A has no open blocker. Starting another read-only feature slice requires an explicit decision to extend the D-018 technical-owner exception beyond live Home or to resume Phase 1 first. `P2-PRD-01` still blocks “available money” and comparison claims; Phase 1 must be resolved before offline storage or broader dogfood.
 
 ### Deferred decisions
 
@@ -161,3 +162,4 @@ No blocker prevents the Phase 2A privacy-cover and live Home work. `P2-PRD-01` s
 | 2026-07-16 | Owner confirmed the refreshed physical build renders Recent activity and no longer presents Search on Home. Live-render and compatibility acceptance are closed; refresh, offline-retention, relaunch, and app-switcher-cover checks remain. |
 | 2026-07-16 | Closed physical pull-to-refresh acceptance after the owner confirmed the calculation timestamp advanced from 11:16 to 11:54 with the refreshed live Home still populated. |
 | 2026-07-16 | Closed the Phase 2A physical app-switcher and Tailscale-off gates after the owner confirmed snapshot concealment and recoverable refresh-failure retention of the accepted in-memory Home. Relaunch refetch is the final live-Home device check. |
+| 2026-07-16 | Accepted Phase 2A after force-quit/relaunch restored the existing Keychain connection without QR and refetched populated live Home with a newer calculation. The slice remains live, memory-only, read-only, and limited to the sole technical owner under D-018. |
