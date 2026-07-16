@@ -2,7 +2,7 @@
 
 ## Active
 
-- [ ] **Complete Phase 2A physical resilience checks** - Live Home, Recent activity compatibility, Search scoping, and pull-to-refresh passed on the paired iPhone. Next verify Tailscale-off retained values, app-switcher concealment, and relaunch refetch. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
+- [ ] **Complete Phase 2A relaunch-refetch check** - Live Home, Recent activity compatibility, Search scoping, pull-to-refresh, Tailscale-off in-memory retention, and app-switcher concealment passed on the paired iPhone. With Tailscale restored, force-quit and reopen the iPhone app; confirm the saved Keychain profile refetches live Home without pairing and advances the calculation time. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
 
 ## Waiting On
 
