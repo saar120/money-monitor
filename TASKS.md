@@ -2,11 +2,13 @@
 
 ## Active
 
-- [ ] **Begin iOS Phase 1 — Trust, security, and resilience** - Accept `P1-PRD-01` lock/freshness/retention/wipe policy, then implement the root-state coordinator, app lock/privacy cover, and encrypted snapshot path tracked in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
+- [ ] **Build Phase 2A — live Home technical dogfood** - Pull forward the app-switcher privacy cover, then render the validated bootstrap in memory with truthful formatting, partial-section suppression, refresh, and no financial disk cache. Track evidence in [`ios/IMPLEMENTATION_LEDGER.md`](ios/IMPLEMENTATION_LEDGER.md).
 
 ## Waiting On
 
 ## Someday
+
+- [ ] **Resume iOS Phase 1 before broader distribution or offline storage** - App lock, encrypted snapshot/cache policy, polished recovery, and the full accessibility/resilience matrix are deferred under D-018.
 
 ## Done
 

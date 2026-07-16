@@ -10,6 +10,7 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 - **Ready:** committed foundation exists in this folder.
 - **Planned:** specified here but not implemented.
 - **Blocked:** depends on a product or architecture decision.
+- **Deferred:** intentionally moved outside the current technical-owner checkpoint.
 
 ## [Phase 0 — Foundation and private bridge](../Specification/PHASE_0_FOUNDATION.md)
 
@@ -32,9 +33,11 @@ This file is the concise roadmap. The issue-sized tasks, user stories, dependenc
 
 **Exit criteria passed 2026-07-16:** a physical iPhone paired and stored its scoped token in Keychain; stable health followed random-port Mac restarts, and a later physical cold launch authenticated bootstrap from the saved credential. The bridge remained isolated from the LAN, rejected a revoked credential, and recovered through a fresh approved pairing. Final count-only scans found no registered-token, Bearer, private-route, or known-account leakage in inspected artifacts.
 
-## [Phase 1 — Trust, security, and resilience](../Specification/PHASE_1_TRUST_AND_RESILIENCE.md)
+## [Phase 1 — Trust, security, and resilience](../Specification/PHASE_1_TRUST_AND_RESILIENCE.md) — Deferred
 
 Screens: Welcome, Connect to Mac, Face ID, Connected, Mac unavailable.
+
+D-018 postpones this phase for the current sole technical owner. It remains required before offline storage or broader dogfood. Only the opaque app-switcher cover is pulled forward into Phase 2A.
 
 - QR scanner and manual-address fallback.
 - Pairing approval and clear failure recovery.
@@ -45,17 +48,19 @@ Screens: Welcome, Connect to Mac, Face ID, Connected, Mac unavailable.
 
 **Exit criteria:** a paired user always knows whether data is live or saved, can browse the saved snapshot offline, and cannot expose financial content from the app switcher when locked.
 
-## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md)
+## [Phase 2 — Everyday read-only experience](../Specification/PHASE_2_EVERYDAY_MONEY.md) — Phase 2A active
 
 Screens: Home, Activity, Search, Transaction detail, Filters.
 
-- Bootstrap-driven Home with summary, cash flow, budget pulse, review count, and freshness.
+- Live bootstrap-driven Home with summary, cash flow, budget pulse, review count, calculation time, and recent activity.
+- Memory-only financial DTOs; no snapshot, URL cache, `UserDefaults`, or search-recents persistence.
+- Opaque app-switcher cover before any real amount renders.
 - Transaction pagination, search debounce, filters, and detail.
-- Pull to refresh with atomic snapshot replacement.
+- Pull to refresh with validated in-memory replacement; cached/offline replacement remains deferred.
 - Locale-aware ILS values and mixed Hebrew/English merchant content.
 - Loading, empty, partial, retry, offline, and decode-failure states.
 
-**Exit criteria:** the daily glance and transaction search work against live and cached fixtures, pass VoiceOver/Dynamic Type checks, and do not require a mutation endpoint.
+**Phase 2A exit criteria:** live Home renders only validated, non-failed sections, uses truthful money/date labels, covers inactive scenes, persists no financial DTO, and exposes no mutation. Full Phase 2 still requires Phase 1, Activity/Search/Detail, cached fixtures, and the accessibility matrix.
 
 ## [Phase 3 — Planning, wealth, and connected data](../Specification/PHASE_3_PLANNING_AND_ACCOUNTS.md)
 
@@ -107,9 +112,9 @@ Screens: Advisor home and conversation.
 
 ## Next development tickets
 
-1. Accept `P1-PRD-01`: app-lock, freshness, encrypted-snapshot retention, disconnect/revocation, and wipe behavior.
-2. Implement the pure root-state coordinator and exhaustive transition tests.
-3. Add the app-switcher privacy cover, LocalAuthentication seam, and encrypted snapshot container.
+1. Pull forward the standalone `P1-SEC-02` inactive/app-switcher privacy cover and lifecycle tests.
+2. Implement the `P2-IOS-01` Home formatting subset with `Decimal`, locale-aware currency/date output, and partial-section suppression.
+3. Replace the Home placeholder with the live in-memory `P2-IOS-02` presentation plus refresh and fixture-driven tests.
 
 Phase 0 is complete: the stable private URL survived random-port Mac restarts, a full iPhone reboot preserved Keychain authentication, a Tailscale-disabled iPhone could not reach either listener through Wi-Fi, same-device re-pair atomically rotated the token, revocation blocked the saved credential, and fresh recovery pairing created a distinct active device without reactivating the revoked audit row. The hardened signed harness forces loopback binds and owner-only local-data permissions.
 
@@ -118,6 +123,8 @@ The starter Xcode/build tasks `P0-IOS-01` through `P0-IOS-03` and `P0-QA-01` are
 ## Definition of done for every feature
 
 The complete cross-phase definition and release evidence rules are in [Quality gates](../Specification/QUALITY_GATES.md); screen-to-story/task coverage is maintained in [Traceability](../Specification/TRACEABILITY.md).
+
+Phase 2A is an internal technical-owner exception and does not claim the full definition below. Security boundaries, redaction, native semantics, flexible layout, and read-only contracts still apply; offline/resilience and complete accessibility certification are deferred, not waived for release.
 
 - Matches the approved screen hierarchy and semantic tokens.
 - Handles live, loading, empty, cached/stale, offline, authentication, and server-error states.

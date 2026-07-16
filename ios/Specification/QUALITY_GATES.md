@@ -2,6 +2,8 @@
 
 These gates apply to every phase. Phase 6 completes the full release matrix, but it does not postpone security, accessibility, state handling, or tests that belong to an earlier feature.
 
+**D-018 technical-dogfood exception:** Phase 2A may defer the full manual accessibility/device matrix while the app is used only by its sole technical owner on a passcode-protected, non-shared personal iPhone. New work must still use native semantics, flexible layouts, non-color status meaning, and labels for essential controls. This exception cannot satisfy a full phase exit gate or support wider dogfood, offline storage, or release acceptance.
+
 ## 1. Definition of done for an implementation task
 
 A task is done only when:
@@ -209,4 +211,3 @@ Each phase review should attach:
 - contract fixture diff and redaction scan;
 - known limitations and deferred tasks;
 - accepted decisions or unresolved blockers.
-

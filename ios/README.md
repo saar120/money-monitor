@@ -17,7 +17,7 @@ The iPhone is a private client of the Mac app. The Mac remains the credential ho
 | Private Mac bridge                          | Hardened signed harness is live; both servers are loopback-only, external-LAN refusal passed, and the private route is healthy            |
 | Bootstrap contract                          | Production allow-listed DTO adapter, generated JSON Schema, shared TypeScript/Swift fixtures, and authenticated native client implemented |
 | Stable Mac pairing endpoint                 | Phase 0 accepted: pairing, no-flash restoration, reboot persistence, rotation, revocation, recovery pairing, and final security QA passed |
-| Feature data and final screens              | Planned, not implemented                                                                                                                  |
+| Feature data and final screens              | Phase 2A active: live, in-memory Home is next; offline cache, app lock, polished recovery, and full accessibility acceptance are deferred  |
 
 The packaged Mac app still keeps its desktop Fastify listener and rotating full-access bearer token private. The Phase 0 mobile bridge is a second loopback-only listener, mapped through a dedicated private Tailscale HTTPS path and protected by revocable per-device `mobile.read` tokens. See [Architecture](Documentation/ARCHITECTURE.md), [API contract](Documentation/API_CONTRACT.md), and the live [implementation ledger](IMPLEMENTATION_LEDGER.md).
 
@@ -63,5 +63,8 @@ Start with the [Implementation ledger](IMPLEMENTATION_LEDGER.md) for current exe
 - Bank credentials, scraper code, encryption keys, and authoritative financial data stay on the Mac.
 - Do not bind the desktop Fastify server to `0.0.0.0` for mobile access.
 - Use a private Tailscale HTTPS route and a scoped device token stored in iOS Keychain.
+- During Phase 2A, keep every financial bootstrap/feature DTO in memory only; do not add `UserDefaults`, `@AppStorage`, file, URL-cache, or state-restoration persistence.
 - Treat the phone cache as an encrypted, timestamped last-known snapshot, never a second source of truth.
+- Limit Phase 2A to the sole technical owner on a passcode-protected, non-shared personal iPhone; foregrounding does not add a second app-authentication prompt yet.
+- Resume Phase 1 before adding that encrypted cache or distributing beyond the sole technical owner.
 - Keep financial content flat. Let system navigation and controls provide Liquid Glass on supported iOS versions.

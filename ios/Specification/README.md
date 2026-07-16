@@ -3,8 +3,8 @@
 This folder is the canonical implementation specification for the native iOS app. It turns the approved product direction and mockups into phased, testable work that can be converted into engineering issues without rediscovering scope.
 
 Status: **Draft for implementation review**  
-Last updated: **2026-07-14**  
-Recommended first shippable milestone: **private read-only MVP through Phase 3**
+Last updated: **2026-07-16**\
+Recommended current milestone: **Phase 2A live Home for the sole technical owner; broader private read-only MVP still requires deferred Phase 1**
 
 ## How to read the specification
 
@@ -19,8 +19,8 @@ Recommended first shippable milestone: **private read-only MVP through Phase 3**
 | Phase | Outcome | Specification | Delivery checkpoint |
 | --- | --- | --- | --- |
 | 0 | A real iPhone can securely reach a stable, mobile-safe Mac API | [Foundation and private bridge](PHASE_0_FOUNDATION.md) | Internal connectivity prototype |
-| 1 | Pairing, app lock, truthful freshness, and encrypted offline viewing work | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Private dogfood build |
-| 2 | Home, Activity, Search, filters, and transaction detail work read-only | [Everyday money](PHASE_2_EVERYDAY_MONEY.md) | Daily-use read-only slice |
+| 1 | Deferred: app lock, truthful freshness, polished recovery, and encrypted offline viewing | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Later private dogfood gate |
+| 2 | Phase 2A starts live Home now; full phase adds Activity, Search, filters, detail, and cached behavior | [Everyday money](PHASE_2_EVERYDAY_MONEY.md) | Technical-owner live slice, then daily-use read-only slice |
 | 3 | Budgets, net worth, assets, accounts, and sync history work read-only | [Planning and connected data](PHASE_3_PLANNING_AND_ACCOUNTS.md) | Recommended read-only MVP |
 | 4 | Explicitly approved commands can safely mutate Mac-owned data | [Mobile commands](PHASE_4_MOBILE_COMMANDS.md) | Trusted command release |
 | 5 | Advisor works with streaming, freshness disclosure, and a safe tool policy | [Advisor](PHASE_5_ADVISOR.md) | Full mockup capability parity |
@@ -32,6 +32,8 @@ Recommended first shippable milestone: **private read-only MVP through Phase 3**
 flowchart LR
     P0["Phase 0: private bridge"] --> P1["Phase 1: trust and cache"]
     P1 --> P2["Phase 2: everyday money"]
+    P0 -. "D-018 technical lane" .-> P2A["Phase 2A: live Home"]
+    P2A -. "later integrates" .-> P2
     P2 --> P3["Phase 3: planning and accounts"]
     P3 --> MVP["Read-only MVP gate"]
     MVP --> P4["Phase 4: commands"]
@@ -40,7 +42,7 @@ flowchart LR
     P5 --> P6
 ```
 
-Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or Phase 1 security model.
+D-018 permits only the sole technical owner to start Phase 2A from Phase 0. That lane is live-only and memory-only, pulls forward the app-switcher cover, and cannot claim Phase 1, full Phase 2, private dogfood, or release readiness. The solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
 
 ## Task identifiers
 
@@ -100,4 +102,3 @@ Split a task if it cannot be reviewed independently or is expected to span more 
 - API changes update [`API_CONTRACT.md`](../Documentation/API_CONTRACT.md), fixtures, and Swift decoder tests together.
 - Visual changes update the canonical mockup package under `docs/ios-mockups` before changing this specification's screen references.
 - Adding scope to a phase requires removing equivalent scope, moving its exit date, or explicitly changing the delivery checkpoint.
-

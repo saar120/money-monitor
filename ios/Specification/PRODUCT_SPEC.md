@@ -302,7 +302,7 @@ Disallowed analytics payloads:
 
 ## 15. Assumptions and dependencies
 
-- The Mac is powered on and reachable for live data; saved data covers temporary unavailability.
+- The Mac is powered on and reachable for the current Phase 2A live-only lane; deferred Phase 1 saved data will cover temporary unavailability in the broader MVP.
 - Both devices can use the same Tailnet for the first implementation.
 - Existing services remain the calculation source behind mobile DTOs.
 - The iOS app can require iOS 18 while building with the stable iOS 26 SDK.
@@ -320,7 +320,7 @@ Disallowed analytics payloads:
 | Offline snapshot is mistaken for live data | Incorrect financial decisions | Generated timestamp and root freshness state in visual and spoken output |
 | Scope expands to mutations before read model stabilizes | Slow delivery and unsafe authorization | Make Phases 0–3 a standalone release gate; block Phase 4 on capability matrix |
 | Advisor can call mutating tools | Unapproved data changes | Read-only tool allowlist first; confirmation contract before any command |
-| Accessibility is deferred to hardening | Expensive rework and unusable core flows | Apply quality gates in every phase, not only Phase 6 |
+| Full accessibility acceptance is deferred for technical-owner dogfood | Expensive rework before broader use | Continue native semantics/flexible layouts now; complete the full matrix before broader distribution under D-018 |
 | No cloud telemetry hides reliability issues | Slow debugging | Redacted local diagnostics and structured dogfood scripts |
 
 ## 17. Open questions
@@ -329,8 +329,8 @@ Disallowed analytics payloads:
 | --- | --- | --- | --- | --- |
 | OQ-01 | Phase 0 contract | Product | Is the first release owner-only, or may a household member receive owner-equivalent read access? | Owner-only until a role model exists |
 | OQ-02 | Phase 0 security | Security/Engineering | What are device-token lifetime, rotation, and revocation semantics? | Long-lived per-device token, rotatable and immediately revocable; never reuse desktop token |
-| OQ-03 | Phase 1 cache | Product/Security | How long is the saved snapshot retained, and what happens on revocation? | Wipe on explicit unpair; lock on remote revocation until policy is confirmed |
-| OQ-04 | Phase 1 app lock | Product | Is Face ID optional, default-on, or mandatory? What is the background grace interval? | Default-on with device passcode fallback and short configurable grace period |
+| OQ-03 | Phase 1 cache | Product/Security | How long is the saved snapshot retained, and what happens on revocation? | Deferred under D-018; blocks offline storage/broader dogfood, not memory-only Phase 2A. Later default: wipe on explicit unpair; lock on remote revocation until policy is confirmed |
+| OQ-04 | Phase 1 app lock | Product | Is Face ID optional, default-on, or mandatory? What is the background grace interval? | Deferred under D-018; blocks broader dogfood, not sole-owner Phase 2A. Later default: device authentication with passcode fallback and short grace period |
 | OQ-05 | Phase 2 finance | Product/Engineering | Which periods and comparison rules define Home cash flow? | Match current desktop calculations, then freeze them in mobile fixtures |
 | OQ-06 | Phase 3 currency | Product | How should mixed-currency net worth and assets disclose conversion rate age? | Display base-currency total plus source currency and rate timestamp in detail |
 | OQ-07 | Phase 4 commands | Product/Security | Which mobile commands are allowed? | Begin with low-risk review/category/budget actions only after individual approval; keep credentials/deletion Mac-only |
@@ -341,8 +341,9 @@ Disallowed analytics payloads:
 
 ## 18. Timeline considerations
 
-- No calendar commitment should be made until Phase 0 bridge architecture and OQ-01 through OQ-03 are resolved.
-- Phase 0 and Phase 1 require Mac and iOS work in coordinated slices; neither is an iOS-only milestone.
+- No broader distribution commitment should be made until the deferred Phase 1 policy and security gates are resolved.
+- Phase 2A may proceed from accepted Phase 0 only for the sole technical owner on a passcode-protected, non-shared personal iPhone; it keeps financial DTOs memory-only and pulls forward the app-switcher cover. Foregrounding does not add a second app-authentication prompt until Phase 1 resumes.
+- Phase 1 still requires coordinated Mac/iOS work before offline storage or wider dogfood.
 - Phase 2 can begin against frozen fixtures while Phase 0 server work proceeds, but live integration cannot pass early.
 - Phase 3 should reuse the Phase 2 repository/state patterns rather than create separate networking behavior.
 - Phase 4 and Phase 5 may be deferred independently without invalidating the read-only MVP.

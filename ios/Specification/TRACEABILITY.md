@@ -131,9 +131,12 @@ Every approved mockup has a product story, owning implementation task, data/comm
 
 ## Delivery checkpoint gates
 
+D-018 adds a non-cumulative technical-owner execution lane. It advances live feature implementation but is not a substitute for any existing phase or release gate.
+
 | Checkpoint | Included work | Required approval/evidence |
 | --- | --- | --- |
 | Internal connectivity prototype | Phase 0 | Real private route, explicit approval, scoped Keychain credential, mobile-safe bootstrap contract |
+| Technical-owner live Home | Phase 0 + Phase 2A subset | Trusted sole-owner device, app-switcher cover, live validated bootstrap, memory-only financial DTOs, read-only/privacy-negative tests |
 | Private dogfood | Phases 0–1 | App lock/privacy cover, encrypted atomic snapshot, truthful recovery states, physical fault matrix |
 | Daily-use read-only slice | Phases 0–2 | Home/Activity/Search/Detail, coherent calculations, paging/state restoration, cached daily journey |
 | Recommended read-only MVP | Phases 0–3 | Planning/accounts/safe sync read models, reconciled financial fixtures, accessible charts, no credential/config leakage |
