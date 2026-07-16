@@ -85,7 +85,6 @@ Standard system components automatically adapt to Reduce Transparency and Increa
 
 ## Layout and appearance coverage
 
-The mockup canvas is 393 by 852 points, not a fixed implementation frame. Validate smaller iPhones, landscape, iPad, split view, safe-area changes, keyboard presentation, and accessibility text sizes.
+The mockup canvas is 393 by 852 points, not a fixed implementation frame. Validate smaller supported iPhones, functional landscape, safe-area changes, keyboard presentation, and accessibility text sizes. iPad and split-view optimization are out of scope.
 
 Dark Mode is token-driven across the whole app. The two dark mockups are regression references, not permission to leave other screens unverified.
-

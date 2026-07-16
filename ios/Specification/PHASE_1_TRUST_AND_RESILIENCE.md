@@ -5,19 +5,20 @@
 A non-technical owner can complete the approved onboarding flow, protect financial content with device authentication, and browse an encrypted last-known snapshot with truthful live/cached/stale/revoked/incompatible states.
 
 Delivery checkpoint: **private dogfood build**  
-Phase status: **deferred for the current technical-owner dogfood under D-018**\
-Depends on: **Phase 0 exit gate — passed 2026-07-16; resumption timing intentionally postponed**
+Phase status: **product policy accepted under D-020/D-021; implementation is next**\
+Depends on: **Phase 0 exit gate — passed 2026-07-16**
 
-## Deferral decision
+## Accepted policy
 
-Phase 1 is postponed, not cancelled. The current owner is the sole technical tester, so Phase 2A may build a live-only, memory-only Home experience directly on the accepted Phase 0 bridge. The following remain outside the current delivery lane:
+The earlier sole-owner deferral enabled the accepted live-only Phase 2A/2B slices. D-020 expands the intended audience to a small trusted circle, so Phase 1 resumes before family/friend distribution or saved financial data. D-021 and the [locked product policy](../Documentation/LOCKED_PRODUCT_POLICY.md) resolve the prior blockers:
 
-- polished onboarding and manual recovery presentation;
-- Face ID/app-lock policy and background grace interval;
-- encrypted snapshot persistence, offline browsing, and retention/wipe policy;
-- the full VoiceOver, maximum Dynamic Type, localization, and resilience acceptance matrix.
+- mandatory system device authentication with passcode fallback and a two-minute background grace;
+- immediate app-switcher concealment and cold-launch/reboot authentication;
+- one encrypted, device-only, backup-excluded snapshot retained for at most 30 days and stale after 24 hours;
+- wipe on explicit Disconnect, discovered revocation, server/key failure, or reinstall;
+- replacement phones pair fresh and old phones are revoked separately.
 
-The app-switcher privacy-cover subset of `P1-SEC-02` is pulled forward before real financial values render. Basic native semantics and flexible layouts remain implementation defaults, but `US-P1-09` is not a gate for the current technical-only slice. All other task-local statuses below describe the work required when Phase 1 resumes.
+The app-switcher subset of `P1-SEC-02` is already accepted. Full implementation now adds app lock, encrypted offline state, recovery, and the core accessibility journey without inventing household accounts, cloud identity, or phone-to-phone migration.
 
 ## User stories
 
@@ -82,27 +83,27 @@ This prevents a timeout from disguising revocation or an upgrade requirement.
 
 ## Task backlog
 
-### P1-PRD-01 — Approve lock, freshness, retention, and wipe policy
+### P1-PRD-01 — Lock, freshness, retention, wipe, and replacement-phone policy
 
 Owner: Product + security  
-Status: **Deferred under D-018**\
+Status: **Done — accepted under D-021**\
 Priority: Must  
 Dependencies: P0-PRD-01
 
 How:
 
-- Choose whether app lock is mandatory, default-on, or optional.
-- Define cold-start behavior, background grace interval, and device-passcode fallback.
-- Define live/cached/stale thresholds using server `generatedAt`, not request completion time.
-- Define snapshot retention and behavior on explicit disconnect, remote revocation, key loss, app reinstall, and incompatible version.
-- State explicitly that a Mac cannot destroy an offline phone cache until it reconnects.
+- Require system device authentication, passcode fallback, cold-launch/reboot locking, and the two-minute grace.
+- Use `generatedAt` for Live/Saved/Stale meaning, with a 24-hour stale threshold.
+- Keep one encrypted snapshot for at most 30 days and exclude it from backup.
+- Apply the accepted Disconnect, revocation, identity/key-loss, reinstall, incompatible-version, and replacement-phone behavior.
+- Preserve the truth that a Mac cannot destroy an offline phone cache until it reconnects.
 
 Acceptance:
 
-- [ ] OQ-03 and OQ-04 have accepted decisions.
-- [ ] Every transition in the root-state model has one expected presentation/recovery action.
-- [ ] Wipe/retain behavior is consistent across Keychain profile and snapshot files.
-- [ ] Policies are testable with an injected clock and storage dependencies.
+- [x] OQ-03 and OQ-04 are resolved by D-021.
+- [x] Every policy outcome has an expected presentation/recovery action.
+- [x] Credential, snapshot, and replacement-phone behavior are consistent.
+- [x] The policy is testable with injected clock and storage dependencies.
 
 ### P1-DES-01 — Complete onboarding and resilience state designs
 
@@ -202,7 +203,7 @@ Dependencies: P1-PRD-01, P1-IOS-03
 How:
 
 - Wrap `LAContext` behind a protocol for deterministic tests.
-- Use the accepted biometric/passcode policy and localized reason.
+- Use the accepted biometric/passcode policy and clear user-facing reason.
 - Re-evaluate on cold start and after the accepted background grace interval.
 - Treat success, user cancel, system cancel, interruption, unavailable biometric, lockout, and passcode fallback distinctly.
 - Never place financial values under a translucent lock overlay.

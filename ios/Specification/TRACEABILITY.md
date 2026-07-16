@@ -2,7 +2,7 @@
 
 This matrix connects product requirements and user stories to the approved mockups, implementation tasks, mobile contracts, and evidence required to call the work complete. It is the coverage ledger for issue planning and release review; it does not replace the detailed acceptance criteria in each phase.
 
-Status: **Draft baseline; Phase 2B automated gate passed under D-019, consolidated physical acceptance pending**
+Status: **Accepted trusted-circle product baseline; Phase 2B accepted, Phase 1 implementation next**
 Canonical screen inventory: [Screen map](../Documentation/SCREEN_MAP.md)  
 Contract baseline: [Mobile API contract](../Documentation/API_CONTRACT.md)  
 Global gates: [Quality gates](QUALITY_GATES.md)
@@ -16,22 +16,22 @@ Global gates: [Quality gates](QUALITY_GATES.md)
 | `I`  | Integration test across the Mac API and iOS client/repository             |
 | `UI` | Automated UI journey or state screenshot test                             |
 | `P`  | Physical-device validation over the real private route                    |
-| `A`  | Accessibility, Dynamic Type, contrast, motion, or localization evidence   |
+| `A`  | Accessibility, Dynamic Type, contrast, motion, or bidirectional-content evidence |
 | `S`  | Security/privacy negative test, threat review, or secret scan             |
-| `R`  | Signed archive, installation, update, compatibility, or rollback evidence |
+| `R`  | Signed archive, installation, update, compatibility, or fresh-pair recovery evidence |
 
 ## Phase 2B evidence snapshot — 2026-07-16
 
-The implementation, automated gate, and clean signed-harness verification are complete, but Phase 2B is not accepted until the consolidated physical-iPhone journey passes.
+The implementation, automated gate, clean signed-harness verification, and consolidated physical-iPhone journey passed. Phase 2B is accepted.
 
 - Backend evidence: authenticated GET-only allowlisted list/detail contracts, HMAC IDs, encrypted filter/snapshot-bound keyset cursors, redaction, and adjacent-route negatives; 49 files/555 tests plus main/Electron TypeScript typechecks, lint, and Prettier passed.
 - iOS evidence: memory-only Activity/Search/supported filters/read-only detail; exact 300 ms debounce; NFKC plus shared ECMAScript whitespace/UTF-16 vectors; pagination/dedupe/retry; strict nested/nullables/enums/UTC decoding; detail ID/server identity binding; Keychain credential use; epoch-guarded revocation/re-pair races; sheet privacy cover; calendar-only dates; and no persistence, mutations, or edit controls.
 - Build/review evidence: the iPhone 17 Pro iOS 26.5 simulator passed 140 tests/165 parameterized executions with zero failures; the generic simulator production build passed; independent security and UI reviews reported no findings; and the source scan found no financial/query/filter/cursor/detail persistence or logging path.
 - Shared canonical fixtures: `transaction-list-live.json`, `transaction-detail-live.json`, and `transaction-search-normalization.json` are consumed by TypeScript and Swift.
 - Signed-harness evidence: the clean Apple Development-signed app is valid on disk, satisfies its designated requirement, and uses hardened runtime, timestamp, and sealed resources. Gatekeeper rejection is limited to the expected lack of notarization for this local development build.
-- Remaining evidence: physically validate Activity → filters/Search → detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recents.
+- Physical evidence: Activity → filters/Search → detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recents passed.
 
-Phase 1 and broader/offline dogfood remain deferred and gated exactly by D-019.
+The D-018/D-019 sole-owner limit is superseded by D-020. D-021 resolves the Phase 1 product policy; implementation is next before trusted-circle distribution or offline storage.
 
 ## User story ownership
 
@@ -60,7 +60,7 @@ Cross-app stories from the product specification are covered as follows:
 | `US-G-07` Equivalent accessible meaning         | `REQ-A11Y-01`, `REQ-A11Y-02`; phase accessibility checks and P6-IOS-01/02                   |
 | `US-G-08` Preserve content and explain recovery | `REQ-FRESH-01`, `REQ-COMP-01`, `REQ-NET-02`; data/recovery tasks across all phases          |
 | `US-G-09` Redacted diagnostics                  | `REQ-DIAG-01`, `REQ-OBS-01`; P6-SEC-02/03 and phase privacy QA                              |
-| `US-G-10` Future limited household access       | `REQ-ROLE-01`; deferred pending actor/role specification                                    |
+| `US-G-10` Trusted-circle approved-device access | `REQ-SEC-01/02`, `REQ-ROLE-01`; individually approved devices with no role system            |
 
 ## Global requirement coverage
 
@@ -90,10 +90,10 @@ Cross-app stories from the product specification are covered as follows:
 | `REQ-A11Y-02` Accessible chart summaries/Audio Graphs                         | P3-IOS-03/04, P3-DES-02, P3-QA-03, P6-IOS-02                       | U, P, A           |
 | `REQ-L10N-01` Correct Hebrew/bidirectional content                            | P2-IOS-01, P2-DES-02, P6-IOS-03/04                                 | C, UI, A          |
 | `REQ-OBS-01` Privacy-safe performance/reliability measurement                 | P1-QA-01, P6-QA-01, P6-SEC-02                                      | U, P, S           |
-| `REQ-ROLE-01` Future household role limits                                    | Deferred; architecture constraint for P0-SEC-02 and P4-SEC-01      | Future C, I, S    |
-| `REQ-CLOUD-01` Future transport can preserve mobile contract                  | P0-ARC-01 and contract isolation; no current feature task          | Future C, I       |
-| `REQ-PUSH-01` Notifications require approved local-first architecture         | Blocked in P4-PRD-02/P4-API-06/P4-IOS-06                           | Future P, S       |
-| `REQ-MULTI-01` Explicit future multi-Mac source separation                    | P1-DAT-01 includes server identity; otherwise deferred             | Future U, I       |
+| `REQ-ROLE-01` No roles; approved trusted devices share the accepted surface   | D-020, P0-SEC-02, P4-SEC-01                                      | Negative C, I, S  |
+| `REQ-CLOUD-01` No cloud transport/identity/storage/scraping                    | D-020/D-026, P0-ARC-01 contract isolation                         | Negative C, I     |
+| `REQ-PUSH-01` No APNs; Telegram alert preferences remain Mac-owned             | D-024/D-026, P4-API-06/P4-IOS-06                                 | Negative P, S     |
+| `REQ-MULTI-01` One Mac per phone; switching requires Disconnect/fresh pairing | D-020/D-021, P1-DAT-01 server identity                            | U, I, P           |
 | `REQ-OFFCMD-01` Offline queue needs separate conflict/auth spec               | Explicitly excluded by P4-PRD-01/P4-IOS-01/P4-QA-03                | Negative I, UI, S |
 
 ## Approved screen coverage
@@ -108,9 +108,9 @@ Every approved mockup has a product story, owning implementation task, data/comm
 | 4   | [Connected and ready](../../docs/ios-mockups/rendered/screens/ready.png)                    | US-P0-04/05, US-P1-07                  | P0-IOS-05, P1-IOS-02/03                      | Authenticated compatibility/bootstrap must pass before “ready”                                                 | C, I, UI, P          |
 | 5   | [Home](../../docs/ios-mockups/rendered/screens/home.png)                                    | US-P2-01, US-P2-05/06/08               | P2-PRD-01, P2-API-02, P2-IOS-02, P2-DAT-01   | `GET /bootstrap`; one coherent snapshot/time                                                                   | C, U, I, UI, P, A    |
 | 6   | [Activity](../../docs/ios-mockups/rendered/screens/activity.png)                            | US-P2-02, US-P2-05/06/08               | P2-API-03, P2-IOS-03, P2-DAT-01              | `GET /transactions`; bounded keyset pages (30 default/50 max), opaque cursor, safe memory-only DTO              | C, I, UI, P, A, S    |
-| 7   | [Search](../../docs/ios-mockups/rendered/screens/search.png)                                | US-P2-03/08; US-P2-07 deferred         | P2-API-03, P2-IOS-05, P2-QA-02               | `GET /transactions?q=…`; exactly 300 ms debounce, cancellable, query excluded from diagnostics and persistence | C, U, UI, S, A       |
+| 7   | [Search](../../docs/ios-mockups/rendered/screens/search.png)                                | US-P2-03/08; US-P2-07 out of scope     | P2-API-03, P2-IOS-05, P2-QA-02               | `GET /transactions?q=…`; exactly 300 ms debounce, cancellable, query excluded from diagnostics and persistence | C, U, UI, S, A       |
 | 8   | [Transaction detail](../../docs/ios-mockups/rendered/screens/transaction.png)               | US-P2-04/08; US-P4-03 when writes ship | P2-API-04, P2-IOS-06; P4-API-03/P4-IOS-03    | `GET /transactions/:id` with opaque ID; all note/recurring/options/category/owner/review edit controls hidden  | C, I, UI, S, A       |
-| 9   | [Filters sheet](../../docs/ios-mockups/rendered/screens/filters.png)                        | US-P2-03/08                            | P2-IOS-04, P2-DES-01/02                      | Draft vs applied direction/status/date/account/review/excluded state; transfer/category/owner filters deferred | C, U, UI, A, S       |
+| 9   | [Filters sheet](../../docs/ios-mockups/rendered/screens/filters.png)                        | US-P2-03/08                            | P2-IOS-04, P2-DES-01/02                      | Accepted draft/applied filters; full phase adds category/owner and All/Exclude transfers/Transfers only        | C, U, UI, A, S       |
 | 10  | [Review queue](../../docs/ios-mockups/rendered/screens/review.png)                          | US-P4-01/03/05/07/08                   | P4-API-02, P4-IOS-02, P4-QA-01/02/04         | `mobile.review.write`; confirmed, idempotent online command only                                               | C, I, UI, P, S, A    |
 | 11  | [Plan](../../docs/ios-mockups/rendered/screens/plan.png)                                    | US-P3-01/02/06/08                      | P3-API-01/02/07, P3-IOS-01                   | Bootstrap planning summary plus safe detail contracts                                                          | C, I, UI, P, A       |
 | 12  | [Budget detail](../../docs/ios-mockups/rendered/screens/budget-detail.png)                  | US-P3-01/06/07/08                      | P3-API-01, P3-IOS-02, P3-QA-01               | `GET /budgets/progress`; read-only in MVP                                                                      | C, U, UI, A          |
@@ -122,9 +122,9 @@ Every approved mockup has a product story, owning implementation task, data/comm
 | 18  | [Accounts](../../docs/ios-mockups/rendered/screens/accounts.png)                            | US-P3-04/06                            | P3-API-04/07, P3-IOS-05, P3-QA-02            | `GET /accounts`; server-masked safe DTO, never raw account config                                              | C, I, UI, S, A       |
 | 19  | [Account detail](../../docs/ios-mockups/rendered/screens/account-detail.png)                | US-P3-04/06; US-P4-04 for sync         | P3-API-04, P3-IOS-05; P4-API-07/P4-IOS-07    | Safe detail/read activity; sync requires `mobile.sync.start`                                                   | C, I, UI, P, S, A    |
 | 20  | [Sync history](../../docs/ios-mockups/rendered/screens/sync-history.png)                    | US-P3-05/06; US-P4-04                  | P3-API-05/06, P3-IOS-06; P4-API-07/P4-IOS-07 | `GET /sync-history`; translated safe states; no OTP/raw scraper routes                                         | C, I, UI, S, A       |
-| 21  | [Categories](../../docs/ios-mockups/rendered/screens/categories.png)                        | US-P4-06/07/08                         | P4-PRD-02, P4-API-05, P4-IOS-05              | Blocked pending stable label/name/order/delete semantics and capability                                        | C, I, UI, S, A       |
-| 22  | [Alerts](../../docs/ios-mockups/rendered/screens/alerts.png)                                | US-P4-03/05/07/08                      | P4-PRD-02, P4-API-06, P4-IOS-06              | Blocked pending delivery ownership; current Telegram settings do not imply iOS notifications                   | C, I, UI, S, A       |
-| 23  | [Settings](../../docs/ios-mockups/rendered/screens/settings.png)                            | US-P0-03, US-P1-03/04, US-P4-05/07     | P1-IOS-05, P4-API-08, P4-IOS-06              | Local privacy/cache preferences separated from scoped Mac/device settings; Household hidden/deferred           | I, UI, P, S, A       |
+| 21  | [Categories](../../docs/ios-mockups/rendered/screens/categories.png)                        | US-P4-06/07/08                         | P4-PRD-02, P4-API-05, P4-IOS-05              | Accepted opaque ID, unique editable label, explicit order, and replacement-before-delete capability            | C, I, UI, S, A       |
+| 22  | [Alerts](../../docs/ios-mockups/rendered/screens/alerts.png)                                | US-P4-03/05/07/08                      | P4-PRD-02, P4-API-06, P4-IOS-06              | Mac-owned Telegram preferences only; no native iPhone notification claim                                       | C, I, UI, S, A       |
+| 23  | [Settings](../../docs/ios-mockups/rendered/screens/settings.png)                            | US-P0-03, US-P1-03/04, US-P4-05/07     | P1-IOS-05, P4-API-08, P4-IOS-06              | Local privacy/cache preferences and scoped Mac settings; Household and unsupported controls hidden             | I, UI, P, S, A       |
 | 24  | [Mac unavailable](../../docs/ios-mockups/rendered/screens/offline.png)                      | US-P1-05/06/07/09                      | P1-IOS-03/04, P1-DAT-02, P1-QA-01            | Root state uses last verified snapshot and distinct recovery by cause                                          | U, I, UI, P, A       |
 | 25  | [Home, Dark Mode](../../docs/ios-mockups/rendered/screens/home-dark.png)                    | US-P2-01/08, US-P6-01/02/05            | P2-IOS-02, P6-DES-01, P6-IOS-01/02           | Same Home implementation and semantic tokens; privacy cover also verified                                      | UI, P, A, S          |
 | 26  | [Advisor conversation, Dark Mode](../../docs/ios-mockups/rendered/screens/advisor-dark.png) | US-P5-02/07, US-P6-01/02/05            | P5-IOS-02/05, P6-DES-01, P6-IOS-01/02        | Same transcript implementation; streaming states cannot rely on color alone                                    | UI, P, A, S          |
@@ -140,23 +140,23 @@ Every approved mockup has a product story, owning implementation task, data/comm
 | Accounts → detail → sync history                                      | US-P3-04/05/06                              | Phase 3 read-only MVP                              | C, I, UI, P, S, A    |
 | Review or budget edit → confirm → conflict/unknown recovery           | US-P4-01/02/03/05/07/08                     | Phase 4 trusted commands                           | C, I, UI, P, S, A    |
 | Start Advisor → stream → interrupt/reconnect/cancel → offline history | US-P5-01–07                                 | Phase 5 Advisor                                    | C, U, I, UI, P, S, A |
-| Install/update → pair → use → revoke → recover/rollback               | US-P6-04/05/06/07                           | Phase 6 release candidate                          | P, S, R              |
+| Install/update → pair → use → revoke → update or fresh-pair recovery  | US-P6-04/05/06/07/08                        | Phase 6 release candidate                          | P, S, R              |
 
 ## Delivery checkpoint gates
 
-D-018 adds a non-cumulative technical-owner execution lane for live Home, and D-019 extends it only into live, memory-only, read-only transaction browsing. These decisions advance feature implementation but are not substitutes for any existing phase or release gate.
+D-018/D-019 remain the historical execution lane for accepted Phase 2A/2B. D-020 through D-026 now define the trusted-circle self-use roadmap and explicit exclusions; they resolve product blockers without substituting for implementation or evidence gates.
 
 | Checkpoint                        | Included work                                 | Required approval/evidence                                                                                                                                                                                                                        |
 | --------------------------------- | --------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
 | Internal connectivity prototype   | Phase 0                                       | Real private route, explicit approval, scoped Keychain credential, mobile-safe bootstrap contract                                                                                                                                                 |
 | Technical-owner live Home         | Phase 0 + Phase 2A subset                     | Trusted sole-owner device, app-switcher cover, live validated bootstrap, memory-only financial DTOs, read-only/privacy-negative tests                                                                                                             |
-| Technical-owner live transactions | Phase 0 + accepted Phase 2A + Phase 2B subset | Automated and signed-harness gates passed: `mobile.read` list/opaque detail, bounded encrypted keyset cursor, 300 ms Search, supported direction/status/date/account/review/excluded filters, memory-only state, no recents/mutations, abuse/privacy tests, and strict local bundle verification. Pending: consolidated physical validation. |
+| Technical-owner live transactions | Phase 0 + accepted Phase 2A + Phase 2B subset | Accepted: `mobile.read` list/opaque detail, bounded encrypted keyset cursor, 300 ms Search, supported filters, memory-only state, no recents/mutations, abuse/privacy tests, strict bundle verification, and consolidated physical validation passed. |
 | Private dogfood                   | Phases 0–1                                    | App lock/privacy cover, encrypted atomic snapshot, truthful recovery states, physical fault matrix                                                                                                                                                |
 | Daily-use read-only slice         | Phases 0–2                                    | Home/Activity/Search/Detail, coherent calculations, paging/state restoration, cached daily journey                                                                                                                                                |
 | Recommended read-only MVP         | Phases 0–3                                    | Planning/accounts/safe sync read models, reconciled financial fixtures, accessible charts, no credential/config leakage                                                                                                                           |
 | Trusted command release           | Add Phase 4                                   | Approved per-command matrix, capabilities, idempotency/conflict/audit proof, no offline queue                                                                                                                                                     |
 | Advisor release                   | Add Phase 5                                   | Read-only tool registry, mutation-negative proof, typed resilient stream, encrypted offline transcripts                                                                                                                                           |
-| Release candidate                 | Included feature phases plus Phase 6          | Full global gates, localization/accessibility matrix, threat/privacy review, signed artifact and rollback rehearsal                                                                                                                               |
+| Release candidate                 | Included feature phases plus Phase 6          | Scoped iPhone/accessibility/bidirectional-content gates, threat/privacy review, signed artifact, and update/fresh-pair rehearsal                                                                                                                    |
 
 ## Coverage maintenance rules
 

@@ -30,13 +30,15 @@ Do not hand-edit `project.pbxproj` for settings that belong in `project.yml`. Xc
 
 ## Device signing
 
-1. Replace `com.example.MoneyMonitor` and both test bundle identifiers in `project.yml`.
+The locked production identity is team `CVP2NVLKL4`, organization `com.saaramrani`, and application bundle `com.saaramrani.moneymonitor`. The current `com.example` identifiers remain a temporary development migration task until the one-time bundle switch and re-pair are scheduled.
+
+1. Set the app/test identifiers in `project.yml` under the locked `com.saaramrani.moneymonitor` namespace.
 2. Regenerate the project.
-3. In Signing & Capabilities, enable automatic signing and select your team.
+3. In Signing & Capabilities, enable automatic signing and select team `CVP2NVLKL4`.
 4. Enable Developer Mode on the iPhone when prompted.
 5. Install Tailscale on both devices and sign them into the same Tailnet.
 
-A free Personal Team is sufficient for early device tests, but provisioning is short-lived and must be renewed. Use a paid team before TestFlight or App Store distribution.
+A free Personal Team is sufficient for direct development installs, but provisioning is short-lived and must be renewed. The family/friend lane is private TestFlight, which requires an Apple Developer Program distribution account; App Store publication is out of scope.
 
 ## Project conventions
 

@@ -7,6 +7,8 @@ A packaged Money Monitor Mac and a physical iPhone can establish a stable, authe
 Delivery checkpoint: **internal connectivity prototype**  
 Current phase status: **done — implementation, signed physical harness, and physical private-path acceptance passed on 2026-07-16**
 
+Audience note: this phase was accepted under the historical owner-only D-011 baseline. D-020 later supersedes only that audience limit with individually approved trusted-circle devices; the implemented pairing and revocation boundary remains unchanged.
+
 ## Why this phase exists
 
 The current SwiftUI shell can call public health, but the packaged Mac app starts Fastify on a random loopback port and generates a new full-access desktop token on each launch. Hard-coding port `3000`, binding Fastify to the LAN, or copying the desktop token to iOS would create a demo that either breaks after restart or violates the privacy model.

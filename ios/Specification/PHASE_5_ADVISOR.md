@@ -5,10 +5,10 @@
 The owner can start/resume a conversation, receive a resilient streamed answer grounded in explicitly timestamped Money Monitor data, read saved conversations offline, and trust that the mobile Advisor cannot mutate financial data.
 
 Delivery checkpoint: **Advisor release / full capability parity with approved mockups**  
-Phase status: **planned; read-only policy recommended**  
+Phase status: **read-only product policy accepted under D-025; implementation planned**
 Depends on: **Phase 3 read model and Phase 4 capability boundary**
 
-## Safety recommendation
+## Accepted safety policy
 
 Phase 5A is strictly read-only. Do not expose the current desktop `/api/ai/chat` and tool registry directly to the mobile token: the current agent can mutate transactions, categories, memory, assets, holdings, liabilities, budgets, and alerts.
 
@@ -32,7 +32,9 @@ Denied mobile tool classes:
 - file/table image generation that exposes local paths;
 - provider configuration or arbitrary desktop command.
 
-If actions are added later, Advisor proposes a structured Phase 4 command and the UI asks for exact confirmation. The model never receives direct write authority.
+If actions are added later, Advisor proposes a structured Phase 4 command and the ordinary command UI asks for exact confirmation. The model never receives direct write authority or AI-memory write access.
+
+The Mac owns the configured provider and credential. Each phone receives a first-use disclosure that relevant allowlisted financial context is sent to that provider. Sessions are private to the creating device; the Mac is authoritative and the phone may cache encrypted transcripts for 30 days. Every answer states the source calculation time and relevant period/sample when meaningful.
 
 ## User stories
 
@@ -59,7 +61,7 @@ The desktop SSE stream has no resumable event IDs or dedicated cancellation cont
 
 ```text
 started     sessionId, messageId, eventId
-status      safe localized status code
+status      stable safe status code
 delta       ordered text fragment, eventId
 completed   final text, freshness/scope metadata, eventId
 cancelled   incomplete marker, eventId
@@ -72,7 +74,7 @@ Every client message has an idempotency ID. Reconnect/retry with the same ID res
 
 | ID | Owner | Status | Task — how and acceptance |
 | --- | --- | --- | --- |
-| P5-PRD-01 | Product + AI + security | Blocked | Approve read-only tool allowlist, provider/data disclosure, conversation retention/cache, freshness wording, and future action boundary. Recommended: read-only v1, no AI memory writes. |
+| P5-PRD-01 | Product + AI + security | Done — accepted under D-025 | The read-only tool allowlist, provider/data disclosure, device-private conversation scope, 30-day phone cache, freshness wording, no-memory-write rule, and future Phase 4 action boundary are locked. |
 | P5-AI-01 | Backend AI/security | Planned | Extract a mobile read-only tool registry. Classification is deny-by-default; a test fails when any newly registered tool lacks explicit allowed/denied classification. |
 | P5-AI-02 | Backend AI | Planned | Run mobile conversations only with the read registry. Database/settings/memory before-and-after tests prove adversarial prompts cannot mutate state. |
 | P5-API-01 | Backend API | Planned | Add mobile session list/create/detail endpoints with safe title/timestamps, cursor pagination, explicit retention, and no filesystem path/internal session representation. |
@@ -132,4 +134,3 @@ Phase 5 passes only when:
 - VoiceOver announces useful progress without token-by-token noise;
 - saved conversations remain encrypted/readable offline while new prompts are unavailable;
 - future action proposals, if displayed, cannot bypass Phase 4 confirmation/capabilities.
-

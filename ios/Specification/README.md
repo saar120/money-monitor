@@ -2,29 +2,30 @@
 
 This folder is the canonical implementation specification for the native iOS app. It turns the approved product direction and mockups into phased, testable work that can be converted into engineering issues without rediscovering scope.
 
-Status: **Draft for implementation review**  
+Status: **Product policy accepted for trusted-circle self-use; implementation phased**
 Last updated: **2026-07-16**\
-Current milestone: **Phase 2B live, memory-only Activity, Search, supported filters, and transaction detail are in progress for the sole technical owner under D-019**
+Current milestone: **Phase 2B accepted; Phase 1 trust/cache implementation is next under D-020/D-021**
 
 ## How to read the specification
 
-1. Start with [Product specification](PRODUCT_SPEC.md) for the problem, users, goals, scope, requirements, metrics, risks, and open decisions.
-2. Read the relevant phase file before creating implementation issues.
-3. Apply [Quality gates](QUALITY_GATES.md) to every task and phase exit.
-4. Use [Traceability](TRACEABILITY.md) to connect user stories, approved screens, APIs, and validation evidence.
-5. Consult the existing [architecture](../Documentation/ARCHITECTURE.md), [API contract](../Documentation/API_CONTRACT.md), [design system](../Documentation/DESIGN_SYSTEM.md), and [screen map](../Documentation/SCREEN_MAP.md) for domain-specific details.
+1. Start with [Product specification](PRODUCT_SPEC.md) for the problem, users, goals, scope, requirements, metrics, risks, and accepted decisions.
+2. Use [Locked product policy](../Documentation/LOCKED_PRODUCT_POLICY.md) for the accepted cross-phase behavior and explicit exclusions.
+3. Read the relevant phase file before creating implementation issues.
+4. Apply [Quality gates](QUALITY_GATES.md) to every task and phase exit.
+5. Use [Traceability](TRACEABILITY.md) to connect user stories, approved screens, APIs, and validation evidence.
+6. Consult the existing [architecture](../Documentation/ARCHITECTURE.md), [API contract](../Documentation/API_CONTRACT.md), [design system](../Documentation/DESIGN_SYSTEM.md), and [screen map](../Documentation/SCREEN_MAP.md) for domain-specific details.
 
 ## Phase documents
 
 | Phase | Outcome                                                                                                                                         | Specification                                                      | Delivery checkpoint                                         |
 | ----- | ----------------------------------------------------------------------------------------------------------------------------------------------- | ------------------------------------------------------------------ | ----------------------------------------------------------- |
 | 0     | A real iPhone can securely reach a stable, mobile-safe Mac API                                                                                  | [Foundation and private bridge](PHASE_0_FOUNDATION.md)             | Internal connectivity prototype                             |
-| 1     | Deferred: app lock, truthful freshness, polished recovery, and encrypted offline viewing                                                        | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Later private dogfood gate                                  |
-| 2     | Phase 2A live Home accepted; Phase 2B live transaction browsing in progress; full phase later adds cached/offline behavior and deferred filters | [Everyday money](PHASE_2_EVERYDAY_MONEY.md)                        | Technical-owner live slices, then daily-use read-only slice |
+| 1     | Locked policy; implement app lock, truthful freshness, recovery, and encrypted offline viewing next                                               | [Trust, security, and resilience](PHASE_1_TRUST_AND_RESILIENCE.md) | Trusted-circle private dogfood gate                         |
+| 2     | Phase 2A/2B live read-only experience accepted; full phase adds locked finance semantics, filters, and saved/offline behavior                    | [Everyday money](PHASE_2_EVERYDAY_MONEY.md)                        | Daily-use read-only slice                                   |
 | 3     | Budgets, net worth, assets, accounts, and sync history work read-only                                                                           | [Planning and connected data](PHASE_3_PLANNING_AND_ACCOUNTS.md)    | Recommended read-only MVP                                   |
 | 4     | Explicitly approved commands can safely mutate Mac-owned data                                                                                   | [Mobile commands](PHASE_4_MOBILE_COMMANDS.md)                      | Trusted command release                                     |
 | 5     | Advisor works with streaming, freshness disclosure, and a safe tool policy                                                                      | [Advisor](PHASE_5_ADVISOR.md)                                      | Full mockup capability parity                               |
-| 6     | The app is accessible, localized, resilient, signed, and distributable                                                                          | [Release readiness](PHASE_6_RELEASE_READINESS.md)                  | Release candidate                                           |
+| 6     | The app is accessible, mixed-content-safe, resilient, signed, and privately distributable                                                       | [Release readiness](PHASE_6_RELEASE_READINESS.md)                  | Release candidate                                           |
 
 ## Dependency flow
 
@@ -43,7 +44,7 @@ flowchart LR
     P5 --> P6
 ```
 
-D-018 permitted only the sole technical owner to start Phase 2A from Phase 0; that Home slice is accepted. D-019 extends the same live-only, memory-only, read-only lane into Activity, 300 ms Search, direction/status/date/account/review/excluded filters, fixed opaque cursor pagination, and opaque-ID transaction detail. It does not permit persistence, search recents, mutations, transfer/category/owner filters, or editable transaction controls. Neither decision claims Phase 1, full Phase 2, private dogfood, or release readiness; the solid dependency path remains mandatory before offline storage or broader distribution. Phase 4 and Phase 5 may proceed in parallel after the read-only contract is stable, but neither may bypass the Phase 0 capability boundary or the deferred Phase 1 security model.
+D-018/D-019 record the historical sole-owner live lane through accepted Phase 2A/2B. D-020 supersedes that audience limit with individually approved owner-equivalent trusted-circle devices, and D-021 resumes Phase 1 before family/friend distribution or offline data. D-022 through D-026 lock the remaining finance, planning, command, Advisor, and private-TestFlight policies. There are no unresolved product blockers; implementation still follows the solid Phase 0 → Phase 1 → full Phase 2 → Phase 3 read-only path before commands or Advisor.
 
 ## Task identifiers
 

@@ -10,13 +10,15 @@ ios
 
 ## Users
 
-Money Monitor owners and household members who already run the Mac app and want a quick, private view of their finances while away from the desk. They usually open the iPhone app for a short daily check, to find a transaction, review an AI suggestion, check a budget, or ask a focused question. The primary user is financially engaged but should not need to understand scraping, SQLite, or Tailscale to use the phone app.
+The maintainer and a small trusted circle of family and friends who use an individually approved iPhone with one Money Monitor Mac. They usually open the app for a short daily check, to find a transaction, review an AI suggestion, check a budget, or ask a focused question. They should not need to understand scraping, SQLite, or Tailscale. There are no cloud accounts, household roles, or multi-Mac profiles.
 
 ## Product Purpose
 
 Give people a clear, trustworthy view of their Money Monitor data on iPhone while the Mac remains the only source of truth, credential holder, and scraper. The app connects privately to the Mac, caches the most recent read model for useful offline viewing, and makes the most common review tasks feel immediate and native.
 
 Success means a person can understand their current financial position in seconds, find or review a transaction in under a minute, and always know whether the data is live or cached.
+
+The self-use product ships through direct Xcode installation and private TestFlight. Replacement phones pair fresh and old devices are revoked from the Mac; credentials and cached financial data are not migrated phone-to-phone.
 
 ## Positioning
 

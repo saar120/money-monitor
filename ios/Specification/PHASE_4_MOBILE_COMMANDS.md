@@ -5,14 +5,14 @@
 The owner can perform a deliberately approved set of focused actions on Mac-owned data. Every command is live-only, separately authorized, idempotent, conflict-aware, auditable, and recoverable.
 
 Delivery checkpoint: **trusted command release**  
-Phase status: **blocked until command capability matrix is approved**  
+Phase status: **command policy accepted under D-024; implementation planned after the read-only MVP**
 Depends on: **read-only MVP gate through Phase 3**
 
 ## Product rule
 
 The approved mockups imply more write behavior than the current mobile trust model authorizes. A visible edit control is design intent, not permission to expose the desktop CRUD route.
 
-No command implementation starts until `P4-PRD-01` records:
+`P4-PRD-01` is resolved by D-024. Every implementation row still records:
 
 - exact verb and target;
 - required device capability;
@@ -25,23 +25,18 @@ No command implementation starts until `P4-PRD-01` records:
 
 There is no generic `mobile.write` capability.
 
-## Candidate command scope
+## Accepted command scope
 
-Recommended first allowlist, subject to approval:
+Accepted allowlist:
 
 - resolve or skip one review item;
 - change transaction category, owner, or report-exclusion state;
 - create, update, or delete a budget;
-- update only alert preferences that the current delivery architecture actually supports;
+- create, rename, reorder, or safely delete categories after the accepted category schema exists;
+- update only Mac-owned Telegram alert preferences;
 - request a single-account or all-account sync on the Mac.
 
-Possible follow-up:
-
-- create/update categories after stable-name, ordering, deletion, and reassignment behavior is defined;
-- change a narrow set of non-credential account preferences;
-- cancel a running sync if backend semantics are reliable.
-
-Explicitly excluded from this phase unless separately re-specified:
+Explicitly out of scope:
 
 - add/delete bank accounts or enter/change credentials;
 - submit OTP or manual-login input from iPhone;
@@ -49,7 +44,8 @@ Explicitly excluded from this phase unless separately re-specified:
 - household administration;
 - AI provider/API-key or general desktop settings;
 - transaction notes or recurring flags, which lack an accepted schema/route;
-- offline mutation queues.
+- offline mutation queues;
+- sync cancellation and native iPhone push notifications.
 
 ## User stories
 
@@ -74,10 +70,10 @@ Explicitly excluded from this phase unless separately re-specified:
 - [Settings](../../docs/ios-mockups/rendered/screens/settings.png)
 - [Account detail](../../docs/ios-mockups/rendered/screens/account-detail.png) and [Sync history](../../docs/ios-mockups/rendered/screens/sync-history.png), accepted sync command only
 
-Known design/backend mismatches:
+Resolved design/backend boundaries:
 
-- Category mockup implies rename/reorder, but current schema has no explicit sort order and stable-name semantics differ from display label.
-- Alerts mockup reads like iPhone notifications, while current settings primarily drive Telegram alerts. Delivery channel/ownership must be decided first.
+- Categories use immutable opaque IDs, editable case-insensitively unique labels, explicit order, and replacement-before-delete for used categories.
+- Alerts expose only supported Mac-owned Telegram preferences and never imply native iPhone delivery.
 - Settings shows Household, which is outside current product scope.
 - Asset detail shows Edit, but no mobile-safe asset command is specified.
 - Raw scrape routes include OTP/manual operations that must remain Mac-only in the initial command release.
@@ -106,23 +102,23 @@ Timeout after submission is not automatically a failure: the server may have com
 
 | ID | Owner | Status | Task — how and acceptance |
 | --- | --- | --- | --- |
-| P4-PRD-01 | Product + security | Blocked | Approve command matrix row-by-row: verb, target, capability, confirmation, audit, offline, conflict, idempotency, and reversibility. No undecided row enters engineering. |
-| P4-PRD-02 | Product + backend | Blocked | Resolve category stable name/display label, duplicates, ordering schema, deletion, and transaction reassignment. Decide Alerts delivery/channel ownership and keep Household/asset edits deferred. |
+| P4-PRD-01 | Product + security | Done — accepted under D-024 | The command matrix is live-only, per-capability, idempotent, conflict-aware, redacted-audit-backed, and destructive-confirmed; excluded rows do not enter engineering. |
+| P4-PRD-02 | Product + backend | Done — accepted under D-024 | Category identity/label/uniqueness/order/delete/reassignment and Mac-owned Telegram alert behavior are locked; Household, asset edits, APNs, and unsupported settings are out of scope. |
 | P4-SEC-01 | Backend security | Planned | Add granular capabilities such as `mobile.review.write`, `mobile.transaction.write`, `mobile.budget.write`, `mobile.category.write`, `mobile.alert.write`, and `mobile.sync.start`; route addition is denied until classified. |
 | P4-API-01 | Backend command infra | Planned | Add idempotency, expected-version/ETag conflict detection, stable errors, and redacted audit events with device, command, target type/opaque reference, time, request ID, and outcome—never financial values/secrets. |
 | P4-API-02 | Backend review | Planned | Add narrow review resolve/skip endpoints. Replayed idempotency key returns original result; already-resolved item returns a safe conflict and current state. |
 | P4-API-03 | Backend transaction | Planned | Add only accepted category/owner/exclusion commands. Reject unsupported note/recurring fields rather than ignoring them. |
 | P4-API-04 | Backend budgets | Planned | Add mobile budget create/update/delete with validation, versioning, deletion confirmation metadata, and audit. Responses return authoritative refreshed DTO. |
-| P4-API-05 | Backend categories | Blocked | After P4-PRD-02, implement accepted category operations and schema/order migration if required. Prevent orphaned transactions and ambiguous duplicate labels. |
-| P4-API-06 | Backend alerts/settings | Blocked | Expose only accepted settings with explicit local-vs-Mac ownership. Never reuse general `/api/settings`; do not claim iPhone notification delivery when only Telegram exists. |
+| P4-API-05 | Backend categories | Planned | Implement accepted category operations and schema/order migration. Prevent orphaned transactions and ambiguous duplicate labels. |
+| P4-API-06 | Backend alerts/settings | Planned | Expose only accepted Telegram settings with explicit local-vs-Mac ownership. Never reuse general `/api/settings` or claim iPhone notification delivery. |
 | P4-API-07 | Backend sync | Planned | Add mobile-safe sync start/status/optional cancel facade. Translate already-running, demo-disabled, attention-needed, partial, and completion; never authorize OTP/manual-confirm/credential routes. |
 | P4-API-08 | Backend device/settings | Planned | Add safe paired-device/Mac/app status and accepted account-preference endpoints. General provider, secret, credential, and destructive settings remain absent. |
 | P4-IOS-01 | iOS command infra | Planned | Implement reusable state machine: clean/dirty → validating → submitting → confirmed or validation/conflict/forbidden/revoked/unknown. Preserve user input after recoverable error and never queue offline. |
 | P4-IOS-02 | iOS Review | Planned | Build Review queue with category/owner choice as approved, skip, count/position, server-confirmed advancement, conflict refresh, and cached/offline disabled state. |
 | P4-IOS-03 | iOS transaction | Planned | Enable only accepted transaction rows with explicit save/confirmation. Hide unsupported notes/recurring/options. Refresh detail/list authoritatively after success. |
 | P4-IOS-04 | iOS budgets | Planned | Build create/edit sheet with validation, dirty-dismiss confirmation, server conflict, successful refresh, and destructive delete dialog. |
-| P4-IOS-05 | iOS Categories | Blocked | Implement approved label/rule/order/create/delete behaviors and make stable identifier vs display label clear in model/UI. |
-| P4-IOS-06 | iOS Alerts/Settings | Blocked | Render only accepted delivery/settings. Local Face ID/appearance/cache preferences update locally; Mac preferences use scoped commands. Hide Household and unsupported controls. |
+| P4-IOS-05 | iOS Categories | Planned | Implement approved label/order/create/delete/reassignment behavior and keep opaque identity distinct from display label. |
+| P4-IOS-06 | iOS Alerts/Settings | Planned | Render only accepted Telegram settings. Local Face ID/appearance/cache preferences update locally; Mac preferences use scoped commands. Hide Household, push, and unsupported controls. |
 | P4-IOS-07 | iOS sync | Planned | Enable account/all sync with status, background navigation, safe attention messaging, duplicate-start behavior, and optional cancel. Phone submits a command only; Mac performs scraping. |
 | P4-DES-01 | Design + UX writing | Planned | Specify validation, dirty dismissal, destructive confirmation, conflict, forbidden/revoked, timeout-before/after commit, unknown outcome, success, offline-disabled, and attention-needed states. |
 | P4-QA-01 | Security QA | Planned | For every capability, prove intended command succeeds and every undeclared desktop/mobile route is forbidden. Test stolen/revoked/expired/wrong-capability tokens. |
@@ -168,4 +164,3 @@ Phase 4 passes only when:
 - timeout/retry tests prove no command executes twice;
 - validation/conflict/revocation paths preserve user data and recover accessibly;
 - unsupported mockup controls are hidden or explicitly deferred.
-

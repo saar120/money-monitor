@@ -74,20 +74,20 @@ Do not send stack traces, filesystem paths, raw provider errors, or secret value
 
 ## Read endpoints
 
-`GET /bootstrap` is implemented. The remaining rows are later read-only slices and are not registered yet.
+Bootstrap plus the Phase 2B transaction list/detail slice are implemented. The other rows are accepted later read models and are not registered yet.
 
-| Endpoint                        | Purpose                                                                                                                                         |
-| ------------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
-| `GET /bootstrap`                | App/server version, compatibility, freshness, safe accounts, Home summary, recent activity, budget status, review count, and latest sync state. |
-| `GET /accounts`                 | Masked account cards and freshness only.                                                                                                        |
-| `GET /transactions`             | Searchable, filterable, cursor-paginated activity.                                                                                              |
-| `GET /transactions/:id`         | Mobile-safe transaction detail.                                                                                                                 |
-| `GET /spending/summary`         | One normalized response shape per requested grouping.                                                                                           |
-| `GET /budgets/progress`         | Budget cards and detail progress.                                                                                                               |
-| `GET /net-worth`                | Current totals, composition, and freshness.                                                                                                     |
-| `GET /net-worth/history`        | Chart series with explicit period and currency.                                                                                                 |
-| `GET /assets` and `/assets/:id` | Safe asset summaries and history.                                                                                                               |
-| `GET /liabilities`              | Safe liability summaries.                                                                                                                       |
+| Endpoint                        | Status      | Purpose                                                                                                                                         |
+| ------------------------------- | ----------- | ----------------------------------------------------------------------------------------------------------------------------------------------- |
+| `GET /bootstrap`                | Implemented | App/server version, compatibility, freshness, safe accounts, Home summary, recent activity, budget status, review count, and latest sync state. |
+| `GET /accounts`                 | Planned     | Masked account cards and freshness only.                                                                                                        |
+| `GET /transactions`             | Implemented | Searchable, filterable, cursor-paginated activity.                                                                                              |
+| `GET /transactions/:id`         | Implemented | Mobile-safe transaction detail.                                                                                                                 |
+| `GET /spending/summary`         | Planned     | One normalized response shape per requested grouping.                                                                                           |
+| `GET /budgets/progress`         | Planned     | Budget cards and detail progress.                                                                                                               |
+| `GET /net-worth`                | Planned     | Current totals, composition, and freshness.                                                                                                     |
+| `GET /net-worth/history`        | Planned     | Chart series with explicit period and currency.                                                                                                 |
+| `GET /assets` and `/assets/:id` | Planned     | Safe asset summaries and history.                                                                                                               |
+| `GET /liabilities`              | Planned     | Safe liability summaries.                                                                                                                       |
 | `GET /categories`               | Category labels, symbols, and semantic colors.                                                                                                  |
 | `GET /alert-settings`           | Read-only alert preferences until notification architecture is decided.                                                                         |
 | `GET /sync-history`             | Human-readable account freshness and recent Mac scrape outcomes.                                                                                |
@@ -155,14 +155,14 @@ The QR must not contain the desktop bearer token, bank credentials, encryption k
 
 ## Mutations and Advisor
 
-No mutation belongs in v1 until its command policy is accepted. Later command endpoints should be narrow verbs—such as resolving one review item—rather than exposing the full desktop CRUD API.
+The D-024 command policy is accepted, but commands remain later, narrow endpoints rather than the full desktop CRUD API. Only review, transaction category/owner/exclusion, budget, schema-safe category, Telegram preference, and Mac-sync verbs may enter the accepted allowlist.
 
-Advisor is also deferred from the read-only seam. The current agent can call mutating tools. The first mobile Advisor must either use a read-only tool allowlist or present an explicit confirmation for each narrowly scoped action.
+Advisor remains separate from the read-only financial seam. Under D-025, the first mobile Advisor uses only a read-tool allowlist, cannot write AI memory, and can only propose a future Phase 4 command for confirmation by ordinary UI.
 
 ## Contract verification
 
 - Maintain canonical JSON fixtures for every response and error.
 - Regenerate and drift-check the bootstrap JSON Schema whenever the executable contract changes.
 - Decode the same bootstrap and pairing fixtures in Swift tests.
-- Keep compatibility tests for the current and previous mobile schema version.
+- Keep compatibility tests for the current mobile schema version and explicit mismatch behavior; private installs make no previous-version support promise.
 - Reject unknown required schema versions before replacing the offline snapshot.

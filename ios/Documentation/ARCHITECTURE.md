@@ -15,28 +15,19 @@ flowchart LR
 
 The iPhone never connects to SQLite, runs scraper code, or receives bank credentials. Tailscale is the private transport; the Mac app remains the application server.
 
-## Current gap in the packaged Mac app
+## Implemented packaged-Mac boundary
 
-Today the Electron process:
+Phase 0 closed the original full-desktop-token gap. The packaged Electron composition now:
 
-- starts Fastify on `127.0.0.1` with port `0`, so the port is random on every launch;
-- generates a new 32-byte bearer token for that process;
-- gives that token access to the full general-purpose API, including destructive and administrative routes;
-- has no `/api/mobile/v1` DTO or capability layer.
+- keeps both the desktop and isolated mobile Fastify listeners on loopback;
+- maintains a stable private Tailscale HTTPS route to the mobile listener even when local ports change;
+- registers only the mobile allowlist under `/api/mobile/v1` on that listener;
+- issues a unique scoped device credential after short-lived proof plus explicit Mac approval;
+- stores only the credential digest and device audit metadata on the Mac, while the raw credential is device-only in iOS Keychain;
+- supports individually named devices, last-use tracking, rotation, and revocation; and
+- exposes versioned, masked mobile DTOs rather than desktop database rows.
 
-Binding Fastify to `0.0.0.0` is not an acceptable shortcut because it expands access to the local network. The Mac app needs a mobile gateway/pairing bridge before real onboarding is complete.
-
-## Phase 0 Mac bridge
-
-The Mac-side bridge should:
-
-1. Keep Fastify and SQLite on loopback.
-2. Publish or update a stable private Tailscale HTTPS route for the current backend port.
-3. Display a QR pairing payload containing the private base URL, a one-time pairing nonce, and protocol version—not bank credentials.
-4. Exchange the nonce for a device-scoped token with read-only capabilities by default.
-5. Persist the token encrypted on the Mac and in iOS Keychain.
-6. Support device naming, last-used time, expiry, rotation, and revocation.
-7. Expose a versioned mobile DTO contract that masks account numbers and omits internal database fields.
+The full desktop bearer token never enters the pairing payload or iPhone. Binding either listener to `0.0.0.0` remains forbidden because it would expand access to the local network.
 
 ## iOS layers
 
@@ -74,7 +65,7 @@ unpaired → pairing → live
 - Store the snapshot schema version and generated timestamp with the payload.
 - Replace snapshots atomically after a complete successful refresh.
 - Permit browsing while offline; disable network-only or mutating features.
-- Define retention and wipe behavior before implementing the cache.
+- Keep one snapshot for at most 30 days, mark it stale after 24 hours, exclude it from backup, and apply D-021 wipe/re-pair behavior.
 
 ## Transport and security
 
@@ -83,4 +74,3 @@ unpaired → pairing → live
 - Pinning is not required for the first private Tailnet slice, but normal TLS validation is.
 - Never log bearer tokens, raw financial payloads, or merchant search strings in production.
 - Redact account identifiers in metrics, crash reports, previews, and screenshots.
-

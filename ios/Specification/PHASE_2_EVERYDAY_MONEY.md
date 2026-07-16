@@ -5,8 +5,8 @@
 The owner can use Home, Activity, Search, filters, and transaction detail against live or saved data without any mobile mutation capability.
 
 Delivery checkpoint: **daily-use read-only slice**  
-Phase status: **Phase 2A accepted on 2026-07-16; Phase 2B implementation and automated gate complete, consolidated physical acceptance pending**\
-Depends on: **Phase 0 bootstrap/client plus the app-switcher subset of P1-SEC-02 under D-018/D-019; full Phase 2 still depends on Phase 1**
+Phase status: **Phase 2A and Phase 2B accepted on 2026-07-16; full Phase 2 product policy accepted and remaining implementation planned**\
+Depends on: **Phase 0 bootstrap/client; full saved/offline Phase 2 still depends on Phase 1 implementation**
 
 ## User stories
 
@@ -18,12 +18,12 @@ Depends on: **Phase 0 bootstrap/client plus the app-switcher subset of P1-SEC-02
 | US-P2-04 | Must     | As a user, I want a safe read-only transaction detail so that I can understand a charge without exposing internal fields or accidentally editing it.                                             |
 | US-P2-05 | Must     | As an offline user, I want the same screens backed by the last valid snapshot with an unmistakable saved timestamp.                                                                              |
 | US-P2-06 | Must     | As a user refreshing data, I want readable content to remain visible until a complete replacement exists.                                                                                        |
-| US-P2-07 | Should   | As a returning search user, I want optional recent searches stored locally and easy to clear.                                                                                                    |
+| US-P2-07 | Future   | As a returning search user, I may later want optional recent searches; they are out of scope for the private self-use plan.                                                                      |
 | US-P2-08 | Must     | As an assistive-technology user, I want transaction rows and amounts to communicate the same meaning without relying on visual layout or color.                                                  |
 
 ## Accepted delivery slice — Phase 2A live Home
 
-Phase 2A is an internal execution exception recorded in D-018. It is restricted to the sole technical owner on a passcode-protected, non-shared personal iPhone and does not satisfy the full Phase 1 or Phase 2 exit gates. The accepted limitation is that foregrounding can reveal data without an additional app-authentication prompt until Phase 1 resumes; the standalone app-switcher cover prevents financial content from appearing in inactive/background snapshots.
+Phase 2A was delivered under the historical sole-owner D-018 exception and does not satisfy the full Phase 1 or Phase 2 exit gates. D-020 now supersedes that audience limit for planned trusted-circle use; Phase 1 resumes before wider installs or financial persistence.
 
 In scope now:
 
@@ -52,9 +52,9 @@ Phase 2A acceptance:
 
 Accepted on 2026-07-16 after simulator/security regression, signed-harness verification, and physical checks for live rendering, Recent compatibility, Search scoping, pull-to-refresh, recoverable Tailscale-off retention, app-switcher concealment, and force-quit/relaunch refetch. This acceptance does not expand the slice beyond the limitations above.
 
-## Implemented delivery slice — Phase 2B live transactions, physical acceptance pending
+## Accepted delivery slice — Phase 2B live transactions
 
-D-019 extends D-018 only for the same sole technical owner and trusted personal iPhone. Phase 2B adds live Activity, Search, supported filters, and transaction detail while keeping the Phase 2A trust boundary: `mobile.read`, ephemeral cacheless networking, Keychain-only device credential, opaque app-switcher cover, and memory-only financial state. It does not satisfy Phase 1 or the full Phase 2 exit gate.
+D-019 historically extended the sole-owner lane through live Activity, Search, supported filters, and transaction detail while keeping `mobile.read`, ephemeral cacheless networking, a Keychain-only device credential, the app-switcher cover, and memory-only financial state. D-020 supersedes the audience limit but does not retroactively claim Phase 1 or saved/offline Phase 2 behavior.
 
 In scope now:
 
@@ -92,7 +92,7 @@ Automated evidence recorded on 2026-07-16:
 - independent final security and UI reviews reported no findings, and a source scan found no financial/query/filter/cursor/detail persistence or logging path;
 - TypeScript and Swift share `transaction-list-live.json`, `transaction-detail-live.json`, and `transaction-search-normalization.json` as canonical fixtures.
 
-Phase 2B is not accepted yet. The clean Apple Development-signed Mac harness is valid on disk and satisfies its designated requirement. The remaining gate is one consolidated physical-iPhone journey covering Activity → filters/Search → detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recent-search state.
+Phase 2B was accepted on 2026-07-16 after the owner completed the consolidated physical-iPhone journey covering Activity, filters/Search, detail/back, network interruption/retry/retention, sheet/detail app-switcher concealment, and force-quit live refetch with no recent-search state. The clean Apple Development-signed Mac harness is valid on disk and satisfies its designated requirement.
 
 ## Screen scope
 
@@ -121,7 +121,14 @@ The Phase 0 bootstrap schema is finalized with:
 - safe account/sync freshness summary;
 - complete/partial/cacheable metadata.
 
-The exact definition of “available money” and desktop calculation parity must be frozen in fixtures before UI implementation.
+The accepted Home semantics are:
+
+- **Available money** is Mac `liquidTotal`: active bank balances plus explicitly liquid assets minus active liabilities;
+- cash flow is calendar month-to-date through today in `Asia/Jerusalem`, compared with the same elapsed dates in the previous month;
+- positive settled rows are income and negative settled rows are spending; ignored and explicit Transfer-category rows are excluded;
+- ILS is the base currency and only the Mac converts non-ILS values; missing required inputs produce partial/unavailable output, never fabricated zeroes.
+
+These rules must be frozen in seeded fixtures before the remaining Home implementation.
 
 ### Transaction list/search
 
@@ -133,7 +140,7 @@ The exact definition of “available money” and desktop calculation parity mus
 - stable `hasMore` and next cursor;
 - one safe response shape for initial/search/filter/append.
 
-Transfer-specific behavior, category/owner filters, and additional sort modes remain outside Phase 2B and must not be accepted silently by this route.
+Full Phase 2 adds multi-select category/owner filters and `All / Exclude transfers / Transfers only`. Explicit Transfer-category rows remain separate because the database has no pair identity, but they are excluded from aggregates and budgets. Newest-first is the only accepted sort and search recents remain out of scope.
 
 ### Transaction detail
 
@@ -143,24 +150,24 @@ Transfer-specific behavior, category/owner filters, and additional sort modes re
 
 | ID        | Owner                          | Status                                     | Task — how and acceptance                                                                                                                                                                                                                                                       |
 | --------- | ------------------------------ | ------------------------------------------ | ------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| P2-PRD-01 | Product + finance logic        | Blocked                                    | Freeze exact Home metrics, period boundaries, comparisons, available-cash definition, sign convention, base currency, and stale thresholds. Acceptance: seeded fixture has expected values documented independently of the UI.                                                  |
-| P2-API-01 | Shared API                     | Implemented — physical gate pending        | Shared Swift/server fixtures define the bounded-page transaction list, opaque keyset cursor/detail ID, supported filters, and safe errors; money is decimal string + currency and IDs are opaque.                                                                               |
+| P2-PRD-01 | Product + finance logic        | Done — accepted under D-022                 | Home metrics, period/comparison, signs, ILS conversion ownership, Transfer exclusion, category/owner/transfer filters, sort, and no-recents policy are locked in fixtures independently of UI.                                                                                 |
+| P2-API-01 | Shared API                     | Implemented — Phase 2B accepted             | Shared Swift/server fixtures define the bounded-page transaction list, opaque keyset cursor/detail ID, supported filters, and safe errors; money is decimal string + currency and IDs are opaque.                                                                               |
 | P2-API-02 | Backend                        | Planned                                    | Complete `/bootstrap` Home DTO with one snapshot/calculation time. No section carries a conflicting timestamp; failed required sections make the payload non-cacheable. Depends on P2-PRD-01 and P2-API-01.                                                                     |
-| P2-API-03 | Backend                        | Implemented — physical gate pending        | `/transactions` uses bounded date/ID keyset pages with an encrypted opaque cursor bound to the canonical query, supported filters, finance date, and snapshot ceiling; append returns stable `hasMore`, with no raw offsets or deferred filters.                                 |
-| P2-API-04 | Backend                        | Implemented — physical gate pending        | `/transactions/:id` uses opaque IDs, allowlisted read-only fields, and safe `404 transaction_not_found`; raw transaction rows and internal hash/meta/scrape fields are never serialized.                                                                                        |
-| P2-API-05 | Backend + QA                   | Automated gate passed; physical pending    | Compatibility, redaction, mixed-direction literal Search/normalization, malformed/duplicate/cursor-abuse/cross-filter/pagination-boundary, authorization, GET-only, and adjacent-route-negative coverage passed.                                                               |
-| P2-IOS-01 | iOS models/formatting          | Phase 2A done; Phase 2B automated gate passed | Strict transaction list/detail/cursor decoding covers nested allowlists, nullables, enums, UTC instants, calendar-only dates, ID kinds, masks, decimal money, server/detail identity binding, and equivalent locale-aware/spoken meaning.                                         |
+| P2-API-03 | Backend                        | Implemented — Phase 2B accepted             | `/transactions` uses bounded date/ID keyset pages with an encrypted opaque cursor bound to the canonical query, supported filters, finance date, and snapshot ceiling; append returns stable `hasMore`, with no raw offsets or deferred filters.                                 |
+| P2-API-04 | Backend                        | Implemented — Phase 2B accepted             | `/transactions/:id` uses opaque IDs, allowlisted read-only fields, and safe `404 transaction_not_found`; raw transaction rows and internal hash/meta/scrape fields are never serialized.                                                                                        |
+| P2-API-05 | Backend + QA                   | Done — Phase 2B accepted                    | Compatibility, redaction, mixed-direction literal Search/normalization, malformed/duplicate/cursor-abuse/cross-filter/pagination-boundary, authorization, GET-only, and adjacent-route-negative coverage passed.                                                               |
+| P2-IOS-01 | iOS models/formatting          | Phase 2A/2B accepted                        | Strict transaction list/detail/cursor decoding covers nested allowlists, nullables, enums, UTC instants, calendar-only dates, ID kinds, masks, decimal money, server/detail identity binding, and equivalent locale-aware/spoken meaning.                                         |
 | P2-IOS-02 | iOS Home                       | Phase 2A done; full task planned           | The live, memory-only Home, single-flight refresh, recoverable failure retention, and relaunch refetch passed physical acceptance. It does not claim cached/offline browsing; the full repository-backed task remains dependent on Phase 1.                                     |
-| P2-IOS-03 | iOS Activity                   | Implemented — physical gate pending        | Grouped live Activity implements initial load, keyset-cursor append, refresh, preserved in-memory journey, inline append retry, deduplication, and navigation to detail.                                                                                                      |
-| P2-IOS-04 | iOS filters                    | Implemented — physical gate pending        | Direction/status/date/account/review/excluded filters use draft vs applied state. Apply, Reset, Cancel, and distinct filtered-empty behavior are covered; transfer/category/owner filters stay hidden.                                                                          |
-| P2-IOS-05 | iOS Search                     | Implemented — physical gate pending        | Exactly 300 ms debounce, cancellation of superseded requests, NFKC plus shared ECMAScript whitespace/UTF-16 normalization vectors, query/filter preservation, no-results recovery, and no diagnostics, persistence, or recents are covered.                                   |
-| P2-IOS-06 | iOS detail                     | Implemented — physical gate pending        | Read-only Transaction detail binds the opaque request ID and server identity. Category/account/owner/status/review/excluded rows are non-editable; Options, note, recurring, and every edit action stay hidden.                                                                |
-| P2-DAT-01 | iOS data                       | Deferred                                   | Full encrypted snapshot/repository and cached transaction window move with Phase 1; Phase 2A and Phase 2B persist no financial DTO, query, filter, cursor, detail, or recent-search state.                                                                                      |
-| P2-DES-01 | Design + UX writing            | Phase 2A done; Phase 2B review passed, physical pending | The flat native hierarchy covers live Activity/Search/filter/detail loading, empty, append-error, unavailable, revoked, and incompatible states; independent UI review reported no findings, while physical visual acceptance remains open.                                  |
-| P2-DES-02 | Design + accessibility         | Deferred                                   | Full accessibility/design acceptance moves to the later Phase 1/6 hardening path; Phase 2A still uses native semantics, flexible layouts, and non-color meaning by default.                                                                                                     |
+| P2-IOS-03 | iOS Activity                   | Implemented — Phase 2B accepted             | Grouped live Activity implements initial load, keyset-cursor append, refresh, preserved in-memory journey, inline append retry, deduplication, and navigation to detail.                                                                                                      |
+| P2-IOS-04 | iOS filters                    | Phase 2B accepted; full filters planned     | Direction/status/date/account/review/excluded behavior is accepted. Full Phase 2 adds the locked transfer/category/owner filters without alternate sorts.                                                                                                                      |
+| P2-IOS-05 | iOS Search                     | Implemented — Phase 2B accepted             | Exactly 300 ms debounce, cancellation of superseded requests, NFKC plus shared ECMAScript whitespace/UTF-16 normalization vectors, query/filter preservation, no-results recovery, and no diagnostics, persistence, or recents are covered.                                   |
+| P2-IOS-06 | iOS detail                     | Implemented — Phase 2B accepted             | Read-only Transaction detail binds the opaque request ID and server identity. Category/account/owner/status/review/excluded rows are non-editable; Options, note, recurring, and every edit action stay hidden.                                                                |
+| P2-DAT-01 | iOS data                       | Planned after Phase 1                       | Full encrypted snapshot/repository and cached transaction window use D-021. Phase 2A/2B remain memory-only until that repository exists; search recents remain out of scope.                                                                                                  |
+| P2-DES-01 | Design + UX writing            | Phase 2A/2B accepted; offline states planned | The flat native hierarchy passed live Activity/Search/filter/detail review and physical use. Saved/stale/corrupt states remain with full Phase 2.                                                                                                                             |
+| P2-DES-02 | Design + accessibility         | Planned                                    | Apply core VoiceOver, large-text, and non-color meaning to the complete live/saved journey; broad release-matrix work remains Phase 6.                                                                                                                                          |
 | P2-QA-01  | QA                             | Phase 2A done; Phase 2B automated evidence passed | Fixture, refresh, privacy-boundary, normalization, and full simulator suites pass; the source scan finds no financial/query/filter/cursor/detail persistence or logging path. Full encrypted-snapshot coverage remains deferred with Phase 1.                                  |
-| P2-QA-02  | QA                             | Automated gate passed; physical pending    | Live/empty/slow/revoked/incompatible/duplicate/cursor-abuse/cancellation/append-error state coverage, epoch-guarded late-response races, sheet privacy cover, and no-persistence checks passed. The consolidated physical journey remains.                                     |
-| P2-QA-03  | Accessibility + performance QA | Deferred                                   | Full VoiceOver, maximum Dynamic Type, cached/search, and representative-device matrix is deferred; targeted live Home performance checks may run without closing this task.                                                                                                     |
+| P2-QA-02  | QA                             | Done — Phase 2B accepted                    | Live/empty/slow/revoked/incompatible/duplicate/cursor-abuse/cancellation/append-error coverage, race protection, privacy cover, no-persistence checks, and the physical journey passed.                                                                                         |
+| P2-QA-03  | Accessibility + performance QA | Planned                                    | Verify the supported iPhone/private-release matrix for the complete live/saved journey without adding iPad or full-localization scope.                                                                                                                                        |
 
 ## Required state coverage
 

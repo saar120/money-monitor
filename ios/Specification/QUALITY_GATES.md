@@ -2,7 +2,7 @@
 
 These gates apply to every phase. Phase 6 completes the full release matrix, but it does not postpone security, accessibility, state handling, or tests that belong to an earlier feature.
 
-**D-018 technical-dogfood exception:** Phase 2A may defer the full manual accessibility/device matrix while the app is used only by its sole technical owner on a passcode-protected, non-shared personal iPhone. New work must still use native semantics, flexible layouts, non-color status meaning, and labels for essential controls. This exception cannot satisfy a full phase exit gate or support wider dogfood, offline storage, or release acceptance.
+**Trusted-circle scope:** the historical D-018/D-019 exception ended with accepted Phase 2A/2B. D-020 resumes ordinary core accessibility and privacy gates before family/friend distribution. The supported private-release matrix is intentionally limited to iPhone, English UI, and mixed Hebrew/English financial content.
 
 ## 1. Definition of done for an implementation task
 
@@ -13,7 +13,7 @@ A task is done only when:
 - unit/contract tests cover presentation or domain logic;
 - failure and cancellation paths are deterministic;
 - previews or fixtures exist for every new visual state;
-- user-facing copy is final enough to test and localizable;
+- user-facing copy is centralized and final enough to test;
 - accessibility labels, reading order, targets, and Dynamic Type behavior are verified;
 - logs and diagnostics contain no prohibited fields or values;
 - documentation and traceability links are updated;
@@ -49,7 +49,7 @@ Lists additionally cover first page, pagination, append error, filtered empty, n
 
 - TypeScript validates success/error fixtures against the mobile schema.
 - Swift decodes the identical checked-in fixtures.
-- Current and previous supported schema versions remain in the suite.
+- The current supported schema version remains in the suite; this private product makes no previous-version compatibility promise.
 - Unknown optional fields decode safely; unknown required versions fail before feature decoding.
 - Secret/redaction tests fail if a prohibited key or known sentinel value appears.
 
@@ -140,14 +140,14 @@ Each phase validates its critical journey with:
 
 No status may rely only on blue, green, red, orange, opacity, or animation.
 
-## 6. Localization and bidirectional-text gate
+## 6. Formatting and bidirectional-content gate
 
-- User-facing strings live in String Catalogs before release hardening.
+- English user-facing strings live in a String Catalog before release hardening; translated catalogs are not required.
 - Amounts, dates, percentages, and relative times use `FormatStyle` or equivalent locale-aware formatting.
-- No sentence is built by concatenating localizable fragments.
+- No sentence is built by concatenating fragments that break formatting or accessibility output.
 - Hebrew merchant/category content is tested inside the English UI from Phase 2 onward.
-- Full RTL testing covers alignment, back/navigation semantics, charts, punctuation, Latin digits, masked account suffixes, and mixed-direction search.
-- Long localized copy and maximum text size do not hide actions or freshness.
+- Bidirectional-content testing covers charts, punctuation, Latin digits, masked account suffixes, and mixed-direction search without requiring full interface mirroring.
+- Long financial labels and maximum text size do not hide actions or freshness.
 
 ## 7. Design and Liquid Glass gate
 

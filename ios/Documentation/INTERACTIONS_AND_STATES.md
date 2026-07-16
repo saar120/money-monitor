@@ -5,12 +5,12 @@
 ### Pair and enter
 
 ```text
-Welcome → Connect to Mac → Mac approval → Face ID choice → Connected → Home
+Welcome → Connect to Mac → Mac approval → Device protection → Connected → Home
 ```
 
 - QR scan is primary; manual private HTTPS address is fallback.
 - Pairing failure stays in context and explains whether the Mac, Tailnet, address, approval, or version is the problem.
-- Face ID denial never traps the user; device authentication or an explicit “Not now” policy applies.
+- System biometrics use device-passcode fallback. Saved financial data has no permanent “Not now” path.
 
 ### Find a transaction
 
@@ -21,7 +21,7 @@ Activity → filters sheet → filtered results → transaction detail
 
 - Debounce remote queries.
 - Preserve query and filters when returning from detail.
-- Show recent searches only if stored locally and easy to clear.
+- Do not store or show recent searches in the private self-use plan.
 
 ### Review money
 
@@ -62,7 +62,7 @@ The composer is disabled while offline. A saved conversation remains readable. A
 | Timeout/unreachable | Fall back to a valid saved snapshot or the Mac unavailable screen. |
 | Server error | Give safe plain language, retry, and optional diagnostics ID—not a raw error. |
 | Decode/schema failure | Preserve the prior snapshot; request compatible Mac/app update. |
-| Authentication revoked | Lock protected data, clear the token, retain/wipe cache according to policy, and offer re-pairing. |
+| Authentication revoked | Lock, clear the token and financial cache, and offer fresh pairing. An offline phone cannot discover revocation until it reconnects. |
 
 ## Lists and search
 
@@ -93,7 +93,7 @@ Distinguish queued, running, completed, partially failed, waiting for OTP/manual
 
 ## Face ID and privacy
 
-- Lock on cold start and after the accepted background interval.
+- Lock on cold start and after two minutes in the background.
 - Cover financial content in the app switcher.
 - Handle denied, unavailable, interrupted, and lockout results.
 - Respect system passcode fallback according to the accepted security policy.
@@ -106,4 +106,3 @@ Distinguish queued, running, completed, partially failed, waiting for OTP/manual
 - Destructive actions use confirmation dialogs.
 - Do not hide essential actions behind custom gestures.
 - Keyboard focus, dismissal, and safe-area behavior follow native controls.
-
