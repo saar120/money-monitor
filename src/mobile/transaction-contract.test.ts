@@ -1,3 +1,5 @@
+import { readFileSync } from 'node:fs';
+import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import { createMobilePublicIdProjector } from './mobile-public-id.js';
 import {
@@ -7,6 +9,23 @@ import {
 } from './transaction-contract.js';
 
 const project = createMobilePublicIdProjector('production-mobile-public-id-key-32-chars-minimum');
+const FIXTURE_DIRECTORY = join(process.cwd(), 'ios', 'Fixtures', 'MobileBootstrap');
+
+function loadTransactionFixture(name: string): unknown {
+  return JSON.parse(readFileSync(join(FIXTURE_DIRECTORY, name), 'utf8')) as unknown;
+}
+
+interface SearchNormalizationVector {
+  name: string;
+  input: string;
+  expected: string;
+}
+
+function loadSearchNormalizationVectors(): SearchNormalizationVector[] {
+  return loadTransactionFixture(
+    'transaction-search-normalization.json',
+  ) as SearchNormalizationVector[];
+}
 
 function item(id = 1) {
   return {
@@ -81,9 +100,28 @@ describe('mobile transaction query contract', () => {
   ])('rejects invalid or unrecognized query input %#', (input) => {
     expect(mobileTransactionQuerySchema.safeParse(input).success).toBe(false);
   });
+
+  it.each(loadSearchNormalizationVectors())(
+    'matches the shared normalization vector: $name',
+    ({ input, expected }) => {
+      expect(mobileTransactionQuerySchema.parse({ q: input }).q).toBe(expected);
+    },
+  );
 });
 
 describe('mobile transaction response contract', () => {
+  it('validates the shared Swift and TypeScript transaction fixtures', () => {
+    expect(
+      validateMobileTransactionListEnvelope(loadTransactionFixture('transaction-list-live.json'))
+        .success,
+    ).toBe(true);
+    expect(
+      validateMobileTransactionDetailEnvelope(
+        loadTransactionFixture('transaction-detail-live.json'),
+      ).success,
+    ).toBe(true);
+  });
+
   it('accepts the exact list envelope and strips nothing', () => {
     expect(validateMobileTransactionListEnvelope(listEnvelope())).toEqual({
       success: true,

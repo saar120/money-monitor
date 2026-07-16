@@ -128,6 +128,7 @@ enum MobileErrorCode: String, ForwardCompatibleStringEnum, Equatable, Sendable {
     case capabilityRequired = "capability_required"
     case upgradeRequired = "upgrade_required"
     case routeNotFound = "route_not_found"
+    case transactionNotFound = "transaction_not_found"
     case payloadTooLarge = "payload_too_large"
     case rateLimited = "rate_limited"
     case pairingInvalid = "pairing_invalid"
@@ -381,4 +382,188 @@ struct MobileErrorBody: Codable, Equatable, Sendable {
 struct MobileErrorMetadata: Codable, Equatable, Sendable {
     let apiVersion: String
     let requestId: String
+}
+
+enum MobileTransactionOwnerKind: String, ForwardCompatibleStringEnum, Equatable, Sendable {
+    case member
+    case shared
+    case unassigned
+    case unknown
+}
+
+struct MobileTransactionQuery: Equatable, Hashable, Sendable {
+    var query: String?
+    var cursor: String?
+    var limit: Int
+    var startDate: String?
+    var endDate: String?
+    var direction: BootstrapTransactionDirection?
+    var status: BootstrapTransactionStatus?
+    var needsReview: Bool
+    var includeExcluded: Bool
+    var accountID: String?
+
+    init(
+        query: String? = nil,
+        cursor: String? = nil,
+        limit: Int = 30,
+        startDate: String? = nil,
+        endDate: String? = nil,
+        direction: BootstrapTransactionDirection? = nil,
+        status: BootstrapTransactionStatus? = nil,
+        needsReview: Bool = false,
+        includeExcluded: Bool = false,
+        accountID: String? = nil
+    ) {
+        self.query = Self.canonicalSearchText(query)
+        self.cursor = cursor
+        self.limit = limit
+        self.startDate = startDate
+        self.endDate = endDate
+        self.direction = direction
+        self.status = status
+        self.needsReview = needsReview
+        self.includeExcluded = includeExcluded
+        self.accountID = accountID
+    }
+
+    static func canonicalSearchText(_ value: String?) -> String? {
+        guard let value else { return nil }
+        let normalized = value.precomposedStringWithCompatibilityMapping
+        var result = ""
+        result.reserveCapacity(normalized.utf8.count)
+        var needsSeparator = false
+        for scalar in normalized.unicodeScalars {
+            if isECMAScriptWhitespace(scalar) {
+                if !result.isEmpty { needsSeparator = true }
+                continue
+            }
+            if needsSeparator {
+                result.append(" ")
+                needsSeparator = false
+            }
+            result.unicodeScalars.append(scalar)
+        }
+        return result.isEmpty ? nil : result
+    }
+
+    static func boundedRawSearchInput(
+        _ value: String,
+        maximumCanonicalUTF16Count: Int = 100
+    ) -> String {
+        guard maximumCanonicalUTF16Count > 0 else { return "" }
+        let rawUTF16Count = value.utf16.count
+        guard let canonical = canonicalSearchText(value) else {
+            return rawUTF16Count <= maximumCanonicalUTF16Count ? value : ""
+        }
+        let canonicalUTF16Count = canonical.utf16.count
+        if canonicalUTF16Count <= maximumCanonicalUTF16Count {
+            return rawUTF16Count <= maximumCanonicalUTF16Count ? value : canonical
+        }
+
+        var prefix = ""
+        prefix.reserveCapacity(maximumCanonicalUTF16Count)
+        var prefixUTF16Count = 0
+        for character in canonical {
+            let next = String(character)
+            let nextUTF16Count = next.utf16.count
+            guard
+                prefixUTF16Count + nextUTF16Count <= maximumCanonicalUTF16Count
+            else {
+                break
+            }
+            prefix.append(character)
+            prefixUTF16Count += nextUTF16Count
+        }
+        return prefix
+    }
+
+    private static func isECMAScriptWhitespace(_ scalar: Unicode.Scalar) -> Bool {
+        switch scalar.value {
+        case 0x0009 ... 0x000D,
+             0x0020,
+             0x00A0,
+             0x1680,
+             0x2000 ... 0x200A,
+             0x2028,
+             0x2029,
+             0x202F,
+             0x205F,
+             0x3000,
+             0xFEFF:
+            true
+        default:
+            false
+        }
+    }
+
+    var firstPage: Self {
+        var copy = self
+        copy.cursor = nil
+        return copy
+    }
+
+    func page(after cursor: String) -> Self {
+        var copy = self
+        copy.cursor = cursor
+        return copy
+    }
+}
+
+struct MobileTransactionListEnvelope: Codable, Equatable, Sendable {
+    let data: MobileTransactionListData
+    let meta: MobileTransactionMetadata
+}
+
+struct MobileTransactionDetailEnvelope: Codable, Equatable, Sendable {
+    let data: MobileTransactionDetailData
+    let meta: MobileTransactionMetadata
+}
+
+struct MobileTransactionListData: Codable, Equatable, Sendable {
+    let financialDate: String
+    let transactions: [MobileTransaction]
+    let page: MobileTransactionPage
+}
+
+struct MobileTransactionDetailData: Codable, Equatable, Sendable {
+    let transaction: MobileTransaction
+}
+
+struct MobileTransactionMetadata: Codable, Equatable, Sendable {
+    static let supportedAPIVersion = "1"
+
+    let apiVersion: String
+    let generatedAt: Date
+    let source: BootstrapResponseSource
+    let server: MobileTransactionServer
+}
+
+struct MobileTransactionServer: Codable, Equatable, Sendable {
+    let id: UUID
+    let protocolVersion: Int
+}
+
+struct MobileTransactionPage: Codable, Equatable, Sendable {
+    let hasMore: Bool
+    let nextCursor: String?
+}
+
+struct MobileTransaction: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let occurredOn: String
+    let displayName: String
+    let amount: BootstrapMoney
+    let direction: BootstrapTransactionDirection
+    let status: BootstrapTransactionStatus
+    let category: BootstrapTransactionCategory?
+    let account: BootstrapTransactionAccount
+    let needsReview: Bool
+    let excludedFromReports: Bool
+    let owner: MobileTransactionOwner?
+}
+
+struct MobileTransactionOwner: Codable, Equatable, Sendable {
+    let kind: MobileTransactionOwnerKind
+    let displayName: String?
 }

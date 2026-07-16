@@ -536,3 +536,439 @@ struct HomePresentationTests {
         return strings
     }
 }
+
+private let transactionPresentationAccount = BootstrapTransactionAccount(
+    id: "account_\(String(repeating: "A", count: 22))",
+    displayName: "כרטיס ראשי",
+    identifierMask: "•••• 4242"
+)
+
+private func transactionPresentationFixture(
+    idCharacter: Character,
+    occurredOn: String = "2026-07-15",
+    displayName: String = "קפה Central",
+    direction: BootstrapTransactionDirection = .debit,
+    status: BootstrapTransactionStatus = .posted,
+    needsReview: Bool = false
+) -> MobileTransaction {
+    MobileTransaction(
+        id: "transaction_\(String(repeating: idCharacter, count: 22))",
+        occurredOn: occurredOn,
+        displayName: displayName,
+        amount: BootstrapMoney(value: "42.50", currencyCode: "ILS"),
+        direction: direction,
+        status: status,
+        category: BootstrapTransactionCategory(
+            id: "category_\(String(repeating: "C", count: 22))",
+            label: "Dining"
+        ),
+        account: transactionPresentationAccount,
+        needsReview: needsReview,
+        excludedFromReports: false,
+        owner: nil
+    )
+}
+
+private func transactionPresentationEnvelope(
+    transactions: [MobileTransaction],
+    hasMore: Bool = false,
+    nextCursor: String? = nil
+) -> MobileTransactionListEnvelope {
+    MobileTransactionListEnvelope(
+        data: MobileTransactionListData(
+            financialDate: "2026-07-16",
+            transactions: transactions,
+            page: MobileTransactionPage(hasMore: hasMore, nextCursor: nextCursor)
+        ),
+        meta: MobileTransactionMetadata(
+            apiVersion: "1",
+            generatedAt: Date(timeIntervalSince1970: 1_784_109_600),
+            source: .live,
+            server: MobileTransactionServer(
+                id: UUID(uuidString: "11111111-1111-4111-8111-111111111111")!,
+                protocolVersion: 1
+            )
+        )
+    )
+}
+
+private actor DelayedTransactionListRead {
+    private var started = false
+    private var continuation: CheckedContinuation<MobileTransactionListEnvelope, Never>?
+
+    func load() async -> MobileTransactionListEnvelope {
+        started = true
+        return await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+    }
+
+    func hasStarted() -> Bool {
+        started
+    }
+
+    func resolve(_ envelope: MobileTransactionListEnvelope) {
+        continuation?.resume(returning: envelope)
+        continuation = nil
+    }
+}
+
+private func waitForTransactionListRead(_ read: DelayedTransactionListRead) async {
+    for _ in 0 ..< 100 {
+        if await read.hasStarted() { return }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for transaction list read")
+}
+
+private actor ControlledTransactionDebounce {
+    private var started = false
+    private var recordedDuration: Duration?
+    private var continuation: CheckedContinuation<Void, Never>?
+
+    func sleep(for duration: Duration) async throws {
+        started = true
+        recordedDuration = duration
+        await withCheckedContinuation { continuation in
+            self.continuation = continuation
+        }
+        try Task.checkCancellation()
+    }
+
+    func hasStarted() -> Bool {
+        started
+    }
+
+    func duration() -> Duration? {
+        recordedDuration
+    }
+
+    func release() {
+        continuation?.resume()
+        continuation = nil
+    }
+}
+
+private actor TransactionLoaderCallCounter {
+    private var count = 0
+
+    func record() {
+        count += 1
+    }
+
+    func calls() -> Int {
+        count
+    }
+}
+
+private func waitForTransactionDebounce(_ debounce: ControlledTransactionDebounce) async {
+    for _ in 0 ..< 100 {
+        if await debounce.hasStarted() { return }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for transaction debounce")
+}
+
+struct TransactionPresentationTests {
+    @MainActor
+    @Test
+    func paginationDeduplicatesRowsAndAdvancesTheOpaqueCursor() async {
+        let first = transactionPresentationFixture(idCharacter: "A")
+        let second = transactionPresentationFixture(
+            idCharacter: "B",
+            occurredOn: "2026-07-14",
+            displayName: "Salary",
+            direction: .credit
+        )
+        let model = TransactionListModel()
+        let query = MobileTransactionQuery(limit: 30)
+        await model.replace(with: query) { _ in
+            transactionPresentationEnvelope(
+                transactions: [first],
+                hasMore: true,
+                nextCursor: "cursor_v1_page-2"
+            )
+        }
+
+        await model.append { requestedQuery in
+            #expect(requestedQuery.cursor == "cursor_v1_page-2")
+            return transactionPresentationEnvelope(transactions: [first, second])
+        }
+
+        #expect(model.transactions.map(\.id) == [first.id, second.id])
+        #expect(model.hasMore == false)
+        #expect(model.nextCursor == nil)
+        #expect(model.appendState == .idle)
+    }
+
+    @MainActor
+    @Test
+    func repeatedCursorFailureRetainsEveryAcceptedRow() async {
+        let transaction = transactionPresentationFixture(idCharacter: "A")
+        let model = TransactionListModel()
+        await model.replace(with: MobileTransactionQuery()) { _ in
+            transactionPresentationEnvelope(
+                transactions: [transaction],
+                hasMore: true,
+                nextCursor: "cursor_v1_repeat"
+            )
+        }
+
+        await model.append { _ in
+            transactionPresentationEnvelope(
+                transactions: [transaction],
+                hasMore: true,
+                nextCursor: "cursor_v1_repeat"
+            )
+        }
+
+        #expect(model.transactions == [transaction])
+        #expect(model.hasMore)
+        #expect(model.nextCursor == "cursor_v1_repeat")
+        #expect(model.appendState == .failed("More transactions could not be loaded safely."))
+    }
+
+    @MainActor
+    @Test
+    func refreshFailureRetainsAcceptedRowsAndExposesRetryCopy() async {
+        let transaction = transactionPresentationFixture(idCharacter: "A")
+        let query = MobileTransactionQuery()
+        let model = TransactionListModel()
+        await model.replace(with: query) { _ in
+            transactionPresentationEnvelope(transactions: [transaction])
+        }
+
+        await model.refresh(query: query) { _ in
+            throw MobileClientError.transport(.offline)
+        }
+
+        #expect(model.transactions == [transaction])
+        #expect(model.loadState == .loaded)
+        #expect(model.refreshMessage == "Couldn’t reach the Mac. Try again.")
+    }
+
+    @MainActor
+    @Test
+    func staleGenerationCannotReplaceTheNewestAcceptedQuery() async {
+        let old = transactionPresentationFixture(idCharacter: "A", displayName: "Old")
+        let newest = transactionPresentationFixture(idCharacter: "B", displayName: "Newest")
+        let oldQuery = MobileTransactionQuery(query: "old")
+        let newestQuery = MobileTransactionQuery(query: "new")
+        let gate = DelayedTransactionListRead()
+        let model = TransactionListModel()
+
+        let lateReplace = Task {
+            await model.replace(with: oldQuery) { _ in
+                await gate.load()
+            }
+        }
+        await waitForTransactionListRead(gate)
+        await model.replace(with: newestQuery) { _ in
+            transactionPresentationEnvelope(transactions: [newest])
+        }
+        await gate.resolve(transactionPresentationEnvelope(transactions: [old]))
+        await lateReplace.value
+
+        #expect(model.acceptedQuery == newestQuery)
+        #expect(model.transactions == [newest])
+        #expect(model.loadState == .loaded)
+    }
+
+    @Test
+    func filtersAndAccessibleCopyPreserveNativeWireSemanticsAndMixedScripts() {
+        var filters = TransactionFilters()
+        filters.direction = .expenses
+        filters.status = .pending
+        filters.accountID = transactionPresentationAccount.id
+        filters.needsReview = true
+        filters.includeExcluded = true
+
+        let query = filters.makeQuery(searchText: "  קפה  ")
+        #expect(query.query == "קפה")
+        #expect(query.direction == .debit)
+        #expect(query.status == .pending)
+        #expect(query.accountID == transactionPresentationAccount.id)
+        #expect(query.needsReview)
+        #expect(query.includeExcluded)
+
+        let transaction = transactionPresentationFixture(
+            idCharacter: "A",
+            status: .pending,
+            needsReview: true
+        )
+        let label = TransactionPresentation.accessibilityLabel(transaction)
+        #expect(label.contains("קפה Central"))
+        #expect(label.contains("כרטיס ראשי"))
+        #expect(label.contains("Pending"))
+        #expect(label.contains("Needs review"))
+    }
+
+    @MainActor
+    @Test
+    func firstLoadFailureCanRetryToAnAcceptedSuccess() async {
+        let query = MobileTransactionQuery()
+        let transaction = transactionPresentationFixture(idCharacter: "R")
+        let model = TransactionListModel()
+        await model.replace(with: query) { _ in
+            throw MobileClientError.transport(.offline)
+        }
+
+        #expect(model.acceptedQuery == nil)
+        #expect(model.loadState == .failed("Couldn’t reach the Mac. Try again."))
+
+        await model.refresh(query: query) { _ in
+            transactionPresentationEnvelope(transactions: [transaction])
+        }
+
+        #expect(model.acceptedQuery == query)
+        #expect(model.transactions == [transaction])
+        #expect(model.loadState == .loaded)
+    }
+
+    @Test
+    func calendarDateFormattingKeepsTheBusinessDayInLosAngeles() throws {
+        let losAngeles = try #require(TimeZone(identifier: "America/Los_Angeles"))
+
+        let formatted = TransactionPresentation.formattedDate(
+            "2026-07-15",
+            locale: Locale(identifier: "en_US"),
+            timeZone: losAngeles
+        )
+
+        #expect(formatted == "Jul 15, 2026")
+    }
+
+    @Test
+    func searchCanonicalizationPreservesHebrewAndCollapsesUnicodeWhitespace() {
+        let hebrew = "ש\u{05B8}\u{05C1}לו\u{05B9}ם"
+        let expectedHebrew = hebrew.precomposedStringWithCompatibilityMapping
+        let raw = "\u{00A0}\(hebrew)\t \n\u{2003}ﬃ\u{00A0}"
+
+        #expect(
+            MobileTransactionQuery.canonicalSearchText(raw)
+                == "\(expectedHebrew) ffi"
+        )
+        #expect(MobileTransactionQuery(query: raw).query == "\(expectedHebrew) ffi")
+    }
+
+    @Test
+    func rawSearchBoundingUsesCanonicalUTF16WithoutSplittingCharacters() {
+        let compatibilityExpansion = String(repeating: "ﬃ", count: 34)
+        let boundedExpansion = MobileTransactionQuery.boundedRawSearchInput(
+            compatibilityExpansion
+        )
+        #expect(
+            boundedExpansion
+                == String(String(repeating: "ffi", count: 34).prefix(100))
+        )
+        #expect(boundedExpansion.utf16.count == 100)
+
+        let combiningCharacter = "ש\u{05B8}"
+        let combiningBoundary = String(repeating: "a", count: 99) + combiningCharacter
+        let boundedCombining = MobileTransactionQuery.boundedRawSearchInput(
+            combiningBoundary
+        )
+        #expect(boundedCombining == String(repeating: "a", count: 99))
+        #expect(
+            MobileTransactionQuery.canonicalSearchText(boundedCombining)?.utf16.count == 99
+        )
+
+        let largePaste = String(repeating: "a", count: 10_000)
+        let boundedLargePaste = MobileTransactionQuery.boundedRawSearchInput(largePaste)
+        #expect(boundedLargePaste == String(repeating: "a", count: 100))
+        #expect(boundedLargePaste.utf16.count == 100)
+
+        let whitespaceOnlyPaste = String(repeating: "\u{FEFF}", count: 10_000)
+        #expect(MobileTransactionQuery.boundedRawSearchInput(whitespaceOnlyPaste).isEmpty)
+    }
+
+    @MainActor
+    @Test
+    func exactSearchDebounceAndCancellationNeverReachTheSupersededLoader() async {
+        #expect(TransactionSearchPolicy.debounce == .milliseconds(300))
+
+        let supersededDebounce = ControlledTransactionDebounce()
+        let supersededCalls = TransactionLoaderCallCounter()
+        let model = TransactionListModel()
+        let newest = transactionPresentationFixture(idCharacter: "N")
+        let superseded = Task {
+            await model.replace(
+                with: MobileTransactionQuery(query: "old"),
+                debounce: TransactionSearchPolicy.debounce,
+                sleep: { duration in
+                    try await supersededDebounce.sleep(for: duration)
+                }
+            ) { _ in
+                await supersededCalls.record()
+                throw MobileClientError.transport(.offline)
+            }
+        }
+        await waitForTransactionDebounce(supersededDebounce)
+        #expect(await supersededDebounce.duration() == .milliseconds(300))
+
+        let newestQuery = MobileTransactionQuery(query: "new")
+        await model.replace(with: newestQuery) { _ in
+            transactionPresentationEnvelope(transactions: [newest])
+        }
+        await supersededDebounce.release()
+        await superseded.value
+
+        #expect(await supersededCalls.calls() == 0)
+        #expect(model.acceptedQuery == newestQuery)
+        #expect(model.transactions == [newest])
+        #expect(model.loadState == .loaded)
+
+        let cancelledDebounce = ControlledTransactionDebounce()
+        let cancelledCalls = TransactionLoaderCallCounter()
+        let cancelledModel = TransactionListModel()
+        let cancelled = Task {
+            await cancelledModel.replace(
+                with: MobileTransactionQuery(query: "cancelled"),
+                debounce: TransactionSearchPolicy.debounce,
+                sleep: { duration in
+                    try await cancelledDebounce.sleep(for: duration)
+                }
+            ) { _ in
+                await cancelledCalls.record()
+                throw MobileClientError.transport(.offline)
+            }
+        }
+        await waitForTransactionDebounce(cancelledDebounce)
+        cancelled.cancel()
+        await cancelledDebounce.release()
+        await cancelled.value
+
+        #expect(await cancelledCalls.calls() == 0)
+        if case .failed = cancelledModel.loadState {
+            Issue.record("Cancellation must not publish a failure")
+        }
+    }
+
+    @Test
+    func filterDraftResetAndCancelPreserveValueSemantics() {
+        var applied = TransactionFilters()
+        applied.direction = .income
+        applied.status = .pending
+        applied.accountID = transactionPresentationAccount.id
+        applied.needsReview = true
+
+        var draft = applied
+        draft.direction = .expenses
+        draft.includeExcluded = true
+
+        let afterCancel = applied
+        #expect(afterCancel.direction == .income)
+        #expect(afterCancel.includeExcluded == false)
+        #expect(afterCancel.accountID == transactionPresentationAccount.id)
+
+        draft.reset()
+        #expect(draft.isDefault)
+        #expect(draft.direction == .all)
+        #expect(draft.status == .all)
+        #expect(draft.accountID == nil)
+        #expect(draft.needsReview == false)
+        #expect(draft.includeExcluded == false)
+        #expect(applied.direction == .income)
+        #expect(applied.needsReview)
+    }
+}

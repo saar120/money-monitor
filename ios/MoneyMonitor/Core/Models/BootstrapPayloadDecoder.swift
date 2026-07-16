@@ -7,6 +7,396 @@ enum BootstrapPayloadDecoderError: Error, Equatable {
     case invalidSuccessEnvelope
 }
 
+enum MobilePayloadSecurityValidationError: Error, Equatable {
+    case invalidJSON
+    case redactionViolation
+}
+
+/// Shared raw-payload boundary used before Codable can discard unknown fields.
+struct MobilePayloadSecurityValidator {
+    func validate(_ data: Data) throws {
+        let root: Any
+        do {
+            root = try JSONSerialization.jsonObject(with: data)
+        } catch {
+            throw MobilePayloadSecurityValidationError.invalidJSON
+        }
+        guard root is [String: Any] else {
+            throw MobilePayloadSecurityValidationError.invalidJSON
+        }
+        guard !containsRedactionViolation(root) else {
+            throw MobilePayloadSecurityValidationError.redactionViolation
+        }
+    }
+
+    private func containsRedactionViolation(_ value: Any) -> Bool {
+        if let string = value as? String {
+            return containsForbiddenString(string)
+        }
+        if let number = value as? NSNumber {
+            if CFGetTypeID(number) == CFBooleanGetTypeID() { return false }
+            let doubleValue = number.doubleValue
+            return !doubleValue.isFinite || doubleValue.rounded(.towardZero) != doubleValue
+        }
+        if let array = value as? [Any] {
+            return array.contains(where: containsRedactionViolation)
+        }
+        if let dictionary = value as? [String: Any] {
+            return dictionary.contains { key, child in
+                isForbiddenKey(key) || containsRedactionViolation(child)
+            }
+        }
+        return false
+    }
+
+    private func isForbiddenKey(_ key: String) -> Bool {
+        let normalized = String(
+            key.unicodeScalars.filter { scalar in
+                (48 ... 57).contains(scalar.value)
+                    || (65 ... 90).contains(scalar.value)
+                    || (97 ... 122).contains(scalar.value)
+            }
+        ).lowercased()
+        return [
+            "credential", "token", "hash", "digest", "rawrow", "databaserow",
+            "fullaccountnumber", "accountnumber", "routingnumber", "iban", "cardpan",
+        ].contains(where: normalized.contains)
+    }
+
+    private func containsForbiddenString(_ value: String) -> Bool {
+        matches(#"(?:forbidden|secret)[_-]?sentinel"#, in: value, caseInsensitive: true)
+            || matches(#"^(?:Bearer\s+|keychain://|credential://)"#, in: value, caseInsensitive: true)
+            || matches(
+                #"^(?:sk|pk|rk|ghp|github_pat|xox[baprs]|AIza)[-_][A-Za-z0-9_-]{8,}$"#,
+                in: value,
+                caseInsensitive: true
+            )
+            || matches(
+                #"^(?:[A-Za-z0-9_-]{43}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$"#,
+                in: value
+            )
+            || matches(#"^[a-fA-F0-9]{64}$"#, in: value)
+            || containsLongFinancialIdentifier(value)
+    }
+
+    private func containsLongFinancialIdentifier(_ value: String) -> Bool {
+        guard let expression = try? NSRegularExpression(pattern: #"[\d -]{12,32}"#) else {
+            return false
+        }
+        let range = NSRange(value.startIndex ..< value.endIndex, in: value)
+        return expression.matches(in: value, range: range).contains { match in
+            guard let candidateRange = Range(match.range, in: value) else { return false }
+            let digitCount = value[candidateRange].unicodeScalars.count { scalar in
+                (48 ... 57).contains(scalar.value)
+            }
+            return (12 ... 19).contains(digitCount)
+        }
+    }
+
+    private func matches(
+        _ pattern: String,
+        in value: String,
+        caseInsensitive: Bool = false
+    ) -> Bool {
+        var options: String.CompareOptions = .regularExpression
+        if caseInsensitive { options.insert(.caseInsensitive) }
+        return value.range(of: pattern, options: options) != nil
+    }
+}
+
+enum MobileTransactionPayloadDecoderError: Error, Equatable {
+    case invalidJSON
+    case redactionViolation
+    case invalidEnvelope
+}
+
+private struct MobileTransactionRawShapeValidator {
+    private let rootKeys: Set<String> = ["data", "meta"]
+    private let listDataKeys: Set<String> = ["financialDate", "transactions", "page"]
+    private let detailDataKeys: Set<String> = ["transaction"]
+    private let listTransactionKeys: Set<String> = [
+        "id", "occurredOn", "displayName", "amount", "direction", "status",
+        "category", "account", "needsReview", "excludedFromReports",
+    ]
+    private let detailTransactionKeys: Set<String> = [
+        "id", "occurredOn", "displayName", "amount", "direction", "status",
+        "category", "account", "needsReview", "excludedFromReports", "owner",
+    ]
+    private let amountKeys: Set<String> = ["value", "currencyCode"]
+    private let categoryKeys: Set<String> = ["id", "label"]
+    private let accountKeys: Set<String> = ["id", "displayName", "identifierMask"]
+    private let pageKeys: Set<String> = ["hasMore", "nextCursor"]
+    private let metaKeys: Set<String> = ["apiVersion", "generatedAt", "source", "server"]
+    private let serverKeys: Set<String> = ["id", "protocolVersion"]
+    private let ownerKeys: Set<String> = ["kind", "displayName"]
+
+    func validateList(_ data: Data) throws {
+        let root = try rootObject(data)
+        let payload = try exactObject(root["data"], keys: listDataKeys)
+        guard let transactions = payload["transactions"] as? [Any] else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        for value in transactions {
+            try validateTransaction(value, includesOwner: false)
+        }
+        let page = try exactObject(payload["page"], keys: pageKeys)
+        guard page["nextCursor"] is NSNull || page["nextCursor"] is String else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        try validateMetadata(root["meta"])
+    }
+
+    func validateDetail(_ data: Data) throws {
+        let root = try rootObject(data)
+        let payload = try exactObject(root["data"], keys: detailDataKeys)
+        try validateTransaction(payload["transaction"], includesOwner: true)
+        try validateMetadata(root["meta"])
+    }
+
+    private func rootObject(_ data: Data) throws -> [String: Any] {
+        guard
+            let root = try? JSONSerialization.jsonObject(with: data) as? [String: Any],
+            Set(root.keys) == rootKeys
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        return root
+    }
+
+    private func exactObject(
+        _ value: Any?,
+        keys: Set<String>
+    ) throws -> [String: Any] {
+        guard
+            let object = value as? [String: Any],
+            Set(object.keys) == keys
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        return object
+    }
+
+    private func validateTransaction(_ value: Any?, includesOwner: Bool) throws {
+        let transaction = try exactObject(
+            value,
+            keys: includesOwner ? detailTransactionKeys : listTransactionKeys
+        )
+        _ = try exactObject(transaction["amount"], keys: amountKeys)
+        if !(transaction["category"] is NSNull) {
+            _ = try exactObject(transaction["category"], keys: categoryKeys)
+        }
+        _ = try exactObject(transaction["account"], keys: accountKeys)
+        try requireString(
+            transaction["direction"],
+            in: ["debit", "credit", "unknown"]
+        )
+        try requireString(
+            transaction["status"],
+            in: ["posted", "pending", "unknown"]
+        )
+
+        guard includesOwner else { return }
+        let owner = try exactObject(transaction["owner"], keys: ownerKeys)
+        try requireString(
+            owner["kind"],
+            in: ["member", "shared", "unassigned", "unknown"]
+        )
+        guard owner["displayName"] is NSNull || owner["displayName"] is String else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+    }
+
+    private func validateMetadata(_ value: Any?) throws {
+        let meta = try exactObject(value, keys: metaKeys)
+        guard
+            meta["apiVersion"] as? String == "1",
+            meta["source"] as? String == "live",
+            let generatedAt = meta["generatedAt"] as? String,
+            isExactUTCInstant(generatedAt)
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        let server = try exactObject(meta["server"], keys: serverKeys)
+        guard
+            let protocolVersion = server["protocolVersion"] as? NSNumber,
+            CFGetTypeID(protocolVersion) != CFBooleanGetTypeID(),
+            protocolVersion.intValue == 1,
+            protocolVersion.doubleValue == 1
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+    }
+
+    private func requireString(_ value: Any?, in allowed: Set<String>) throws {
+        guard let value = value as? String, allowed.contains(value) else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+    }
+
+    private func isExactUTCInstant(_ value: String) -> Bool {
+        guard value.range(
+            of: #"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$"#,
+            options: .regularExpression
+        ) != nil else {
+            return false
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.formatOptions = value.contains(".")
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        guard let date = formatter.date(from: value), date.timeIntervalSince1970.isFinite else {
+            return false
+        }
+        return formatter.string(from: date) == value
+    }
+}
+
+struct MobileTransactionPayloadDecoder: Sendable {
+    func decodeList(from data: Data) throws -> MobileTransactionListEnvelope {
+        try validateSecurity(data)
+        try MobileTransactionRawShapeValidator().validateList(data)
+        let envelope = try decode(MobileTransactionListEnvelope.self, from: data)
+        guard
+            isValidMetadata(envelope.meta),
+            isValidFinancialDate(envelope.data.financialDate),
+            envelope.data.transactions.count <= 50,
+            Set(envelope.data.transactions.map(\.id)).count == envelope.data.transactions.count,
+            envelope.data.transactions.allSatisfy({ transaction in
+                isValid(transaction, maximumDate: envelope.data.financialDate, requiresOwner: false)
+            }),
+            envelope.data.page.hasMore == (envelope.data.page.nextCursor != nil),
+            envelope.data.page.nextCursor.map(isValidCursor) ?? true
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        return envelope
+    }
+
+    func decodeDetail(from data: Data) throws -> MobileTransactionDetailEnvelope {
+        try validateSecurity(data)
+        try MobileTransactionRawShapeValidator().validateDetail(data)
+        let envelope = try decode(MobileTransactionDetailEnvelope.self, from: data)
+        guard
+            isValidMetadata(envelope.meta),
+            isValid(envelope.data.transaction, maximumDate: nil, requiresOwner: true)
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        return envelope
+    }
+
+    private func validateSecurity(_ data: Data) throws {
+        do {
+            try MobilePayloadSecurityValidator().validate(data)
+        } catch MobilePayloadSecurityValidationError.invalidJSON {
+            throw MobileTransactionPayloadDecoderError.invalidJSON
+        } catch {
+            throw MobileTransactionPayloadDecoderError.redactionViolation
+        }
+    }
+
+    private func decode<T: Decodable>(_ type: T.Type, from data: Data) throws -> T {
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        do {
+            return try decoder.decode(type, from: data)
+        } catch {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+    }
+
+    private func isValidMetadata(_ meta: MobileTransactionMetadata) -> Bool {
+        meta.apiVersion == MobileTransactionMetadata.supportedAPIVersion
+            && meta.source == .live
+            && meta.server.protocolVersion == BootstrapServer.supportedProtocolVersion
+    }
+
+    private func isValid(
+        _ transaction: MobileTransaction,
+        maximumDate: String?,
+        requiresOwner: Bool
+    ) -> Bool {
+        guard
+            isValidPublicID(transaction.id, kind: "transaction"),
+            isValidFinancialDate(transaction.occurredOn),
+            maximumDate.map({ transaction.occurredOn <= $0 }) ?? true,
+            isValidDisplayText(transaction.displayName, maximum: 160),
+            isValidMoney(transaction.amount),
+            transaction.category.map({
+                isValidPublicID($0.id, kind: "category")
+                    && isValidDisplayText($0.label, maximum: 80)
+            }) ?? true,
+            isValidPublicID(transaction.account.id, kind: "account"),
+            isValidDisplayText(transaction.account.displayName, maximum: 80),
+            isValidIdentifierMask(transaction.account.identifierMask)
+        else {
+            return false
+        }
+
+        if requiresOwner {
+            guard let owner = transaction.owner else { return false }
+            return isValid(owner)
+        }
+        return transaction.owner == nil
+    }
+
+    private func isValid(_ owner: MobileTransactionOwner) -> Bool {
+        switch owner.kind {
+        case .member:
+            guard let displayName = owner.displayName else { return false }
+            return isValidDisplayText(displayName, maximum: 80)
+        case .shared, .unassigned, .unknown:
+            return owner.displayName == nil
+        }
+    }
+
+    private func isValidMoney(_ money: BootstrapMoney) -> Bool {
+        matches(#"^(?:0|[1-9]\d*)(?:\.\d{1,4})?$"#, in: money.value)
+            && Decimal(string: money.value, locale: Locale(identifier: "en_US_POSIX")) != nil
+            && matches(#"^[A-Z]{3}$"#, in: money.currencyCode)
+            && Locale.commonISOCurrencyCodes.contains(money.currencyCode)
+    }
+
+    private func isValidPublicID(_ value: String, kind: String) -> Bool {
+        matches("^\(kind)_[A-Za-z0-9_-]{22}$", in: value)
+    }
+
+    private func isValidCursor(_ value: String) -> Bool {
+        value.count <= 512 && matches(#"^cursor_v1_[A-Za-z0-9_-]+$"#, in: value)
+    }
+
+    private func isValidIdentifierMask(_ value: String) -> Bool {
+        matches(#"^(?:••••|\*{4}) [A-Za-z0-9]{2,4}$"#, in: value)
+    }
+
+    private func isValidDisplayText(_ value: String, maximum: Int) -> Bool {
+        let trimmed = value.trimmingCharacters(in: .whitespacesAndNewlines)
+        return !trimmed.isEmpty && trimmed.count <= maximum
+    }
+
+    private func isValidFinancialDate(_ value: String) -> Bool {
+        guard matches(#"^\d{4}-\d{2}-\d{2}$"#, in: value) else { return false }
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false).compactMap { Int($0) }
+        guard parts.count == 3 else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let date = calendar.date(
+            from: DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        ) else {
+            return false
+        }
+        let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
+        return roundTrip.year == parts[0]
+            && roundTrip.month == parts[1]
+            && roundTrip.day == parts[2]
+    }
+
+    private func matches(_ pattern: String, in value: String) -> Bool {
+        value.range(of: pattern, options: .regularExpression) != nil
+    }
+}
+
 /// Validates the raw JSON tree before Codable can discard unknown keys, then
 /// decodes one of the two explicit mobile bootstrap envelope shapes.
 struct BootstrapPayloadDecoder: Sendable {
@@ -29,17 +419,11 @@ struct BootstrapPayloadDecoder: Sendable {
     }
 
     private func validateRedactionBoundary(_ data: Data) throws {
-        let root: Any
         do {
-            root = try JSONSerialization.jsonObject(with: data)
+            try MobilePayloadSecurityValidator().validate(data)
+        } catch MobilePayloadSecurityValidationError.invalidJSON {
+            throw BootstrapPayloadDecoderError.invalidJSON
         } catch {
-            throw BootstrapPayloadDecoderError.invalidJSON
-        }
-
-        guard root is [String: Any] else {
-            throw BootstrapPayloadDecoderError.invalidJSON
-        }
-        guard !containsRedactionViolation(root) else {
             throw BootstrapPayloadDecoderError.redactionViolation
         }
     }
@@ -272,87 +656,6 @@ struct BootstrapPayloadDecoder: Sendable {
         let parts = calendar.dateComponents([.year, .month, .day], from: instant)
         guard let year = parts.year, let month = parts.month, let day = parts.day else { return "" }
         return String(format: "%04d-%02d-%02d", year, month, day)
-    }
-
-    private func containsRedactionViolation(_ value: Any) -> Bool {
-        if let string = value as? String {
-            return containsForbiddenString(string)
-        }
-
-        if let number = value as? NSNumber {
-            if CFGetTypeID(number) == CFBooleanGetTypeID() {
-                return false
-            }
-            let doubleValue = number.doubleValue
-            return !doubleValue.isFinite || doubleValue.rounded(.towardZero) != doubleValue
-        }
-
-        if let array = value as? [Any] {
-            return array.contains(where: containsRedactionViolation)
-        }
-
-        if let dictionary = value as? [String: Any] {
-            return dictionary.contains { key, child in
-                isForbiddenKey(key) || containsRedactionViolation(child)
-            }
-        }
-
-        return false
-    }
-
-    private func isForbiddenKey(_ key: String) -> Bool {
-        let normalized = String(
-            key.unicodeScalars.filter { scalar in
-                (48 ... 57).contains(scalar.value)
-                    || (65 ... 90).contains(scalar.value)
-                    || (97 ... 122).contains(scalar.value)
-            }
-        ).lowercased()
-
-        return [
-            "credential",
-            "token",
-            "hash",
-            "digest",
-            "rawrow",
-            "databaserow",
-            "fullaccountnumber",
-            "accountnumber",
-            "routingnumber",
-            "iban",
-            "cardpan",
-        ].contains(where: normalized.contains)
-    }
-
-    private func containsForbiddenString(_ value: String) -> Bool {
-        matches(#"(?:forbidden|secret)[_-]?sentinel"#, in: value, caseInsensitive: true)
-            || matches(#"^(?:Bearer\s+|keychain://|credential://)"#, in: value, caseInsensitive: true)
-            || matches(
-                #"^(?:sk|pk|rk|ghp|github_pat|xox[baprs]|AIza)[-_][A-Za-z0-9_-]{8,}$"#,
-                in: value,
-                caseInsensitive: true
-            )
-            || matches(
-                #"^(?:[A-Za-z0-9_-]{43}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$"#,
-                in: value
-            )
-            || matches(#"^[a-fA-F0-9]{64}$"#, in: value)
-            || containsLongFinancialIdentifier(value)
-    }
-
-    private func containsLongFinancialIdentifier(_ value: String) -> Bool {
-        guard let expression = try? NSRegularExpression(pattern: #"[\d -]{12,32}"#) else {
-            return false
-        }
-        let range = NSRange(value.startIndex ..< value.endIndex, in: value)
-
-        return expression.matches(in: value, range: range).contains { match in
-            guard let candidateRange = Range(match.range, in: value) else { return false }
-            let digitCount = value[candidateRange].unicodeScalars.count { scalar in
-                (48 ... 57).contains(scalar.value)
-            }
-            return (12 ... 19).contains(digitCount)
-        }
     }
 
     private func matches(_ pattern: String, in value: String, caseInsensitive: Bool = false) -> Bool {

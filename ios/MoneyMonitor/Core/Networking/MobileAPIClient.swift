@@ -5,6 +5,18 @@ protocol MobileAPIClient: Sendable {
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
 }
 
+protocol MobileTransactionAPIClient: Sendable {
+    func transactions(
+        query: MobileTransactionQuery,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionListEnvelope
+
+    func transactionDetail(
+        id: String,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionDetailEnvelope
+}
+
 struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
     private let transport: any MobileHTTPTransport
     private let payloadDecoder: BootstrapPayloadDecoder
@@ -105,5 +117,147 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
             )
         }
         return response
+    }
+}
+
+extension URLSessionMobileAPIClient: MobileTransactionAPIClient {
+    func transactions(
+        query: MobileTransactionQuery,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionListEnvelope {
+        guard Self.isValid(query) else { throw MobileClientError.invalidRequest }
+        let endpoint = APIEndpoint.transactions(query)
+        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobileTransactionListEnvelope
+        do {
+            envelope = try MobileTransactionPayloadDecoder().decodeList(from: response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        try validateIdentity(envelope.meta, credential: credential)
+        return envelope
+    }
+
+    func transactionDetail(
+        id: String,
+        credential: PairedMacCredential
+    ) async throws -> MobileTransactionDetailEnvelope {
+        guard Self.isValidPublicID(id, kind: "transaction") else {
+            throw MobileClientError.invalidRequest
+        }
+        let endpoint = APIEndpoint.transactionDetail(id: id)
+        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobileTransactionDetailEnvelope
+        do {
+            envelope = try MobileTransactionPayloadDecoder().decodeDetail(from: response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        try validateIdentity(envelope.meta, credential: credential)
+        guard envelope.data.transaction.id == id else {
+            throw MobileClientError.invalidPayload
+        }
+        return envelope
+    }
+
+    private func makeProtectedRequest(
+        endpoint: APIEndpoint,
+        credential: PairedMacCredential
+    ) throws -> URLRequest {
+        do {
+            return try MobileRequestFactory.makeRequest(
+                endpoint: endpoint,
+                baseURL: credential.profile.baseURL,
+                bearerToken: credential.token
+            )
+        } catch {
+            throw MobileClientError.invalidRequest
+        }
+    }
+
+    private func validateIdentity(
+        _ metadata: MobileTransactionMetadata,
+        credential: PairedMacCredential
+    ) throws {
+        guard
+            metadata.server.id == credential.profile.serverID,
+            metadata.server.protocolVersion == credential.profile.protocolVersion,
+            metadata.apiVersion == String(credential.profile.apiVersion),
+            credential.profile.capabilities.contains(BootstrapCapability.mobileRead.rawValue)
+        else {
+            throw MobileClientError.identityMismatch
+        }
+    }
+
+    private static func isValid(_ query: MobileTransactionQuery) -> Bool {
+        let canonicalQuery = MobileTransactionQuery.canonicalSearchText(query.query)
+        return query.limit >= 1
+            && query.limit <= 50
+            && query.query == canonicalQuery
+            && (canonicalQuery?.utf16.count ?? 0) <= 100
+            && (query.cursor?.count ?? 0) <= 512
+            && (query.cursor?.range(
+                of: #"^cursor_v1_[A-Za-z0-9_-]+$"#,
+                options: .regularExpression
+            ) != nil || query.cursor == nil)
+            && query.direction != .unknown
+            && query.status != .unknown
+            && query.startDate.map(isValidFinancialDate) ?? true
+            && query.endDate.map(isValidFinancialDate) ?? true
+            && Self.isOrdered(query.startDate, query.endDate)
+            && query.accountID.map({ isValidPublicID($0, kind: "account") }) ?? true
+    }
+
+    private static func isOrdered(_ start: String?, _ end: String?) -> Bool {
+        guard let start, let end else { return true }
+        return start <= end
+    }
+
+    private static func isValidFinancialDate(_ value: String) -> Bool {
+        guard value.range(
+            of: #"^\d{4}-\d{2}-\d{2}$"#,
+            options: .regularExpression
+        ) != nil else {
+            return false
+        }
+        let parts = value.split(separator: "-", omittingEmptySubsequences: false)
+            .compactMap { Int($0) }
+        guard parts.count == 3 else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let date = calendar.date(
+            from: DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        ) else {
+            return false
+        }
+        let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
+        return roundTrip.year == parts[0]
+            && roundTrip.month == parts[1]
+            && roundTrip.day == parts[2]
+    }
+
+    private static func isValidPublicID(_ value: String, kind: String) -> Bool {
+        value.range(
+            of: "^\(kind)_[A-Za-z0-9_-]{22}$",
+            options: .regularExpression
+        ) != nil
+    }
+}
+
+struct UnavailableMobileTransactionAPIClient: MobileTransactionAPIClient {
+    func transactions(
+        query _: MobileTransactionQuery,
+        credential _: PairedMacCredential
+    ) async throws -> MobileTransactionListEnvelope {
+        throw MobileClientError.invalidRequest
+    }
+
+    func transactionDetail(
+        id _: String,
+        credential _: PairedMacCredential
+    ) async throws -> MobileTransactionDetailEnvelope {
+        throw MobileClientError.invalidRequest
     }
 }

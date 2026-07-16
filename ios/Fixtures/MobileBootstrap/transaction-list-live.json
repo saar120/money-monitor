@@ -1,0 +1,42 @@
+{
+  "data": {
+    "financialDate": "2026-07-16",
+    "transactions": [
+      {
+        "id": "transaction_TTTTTTTTTTTTTTTTTTTTTT",
+        "occurredOn": "2026-07-15",
+        "displayName": "קפה Central",
+        "amount": {
+          "value": "42.50",
+          "currencyCode": "ILS"
+        },
+        "direction": "debit",
+        "status": "posted",
+        "category": {
+          "id": "category_CCCCCCCCCCCCCCCCCCCCCC",
+          "label": "Dining"
+        },
+        "account": {
+          "id": "account_AAAAAAAAAAAAAAAAAAAAAA",
+          "displayName": "Main Card",
+          "identifierMask": "•••• 4242"
+        },
+        "needsReview": true,
+        "excludedFromReports": false
+      }
+    ],
+    "page": {
+      "hasMore": false,
+      "nextCursor": null
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-16T10:00:00.000Z",
+    "source": "live",
+    "server": {
+      "id": "11111111-1111-4111-8111-111111111111",
+      "protocolVersion": 1
+    }
+  }
+}

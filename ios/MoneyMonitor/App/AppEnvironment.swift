@@ -9,16 +9,21 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var bootstrapRefreshState: BootstrapRefreshState = .idle
 
     private let apiClient: any MobileAPIClient
+    private let transactionClient: any MobileTransactionAPIClient
     private let pairingClient: any MobilePairingClient
     private let profileStore: any PairedProfileStore
     private let clock: @Sendable () -> Date
     private let sleep: @Sendable (TimeInterval) async throws -> Void
     private var activeOperationID: UUID?
     private var activeRefreshOperationID: UUID?
+    private var featureRevocationCleanupInProgress = false
+    private var mobileReadEpoch = 0
 
     init() {
         let store = KeychainPairedProfileStore()
-        apiClient = URLSessionMobileAPIClient()
+        let client = URLSessionMobileAPIClient()
+        apiClient = client
+        transactionClient = client
         pairingClient = URLSessionMobilePairingClient(profileStore: store)
         profileStore = store
         clock = { Date() }
@@ -30,6 +35,8 @@ final class AppEnvironment: ObservableObject {
     init(apiClient: any MobileAPIClient) {
         let store = KeychainPairedProfileStore()
         self.apiClient = apiClient
+        transactionClient = (apiClient as? any MobileTransactionAPIClient)
+            ?? UnavailableMobileTransactionAPIClient()
         pairingClient = URLSessionMobilePairingClient(profileStore: store)
         profileStore = store
         clock = { Date() }
@@ -40,6 +47,7 @@ final class AppEnvironment: ObservableObject {
 
     init(
         apiClient: any MobileAPIClient,
+        transactionClient: (any MobileTransactionAPIClient)? = nil,
         pairingClient: any MobilePairingClient,
         profileStore: any PairedProfileStore,
         clock: @escaping @Sendable () -> Date = { Date() },
@@ -48,6 +56,9 @@ final class AppEnvironment: ObservableObject {
         }
     ) {
         self.apiClient = apiClient
+        self.transactionClient = transactionClient
+            ?? (apiClient as? any MobileTransactionAPIClient)
+            ?? UnavailableMobileTransactionAPIClient()
         self.pairingClient = pairingClient
         self.profileStore = profileStore
         self.clock = clock
@@ -56,6 +67,7 @@ final class AppEnvironment: ObservableObject {
 
     func connect(to rawAddress: String) async {
         guard !isRefreshRevocationCleanupInProgress else { return }
+        advanceMobileReadEpoch()
         activeOperationID = nil
         invalidateBootstrapRefresh()
         pairingState = .idle
@@ -241,8 +253,45 @@ final class AppEnvironment: ObservableObject {
         }
     }
 
+    func transactions(
+        query: MobileTransactionQuery
+    ) async throws -> MobileTransactionListEnvelope {
+        let session = try await mobileReadSession()
+        do {
+            let envelope = try await transactionClient.transactions(
+                query: query,
+                credential: session.credential
+            )
+            try ensureCurrentMobileReadEpoch(session.epoch)
+            return envelope
+        } catch {
+            if Self.isAuthoritativeRevocation(error) {
+                try await finishFeatureReadAsRevoked(expectedEpoch: session.epoch)
+            }
+            throw error
+        }
+    }
+
+    func transactionDetail(id: String) async throws -> MobileTransactionDetailEnvelope {
+        let session = try await mobileReadSession()
+        do {
+            let envelope = try await transactionClient.transactionDetail(
+                id: id,
+                credential: session.credential
+            )
+            try ensureCurrentMobileReadEpoch(session.epoch)
+            return envelope
+        } catch {
+            if Self.isAuthoritativeRevocation(error) {
+                try await finishFeatureReadAsRevoked(expectedEpoch: session.epoch)
+            }
+            throw error
+        }
+    }
+
     func cancelPairing() {
         guard pairingState.isCancellable else { return }
+        advanceMobileReadEpoch()
         activeOperationID = nil
         invalidateBootstrapRefresh()
         pairingState = .idle
@@ -269,6 +318,7 @@ final class AppEnvironment: ObservableObject {
 
     private func beginOperation(state: PairingFlowState) -> UUID {
         let operationID = UUID()
+        advanceMobileReadEpoch()
         invalidateBootstrapRefresh()
         activeOperationID = operationID
         pairingState = state
@@ -298,7 +348,69 @@ final class AppEnvironment: ObservableObject {
     }
 
     private var isRefreshRevocationCleanupInProgress: Bool {
-        activeRefreshOperationID != nil && pairingState == .disconnecting
+        featureRevocationCleanupInProgress
+            || (activeRefreshOperationID != nil && pairingState == .disconnecting)
+    }
+
+    private func mobileReadSession() async throws -> (
+        credential: PairedMacCredential,
+        epoch: Int
+    ) {
+        let epoch = mobileReadEpoch
+        guard
+            !isRefreshRevocationCleanupInProgress,
+            activeOperationID == nil,
+            case .connected = connectionState
+        else {
+            throw MobileClientError.invalidRequest
+        }
+        guard let credential = try await profileStore.load() else {
+            throw MobileClientError.authentication(.required)
+        }
+        try ensureCurrentMobileReadEpoch(epoch)
+        return (credential, epoch)
+    }
+
+    private func ensureCurrentMobileReadEpoch(_ epoch: Int) throws {
+        try Task.checkCancellation()
+        guard epoch == mobileReadEpoch, case .connected = connectionState else {
+            throw CancellationError()
+        }
+    }
+
+    private func advanceMobileReadEpoch() {
+        mobileReadEpoch &+= 1
+    }
+
+    private func finishFeatureReadAsRevoked(expectedEpoch: Int) async throws {
+        guard
+            expectedEpoch == mobileReadEpoch,
+            !isRefreshRevocationCleanupInProgress,
+            activeOperationID == nil,
+            case .connected = connectionState
+        else {
+            throw CancellationError()
+        }
+        featureRevocationCleanupInProgress = true
+        advanceMobileReadEpoch()
+        activeOperationID = nil
+        invalidateBootstrapRefresh()
+        serverURL = nil
+        latestBootstrap = nil
+        pairingState = .disconnecting
+        connectionState = .connecting
+
+        do {
+            try await profileStore.delete()
+            pairingState = .failed(.savedAccessRevoked)
+            connectionState = .notConfigured
+            bootstrapRefreshState = .failed(.accessRevoked)
+        } catch {
+            pairingState = .failed(.secureStorageUnavailable)
+            connectionState = .failed(message: PairingFlowFailure.secureStorageUnavailable.message)
+            bootstrapRefreshState = .failed(.secureStorageUnavailable)
+        }
+        featureRevocationCleanupInProgress = false
     }
 
     private func finishRefreshConnected(
@@ -317,6 +429,7 @@ final class AppEnvironment: ObservableObject {
     private func finishRefreshAsNotConfigured(operationID: UUID) {
         guard activeRefreshOperationID == operationID else { return }
         activeRefreshOperationID = nil
+        advanceMobileReadEpoch()
         serverURL = nil
         latestBootstrap = nil
         pairingState = .idle
@@ -329,6 +442,7 @@ final class AppEnvironment: ObservableObject {
 
         // Clear financial memory immediately, but keep setup blocked until the
         // revoked credential has actually been removed from Keychain.
+        advanceMobileReadEpoch()
         serverURL = nil
         latestBootstrap = nil
         pairingState = .disconnecting
@@ -430,7 +544,7 @@ final class AppEnvironment: ObservableObject {
             return .unavailable
         case .upgradeRequired:
             return .incompatible
-        case .invalidRequest, .invalidResponse, .invalidPayload, .identityMismatch,
+        case .invalidRequest, .invalidResponse, .invalidPayload, .identityMismatch, .notFound,
              .authentication, .authorization, .pairing, .credentialStorageFailed:
             return .invalidResponse
         }
@@ -474,7 +588,7 @@ final class AppEnvironment: ObservableObject {
             return .identityMismatch
         case .credentialStorageFailed:
             return .secureStorageUnavailable
-        case .invalidResponse, .invalidPayload, .authentication, .authorization,
+        case .invalidResponse, .invalidPayload, .notFound, .authentication, .authorization,
              .pairing(.approvalRequired), .pairing(.exchangeInProgress), .rateLimited,
              .server:
             return .unexpectedResponse
