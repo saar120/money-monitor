@@ -4,6 +4,7 @@ import UIKit
 struct HomeView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var isRePairScannerPresented = false
+    @State private var isDisconnectConfirmationPresented = false
 
     private let scannerFactory: PairingScannerViewFactory
     private let deviceName: () -> String
@@ -54,9 +55,7 @@ struct HomeView: View {
                     .accessibilityIdentifier("repair-mac-connection")
 
                     Button("Disconnect", role: .destructive) {
-                        Task {
-                            await environment.disconnect()
-                        }
+                        isDisconnectConfirmationPresented = true
                     }
                 } label: {
                     Label("Profile and settings", systemImage: "person.crop.circle")
@@ -70,6 +69,20 @@ struct HomeView: View {
                     onCancel: { isRePairScannerPresented = false }
                 )
             }
+        }
+        .confirmationDialog(
+            "Disconnect this iPhone?",
+            isPresented: $isDisconnectConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            Button("Disconnect and remove saved data", role: .destructive) {
+                Task {
+                    await environment.disconnect()
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This removes this iPhone’s saved Mac connection and encrypted financial snapshot. You can pair again later from your Mac.")
         }
     }
 
