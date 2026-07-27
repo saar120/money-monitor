@@ -35,6 +35,15 @@ struct HomeView: View {
         .navigationTitle("Home")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
+                Button {
+                    Task { await refreshHome() }
+                } label: {
+                    Label("Refresh Home data", systemImage: "arrow.clockwise")
+                }
+                .disabled(environment.bootstrapRefreshState == .refreshing)
+                .accessibilityIdentifier("refresh-home-data")
+            }
+            ToolbarItem(placement: .topBarTrailing) {
                 Menu {
                     Button {
                         isRePairScannerPresented = true
@@ -114,9 +123,22 @@ struct HomeView: View {
             .padding(.horizontal, MoneyMonitorTheme.Spacing.large)
             .padding(.vertical, MoneyMonitorTheme.Spacing.standard)
         }
+        // A short Home snapshot can otherwise have no vertical overscroll area,
+        // preventing SwiftUI from recognizing the pull-to-refresh gesture.
+        .scrollBounceBehavior(.always, axes: .vertical)
         .refreshable {
+            await refreshHome()
+        }
+    }
+
+    /// Keeps a pull gesture from cancelling the live refresh before the Mac's
+    /// response can replace Home's accepted bootstrap snapshot. The toolbar
+    /// button and SwiftUI's refresh control intentionally share this launcher.
+    private func refreshHome() async {
+        let refresh = Task { @MainActor in
             await environment.refreshBootstrap()
         }
+        await refresh.value
     }
 
     private func sourceContext(_ presentation: HomePresentation) -> some View {

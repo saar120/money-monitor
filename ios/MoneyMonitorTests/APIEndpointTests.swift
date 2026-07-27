@@ -30,6 +30,8 @@ struct APIEndpointTests {
                 .transactionDetail(id: "transaction_\(String(repeating: "T", count: 22))"),
                 "/money-monitor/api/mobile/v1/transactions/transaction_\(String(repeating: "T", count: 22))"
             ),
+            (.reviewResolve, "/money-monitor/api/mobile/v1/reviews/resolve"),
+            (.reviewSkip, "/money-monitor/api/mobile/v1/reviews/skip"),
         ]
 
         for (endpoint, expectedPath) in expectedPaths {
@@ -49,6 +51,10 @@ struct APIEndpointTests {
                 id: "transaction_\(String(repeating: "T", count: 22))"
             ).authorizationPolicy == .deviceBearer
         )
+        #expect(APIEndpoint.reviewResolve.authorizationPolicy == .deviceBearer)
+        #expect(APIEndpoint.reviewResolve.httpMethod == "POST")
+        #expect(APIEndpoint.reviewSkip.authorizationPolicy == .deviceBearer)
+        #expect(APIEndpoint.reviewSkip.httpMethod == "POST")
         #expect(APIEndpoint.health.authorizationPolicy == .none)
         #expect(APIEndpoint.pairingStart.authorizationPolicy == .none)
         #expect(APIEndpoint.pairingStatus.authorizationPolicy == .none)

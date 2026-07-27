@@ -2,6 +2,7 @@ import SwiftUI
 
 struct RootView: View {
     @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.scenePhase) private var scenePhase
     private let scannerFactory: PairingScannerViewFactory
 
     init(scannerFactory: PairingScannerViewFactory = .integrationPending) {
@@ -10,12 +11,23 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            ScenePrivacyProtectionContainer {
-                appContent
+            if environment.isFinancialContentLocked, scenePhase == .active {
+                // The active lock screen replaces the privacy cover. Stacking
+                // both views makes the cover's branding overlap the unlock UI.
+                FinancialContentLockView()
+            } else {
+                ScenePrivacyProtectionContainer(
+                    isContentAuthorized: !environment.isFinancialContentLocked
+                ) {
+                    appContent
+                }
             }
         }
         .task {
             await environment.restoreSavedConnection()
+        }
+        .onChange(of: scenePhase) { _, newPhase in
+            environment.scenePhaseChanged(isActive: newPhase == .active)
         }
     }
 
@@ -33,6 +45,39 @@ struct RootView: View {
                 }
             }
         }
+    }
+}
+
+private struct FinancialContentLockView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+
+    var body: some View {
+        VStack(spacing: MoneyMonitorTheme.Spacing.large) {
+            Image(systemName: "lock.fill")
+                .font(.system(size: 34, weight: .medium))
+                .foregroundStyle(MoneyMonitorTheme.tint)
+                .accessibilityHidden(true)
+
+            Text("Money Monitor is locked")
+                .font(.headline)
+
+            Text("Unlock with your device passcode or biometrics to view saved financial data.")
+                .font(.subheadline)
+                .foregroundStyle(.secondary)
+                .multilineTextAlignment(.center)
+
+            Button("Unlock Money Monitor") {
+                Task { await environment.unlockFinancialContent() }
+            }
+            .buttonStyle(.borderedProminent)
+            .disabled(environment.financialContentLockState == .authenticating)
+            .accessibilityIdentifier("unlock-financial-content")
+        }
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .frame(maxWidth: 420, maxHeight: .infinity)
+        .frame(maxWidth: .infinity, maxHeight: .infinity)
+        .background(MoneyMonitorTheme.canvas.ignoresSafeArea())
+        .accessibilityElement(children: .contain)
     }
 }
 

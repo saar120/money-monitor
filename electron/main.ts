@@ -30,6 +30,29 @@ import {
 import { MobileAccessRuntime } from './mobile-access/mobile-access-runtime.js';
 import { FileServeOwnershipStore } from './mobile-access/serve-ownership-store.js';
 import { resolveTailscaleExecutable } from './mobile-access/tailscale-executable.js';
+
+/**
+ * A desktop app can outlive the terminal or task runner that launched it.
+ * Node reports the resulting closed stdout/stderr pipe asynchronously, so
+ * console calls otherwise surface as an uncaught EPIPE and terminate Electron.
+ */
+function installBrokenPipeGuards(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EPIPE') return;
+      // A listener is required to keep an asynchronous stream error from
+      // terminating the process. Do not write another diagnostic here: the
+      // destination may be the same failed stream.
+    });
+  }
+}
+
+function logMobileAccess(event: string, status: string, diagnostic: string): void {
+  if (process.stdout.destroyed || !process.stdout.writable) return;
+  console.info(`[MobileAccess] ${event} ${status} ${diagnostic}`);
+}
+
+installBrokenPipeGuards();
 import { TailscaleServeCoordinator } from './mobile-access/tailscale-serve-coordinator.js';
 import { startDesktopServer } from './security/desktop-server-bind-policy.js';
 import { isTrustedRendererURL, safeExternalURL } from './security/trusted-renderer.js';
@@ -263,6 +286,14 @@ function registerMobileAccessIpc(): void {
     }
     return mobileAccessControl.revoke(deviceId);
   });
+
+  ipcMain.handle('mobile-access:set-review-access', (event, deviceId: unknown, enabled: unknown) => {
+    assertTrustedRenderer(event);
+    if (!mobileAccessControl || typeof deviceId !== 'string' || typeof enabled !== 'boolean') {
+      return unavailableMobileAccessSnapshot('invalid_request');
+    }
+    return mobileAccessControl.setReviewAccess(deviceId, enabled);
+  });
 }
 
 registerMobileAccessIpc();
@@ -278,6 +309,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
     const connection = await import('../dist/db/connection.js');
     const { db } = connection;
     const { getNetWorth } = await import('../dist/services/net-worth.js');
+    const { resolveReview } = await import('../dist/services/transactions.js');
     const { createProductionMobileAccess } =
       await import('../dist/mobile/production-mobile-access.js');
     const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
@@ -296,6 +328,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
         minimumClientVersion: '0.1.0',
       },
       readNetWorthIls: async () => (await getNetWorth()).total,
+      resolveReview,
       // The bootstrap ports intentionally retain the real database used for
       // device credentials. While the desktop swaps to its demo database,
       // fail the entire mobile snapshot closed instead of mixing sources.
@@ -318,6 +351,9 @@ async function startMobileAccessIfEnabled(): Promise<void> {
             bootstrap: production.bootstrapDependencies,
             pairing: production.pairingDependencies,
             transactions: production.transactionDependencies,
+            planning: production.planningDependencies,
+            netWorthHistory: production.netWorthHistoryDependencies,
+            reviewCommands: production.reviewCommandDependencies,
           });
           try {
             const port = await server.start({ host });
@@ -333,7 +369,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
         log({ event, status, diagnostic }) {
           // These are fixed enums. Do not add command output, target URLs,
           // tokens, pairing payloads, or exception text to this log entry.
-          console.info(`[MobileAccess] ${event} ${status} ${diagnostic}`);
+          logMobileAccess(event, status, diagnostic);
         },
       },
     });

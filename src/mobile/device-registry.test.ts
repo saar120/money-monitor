@@ -3,7 +3,11 @@ import { afterEach, beforeEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import * as schema from '../db/schema.js';
 import {
+  MOBILE_CAPABILITIES,
+  MOBILE_BUDGET_WRITE_CAPABILITY,
   MOBILE_READ_CAPABILITY,
+  MOBILE_REVIEW_WRITE_CAPABILITY,
+  MOBILE_SYNC_START_CAPABILITY,
   MobileDeviceRegistry,
   digestMobileToken,
 } from './device-registry.js';
@@ -61,6 +65,59 @@ describe('MobileDeviceRegistry', () => {
     expect(testDb.db.select().from(schema.mobileDevices).get()?.lastUsedAt).toBe(NOW.toISOString());
   });
 
+  it('issues only the explicit Phase 4 capability allowlist', () => {
+    const credential = registry.issue({
+      name: 'Command-capable iPhone',
+      capabilities: [MOBILE_SYNC_START_CAPABILITY, MOBILE_REVIEW_WRITE_CAPABILITY],
+    });
+
+    expect(credential.device.capabilities).toEqual([
+      MOBILE_REVIEW_WRITE_CAPABILITY,
+      MOBILE_SYNC_START_CAPABILITY,
+    ]);
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_REVIEW_WRITE_CAPABILITY).status).toBe(
+      'authenticated',
+    );
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_SYNC_START_CAPABILITY).status).toBe(
+      'authenticated',
+    );
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_READ_CAPABILITY)).toEqual({
+      status: 'capability_required',
+      deviceId: 'device-1',
+    });
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_BUDGET_WRITE_CAPABILITY)).toEqual({
+      status: 'capability_required',
+      deviceId: 'device-1',
+    });
+  });
+
+  it('allows every declared mobile capability to be issued and authorized', () => {
+    const credential = registry.issue({
+      name: 'Fully capable iPhone',
+      capabilities: MOBILE_CAPABILITIES,
+    });
+
+    expect(credential.device.capabilities).toEqual([...MOBILE_CAPABILITIES].sort());
+    for (const capability of MOBILE_CAPABILITIES) {
+      expect(registry.authenticate(TOKEN_ONE, capability).status).toBe('authenticated');
+    }
+  });
+
+  it('rejects unclassified capabilities at issuance and authentication', () => {
+    expect(() =>
+      registry.issue({
+        name: 'Unexpected capability',
+        capabilities: ['mobile.write' as never],
+      }),
+    ).toThrow('Only explicitly supported mobile capabilities');
+
+    registry.issue({ name: 'iPhone' });
+    expect(registry.authenticate(TOKEN_ONE, 'mobile.unclassified')).toEqual({
+      status: 'capability_required',
+      deviceId: 'device-1',
+    });
+  });
+
   it('authenticates the persisted credential through a fresh registry instance', () => {
     registry.issue({ name: 'iPhone' });
     const restartedRegistry = new MobileDeviceRegistry(testDb.db, { clock: () => NOW });
@@ -87,6 +144,27 @@ describe('MobileDeviceRegistry', () => {
       deviceId: device.id,
     });
     expect(registry.list()[0].revokedAt).toBe(NOW.toISOString());
+  });
+
+  it('changes review access only for an active paired device', () => {
+    const issued = registry.issue({ name: 'iPhone' });
+
+    expect(registry.setReviewAccess(issued.device.id, true)).toMatchObject({
+      capabilities: [MOBILE_READ_CAPABILITY, MOBILE_REVIEW_WRITE_CAPABILITY],
+    });
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_REVIEW_WRITE_CAPABILITY).status).toBe(
+      'authenticated',
+    );
+    expect(registry.setReviewAccess(issued.device.id, false)).toMatchObject({
+      capabilities: [MOBILE_READ_CAPABILITY],
+    });
+    expect(registry.authenticate(TOKEN_ONE, MOBILE_REVIEW_WRITE_CAPABILITY)).toEqual({
+      status: 'capability_required',
+      deviceId: issued.device.id,
+    });
+
+    registry.revoke(issued.device.id);
+    expect(registry.setReviewAccess(issued.device.id, true)).toBeNull();
   });
 
   it('rotates a token and invalidates the previous credential', () => {

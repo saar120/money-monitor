@@ -100,6 +100,15 @@ class FakeRegistry implements MobileAccessDeviceRegistry {
     device.revokedAt = '2026-07-15T13:00:00.000Z';
     return true;
   }
+
+  setReviewAccess(deviceId: string, enabled: boolean): MobileAccessRegistryDevice | null {
+    const device = this.devices.find((candidate) => candidate.id === deviceId);
+    if (!device || device.revokedAt) return null;
+    device.capabilities = enabled
+      ? ['mobile.read', 'mobile.review.write']
+      : ['mobile.read'];
+    return { ...device };
+  }
 }
 
 function harness() {
@@ -277,6 +286,23 @@ describe('MobileAccessControl', () => {
         revokedAt: '2026-07-15T13:00:00.000Z',
       }),
     ]);
+  });
+
+  it('changes review access through the trusted Mac control surface only', async () => {
+    const context = harness();
+    context.registry.devices = [{
+      id: 'device-1', name: 'Saar iPhone', capabilities: ['mobile.read'], protocolVersion: 1,
+      tokenVersion: 1, createdAt: '2026-07-15T12:00:00.000Z', lastUsedAt: null,
+      expiresAt: null, revokedAt: null,
+    }];
+
+    expect(context.control.setReviewAccess('device-1', true).devices[0]?.capabilities).toEqual([
+      'mobile.read',
+      'mobile.review.write',
+    ]);
+    expect(context.control.setReviewAccess('../unsafe', true).lastActionError).toBe(
+      'device_operation_failed',
+    );
   });
 
   it('creates a trusted active-device re-pair without exposing the replacement binding', async () => {

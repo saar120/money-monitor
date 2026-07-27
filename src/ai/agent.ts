@@ -17,35 +17,7 @@ import {
 import type { CategoryWithRules } from './prompts.js';
 import { parseMeta } from '../shared/types.js';
 import type { Transaction } from '../shared/types.js';
-import {
-  buildQueryTransactionsTool,
-  buildGetSpendingSummaryTool,
-  buildGetAccountBalancesTool,
-  buildComparePeriodsTool,
-  buildGetSpendingTrendsTool,
-  buildDetectRecurringTransactionsTool,
-  buildGetTopMerchantsTool,
-  buildCategorizeTransactionTool,
-  buildSaveMemoryTool,
-  buildUpdateMemoryTool,
-  buildAddCategoryTool,
-  buildGetCategoryRulesTool,
-  buildUpdateCategoryRulesTool,
-  buildGetLatestScrapeTransactionsTool,
-} from './tools.js';
-import {
-  buildGetNetWorthTool,
-  buildGetAssetDetailsTool,
-  buildGetLiabilitiesTool,
-  buildGetNetWorthHistoryTool,
-  buildManageAssetTool,
-  buildManageHoldingTool,
-  buildRecordMovementTool,
-  buildManageLiabilityTool,
-} from './asset-tools.js';
-import { buildGetBudgetProgressTool, buildManageBudgetTool } from './budget-tools.js';
-import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
-import { buildGenerateTableImageTool } from './image-tools.js';
+import { buildDesktopAdvisorTools } from './mobile-advisor-tool-registry.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
 
 // Load OAuth credentials at module init
@@ -210,35 +182,7 @@ export async function* chat(
     return;
   }
 
-  const tools = [
-    buildQueryTransactionsTool(),
-    buildGetSpendingSummaryTool(),
-    buildGetAccountBalancesTool(),
-    buildComparePeriodsTool(),
-    buildGetSpendingTrendsTool(),
-    buildDetectRecurringTransactionsTool(),
-    buildGetTopMerchantsTool(),
-    buildCategorizeTransactionTool(categoryNames),
-    buildAddCategoryTool(),
-    buildGetCategoryRulesTool(),
-    buildUpdateCategoryRulesTool(),
-    buildSaveMemoryTool(),
-    buildUpdateMemoryTool(),
-    buildGetNetWorthTool(),
-    buildGetAssetDetailsTool(),
-    buildGetLiabilitiesTool(),
-    buildGetNetWorthHistoryTool(),
-    buildManageAssetTool(),
-    buildManageHoldingTool(),
-    buildRecordMovementTool(),
-    buildManageLiabilityTool(),
-    buildGetBudgetProgressTool(),
-    buildManageBudgetTool(),
-    buildGetAlertSettingsTool(),
-    buildUpdateAlertSettingsTool(),
-    buildGetLatestScrapeTransactionsTool(),
-    buildGenerateTableImageTool(),
-  ];
+  const tools = buildDesktopAdvisorTools(categoryNames);
 
   const agent = new Agent({
     initialState: {

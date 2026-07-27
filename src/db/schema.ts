@@ -315,3 +315,37 @@ export const mobileDevices = sqliteTable(
     index('idx_mobile_devices_revoked_at').on(table.revokedAt),
   ],
 );
+
+/**
+ * Durable, redacted receipts for mobile mutations. Payload values intentionally
+ * never enter this table; a replay returns the stable outcome by key.
+ */
+export const mobileCommandReceipts = sqliteTable(
+  'mobile_command_receipts',
+  {
+    idempotencyKey: text('idempotency_key').primaryKey(),
+    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    commandType: text('command_type').notNull(),
+    targetReference: text('target_reference').notNull(),
+    requestFingerprint: text('request_fingerprint').notNull(),
+    outcome: text('outcome').notNull(),
+    resultNeedsReview: integer('result_needs_review', { mode: 'boolean' }).notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [index('idx_mobile_command_receipts_device').on(table.deviceId)],
+);
+
+/** Metadata-only audit trail for accepted, conflicted, or rejected commands. */
+export const mobileCommandAuditEvents = sqliteTable(
+  'mobile_command_audit_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    commandType: text('command_type').notNull(),
+    targetReference: text('target_reference').notNull(),
+    requestId: text('request_id').notNull(),
+    outcome: text('outcome').notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [index('idx_mobile_command_audit_events_device').on(table.deviceId)],
+);

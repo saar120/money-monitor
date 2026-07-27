@@ -72,8 +72,10 @@ enum MobileRequestFactory {
 private extension APIEndpoint {
     var isFinancialRead: Bool {
         switch self {
-        case .bootstrap, .transactions, .transactionDetail:
+        case .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory:
             true
+        case .reviewResolve, .reviewSkip:
+            false
         case .health, .pairingStart, .pairingStatus, .pairingExchange:
             false
         }

@@ -8,6 +8,10 @@ enum APIEndpoint: Equatable {
     case bootstrap
     case transactions(MobileTransactionQuery)
     case transactionDetail(id: String)
+    case planning
+    case netWorthHistory(range: MobileNetWorthHistoryRange)
+    case reviewResolve
+    case reviewSkip
 
     enum AuthorizationPolicy: Equatable {
         case none
@@ -30,21 +34,29 @@ enum APIEndpoint: Equatable {
             "api/mobile/v1/transactions"
         case let .transactionDetail(id):
             "api/mobile/v1/transactions/\(id)"
+        case .planning:
+            "api/mobile/v1/planning"
+        case .netWorthHistory:
+            "api/mobile/v1/net-worth/history"
+        case .reviewResolve:
+            "api/mobile/v1/reviews/resolve"
+        case .reviewSkip:
+            "api/mobile/v1/reviews/skip"
         }
     }
 
     var httpMethod: String {
         switch self {
-        case .health, .bootstrap, .transactions, .transactionDetail:
+        case .health, .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory:
             "GET"
-        case .pairingStart, .pairingStatus, .pairingExchange:
+        case .pairingStart, .pairingStatus, .pairingExchange, .reviewResolve, .reviewSkip:
             "POST"
         }
     }
 
     var authorizationPolicy: AuthorizationPolicy {
         switch self {
-        case .bootstrap, .transactions, .transactionDetail:
+        case .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory, .reviewResolve, .reviewSkip:
             .deviceBearer
         case .health, .pairingStart, .pairingStatus, .pairingExchange:
             .none
@@ -55,7 +67,12 @@ enum APIEndpoint: Equatable {
         let endpointURL = path.split(separator: "/").reduce(baseURL) { url, component in
             url.appendingPathComponent(String(component))
         }
-        guard case let .transactions(query) = self else { return endpointURL }
+        guard case let .transactions(query) = self else {
+            guard case let .netWorthHistory(range) = self else { return endpointURL }
+            var components = URLComponents(url: endpointURL, resolvingAgainstBaseURL: false)
+            components?.queryItems = [URLQueryItem(name: "range", value: range.rawValue)]
+            return components?.url ?? endpointURL
+        }
 
         var components = URLComponents(url: endpointURL, resolvingAgainstBaseURL: false)
         components?.queryItems = query.queryItems

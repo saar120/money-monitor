@@ -839,4 +839,96 @@ struct MobileAPIClientTests {
                 )
         }
     }
+
+    @Test
+    func reviewResolutionUsesTheExactLiveOnlyCommandContract() async throws {
+        let transactionID = mobileTransactionID
+        let payload = Data(
+            """
+            {"data":{"outcome":"confirmed","transactionId":"\(transactionID)","needsReview":false},"meta":{"apiVersion":"1","generatedAt":"2026-07-18T12:00:00.000Z","source":"live","server":{"id":"11111111-1111-4111-8111-111111111111","protocolVersion":1}}}
+            """.utf8
+        )
+        let transport = StubMobileHTTPTransport(
+            responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
+        )
+        let command = MobileReviewResolveCommand(
+            idempotencyKey: "review-command-key-123456",
+            transactionID: transactionID,
+            categoryID: mobileCategoryID
+        )
+
+        let envelope = try await URLSessionMobileAPIClient(transport: transport).resolveReview(
+            command: command,
+            credential: makeMobileAPICredential()
+        )
+        let request = try #require(await transport.requests().first)
+        let body = try #require(request.body)
+        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        #expect(envelope.data.outcome == .confirmed)
+        #expect(envelope.data.needsReview == false)
+        #expect(request.method == "POST")
+        #expect(request.url?.path.hasSuffix("/api/mobile/v1/reviews/resolve") == true)
+        #expect(request.authorization == "Bearer \(String(repeating: "T", count: 43))")
+        #expect(Set(object.keys) == ["idempotencyKey", "transactionId", "categoryId", "expectedNeedsReview"])
+        #expect(object["transactionId"] as? String == transactionID)
+        #expect(object["categoryId"] as? String == mobileCategoryID)
+        #expect(object["expectedNeedsReview"] as? Bool == true)
+    }
+
+    @Test
+    func reviewResolutionRejectsAnUnexpectedResponseField() async throws {
+        let payload = Data(
+            """
+            {"data":{"outcome":"confirmed","transactionId":"\(mobileTransactionID)","needsReview":false,"rawRow":"must-not-cross"},"meta":{"apiVersion":"1","generatedAt":"2026-07-18T12:00:00.000Z","source":"live","server":{"id":"11111111-1111-4111-8111-111111111111","protocolVersion":1}}}
+            """.utf8
+        )
+        let transport = StubMobileHTTPTransport(
+            responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
+        )
+        let command = MobileReviewResolveCommand(
+            idempotencyKey: "review-command-key-123456",
+            transactionID: mobileTransactionID,
+            categoryID: mobileCategoryID
+        )
+
+        await #expect(throws: MobileClientError.invalidPayload) {
+            try await URLSessionMobileAPIClient(transport: transport).resolveReview(
+                command: command,
+                credential: makeMobileAPICredential()
+            )
+        }
+    }
+
+    @Test
+    func reviewSkipUsesTheExactLiveOnlyCommandContract() async throws {
+        let transactionID = mobileTransactionID
+        let payload = Data(
+            """
+            {"data":{"outcome":"confirmed","transactionId":"\(transactionID)","needsReview":false},"meta":{"apiVersion":"1","generatedAt":"2026-07-18T12:00:00.000Z","source":"live","server":{"id":"11111111-1111-4111-8111-111111111111","protocolVersion":1}}}
+            """.utf8
+        )
+        let transport = StubMobileHTTPTransport(
+            responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
+        )
+        let command = MobileReviewSkipCommand(
+            idempotencyKey: "review-skip-key-123456789",
+            transactionID: transactionID
+        )
+
+        let envelope = try await URLSessionMobileAPIClient(transport: transport).skipReview(
+            command: command,
+            credential: makeMobileAPICredential()
+        )
+        let request = try #require(await transport.requests().first)
+        let body = try #require(request.body)
+        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        #expect(envelope.data.outcome == .confirmed)
+        #expect(request.method == "POST")
+        #expect(request.url?.path.hasSuffix("/api/mobile/v1/reviews/skip") == true)
+        #expect(Set(object.keys) == ["idempotencyKey", "transactionId", "expectedNeedsReview"])
+        #expect(object["transactionId"] as? String == transactionID)
+        #expect(object["expectedNeedsReview"] as? Bool == true)
+    }
 }

@@ -24,6 +24,12 @@ import {
 import type { MobileBootstrapRouteDependencies } from './mobile-server.js';
 import { createProductionMobileTransactionPorts } from './transaction-production-ports.js';
 import type { MobileTransactionRouteDependencies } from './transaction-routes.js';
+import { createProductionMobilePlanningPorts } from './planning-production-ports.js';
+import type { MobilePlanningRouteDependencies } from './planning-routes.js';
+import { createProductionMobileNetWorthHistoryPorts } from './net-worth-history-production-ports.js';
+import type { MobileNetWorthHistoryRouteDependencies } from './net-worth-history-routes.js';
+import { createProductionMobileReviewCommandPorts } from './review-command-production-ports.js';
+import type { MobileReviewCommandRouteDependencies } from './review-command-routes.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -50,11 +56,15 @@ export interface ProductionMobileAccessOptions {
   /** Deterministic factories are accepted for tests; production uses CSPRNG defaults. */
   deviceRegistryOptions?: Omit<MobileDeviceRegistryOptions, 'clock'>;
   pairingManagerOptions?: PairingManagerOverrides;
+  resolveReview?: (transactionID: number, categoryName: string) => { needsReview: boolean } | null;
 }
 
 export interface ProductionMobileAccess {
   bootstrapDependencies: MobileBootstrapRouteDependencies;
   transactionDependencies: MobileTransactionRouteDependencies;
+  planningDependencies: MobilePlanningRouteDependencies;
+  netWorthHistoryDependencies: MobileNetWorthHistoryRouteDependencies;
+  reviewCommandDependencies?: MobileReviewCommandRouteDependencies;
   pairingDependencies: MobilePairingRouteDependencies;
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -93,6 +103,19 @@ export function createProductionMobileAccess(
     db: options.db,
     publicIdKey: options.publicIdKey,
   });
+  const planningPorts = createProductionMobilePlanningPorts({
+    db: options.db,
+    publicIdKey: options.publicIdKey,
+  });
+  const netWorthHistoryPorts = createProductionMobileNetWorthHistoryPorts({ db: options.db });
+  const reviewCommandPorts = options.resolveReview
+    ? createProductionMobileReviewCommandPorts({
+      db: options.db,
+      publicIdKey: options.publicIdKey,
+      clock,
+      resolveReview: options.resolveReview,
+    })
+    : undefined;
   const provideBootstrap = createMobileBootstrapAdapter({
     ports,
     // Keep the persisted composition identity authoritative even for an
@@ -128,6 +151,33 @@ export function createProductionMobileAccess(
     },
   };
   Object.freeze(transactionDependencies);
+  const planningDependencies: MobilePlanningRouteDependencies = Object.freeze({
+    authenticator: deviceRegistry,
+    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+    read: (context: Readonly<{ generatedAt: string; financialDate: string }>) => {
+      assertMobileReadAvailable();
+      return planningPorts.read(context);
+    },
+  });
+  const netWorthHistoryDependencies: MobileNetWorthHistoryRouteDependencies = Object.freeze({
+    authenticator: deviceRegistry,
+    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+    read: (
+      query: Parameters<MobileNetWorthHistoryRouteDependencies['read']>[0],
+      context: Parameters<MobileNetWorthHistoryRouteDependencies['read']>[1],
+    ) => {
+      assertMobileReadAvailable();
+      return netWorthHistoryPorts.read(query, context);
+    },
+  });
+  const reviewCommandDependencies = reviewCommandPorts
+    ? Object.freeze({
+      authenticator: deviceRegistry,
+      server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+      resolve: reviewCommandPorts.resolve,
+      skip: reviewCommandPorts.skip,
+    } satisfies MobileReviewCommandRouteDependencies)
+    : undefined;
 
   let activeManager: PairingManager | null = null;
   let pairingGeneration = 0;
@@ -193,6 +243,9 @@ export function createProductionMobileAccess(
   return {
     bootstrapDependencies,
     transactionDependencies,
+    planningDependencies,
+    netWorthHistoryDependencies,
+    reviewCommandDependencies,
     pairingDependencies,
     deviceRegistry,
     createPairingManager,

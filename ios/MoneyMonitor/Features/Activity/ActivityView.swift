@@ -754,9 +754,97 @@ final class TransactionDetailModel: ObservableObject {
     }
 }
 
+enum ReviewResolutionState: Equatable {
+    case idle
+    case submitting
+    case confirmed
+    case validationFailed
+    case conflict
+    case failed(String)
+}
+
+@MainActor
+final class ReviewResolutionModel: ObservableObject {
+    @Published private(set) var state: ReviewResolutionState = .idle
+    private var resolveIdempotencyKey: String?
+    private var skipIdempotencyKey: String?
+
+    func submit(
+        transactionID: String,
+        categoryID: String,
+        using resolve: (String, String, String) async throws -> MobileReviewCommandEnvelope
+    ) async -> Bool {
+        guard state != .submitting else { return false }
+        let key = resolveIdempotencyKey ?? UUID().uuidString
+        resolveIdempotencyKey = key
+        state = .submitting
+
+        do {
+            let result = try await resolve(transactionID, categoryID, key).data
+            switch result.outcome {
+            case .confirmed:
+                state = .confirmed
+                return true
+            case .validationFailed:
+                state = .validationFailed
+            case .conflict:
+                state = .conflict
+            }
+        } catch {
+            state = .failed(message(for: error))
+        }
+        return false
+    }
+
+    func submitSkip(
+        transactionID: String,
+        using skip: (String, String) async throws -> MobileReviewCommandEnvelope
+    ) async -> Bool {
+        guard state != .submitting else { return false }
+        let key = skipIdempotencyKey ?? UUID().uuidString
+        skipIdempotencyKey = key
+        state = .submitting
+
+        do {
+            let result = try await skip(transactionID, key).data
+            switch result.outcome {
+            case .confirmed:
+                state = .confirmed
+                return true
+            case .validationFailed:
+                state = .validationFailed
+            case .conflict:
+                state = .conflict
+            }
+        } catch {
+            state = .failed(message(for: error))
+        }
+        return false
+    }
+
+    private func message(for error: any Error) -> String {
+        guard let error = error as? MobileClientError else {
+            return "Couldn’t confirm the review. Nothing was queued. Try again."
+        }
+        switch error {
+        case .transport:
+            return "Live access to your Mac is required. Nothing was queued."
+        case .authorization(.capabilityRequired):
+            return "Enable Review actions for this iPhone in Money Monitor on your Mac."
+        case .authentication(.revoked), .authentication(.expired):
+            return "This iPhone’s access has changed. Reconnect it from your Mac."
+        default:
+            return TransactionListModel.message(for: error)
+        }
+    }
+}
+
 struct TransactionDetailView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @StateObject private var model = TransactionDetailModel()
+    @StateObject private var reviewModel = ReviewResolutionModel()
+    @State private var isReviewConfirmationPresented = false
+    @State private var isSkipConfirmationPresented = false
     let transactionID: String
 
     var body: some View {
@@ -784,6 +872,34 @@ struct TransactionDetailView: View {
         .navigationBarTitleDisplayMode(.inline)
         .task(id: transactionID) {
             await reload()
+        }
+        .confirmationDialog(
+            "Confirm category?",
+            isPresented: $isReviewConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            if case let .loaded(transaction) = model.state, let category = transaction.category {
+                Button("Confirm \(category.label)") {
+                    Task { await submitReview(transaction: transaction, categoryID: category.id) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This marks the transaction as reviewed using its current category on your Mac.")
+        }
+        .confirmationDialog(
+            "Skip review?",
+            isPresented: $isSkipConfirmationPresented,
+            titleVisibility: .visible
+        ) {
+            if case let .loaded(transaction) = model.state {
+                Button("Skip review", role: .destructive) {
+                    Task { await submitSkip(transaction: transaction) }
+                }
+            }
+            Button("Cancel", role: .cancel) {}
+        } message: {
+            Text("This clears the review flag only. Your category, owner, amounts, and report settings will not change.")
         }
     }
 
@@ -833,10 +949,98 @@ struct TransactionDetailView: View {
                         value: transaction.excludedFromReports ? "Excluded" : "Included"
                     )
                 }
+
+                reviewAction(for: transaction)
             }
             .padding(MoneyMonitorTheme.Spacing.large)
         }
         .accessibilityIdentifier("transaction-detail")
+    }
+
+    @ViewBuilder
+    private func reviewAction(for transaction: MobileTransaction) -> some View {
+        if transaction.needsReview, let category = transaction.category {
+            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.standard) {
+                Text("Review")
+                    .font(.headline)
+                Text("Confirm the current category, or skip this review without changing any transaction details.")
+                    .font(.subheadline)
+                    .foregroundStyle(.secondary)
+
+                Button {
+                    isReviewConfirmationPresented = true
+                } label: {
+                    if reviewModel.state == .submitting {
+                        ProgressView("Confirming category…")
+                    } else {
+                        Text("Confirm \(category.label)")
+                    }
+                }
+                .buttonStyle(.borderedProminent)
+                .disabled(reviewModel.state == .submitting || environment.snapshotState != .live)
+                .accessibilityHint("Requires live access to your Mac and marks this item reviewed.")
+
+                Button("Skip review") {
+                    isSkipConfirmationPresented = true
+                }
+                .buttonStyle(.bordered)
+                .disabled(reviewModel.state == .submitting || environment.snapshotState != .live)
+                .accessibilityHint("Requires live access to your Mac and clears only this review flag.")
+
+                if environment.snapshotState != .live {
+                    Text("Live Mac access is required. Review changes are never queued on this iPhone.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                reviewStatusMessage
+            }
+            .padding(MoneyMonitorTheme.Spacing.standard)
+            .background(.thinMaterial, in: RoundedRectangle(cornerRadius: 16, style: .continuous))
+            .accessibilityIdentifier("transaction-review-action")
+        }
+    }
+
+    @ViewBuilder
+    private var reviewStatusMessage: some View {
+        switch reviewModel.state {
+        case .idle, .submitting:
+            EmptyView()
+        case .confirmed:
+            Label("Category confirmed on your Mac.", systemImage: "checkmark.circle.fill")
+                .foregroundStyle(MoneyMonitorTheme.positive)
+        case .validationFailed:
+            Text("The Mac could not accept this category. Refresh and try again.")
+                .foregroundStyle(MoneyMonitorTheme.warning)
+        case .conflict:
+            Text("This review item changed on your Mac. Refresh to see its current state.")
+                .foregroundStyle(MoneyMonitorTheme.warning)
+        case let .failed(message):
+            Text(message)
+                .foregroundStyle(MoneyMonitorTheme.warning)
+        }
+    }
+
+    private func submitReview(transaction: MobileTransaction, categoryID: String) async {
+        let confirmed = await reviewModel.submit(
+            transactionID: transaction.id,
+            categoryID: categoryID,
+            using: environment.resolveReview
+        )
+        if confirmed {
+            await environment.refreshBootstrap()
+            await reload()
+        }
+    }
+
+    private func submitSkip(transaction: MobileTransaction) async {
+        let confirmed = await reviewModel.submitSkip(
+            transactionID: transaction.id,
+            using: environment.skipReview
+        )
+        if confirmed {
+            await environment.refreshBootstrap()
+            await reload()
+        }
     }
 
     private func detailRow(_ title: String, value: String) -> some View {
