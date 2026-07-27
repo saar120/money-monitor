@@ -1024,6 +1024,9 @@ final class AppEnvironment: ObservableObject {
         serverURL = credential.profile.baseURL
         latestBootstrap = bootstrap
         snapshotState = .live
+        if financialContentLockState == .notRequired {
+            financialContentLockState = .locked
+        }
         pairingState = .idle
         connectionState = .connected(lastCheckedAt: bootstrap.meta.generatedAt)
     }

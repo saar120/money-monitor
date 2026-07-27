@@ -844,6 +844,8 @@ struct AppEnvironmentTests {
         #expect(await store.load() == credential)
         #expect(environment.serverURL == credential.profile.baseURL)
         #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.financialContentLockState == .locked)
+        #expect(environment.isFinancialContentLocked)
         guard case .connected = environment.connectionState else {
             Issue.record("Expected authenticated bootstrap to connect the app")
             return
