@@ -94,6 +94,7 @@ export interface MobileAccessRegistryDevice extends MobileAccessPublicDevice {
 export interface MobileAccessDeviceRegistry {
   list(): MobileAccessRegistryDevice[];
   revoke(deviceId: string): boolean;
+  setReviewAccess(deviceId: string, enabled: boolean): MobileAccessRegistryDevice | null;
 }
 
 export interface MobileAccessControlSnapshot {
@@ -275,6 +276,23 @@ export class MobileAccessControl {
 
     try {
       if (!this.deviceRegistry.revoke(deviceId)) {
+        this.lastActionError = 'device_operation_failed';
+      }
+    } catch {
+      this.lastActionError = 'device_operation_failed';
+    }
+    return this.snapshot();
+  }
+
+  setReviewAccess(deviceId: string, enabled: boolean): MobileAccessControlSnapshot {
+    this.lastActionError = undefined;
+    if (!isSafeIdentifier(deviceId) || typeof enabled !== 'boolean') {
+      this.lastActionError = 'device_operation_failed';
+      return this.snapshot();
+    }
+
+    try {
+      if (!this.deviceRegistry.setReviewAccess(deviceId, enabled)) {
         this.lastActionError = 'device_operation_failed';
       }
     } catch {
@@ -470,7 +488,10 @@ function sanitizeDevice(value: MobileAccessPublicDevice): MobileAccessPublicDevi
     !isSafeIdentifier(value.id) ||
     !name ||
     !Array.isArray(value.capabilities) ||
-    !value.capabilities.every((capability) => capability === 'mobile.read') ||
+    !value.capabilities.includes('mobile.read') ||
+    !value.capabilities.every(
+      (capability) => capability === 'mobile.read' || capability === 'mobile.review.write',
+    ) ||
     !Number.isInteger(value.protocolVersion) ||
     value.protocolVersion < 1 ||
     !Number.isInteger(value.tokenVersion) ||

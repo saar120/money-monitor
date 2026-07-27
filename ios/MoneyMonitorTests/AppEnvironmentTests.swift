@@ -235,6 +235,38 @@ private actor RefreshLoadFailureProfileStore: PairedProfileStore {
     }
 }
 
+private actor SnapshotSecureItemClient: SecureItemClient {
+    private var items: [String: Data] = [:]
+
+    func add(data: Data, service: String, account: String) throws {
+        let key = "\(service):\(account)"
+        guard items[key] == nil else { throw SecureItemError.duplicateItem }
+        items[key] = data
+    }
+
+    func read(service: String, account: String) -> Data? {
+        items["\(service):\(account)"]
+    }
+
+    func update(data: Data, service: String, account: String) throws {
+        let key = "\(service):\(account)"
+        guard items[key] != nil else { throw SecureItemError.itemNotFound }
+        items[key] = data
+    }
+
+    func delete(service: String, account: String) {
+        items["\(service):\(account)"] = nil
+    }
+}
+
+private struct FixedDeviceAuthenticator: DeviceAuthenticationClient {
+    let outcome: DeviceAuthenticationOutcome
+
+    func authenticateDeviceOwner() async -> DeviceAuthenticationOutcome {
+        outcome
+    }
+}
+
 private actor PairingFlowClient: MobilePairingClient {
     private let credential: PairedMacCredential
     private let profileStore: any PairedProfileStore
@@ -393,6 +425,14 @@ private actor BlockingExchangePairingClient: MobilePairingClient {
 }
 
 private let pairingFlowNow = Date(timeIntervalSince1970: 1_784_109_600)
+
+private final class MutableAppEnvironmentClock: @unchecked Sendable {
+    var now: Date
+
+    init(now: Date) {
+        self.now = now
+    }
+}
 
 private func appEnvironmentFixtureData(
     _ filename: String,
@@ -1895,5 +1935,208 @@ struct AppEnvironmentTests {
             Issue.record("Expected stale detail revocation to preserve the replacement session")
             return
         }
+    }
+
+    @Test
+    func encryptedSnapshotIsUnreadableWithoutItsKeyAndRejectsTampering() async throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent(UUID().uuidString, isDirectory: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let secureItems = SnapshotSecureItemClient()
+        let store = EncryptedBootstrapSnapshotStore(
+            secureItems: secureItems,
+            bundleIdentifier: "MoneyMonitorTests.Snapshot",
+            applicationSupportDirectory: directory
+        )
+        let bootstrap = try pairingFlowBootstrap()
+        let snapshot = BootstrapSnapshot(bootstrap: bootstrap, savedAt: pairingFlowNow)
+
+        try await store.save(snapshot)
+
+        let encryptedData = try Data(
+            contentsOf: directory.appendingPathComponent("bootstrap-snapshot.v1")
+        )
+        #expect(encryptedData.range(of: Data("128430.27".utf8)) == nil)
+        #expect(try await store.load(for: bootstrap.meta.server.id) == snapshot)
+
+        let missingKeyStore = EncryptedBootstrapSnapshotStore(
+            secureItems: SnapshotSecureItemClient(),
+            bundleIdentifier: "MoneyMonitorTests.Snapshot",
+            applicationSupportDirectory: directory
+        )
+        await #expect(throws: BootstrapSnapshotStoreError.missingEncryptionKey) {
+            try await missingKeyStore.load(for: bootstrap.meta.server.id)
+        }
+
+        var tampered = encryptedData
+        tampered[tampered.startIndex] ^= 0x01
+        try tampered.write(to: directory.appendingPathComponent("bootstrap-snapshot.v1"))
+        await #expect(throws: BootstrapSnapshotStoreError.decryptionFailed) {
+            try await store.load(for: bootstrap.meta.server.id)
+        }
+    }
+
+    @MainActor
+    @Test
+    func offlineRestoreUsesAValidSnapshotInsteadOfRoutingToOnboarding() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        try await snapshotStore.save(BootstrapSnapshot(bootstrap: bootstrap, savedAt: pairingFlowNow))
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.timeout))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.snapshotState == .cached(generatedAt: bootstrap.meta.generatedAt))
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+        #expect(environment.pairingState == .idle)
+        guard case .connected = environment.connectionState else {
+            Issue.record("Expected saved data to remain available while the Mac is unreachable")
+            return
+        }
+    }
+
+    @MainActor
+    @Test
+    func savedFinancialDataRemainsLockedUntilDeviceAuthenticationSucceeds() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        try await snapshotStore.save(BootstrapSnapshot(bootstrap: bootstrap, savedAt: pairingFlowNow))
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.timeout))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            deviceAuthenticator: FixedDeviceAuthenticator(outcome: .success),
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.financialContentLockState == .locked)
+        #expect(environment.isFinancialContentLocked)
+
+        await environment.unlockFinancialContent()
+
+        #expect(environment.financialContentLockState == .unlocked)
+        #expect(!environment.isFinancialContentLocked)
+    }
+
+    @MainActor
+    @Test
+    func backgroundGraceKeepsUnlockedContentForTwoMinutesThenRelocks() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let clock = MutableAppEnvironmentClock(now: pairingFlowNow)
+        try await snapshotStore.save(BootstrapSnapshot(bootstrap: bootstrap, savedAt: clock.now))
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.timeout))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            deviceAuthenticator: FixedDeviceAuthenticator(outcome: .success),
+            clock: { clock.now }
+        )
+
+        await environment.restoreSavedConnection()
+        await environment.unlockFinancialContent()
+
+        environment.scenePhaseChanged(isActive: false)
+        clock.now = pairingFlowNow.addingTimeInterval(120)
+        environment.scenePhaseChanged(isActive: true)
+        #expect(environment.financialContentLockState == .unlocked)
+
+        environment.scenePhaseChanged(isActive: false)
+        clock.now = pairingFlowNow.addingTimeInterval(241)
+        environment.scenePhaseChanged(isActive: true)
+        #expect(environment.financialContentLockState == .locked)
+    }
+
+    @MainActor
+    @Test
+    func restoredSnapshotIsMarkedStaleFromServerGenerationTime() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let clock = MutableAppEnvironmentClock(
+            now: bootstrap.meta.generatedAt.addingTimeInterval((24 * 60 * 60) + 1)
+        )
+        try await snapshotStore.save(BootstrapSnapshot(bootstrap: bootstrap, savedAt: clock.now))
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.timeout))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: clock.now.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { clock.now }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.snapshotState == .stale(generatedAt: bootstrap.meta.generatedAt))
+        #expect(environment.latestBootstrap == bootstrap)
+    }
+
+    @MainActor
+    @Test
+    func restoreDeletesSnapshotBeyondThirtyDayRetention() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let clock = MutableAppEnvironmentClock(now: pairingFlowNow)
+        try await snapshotStore.save(
+            BootstrapSnapshot(
+                bootstrap: bootstrap,
+                savedAt: clock.now.addingTimeInterval(-((30 * 24 * 60 * 60) + 1))
+            )
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.timeout))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: clock.now.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { clock.now }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.snapshotState == .none)
+        #expect(try await snapshotStore.load(for: credential.profile.serverID) == nil)
+        #expect(environment.pairingState == .failed(.savedConnectionUnavailable))
     }
 }

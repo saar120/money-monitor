@@ -51,6 +51,7 @@ interface MobileAccessElectronAPI {
   approveMobilePairing(pairingId: string): Promise<{ status: string; reason?: string }>;
   rejectMobilePairing(pairingId: string): Promise<{ status: string; reason?: string }>;
   revokeMobileDevice(deviceId: string): Promise<MobileAccessSnapshot>;
+  setMobileReviewAccess(deviceId: string, enabled: boolean): Promise<MobileAccessSnapshot>;
 }
 
 const electronAPI = (window as unknown as { electronAPI?: Partial<MobileAccessElectronAPI> })
@@ -262,6 +263,20 @@ async function revokeDevice(device: MobileAccessDevice): Promise<void> {
   }
 }
 
+async function toggleReviewAccess(device: MobileAccessDevice, enabled: boolean): Promise<void> {
+  if (!electronAPI?.setMobileReviewAccess || device.revokedAt) return;
+  actionId.value = device.id;
+  error.value = '';
+  try {
+    snapshot.value = await electronAPI.setMobileReviewAccess(device.id, enabled);
+    if (snapshot.value.lastActionError) error.value = friendlyError(snapshot.value.lastActionError);
+  } catch {
+    error.value = 'Review access could not be updated.';
+  } finally {
+    actionId.value = '';
+  }
+}
+
 function clearQr(): void {
   qrImage.value = '';
   qrExpiresAt.value = '';
@@ -413,6 +428,14 @@ onUnmounted(() => {
             </div>
           </div>
           <div v-if="!device.revokedAt" class="flex shrink-0 gap-2">
+            <div class="flex items-center gap-1.5 text-[11px] text-text-secondary">
+              <span>Review actions</span>
+              <Switch
+                :model-value="device.capabilities.includes('mobile.review.write')"
+                :disabled="actionId === device.id || !electronAPI?.setMobileReviewAccess"
+                @update:model-value="toggleReviewAccess(device, $event)"
+              />
+            </div>
             <Button
               size="sm"
               variant="secondary"

@@ -1,10 +1,12 @@
 import { createHmac } from 'node:crypto';
 
 export const MOBILE_PUBLIC_ID_DIGEST_LENGTH = 22 as const;
-export type MobilePublicIdKind = 'account' | 'category' | 'transaction';
+export type MobilePublicIdKind = 'account' | 'asset' | 'budget' | 'category' | 'transaction';
 
 const PUBLIC_ID_PATTERNS: Readonly<Record<MobilePublicIdKind, RegExp>> = {
   account: /^account_[A-Za-z0-9_-]{22}$/,
+  asset: /^asset_[A-Za-z0-9_-]{22}$/,
+  budget: /^budget_[A-Za-z0-9_-]{22}$/,
   category: /^category_[A-Za-z0-9_-]{22}$/,
   transaction: /^transaction_[A-Za-z0-9_-]{22}$/,
 };

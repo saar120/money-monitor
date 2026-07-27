@@ -3,8 +3,33 @@ import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 
+/**
+ * The complete mobile capability allowlist. Route registration remains
+ * separate: defining a capability never exposes a route or mutation.
+ */
+export const MOBILE_CAPABILITIES = [
+  'mobile.read',
+  'mobile.review.write',
+  'mobile.transaction.write',
+  'mobile.budget.write',
+  'mobile.category.write',
+  'mobile.alert.write',
+  'mobile.sync.start',
+] as const;
+
 export const MOBILE_READ_CAPABILITY = 'mobile.read' as const;
-export type MobileCapability = typeof MOBILE_READ_CAPABILITY;
+export const MOBILE_REVIEW_WRITE_CAPABILITY = 'mobile.review.write' as const;
+export const MOBILE_TRANSACTION_WRITE_CAPABILITY = 'mobile.transaction.write' as const;
+export const MOBILE_BUDGET_WRITE_CAPABILITY = 'mobile.budget.write' as const;
+export const MOBILE_CATEGORY_WRITE_CAPABILITY = 'mobile.category.write' as const;
+export const MOBILE_ALERT_WRITE_CAPABILITY = 'mobile.alert.write' as const;
+export const MOBILE_SYNC_START_CAPABILITY = 'mobile.sync.start' as const;
+
+export type MobileCapability = (typeof MOBILE_CAPABILITIES)[number];
+
+export function isMobileCapability(value: string): value is MobileCapability {
+  return (MOBILE_CAPABILITIES as readonly string[]).includes(value);
+}
 
 type Database = BetterSQLite3Database<typeof schema>;
 type MobileDeviceRow = typeof schema.mobileDevices.$inferSelect;
@@ -117,15 +142,10 @@ export class MobileDeviceRegistry {
   }
 
   issue(input: IssueMobileDeviceInput): MobileDeviceCredential {
-    const token = this.tokenFactory();
-    if (!TOKEN_PATTERN.test(token)) {
-      throw new Error('Token factory must return a 256-bit base64url token');
-    }
-
     const capabilities = input.capabilities ?? [MOBILE_READ_CAPABILITY];
     if (
       capabilities.length === 0 ||
-      capabilities.some((capability) => capability !== MOBILE_READ_CAPABILITY)
+      capabilities.some((capability) => !isMobileCapability(capability))
     ) {
       throw new Error('Only explicitly supported mobile capabilities may be issued');
     }
@@ -133,6 +153,13 @@ export class MobileDeviceRegistry {
     const protocolVersion = input.protocolVersion ?? 1;
     if (!Number.isInteger(protocolVersion) || protocolVersion < 1) {
       throw new Error('Protocol version must be a positive integer');
+    }
+
+    // Validate the whole request before consuming randomness. This makes an
+    // invalid issuance a true no-op for both production entropy and tests.
+    const token = this.tokenFactory();
+    if (!TOKEN_PATTERN.test(token)) {
+      throw new Error('Token factory must return a 256-bit base64url token');
     }
 
     const row = this.database
@@ -180,6 +207,13 @@ export class MobileDeviceRegistry {
       return { status: 'expired', deviceId: row.id };
     }
 
+    // New mobile endpoints must opt into one of the explicitly classified
+    // capabilities. An unclassified route cannot be authorized by a token
+    // that happens to contain arbitrary persisted JSON.
+    if (!isMobileCapability(requiredCapability)) {
+      return { status: 'capability_required', deviceId: row.id };
+    }
+
     const capabilities = parseCapabilities(row.capabilities);
     if (!capabilities.includes(requiredCapability)) {
       return { status: 'capability_required', deviceId: row.id };
@@ -209,6 +243,38 @@ export class MobileDeviceRegistry {
       .where(eq(schema.mobileDevices.id, deviceId))
       .run();
     return result.changes === 1;
+  }
+
+  /**
+   * Narrow, Mac-controlled permission change for the first mobile command
+   * family. Pairing intentionally grants read access only; enabling review
+   * actions never changes the device token or any other capability.
+   */
+  setReviewAccess(deviceId: string, enabled: boolean): PublicMobileDevice | null {
+    const row = this.database
+      .select()
+      .from(schema.mobileDevices)
+      .where(
+        and(
+          eq(schema.mobileDevices.id, deviceId),
+          isNull(schema.mobileDevices.revokedAt),
+        ),
+      )
+      .get();
+    if (!row || (row.expiresAt && Date.parse(row.expiresAt) <= this.clock().getTime())) return null;
+
+    const capabilities = new Set(parseCapabilities(row.capabilities));
+    capabilities.add(MOBILE_READ_CAPABILITY);
+    if (enabled) capabilities.add(MOBILE_REVIEW_WRITE_CAPABILITY);
+    else capabilities.delete(MOBILE_REVIEW_WRITE_CAPABILITY);
+
+    const updated = this.database
+      .update(schema.mobileDevices)
+      .set({ capabilities: JSON.stringify([...capabilities].sort()) })
+      .where(eq(schema.mobileDevices.id, deviceId))
+      .returning()
+      .get();
+    return updated ? publicDevice(updated) : null;
   }
 
   rotate(deviceId: string): MobileDeviceCredential | null {

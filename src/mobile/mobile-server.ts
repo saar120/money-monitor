@@ -20,6 +20,18 @@ import {
   registerMobileTransactionRoutes,
   type MobileTransactionRouteDependencies,
 } from './transaction-routes.js';
+import {
+  registerMobilePlanningRoutes,
+  type MobilePlanningRouteDependencies,
+} from './planning-routes.js';
+import {
+  registerMobileNetWorthHistoryRoutes,
+  type MobileNetWorthHistoryRouteDependencies,
+} from './net-worth-history-routes.js';
+import {
+  registerMobileReviewCommandRoutes,
+  type MobileReviewCommandRouteDependencies,
+} from './review-command-routes.js';
 
 export const MOBILE_SERVER_HOST = '127.0.0.1' as const;
 
@@ -40,6 +52,9 @@ export interface CreateMobileServerOptions {
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
   transactions?: MobileTransactionRouteDependencies;
+  planning?: MobilePlanningRouteDependencies;
+  netWorthHistory?: MobileNetWorthHistoryRouteDependencies;
+  reviewCommands?: MobileReviewCommandRouteDependencies;
   clock?: () => Date;
   errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
   logger?: boolean;
@@ -149,6 +164,18 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
 
   if (options.transactions) {
     registerMobileTransactionRoutes(app, options.transactions, clock);
+  }
+
+  if (options.planning) {
+    registerMobilePlanningRoutes(app, options.planning, clock);
+  }
+
+  if (options.netWorthHistory) {
+    registerMobileNetWorthHistoryRoutes(app, options.netWorthHistory, clock);
+  }
+
+  if (options.reviewCommands) {
+    registerMobileReviewCommandRoutes(app, options.reviewCommands, clock);
   }
 
   async function start(startOptions: MobileServerStartOptions = {}): Promise<number> {

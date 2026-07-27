@@ -17,6 +17,29 @@ protocol MobileTransactionAPIClient: Sendable {
     ) async throws -> MobileTransactionDetailEnvelope
 }
 
+protocol MobilePlanningAPIClient: Sendable {
+    func planningSnapshot(credential: PairedMacCredential) async throws -> MobilePlanningSnapshotEnvelope
+}
+
+protocol MobileNetWorthHistoryAPIClient: Sendable {
+    func netWorthHistory(
+        range: MobileNetWorthHistoryRange,
+        credential: PairedMacCredential
+    ) async throws -> MobileNetWorthHistoryEnvelope
+}
+
+protocol MobileReviewCommandAPIClient: Sendable {
+    func resolveReview(
+        command: MobileReviewResolveCommand,
+        credential: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope
+
+    func skipReview(
+        command: MobileReviewSkipCommand,
+        credential: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope
+}
+
 struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
     private let transport: any MobileHTTPTransport
     private let payloadDecoder: BootstrapPayloadDecoder
@@ -243,6 +266,297 @@ extension URLSessionMobileAPIClient: MobileTransactionAPIClient {
             of: "^\(kind)_[A-Za-z0-9_-]{22}$",
             options: .regularExpression
         ) != nil
+    }
+}
+
+extension URLSessionMobileAPIClient: MobilePlanningAPIClient {
+    func planningSnapshot(credential: PairedMacCredential) async throws -> MobilePlanningSnapshotEnvelope {
+        let endpoint = APIEndpoint.planning
+        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobilePlanningSnapshotEnvelope
+        do {
+            envelope = try MobilePlanningPayloadDecoder().decode(response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        try validateIdentity(envelope.meta, credential: credential)
+        guard Self.isValidPlanning(envelope.data) else { throw MobileClientError.invalidPayload }
+        return envelope
+    }
+
+    private static func isValidPlanning(_ snapshot: MobilePlanningSnapshot) -> Bool {
+        snapshot.baseCurrencyCode == "ILS"
+            && snapshot.financialDate.range(of: #"^\d{4}-\d{2}-\d{2}$"#, options: .regularExpression) != nil
+            && snapshot.budgets.count <= 100
+            && snapshot.accounts.count <= 100
+            && snapshot.assets.count <= 100
+            && snapshot.accounts.allSatisfy { account in
+                account.id.range(of: #"^account_[A-Za-z0-9_-]{22}$"#, options: .regularExpression) != nil
+                    && account.identifierMask.range(of: #"^(?:••••|\*{4}) [A-Za-z0-9]{2,4}$"#, options: .regularExpression) != nil
+                    && (account.type != "credit_card" || account.balance == nil)
+            }
+    }
+}
+
+struct UnavailableMobilePlanningAPIClient: MobilePlanningAPIClient {
+    func planningSnapshot(credential _: PairedMacCredential) async throws -> MobilePlanningSnapshotEnvelope {
+        throw MobileClientError.invalidRequest
+    }
+}
+
+extension URLSessionMobileAPIClient: MobileNetWorthHistoryAPIClient {
+    func netWorthHistory(
+        range: MobileNetWorthHistoryRange,
+        credential: PairedMacCredential
+    ) async throws -> MobileNetWorthHistoryEnvelope {
+        let endpoint = APIEndpoint.netWorthHistory(range: range)
+        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobileNetWorthHistoryEnvelope
+        do {
+            envelope = try MobileNetWorthHistoryPayloadDecoder().decode(response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        try validateIdentity(envelope.meta, credential: credential)
+        guard envelope.data.range == range else { throw MobileClientError.invalidPayload }
+        return envelope
+    }
+}
+
+extension URLSessionMobileAPIClient: MobileReviewCommandAPIClient {
+    func resolveReview(
+        command: MobileReviewResolveCommand,
+        credential: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope {
+        guard
+            command.idempotencyKey.range(of: #"^[A-Za-z0-9_-]{16,128}$"#, options: .regularExpression) != nil,
+            Self.isValidPublicID(command.transactionID, kind: "transaction"),
+            Self.isValidPublicID(command.categoryID, kind: "category")
+        else {
+            throw MobileClientError.invalidRequest
+        }
+
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(command)
+        } catch {
+            throw MobileClientError.invalidRequest
+        }
+        let endpoint = APIEndpoint.reviewResolve
+        let request = try MobileRequestFactory.makeRequest(
+            endpoint: endpoint,
+            baseURL: credential.profile.baseURL,
+            body: body,
+            bearerToken: credential.token
+        )
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobileReviewCommandEnvelope
+        do {
+            envelope = try MobileReviewCommandPayloadDecoder.decode(response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        guard
+            envelope.meta.server.id == credential.profile.serverID,
+            envelope.meta.server.protocolVersion == credential.profile.protocolVersion,
+            envelope.meta.apiVersion == String(credential.profile.apiVersion),
+            envelope.meta.source == .live,
+            envelope.data.transactionID == command.transactionID
+        else {
+            throw MobileClientError.identityMismatch
+        }
+        return envelope
+    }
+
+    func skipReview(
+        command: MobileReviewSkipCommand,
+        credential: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope {
+        guard
+            command.idempotencyKey.range(of: #"^[A-Za-z0-9_-]{16,128}$"#, options: .regularExpression) != nil,
+            Self.isValidPublicID(command.transactionID, kind: "transaction")
+        else {
+            throw MobileClientError.invalidRequest
+        }
+
+        let body: Data
+        do {
+            body = try JSONEncoder().encode(command)
+        } catch {
+            throw MobileClientError.invalidRequest
+        }
+        let endpoint = APIEndpoint.reviewSkip
+        let request = try MobileRequestFactory.makeRequest(
+            endpoint: endpoint,
+            baseURL: credential.profile.baseURL,
+            body: body,
+            bearerToken: credential.token
+        )
+        let response = try await send(request, endpoint: endpoint)
+        let envelope: MobileReviewCommandEnvelope
+        do {
+            envelope = try MobileReviewCommandPayloadDecoder.decode(response.data)
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+        guard
+            envelope.meta.server.id == credential.profile.serverID,
+            envelope.meta.server.protocolVersion == credential.profile.protocolVersion,
+            envelope.meta.apiVersion == String(credential.profile.apiVersion),
+            envelope.meta.source == .live,
+            envelope.data.transactionID == command.transactionID
+        else {
+            throw MobileClientError.identityMismatch
+        }
+        return envelope
+    }
+}
+
+struct UnavailableMobileNetWorthHistoryAPIClient: MobileNetWorthHistoryAPIClient {
+    func netWorthHistory(
+        range _: MobileNetWorthHistoryRange,
+        credential _: PairedMacCredential
+    ) async throws -> MobileNetWorthHistoryEnvelope {
+        throw MobileClientError.invalidRequest
+    }
+}
+
+struct UnavailableMobileReviewCommandAPIClient: MobileReviewCommandAPIClient {
+    func resolveReview(
+        command _: MobileReviewResolveCommand,
+        credential _: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope {
+        throw MobileClientError.invalidRequest
+    }
+
+    func skipReview(
+        command _: MobileReviewSkipCommand,
+        credential _: PairedMacCredential
+    ) async throws -> MobileReviewCommandEnvelope {
+        throw MobileClientError.invalidRequest
+    }
+}
+
+private struct MobileNetWorthHistoryPayloadDecoder {
+    func decode(_ data: Data) throws -> MobileNetWorthHistoryEnvelope {
+        try MobilePayloadSecurityValidator().validate(data)
+        guard let root = try JSONSerialization.jsonObject(with: data) as? [String: Any],
+              Set(root.keys) == ["data", "meta"],
+              let payload = root["data"] as? [String: Any],
+              Set(payload.keys) == ["financialDate", "range", "period", "baseCurrencyCode", "estimatedHistory", "estimationMethod", "points"],
+              let period = payload["period"] as? [String: Any],
+              Set(period.keys) == ["startDate", "endDate"],
+              let points = payload["points"] as? [Any], points.count <= 1_000,
+              let meta = root["meta"] as? [String: Any],
+              Set(meta.keys) == ["apiVersion", "generatedAt", "source", "server"],
+              let server = meta["server"] as? [String: Any],
+              Set(server.keys) == ["id", "protocolVersion"]
+        else { throw MobileClientError.invalidPayload }
+
+        var previousDate: String?
+        for point in points {
+            guard let object = point as? [String: Any],
+                  Set(object.keys) == ["date", "total", "assetsTotal", "liabilitiesTotal", "bankBalancesTotal"],
+                  let date = object["date"] as? String,
+                  previousDate.map({ date > $0 }) ?? true
+            else { throw MobileClientError.invalidPayload }
+            previousDate = date
+        }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let envelope = try decoder.decode(MobileNetWorthHistoryEnvelope.self, from: data)
+        guard envelope.data.baseCurrencyCode == "ILS",
+              envelope.data.estimatedHistory,
+              envelope.data.estimationMethod == "latest_known_values_carried_forward",
+              envelope.data.period.endDate == envelope.data.financialDate,
+              envelope.data.points.allSatisfy({ $0.total.currencyCode == "ILS" && $0.assetsTotal.currencyCode == "ILS" && $0.liabilitiesTotal.currencyCode == "ILS" && $0.bankBalancesTotal.currencyCode == "ILS" })
+        else { throw MobileClientError.invalidPayload }
+        return envelope
+    }
+}
+
+/// Fail closed before `Codable` can discard unexpected desktop-shaped fields.
+private struct MobilePlanningPayloadDecoder {
+    func decode(_ data: Data) throws -> MobilePlanningSnapshotEnvelope {
+        try MobilePayloadSecurityValidator().validate(data)
+        let root = try object(data)
+        guard Set(root.keys) == ["data", "meta"] else { throw MobileClientError.invalidPayload }
+        let payload = try object(root["data"])
+        guard Set(payload.keys) == ["financialDate", "calculatedAt", "baseCurrencyCode", "budgets", "netWorth", "accounts", "assets", "latestSync"] else {
+            throw MobileClientError.invalidPayload
+        }
+        try validateBudgetRows(payload["budgets"])
+        try validateAccountRows(payload["accounts"])
+        try validateAssetRows(payload["assets"])
+        guard try keys(payload["netWorth"]) == ["state", "total", "assetsTotal", "liabilitiesTotal", "bankBalancesTotal"],
+              try keys(payload["latestSync"]) == ["state", "startedAt", "completedAt", "accountsSucceeded", "accountsAttentionNeeded"],
+              try keys(root["meta"]) == ["apiVersion", "generatedAt", "source", "server"],
+              try keys(try object(root["meta"])["server"]) == ["id", "protocolVersion"]
+        else { throw MobileClientError.invalidPayload }
+
+        let decoder = JSONDecoder()
+        decoder.dateDecodingStrategy = .iso8601
+        let envelope = try decoder.decode(MobilePlanningSnapshotEnvelope.self, from: data)
+        guard envelope.data.baseCurrencyCode == "ILS",
+              envelope.data.budgets.count <= 100,
+              envelope.data.accounts.count <= 100,
+              envelope.data.assets.count <= 100,
+              envelope.data.accounts.allSatisfy({ $0.type != "credit_card" || $0.balance == nil })
+        else { throw MobileClientError.invalidPayload }
+        return envelope
+    }
+
+    private func validateBudgetRows(_ value: Any?) throws {
+        guard let rows = value as? [Any], rows.count <= 100 else { throw MobileClientError.invalidPayload }
+        for row in rows {
+            let object = try object(row)
+            guard Set(object.keys) == ["id", "displayName", "period", "periodRange", "limit", "spent", "remaining", "state", "pace", "includedCategories"],
+                  try keys(object["periodRange"]) == ["startDate", "endDate"],
+                  try keys(object["pace"]) == ["elapsedDays", "totalDays", "expectedSpent", "projectedSpent", "state"],
+                  let categories = object["includedCategories"] as? [Any], categories.count <= 100
+            else { throw MobileClientError.invalidPayload }
+            for category in categories {
+                guard try keys(category) == ["id", "label"] else { throw MobileClientError.invalidPayload }
+            }
+        }
+    }
+
+    private func validateAccountRows(_ value: Any?) throws {
+        guard let rows = value as? [Any], rows.count <= 100 else { throw MobileClientError.invalidPayload }
+        for row in rows {
+            let object = try object(row)
+            guard Set(object.keys) == ["id", "institutionName", "displayName", "type", "identifierMask", "currencyCode", "state", "freshness", "balance"],
+                  try keys(object["freshness"]) == ["status", "lastSuccessfulSyncAt"]
+            else { throw MobileClientError.invalidPayload }
+        }
+    }
+
+    private func validateAssetRows(_ value: Any?) throws {
+        guard let rows = value as? [Any], rows.count <= 100 else { throw MobileClientError.invalidPayload }
+        for row in rows {
+            guard try keys(row) == ["id", "displayName", "type", "liquidity", "currentValue", "state"] else {
+                throw MobileClientError.invalidPayload
+            }
+        }
+    }
+
+    private func object(_ value: Any?) throws -> [String: Any] {
+        guard let value = value as? [String: Any] else { throw MobileClientError.invalidPayload }
+        return value
+    }
+
+    private func keys(_ value: Any?) throws -> Set<String> {
+        Set(try object(value).keys)
+    }
+
+    private func object(_ data: Data) throws -> [String: Any] {
+        guard let value = try JSONSerialization.jsonObject(with: data) as? [String: Any] else {
+            throw MobileClientError.invalidPayload
+        }
+        return value
     }
 }
 

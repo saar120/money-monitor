@@ -567,3 +567,118 @@ struct MobileTransactionOwner: Codable, Equatable, Sendable {
     let kind: MobileTransactionOwnerKind
     let displayName: String?
 }
+
+// MARK: - Phase 3 planning snapshot
+
+struct MobilePlanningSnapshotEnvelope: Codable, Equatable, Sendable {
+    let data: MobilePlanningSnapshot
+    let meta: MobileTransactionMetadata
+}
+
+struct MobilePlanningSnapshot: Codable, Equatable, Sendable {
+    let financialDate: String
+    let calculatedAt: Date
+    let baseCurrencyCode: String
+    let budgets: [MobileBudget]
+    let netWorth: MobileNetWorth
+    let accounts: [MobilePlanningAccount]
+    let assets: [MobileAsset]
+    let latestSync: MobilePlanningSync
+}
+
+struct MobileBudget: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let displayName: String
+    let period: String
+    let periodRange: BootstrapPeriod
+    let limit: BootstrapMoney
+    let spent: BootstrapMoney
+    let remaining: BootstrapMoney
+    let state: String
+    let pace: MobileBudgetPace
+    let includedCategories: [BootstrapTransactionCategory]
+}
+
+struct MobileBudgetPace: Codable, Equatable, Sendable {
+    let elapsedDays: Int
+    let totalDays: Int
+    let expectedSpent: BootstrapMoney
+    let projectedSpent: BootstrapMoney
+    let state: String
+}
+
+struct MobileNetWorth: Codable, Equatable, Sendable {
+    let state: String
+    let total: BootstrapMoney?
+    let assetsTotal: BootstrapMoney?
+    let liabilitiesTotal: BootstrapMoney?
+    let bankBalancesTotal: BootstrapMoney?
+}
+
+enum MobileNetWorthHistoryRange: String, Codable, CaseIterable, Equatable, Hashable, Sendable {
+    case threeMonths = "3M"
+    case sixMonths = "6M"
+    case oneYear = "1Y"
+    case all = "All"
+
+    var title: String { rawValue }
+}
+
+struct MobileNetWorthHistoryEnvelope: Codable, Equatable, Sendable {
+    let data: MobileNetWorthHistory
+    let meta: MobileTransactionMetadata
+}
+
+struct MobileNetWorthHistory: Codable, Equatable, Sendable {
+    let financialDate: String
+    let range: MobileNetWorthHistoryRange
+    let period: BootstrapPeriod
+    let baseCurrencyCode: String
+    let estimatedHistory: Bool
+    let estimationMethod: String
+    let points: [MobileNetWorthHistoryPoint]
+}
+
+struct MobileNetWorthHistoryPoint: Codable, Equatable, Identifiable, Sendable {
+    let date: String
+    let total: BootstrapMoney
+    let assetsTotal: BootstrapMoney
+    let liabilitiesTotal: BootstrapMoney
+    let bankBalancesTotal: BootstrapMoney
+
+    var id: String { date }
+}
+
+struct MobilePlanningAccount: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let institutionName: String
+    let displayName: String
+    let type: String
+    let identifierMask: String
+    let currencyCode: String
+    let state: String
+    let freshness: MobilePlanningFreshness
+    let balance: BootstrapMoney?
+}
+
+struct MobilePlanningFreshness: Codable, Equatable, Sendable {
+    let status: String
+    let lastSuccessfulSyncAt: Date?
+}
+
+struct MobileAsset: Codable, Equatable, Identifiable, Sendable {
+    let id: String
+    let displayName: String
+    let type: String
+    let liquidity: String
+    let currentValue: BootstrapMoney?
+    let state: String
+}
+
+struct MobilePlanningSync: Codable, Equatable, Sendable {
+    let state: String
+    let startedAt: Date?
+    let completedAt: Date?
+    let accountsSucceeded: Int
+    let accountsAttentionNeeded: Int
+}

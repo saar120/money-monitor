@@ -15,14 +15,20 @@ enum ScenePrivacyPolicy {
 
 struct ScenePrivacyProtectionContainer<Content: View>: View {
     @Environment(\.scenePhase) private var scenePhase
+    private let isContentAuthorized: Bool
     private let content: Content
 
-    init(@ViewBuilder content: () -> Content) {
+    init(
+        isContentAuthorized: Bool = true,
+        @ViewBuilder content: () -> Content
+    ) {
+        self.isContentAuthorized = isContentAuthorized
         self.content = content()
     }
 
     var body: some View {
-        let requiresProtection = ScenePrivacyPolicy.requiresProtection(for: scenePhase)
+        let requiresProtection = !isContentAuthorized
+            || ScenePrivacyPolicy.requiresProtection(for: scenePhase)
 
         ZStack {
             content

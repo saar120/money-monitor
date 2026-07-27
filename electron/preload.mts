@@ -65,6 +65,8 @@ contextBridge.exposeInMainWorld('electronAPI', {
     ipcRenderer.invoke('mobile-access:reject-pairing', pairingId),
   revokeMobileDevice: (deviceId: string) =>
     ipcRenderer.invoke('mobile-access:revoke-device', deviceId),
+  setMobileReviewAccess: (deviceId: string, enabled: boolean) =>
+    ipcRenderer.invoke('mobile-access:set-review-access', deviceId, enabled),
   onUpdateStatus: (
     callback: (status: {
       status: string;

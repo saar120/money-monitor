@@ -25,6 +25,7 @@
 		70E4DC72183CA8EF3F28053E /* AppEnvironment.swift in Sources */ = {isa = PBXBuildFile; fileRef = 50ECA720B4C95421DA6E880F /* AppEnvironment.swift */; };
 		71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */; };
 		728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */; };
+		A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */; };
 		7D721163F0FBAC06B5BFAED5 /* PairingQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */; };
 		7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */; };
 		7F052AC076A2A6E5DF5B3C71 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */; };
@@ -104,12 +105,13 @@
 		9D8AAFD34E5B02A00BF45B40 /* FeaturePlaceholderView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeaturePlaceholderView.swift; sourceTree = "<group>"; };
 		A839D76D2788A1EE7EB038F6 /* TransactionSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSearchView.swift; sourceTree = "<group>"; };
 		ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
+		A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileReviewCommand.swift; sourceTree = "<group>"; };
 		B323DAD803194452F179885B /* MoneyMonitorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorUITests.swift; sourceTree = "<group>"; };
 		BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedMacCredential.swift; sourceTree = "<group>"; };
 		BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStoreTests.swift; sourceTree = "<group>"; };
 		C5A2A2AD72B86547C6F76FCD /* PairingQRScannerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerState.swift; sourceTree = "<group>"; };
 		D09F0DA76CF6F330EB5C2A86 /* HealthResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthResponse.swift; sourceTree = "<group>"; };
-		D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */ = {isa = PBXFileReference; includeInIndex = 0; lastKnownFileType = wrapper.application; path = MoneyMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoneyMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = BootstrapPayloadDecoder.swift; sourceTree = "<group>"; };
 		DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		E0C2102EAFFDAA625639EE7F /* PairingQRScannerStateTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerStateTests.swift; sourceTree = "<group>"; };
@@ -154,6 +156,7 @@
 		3440811E36E88D2E9497AE32 /* Models */ = {
 			isa = PBXGroup;
 			children = (
+				A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */,
 				DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */,
 				E4B41200C4ECCF717C2F83FF /* BootstrapRefreshState.swift */,
 				8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */,
@@ -505,6 +508,7 @@
 				7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */,
 				5A69573C603680807107967D /* BootstrapRefreshState.swift in Sources */,
 				728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */,
+				A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */,
 				5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */,
 				F0AEE6F85CBB2BDBCFD2C863 /* ConnectionState.swift in Sources */,
 				EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */,
@@ -622,6 +626,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = CVP2NVLKL4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Money Monitor";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the pairing QR code displayed by Money Monitor on your Mac.";
@@ -771,6 +776,7 @@
 				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_IDENTITY = "iPhone Developer";
+				DEVELOPMENT_TEAM = CVP2NVLKL4;
 				GENERATE_INFOPLIST_FILE = YES;
 				INFOPLIST_KEY_CFBundleDisplayName = "Money Monitor";
 				INFOPLIST_KEY_NSCameraUsageDescription = "Scan the pairing QR code displayed by Money Monitor on your Mac.";
