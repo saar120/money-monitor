@@ -28,6 +28,7 @@
     "mobile:bootstrap-schema:generate": "node --import tsx scripts/mobile-bootstrap-schema.ts --write",
     "mobile:bootstrap-schema:check": "node --import tsx scripts/mobile-bootstrap-schema.ts --check",
     "prototype:ios-ia": "python3 -m http.server 4173 -d docs/ios-mockups",
+    "prototype:ios-offline": "python3 -m http.server 4174 -d docs/ios-mockups",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",
