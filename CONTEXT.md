@@ -23,3 +23,11 @@ _Avoid_: Offline pairing, disconnected device
 **Mutation Conflict**:
 A rejected change whose target was updated by another client after the editing client loaded it.
 _Avoid_: Mac conflict, sync failure
+
+**Resource Version**:
+A monotonically increasing integer identifying the accepted revision of a mutable financial resource.
+_Avoid_: Updated timestamp, client version
+
+**Mutation Receipt**:
+A durable record of the accepted outcome of a potentially repeatable financial command.
+_Avoid_: Request log, retry cache
