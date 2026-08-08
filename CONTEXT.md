@@ -31,3 +31,15 @@ _Avoid_: Updated timestamp, client version
 **Mutation Receipt**:
 A durable record of the accepted outcome of a potentially repeatable financial command.
 _Avoid_: Request log, retry cache
+
+**Worth Your Attention Card**:
+A conditional Home item for an objectively detected condition with a direct corrective action: transaction review, a triggered budget threshold, or Account Refresh Attention.
+_Avoid_: Generic insight, status card
+
+**Advisor Insight**:
+A conditional Home interpretation grounded in specific financial data that is material, non-obvious, and new or meaningfully changed since it was last shown.
+_Avoid_: Summary, generic advice, attention card
+
+**Account Refresh Attention**:
+An account-specific refresh problem requiring intervention, such as a failed refresh, an overdue manual refresh, or a required action that must continue on the Mac.
+_Avoid_: Account health, financial health, global data status
