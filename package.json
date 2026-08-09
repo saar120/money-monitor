@@ -27,6 +27,8 @@
     "test:coverage": "vitest run --coverage",
     "mobile:bootstrap-schema:generate": "node --import tsx scripts/mobile-bootstrap-schema.ts --write",
     "mobile:bootstrap-schema:check": "node --import tsx scripts/mobile-bootstrap-schema.ts --check",
+    "canonical:clients:write": "node --import tsx scripts/generate-canonical-clients.ts --write",
+    "canonical:clients:check": "node --import tsx scripts/generate-canonical-clients.ts --check",
     "lint": "eslint .",
     "lint:fix": "eslint . --fix",
     "format": "prettier --write .",

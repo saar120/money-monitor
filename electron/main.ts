@@ -320,6 +320,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
 
     const production = createProductionMobileAccess({
       db,
+      sqlite: connection.sqlite,
       serverId: config.MOBILE_SERVER_ID,
       publicIdKey: config.MOBILE_PUBLIC_ID_KEY,
       server: {
@@ -348,6 +349,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
       serverFactory: {
         async start({ host }) {
           const server = createMobileServer({
+            canonical: production.canonicalDependencies,
             bootstrap: production.bootstrapDependencies,
             pairing: production.pairingDependencies,
             transactions: production.transactionDependencies,

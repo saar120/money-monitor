@@ -1,4 +1,5 @@
 import type { MobileBootstrapServerIdentity } from './bootstrap-adapter.js';
+import type Database from 'better-sqlite3';
 import { createMobileBootstrapAdapter } from './bootstrap-adapter.js';
 import {
   createProductionMobileBootstrapPorts,
@@ -30,6 +31,8 @@ import { createProductionMobileNetWorthHistoryPorts } from './net-worth-history-
 import type { MobileNetWorthHistoryRouteDependencies } from './net-worth-history-routes.js';
 import { createProductionMobileReviewCommandPorts } from './review-command-production-ports.js';
 import type { MobileReviewCommandRouteDependencies } from './review-command-routes.js';
+import type { CanonicalAuthenticator } from '../api/v1/policy.js';
+import { CanonicalApiError } from '../api/v1/errors.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,6 +46,8 @@ type PairingManagerOverrides = Partial<
 
 export interface ProductionMobileAccessOptions {
   db: ProductionMobileBootstrapPortOptions['db'];
+  /** Raw SQLite connection shared by canonical routes and mobile credentials. */
+  sqlite: Database.Database;
   /** Persisted UUID identifying this Mac installation across restarts. */
   serverId: string;
   /** Private HMAC key used only to derive stable public DTO identifiers. */
@@ -66,6 +71,10 @@ export interface ProductionMobileAccess {
   netWorthHistoryDependencies: MobileNetWorthHistoryRouteDependencies;
   reviewCommandDependencies?: MobileReviewCommandRouteDependencies;
   pairingDependencies: MobilePairingRouteDependencies;
+  canonicalDependencies: {
+    sqlite: Database.Database;
+    authenticate: CanonicalAuthenticator;
+  };
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
   clearPairingManager(): void;
@@ -77,6 +86,23 @@ function stableServerId(value: string): string {
     throw new Error('Mobile server ID must be a stable UUID');
   }
   return normalized.toLowerCase();
+}
+
+const MOBILE_BEARER_PATTERN = /^Bearer ([A-Za-z0-9_-]{43})$/i;
+
+export function createCanonicalMobileAuthenticator(
+  deviceRegistry: MobileDeviceRegistry,
+): CanonicalAuthenticator {
+  return (request) => {
+    const authorization = request.headers.authorization;
+    const token = authorization ? MOBILE_BEARER_PATTERN.exec(authorization)?.[1] : undefined;
+    if (!token) return null;
+    const result = deviceRegistry.authenticate(token, MOBILE_READ_CAPABILITY);
+    if (result.status !== 'authenticated') {
+      throw new CanonicalApiError('authentication_invalid');
+    }
+    return { kind: 'paired-iphone', deviceId: result.device.id };
+  };
 }
 
 /**
@@ -199,6 +225,11 @@ export function createProductionMobileAccess(
     sessions: publicSessions,
   });
 
+  const canonicalDependencies = Object.freeze({
+    sqlite: options.sqlite,
+    authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
+  });
+
   function createPairingManager(publicUrl: string): PairingManager {
     const nextGeneration = pairingGeneration + 1;
     const manager = new MobilePairingSessionManager<MobileDeviceCredential>({
@@ -247,6 +278,7 @@ export function createProductionMobileAccess(
     netWorthHistoryDependencies,
     reviewCommandDependencies,
     pairingDependencies,
+    canonicalDependencies,
     deviceRegistry,
     createPairingManager,
     clearPairingManager,

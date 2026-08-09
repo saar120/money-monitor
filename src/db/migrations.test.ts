@@ -93,6 +93,9 @@ describe('database migrations', () => {
       'asset_movements',
       'asset_snapshots',
       'assets',
+      'canonical_mutation_receipts',
+      'canonical_reference_resources',
+      'canonical_seed_state',
       'categories',
       'holdings',
       'liabilities',
@@ -107,6 +110,56 @@ describe('database migrations', () => {
       expect(tableNames, `Missing table: ${table}`).toContain(table);
     }
 
+    sqlite.close();
+  });
+
+  it('upgrades runtime-created canonical tables without colliding or losing receipts', () => {
+    const sqlite = new Database(':memory:');
+    sqlite.pragma('foreign_keys = ON');
+    const db = drizzle(sqlite, { schema });
+
+    // Establish the previous migration baseline, then reproduce the first
+    // SAA-18 install path where the store created these two tables at runtime
+    // before migration 0024 existed.
+    migrate(db, { migrationsFolder });
+    sqlite.exec('DROP TABLE canonical_seed_state');
+    sqlite
+      .prepare(
+        'DELETE FROM __drizzle_migrations WHERE created_at = (SELECT MAX(created_at) FROM __drizzle_migrations)',
+      )
+      .run();
+    sqlite
+      .prepare(
+        `INSERT INTO canonical_reference_resources
+          (id, title, amount_value, currency_code, resource_version, updated_at)
+         VALUES (1, 'Existing runtime resource', '10.00', 'ILS', 1, '2026-01-01T00:00:00.000Z')`,
+      )
+      .run();
+    sqlite
+      .prepare(
+        `INSERT INTO canonical_mutation_receipts
+          (client_id, idempotency_key, request_fingerprint, outcome_json, created_at)
+         VALUES ('mac-local', 'upgrade-receipt', '{}', '{"accepted":true,"resourceId":1,"refreshHints":[]}', '2026-01-01T00:00:00.000Z')`,
+      )
+      .run();
+
+    expect(() => migrate(db, { migrationsFolder })).not.toThrow();
+    expect(
+      sqlite.prepare('SELECT title FROM canonical_reference_resources WHERE id = 1').get(),
+    ).toEqual({
+      title: 'Existing runtime resource',
+    });
+    expect(
+      sqlite
+        .prepare(
+          'SELECT idempotency_key FROM canonical_mutation_receipts WHERE client_id = ? AND idempotency_key = ?',
+        )
+        .get('mac-local', 'upgrade-receipt'),
+    ).toEqual({ idempotency_key: 'upgrade-receipt' });
+    expect(sqlite.prepare('SELECT id, seeded_at FROM canonical_seed_state').get()).toEqual({
+      id: 1,
+      seeded_at: '1970-01-01T00:00:00.000Z',
+    });
     sqlite.close();
   });
 

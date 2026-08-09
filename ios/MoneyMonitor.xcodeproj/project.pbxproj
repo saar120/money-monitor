@@ -17,6 +17,7 @@
 		2FA69E0656FADB6F82E49B81 /* MobilePairing in Resources */ = {isa = PBXBuildFile; fileRef = 3AFEA5FF4B4EAF7A7CE7E4E1 /* MobilePairing */; };
 		33D069B46618622CE650C256 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F7F996B9B0D3043E9A11BD /* PlanView.swift */; };
 		3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */; };
+		4C2597F80888C13661659ABC /* CanonicalAPI.swift in Sources */ = {isa = PBXBuildFile; fileRef = 1057556068324C56A398389E /* CanonicalAPI.swift */; };
 		5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B14234E69D03441C0E0E38 /* ConnectMacView.swift */; };
 		5A69573C603680807107967D /* BootstrapRefreshState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B41200C4ECCF717C2F83FF /* BootstrapRefreshState.swift */; };
 		5ABA35F8510FE4979480B507 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */; };
@@ -27,6 +28,7 @@
 		728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */; };
 		A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */; };
 		7D721163F0FBAC06B5BFAED5 /* PairingQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */; };
+		7D81AFD1D68FD35847B02B8B /* CanonicalAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */; };
 		7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */; };
 		7F052AC076A2A6E5DF5B3C71 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */; };
 		81E5D60B265B5781CCBD6929 /* PairedMacCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */; };
@@ -75,6 +77,7 @@
 
 /* Begin PBXFileReference section */
 		0FF2F2FACC1376743EC08E7D /* APIEndpoint.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEndpoint.swift; sourceTree = "<group>"; };
+		1057556068324C56A398389E /* CanonicalAPI.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalAPI.swift; sourceTree = "<group>"; };
 		11FF430F6C71FBBABFA6555C /* RootView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootView.swift; sourceTree = "<group>"; };
 		1212A043B7E830A01E98677F /* APIEndpointTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = APIEndpointTests.swift; sourceTree = "<group>"; };
 		17B14234E69D03441C0E0E38 /* ConnectMacView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ConnectMacView.swift; sourceTree = "<group>"; };
@@ -93,6 +96,7 @@
 		5FF9DEA9D7FE3ECB8EDD3229 /* HomePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePresentationTests.swift; sourceTree = "<group>"; };
 		71BB21A8A060955889668C8E /* KeychainPairedProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStore.swift; sourceTree = "<group>"; };
 		72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorApp.swift; sourceTree = "<group>"; };
+		7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalAPITests.swift; sourceTree = "<group>"; };
 		7DC40058FEF8F831775FA932 /* PairingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingModels.swift; sourceTree = "<group>"; };
 		852898A30196C020329CC8CE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerViewFactory.swift; sourceTree = "<group>"; };
@@ -217,6 +221,7 @@
 				AA9315EBE6300B8555FF013B /* App */,
 				4D61D0612612261250AB9903 /* Core */,
 				CE086B4784053E1A04F22599 /* Features */,
+				FCB11B9D1B58E5F3797F737F /* Generated */,
 				4051EA592F34FF8602562498 /* Resources */,
 				9268084DA539C83762AAF3E3 /* Shared */,
 			);
@@ -237,6 +242,7 @@
 				1212A043B7E830A01E98677F /* APIEndpointTests.swift */,
 				9134E698C17470BA8DEAFA33 /* AppEnvironmentTests.swift */,
 				F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */,
+				7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */,
 				5FF9DEA9D7FE3ECB8EDD3229 /* HomePresentationTests.swift */,
 				BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */,
 				3785A80B8904A2FC585452B1 /* MobileAPIClientTests.swift */,
@@ -349,6 +355,14 @@
 				F716CCD8D4DB516D2E22B93B /* AdvisorView.swift */,
 			);
 			path = Advisor;
+			sourceTree = "<group>";
+		};
+		FCB11B9D1B58E5F3797F737F /* Generated */ = {
+			isa = PBXGroup;
+			children = (
+				1057556068324C56A398389E /* CanonicalAPI.swift */,
+			);
+			path = Generated;
 			sourceTree = "<group>";
 		};
 /* End PBXGroup section */
@@ -487,6 +501,7 @@
 				04A80739371145D79C4C522C /* APIEndpointTests.swift in Sources */,
 				A1F1DF811E331549CF42A903 /* AppEnvironmentTests.swift in Sources */,
 				71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */,
+				7D81AFD1D68FD35847B02B8B /* CanonicalAPITests.swift in Sources */,
 				D91D56AD6769745936839702 /* HomePresentationTests.swift in Sources */,
 				3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */,
 				CB4312AFF291EE2E386CD2AF /* MobileAPIClientTests.swift in Sources */,
@@ -509,6 +524,7 @@
 				5A69573C603680807107967D /* BootstrapRefreshState.swift in Sources */,
 				728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */,
 				A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */,
+				4C2597F80888C13661659ABC /* CanonicalAPI.swift in Sources */,
 				5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */,
 				F0AEE6F85CBB2BDBCFD2C863 /* ConnectionState.swift in Sources */,
 				EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */,
