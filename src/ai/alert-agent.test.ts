@@ -24,6 +24,7 @@ vi.mock('../config.js', () => ({
   config: { AI_MAX_TURNS: 8 },
   parseModelSpec: () => ({ provider: 'anthropic', model: 'claude-sonnet-4-6' }),
   getAIModelSpec: () => 'anthropic:claude-sonnet-4-6',
+  getConfiguredThinkingLevel: () => 'off',
 }));
 
 vi.mock('./auth.js', () => ({
