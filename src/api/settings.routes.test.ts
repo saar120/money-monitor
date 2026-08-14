@@ -81,7 +81,7 @@ describe('settings routes', () => {
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
       expect(body.providers).toBeInstanceOf(Array);
-      expect(body.providers.length).toBe(5);
+      expect(body.providers.length).toBe(6);
 
       const anthropic = body.providers.find((p: any) => p.id === 'anthropic');
       expect(anthropic).toBeDefined();
@@ -104,7 +104,14 @@ describe('settings routes', () => {
       const { providers } = JSON.parse(res.body);
 
       const ids = providers.map((p: any) => p.id);
-      expect(ids).toEqual(['anthropic', 'openai', 'openai-codex', 'google', 'openrouter']);
+      expect(ids).toEqual([
+        'anthropic',
+        'openai',
+        'openai-codex',
+        'opencode-go',
+        'google',
+        'openrouter',
+      ]);
 
       // Anthropic supports both API key and OAuth
       const anthropic = providers.find((p: any) => p.id === 'anthropic');
@@ -118,8 +125,14 @@ describe('settings routes', () => {
       expect(codex.models.map((model: { id: string }) => model.id)).toContain('gpt-5.4');
       expect(codex.models.map((model: { id: string }) => model.id)).not.toContain('gpt-5.3-codex');
 
+      const opencodeGo = providers.find((p: any) => p.id === 'opencode-go');
+      expect(opencodeGo.name).toBe('OpenCode Go');
+      expect(opencodeGo.authTypes).toEqual(['api_key']);
+      expect(opencodeGo.apiKeyField).toBe('OPENCODE_API_KEY');
+      expect(opencodeGo.models.map((model: { id: string }) => model.id)).toContain('qwen3.6-plus');
+
       // Other providers support API key only
-      for (const id of ['openai', 'google', 'openrouter']) {
+      for (const id of ['openai', 'opencode-go', 'google', 'openrouter']) {
         const p = providers.find((x: any) => x.id === id);
         expect(p.authTypes).toEqual(['api_key']);
       }

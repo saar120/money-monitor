@@ -18,6 +18,7 @@ export const SECRET_KEYS = new Set([
   'ANTHROPIC_OAUTH_TOKEN',
   'API_TOKEN',
   'OPENAI_API_KEY',
+  'OPENCODE_API_KEY',
   'GEMINI_API_KEY',
   'OPENROUTER_API_KEY',
   'TELEGRAM_BOT_TOKEN',
@@ -90,6 +91,8 @@ export function saveConfigFile(settings: Record<string, string>): void {
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
 
+const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const BATCH_THINKING_LEVELS = ['inherit', ...THINKING_LEVELS] as const;
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('127.0.0.1'),
@@ -101,9 +104,12 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
   AI_PROVIDER: z.string().default('anthropic'),
   AI_CHAT_MODEL: z.string().default(''),
+  AI_THINKING_LEVEL: z.enum(THINKING_LEVELS).default('off'),
   AI_BATCH_PROVIDER: z.string().default(''),
   AI_BATCH_MODEL_ID: z.string().default(''),
+  AI_BATCH_THINKING_LEVEL: z.enum(BATCH_THINKING_LEVELS).default('inherit'),
   OPENAI_API_KEY: z.string().default(''),
+  OPENCODE_API_KEY: z.string().default(''),
   GEMINI_API_KEY: z.string().default(''),
   OPENROUTER_API_KEY: z.string().default(''),
   AI_MODEL: z.string().optional(),
@@ -197,4 +203,24 @@ export function getBatchModelSpec(): string {
   const provider = config.AI_BATCH_PROVIDER || config.AI_PROVIDER;
   const model = config.AI_BATCH_MODEL_ID || config.AI_CHAT_MODEL || config.ANTHROPIC_MODEL;
   return `${provider}:${model}`;
+}
+
+/** Return a provider-neutral reasoning level only when the selected model supports it. */
+export function getConfiguredThinkingLevel(
+  supportsReasoning: boolean,
+): Exclude<Config['AI_THINKING_LEVEL'], 'off'> | undefined {
+  if (!supportsReasoning || config.AI_THINKING_LEVEL === 'off') return undefined;
+  return config.AI_THINKING_LEVEL;
+}
+
+/** Resolve the batch override, falling back to the chat thinking setting when requested. */
+export function getConfiguredBatchThinkingLevel(
+  supportsReasoning: boolean,
+): Exclude<Config['AI_THINKING_LEVEL'], 'off'> | undefined {
+  const level =
+    config.AI_BATCH_THINKING_LEVEL === 'inherit'
+      ? config.AI_THINKING_LEVEL
+      : config.AI_BATCH_THINKING_LEVEL;
+  if (!supportsReasoning || level === 'off') return undefined;
+  return level;
 }

@@ -149,6 +149,7 @@ export const PROVIDER_KEY_MAP: Record<string, keyof Config> = {
   anthropic: 'ANTHROPIC_API_KEY',
   openai: 'OPENAI_API_KEY',
   'openai-codex': 'OPENAI_API_KEY',
+  'opencode-go': 'OPENCODE_API_KEY',
   google: 'GEMINI_API_KEY',
   openrouter: 'OPENROUTER_API_KEY',
 };
