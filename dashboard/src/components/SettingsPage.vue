@@ -45,6 +45,7 @@ const form = ref({
   AI_BATCH_PROVIDER: '',
   AI_BATCH_MODEL_ID: '',
   OPENAI_API_KEY: '',
+  OPENCODE_API_KEY: '',
   GEMINI_API_KEY: '',
   OPENROUTER_API_KEY: '',
   CREDENTIALS_MASTER_KEY: '',
@@ -274,6 +275,7 @@ async function save() {
       'CREDENTIALS_MASTER_KEY',
       'TELEGRAM_BOT_TOKEN',
       'OPENAI_API_KEY',
+      'OPENCODE_API_KEY',
       'GEMINI_API_KEY',
       'OPENROUTER_API_KEY',
     ] as const;
@@ -404,6 +406,19 @@ async function save() {
                 }
               "
             />
+            <p
+              v-if="form.AI_PROVIDER === 'opencode-go'"
+              class="mt-1 text-[11px] leading-relaxed text-text-secondary"
+            >
+              Use your OpenCode Go API key. Models use OpenCode’s OpenAI-compatible Go endpoint.
+              <a
+                href="https://opencode.ai/zen/go"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline"
+                >Learn more</a
+              >
+            </p>
           </SettingsRow>
 
           <!-- Anthropic OAuth section -->

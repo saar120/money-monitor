@@ -49,6 +49,7 @@ function resetConfig() {
     ANTHROPIC_API_KEY: '',
     ANTHROPIC_OAUTH_TOKEN: undefined,
     OPENAI_API_KEY: '',
+    OPENCODE_API_KEY: '',
     GEMINI_API_KEY: '',
     OPENROUTER_API_KEY: '',
   });
@@ -62,6 +63,7 @@ describe('PROVIDER_KEY_MAP', () => {
       anthropic: 'ANTHROPIC_API_KEY',
       openai: 'OPENAI_API_KEY',
       'openai-codex': 'OPENAI_API_KEY',
+      'opencode-go': 'OPENCODE_API_KEY',
       google: 'GEMINI_API_KEY',
       openrouter: 'OPENROUTER_API_KEY',
     });
@@ -119,6 +121,9 @@ describe('resolveApiKey', () => {
 
     mockConfig.OPENROUTER_API_KEY = 'or-key';
     expect(await resolveApiKey('openrouter')).toBe('or-key');
+
+    mockConfig.OPENCODE_API_KEY = 'opencode-go-key';
+    expect(await resolveApiKey('opencode-go')).toBe('opencode-go-key');
   });
 
   it('returns undefined when no key is available (step 4)', async () => {

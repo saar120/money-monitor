@@ -57,6 +57,7 @@ function hasEnvApiKey(provider: string): boolean {
     anthropic: ['ANTHROPIC_API_KEY'],
     openai: ['OPENAI_API_KEY'],
     'openai-codex': ['OPENAI_API_KEY'],
+    'opencode-go': ['OPENCODE_API_KEY'],
     google: ['GEMINI_API_KEY'],
     groq: ['GROQ_API_KEY'],
     xai: ['XAI_API_KEY'],

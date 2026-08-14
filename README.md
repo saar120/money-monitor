@@ -37,21 +37,21 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 ## Tech Stack
 
-| Layer             | Technology                                                             |
-| ----------------- | ---------------------------------------------------------------------- |
-| **Desktop**       | Electron (macOS, Windows, Linux)                                       |
-| **Backend**       | Node.js + TypeScript, Fastify                                          |
-| **Frontend**      | Vue 3 (Composition API), Vite, Tailwind CSS                            |
-| **Database**      | SQLite via better-sqlite3, Drizzle ORM                                 |
-| **Scraping**      | israeli-bank-scrapers, Puppeteer + Stealth Plugin                      |
-| **AI**            | Pi AI multi-provider framework (Anthropic, OpenAI, Google, OpenRouter) |
-| **MCP**           | Model Context Protocol SDK (stdio transport)                           |
-| **Telegram**      | grammy                                                                 |
-| **Scheduling**    | node-cron (Israel timezone)                                            |
-| **Charts**        | Chart.js + vue-chartjs                                                 |
-| **UI Components** | Reka UI (headless), Lucide icons                                       |
-| **Testing**       | Vitest                                                                 |
-| **Validation**    | Zod                                                                    |
+| Layer             | Technology                                                                          |
+| ----------------- | ----------------------------------------------------------------------------------- |
+| **Desktop**       | Electron (macOS, Windows, Linux)                                                    |
+| **Backend**       | Node.js + TypeScript, Fastify                                                       |
+| **Frontend**      | Vue 3 (Composition API), Vite, Tailwind CSS                                         |
+| **Database**      | SQLite via better-sqlite3, Drizzle ORM                                              |
+| **Scraping**      | israeli-bank-scrapers, Puppeteer + Stealth Plugin                                   |
+| **AI**            | Pi AI multi-provider framework (Anthropic, OpenAI, OpenCode Go, Google, OpenRouter) |
+| **MCP**           | Model Context Protocol SDK (stdio transport)                                        |
+| **Telegram**      | grammy                                                                              |
+| **Scheduling**    | node-cron (Israel timezone)                                                         |
+| **Charts**        | Chart.js + vue-chartjs                                                              |
+| **UI Components** | Reka UI (headless), Lucide icons                                                    |
+| **Testing**       | Vitest                                                                              |
+| **Validation**    | Zod                                                                                 |
 
 ## Architecture
 
@@ -128,9 +128,14 @@ SCRAPE_CRON="0 6 * * *"
 SCRAPE_TIMEZONE=Asia/Jerusalem
 SCRAPE_START_DATE_MONTHS_BACK=3
 
-# AI (Anthropic by default — see config.ts for OpenAI, Google, OpenRouter options)
+# AI (Anthropic by default — see config.ts for OpenAI, OpenCode Go, Google, OpenRouter options)
 ANTHROPIC_API_KEY=<your-api-key>
 ANTHROPIC_MODEL=claude-sonnet-4-6
+# OpenCode Go is also available through its OpenAI-compatible API:
+# OPENCODE_API_KEY=<your-opencode-go-api-key>
+# AI_PROVIDER=opencode-go
+# AI_CHAT_MODEL=qwen3.6-plus
+# The provider uses OpenCode's Go API at https://opencode.ai/zen/go/v1.
 
 # Dashboard API URL
 VITE_API_URL=http://localhost:3000
@@ -292,6 +297,3 @@ Running `npm run restore` with no arguments restores the latest archive from `./
 ## License
 
 ISC
-
-
-

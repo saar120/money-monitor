@@ -194,6 +194,20 @@ async function finish() {
               type="password"
               :placeholder="selectedProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'"
             />
+            <p
+              v-if="selectedProvider === 'opencode-go'"
+              class="text-[11px] leading-relaxed text-text-secondary"
+            >
+              Enter your OpenCode Go API key. The available models and OpenAI-compatible endpoint
+              are configured automatically.
+              <a
+                href="https://opencode.ai/zen/go"
+                target="_blank"
+                rel="noopener noreferrer"
+                class="underline"
+                >Learn more</a
+              >
+            </p>
           </div>
 
           <!-- Anthropic OAuth (alternative to API key) -->

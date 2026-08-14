@@ -15,6 +15,7 @@ vi.mock('../config.js', () => ({
     AI_BATCH_PROVIDER: '',
     AI_BATCH_MODEL_ID: '',
     OPENAI_API_KEY: '',
+    OPENCODE_API_KEY: '',
     GEMINI_API_KEY: '',
     OPENROUTER_API_KEY: '',
     API_TOKEN: 'test-token',

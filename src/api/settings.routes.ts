@@ -35,6 +35,7 @@ const SETTABLE_KEYS = [
   'AI_BATCH_PROVIDER',
   'AI_BATCH_MODEL_ID',
   'OPENAI_API_KEY',
+  'OPENCODE_API_KEY',
   'GEMINI_API_KEY',
   'OPENROUTER_API_KEY',
   'CREDENTIALS_MASTER_KEY',
@@ -125,6 +126,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     anthropic: { name: 'Anthropic', authTypes: ['api_key', 'oauth'] },
     openai: { name: 'OpenAI', authTypes: ['api_key'] },
     'openai-codex': { name: 'ChatGPT Plus/Pro', authTypes: ['oauth'] },
+    'opencode-go': { name: 'OpenCode Go', authTypes: ['api_key'] },
     google: { name: 'Google Gemini', authTypes: ['api_key'] },
     openrouter: { name: 'OpenRouter', authTypes: ['api_key'] },
   };
