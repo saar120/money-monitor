@@ -1,11 +1,12 @@
 import { describe, it, expect, beforeEach } from 'vitest';
 
 // Ensure required env var is set before importing the real module
-process.env.CREDENTIALS_MASTER_KEY = process.env.CREDENTIALS_MASTER_KEY || 'test-config-functions-key';
+process.env.CREDENTIALS_MASTER_KEY =
+  process.env.CREDENTIALS_MASTER_KEY || 'test-config-functions-key';
 
 // Import actual implementations (bypassing the global mock from setup.ts)
 // config.ts has top-level await but works fine in vitest's ESM environment.
-const { parseModelSpec, getAIModelSpec, getBatchModelSpec, config } =
+const { parseModelSpec, getAIModelSpec, getBatchModelSpec, getConfiguredThinkingLevel, config } =
   await vi.importActual<typeof import('./config.js')>('./config.js');
 
 // ── parseModelSpec ───────────────────────────────────────────────────────────
@@ -16,7 +17,10 @@ describe('parseModelSpec', () => {
   });
 
   it('defaults to anthropic when no colon', () => {
-    expect(parseModelSpec('claude-sonnet-4-6')).toEqual({ provider: 'anthropic', model: 'claude-sonnet-4-6' });
+    expect(parseModelSpec('claude-sonnet-4-6')).toEqual({
+      provider: 'anthropic',
+      model: 'claude-sonnet-4-6',
+    });
   });
 
   it('handles multiple colons (only splits on first)', () => {
@@ -110,5 +114,23 @@ describe('getBatchModelSpec', () => {
     config.AI_BATCH_PROVIDER = 'openai';
     config.AI_BATCH_MODEL_ID = 'gpt-4o-mini';
     expect(getBatchModelSpec()).toBe('openai:gpt-4o-mini');
+  });
+});
+
+describe('getConfiguredThinkingLevel', () => {
+  beforeEach(() => {
+    config.AI_THINKING_LEVEL = 'off';
+  });
+
+  it('does not request reasoning when it is disabled or the model does not support it', () => {
+    expect(getConfiguredThinkingLevel(true)).toBeUndefined();
+
+    config.AI_THINKING_LEVEL = 'high';
+    expect(getConfiguredThinkingLevel(false)).toBeUndefined();
+  });
+
+  it('returns the selected level for reasoning-capable models', () => {
+    config.AI_THINKING_LEVEL = 'xhigh';
+    expect(getConfiguredThinkingLevel(true)).toBe('xhigh');
   });
 });

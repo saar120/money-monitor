@@ -91,6 +91,7 @@ export function saveConfigFile(settings: Record<string, string>): void {
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
 
+const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('127.0.0.1'),
@@ -102,6 +103,7 @@ const envSchema = z.object({
   ANTHROPIC_MODEL: z.string().default('claude-sonnet-4-6'),
   AI_PROVIDER: z.string().default('anthropic'),
   AI_CHAT_MODEL: z.string().default(''),
+  AI_THINKING_LEVEL: z.enum(THINKING_LEVELS).default('off'),
   AI_BATCH_PROVIDER: z.string().default(''),
   AI_BATCH_MODEL_ID: z.string().default(''),
   OPENAI_API_KEY: z.string().default(''),
@@ -199,4 +201,12 @@ export function getBatchModelSpec(): string {
   const provider = config.AI_BATCH_PROVIDER || config.AI_PROVIDER;
   const model = config.AI_BATCH_MODEL_ID || config.AI_CHAT_MODEL || config.ANTHROPIC_MODEL;
   return `${provider}:${model}`;
+}
+
+/** Return a provider-neutral reasoning level only when the selected model supports it. */
+export function getConfiguredThinkingLevel(
+  supportsReasoning: boolean,
+): Exclude<Config['AI_THINKING_LEVEL'], 'off'> | undefined {
+  if (!supportsReasoning || config.AI_THINKING_LEVEL === 'off') return undefined;
+  return config.AI_THINKING_LEVEL;
 }

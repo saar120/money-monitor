@@ -2,6 +2,7 @@ import { Agent } from '@earendil-works/pi-agent-core';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import { resolveApiKey } from './auth.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
+import { getConfiguredThinkingLevel } from '../config.js';
 import {
   buildQueryTransactionsTool,
   buildGetSpendingSummaryTool,
@@ -49,7 +50,12 @@ export async function runAlertAgent(opts: {
   const tools = buildAlertTools();
 
   const agent = new Agent({
-    initialState: { systemPrompt: opts.systemPrompt, model, tools, thinkingLevel: 'low' as const },
+    initialState: {
+      systemPrompt: opts.systemPrompt,
+      model,
+      tools,
+      thinkingLevel: getConfiguredThinkingLevel(model.reasoning) ?? 'off',
+    },
     getApiKey: resolveApiKey,
   });
 

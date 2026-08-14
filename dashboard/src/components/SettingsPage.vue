@@ -42,6 +42,7 @@ const form = ref({
   ANTHROPIC_MODEL: 'claude-sonnet-4-6',
   AI_PROVIDER: 'anthropic',
   AI_CHAT_MODEL: '',
+  AI_THINKING_LEVEL: 'off',
   AI_BATCH_PROVIDER: '',
   AI_BATCH_MODEL_ID: '',
   OPENAI_API_KEY: '',
@@ -62,6 +63,15 @@ const form = ref({
 const currentProvider = computed(() =>
   providers.value.find((p) => p.id === form.value.AI_PROVIDER),
 );
+const currentModel = computed(() =>
+  currentProvider.value?.models.find(
+    (model) =>
+      model.id ===
+      (form.value.AI_CHAT_MODEL ||
+        (form.value.AI_PROVIDER === 'anthropic' ? form.value.ANTHROPIC_MODEL : '')),
+  ),
+);
+const supportsCurrentModelThinking = computed(() => currentModel.value?.reasoning ?? false);
 const batchProvider = computed(() =>
   providers.value.find((p) => p.id === (form.value.AI_BATCH_PROVIDER || form.value.AI_PROVIDER)),
 );
@@ -95,6 +105,7 @@ onMounted(async () => {
     form.value.ANTHROPIC_MODEL = String(s.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
     form.value.AI_PROVIDER = String(s.AI_PROVIDER || 'anthropic');
     form.value.AI_CHAT_MODEL = String(s.AI_CHAT_MODEL || '');
+    form.value.AI_THINKING_LEVEL = String(s.AI_THINKING_LEVEL || 'off');
     form.value.AI_BATCH_PROVIDER = String(s.AI_BATCH_PROVIDER || '');
     form.value.AI_BATCH_MODEL_ID = String(s.AI_BATCH_MODEL_ID || '');
     useSeparateBatch.value = !!(s.AI_BATCH_PROVIDER || s.AI_BATCH_MODEL_ID);
@@ -258,6 +269,7 @@ async function save() {
       ANTHROPIC_MODEL: form.value.ANTHROPIC_MODEL,
       AI_PROVIDER: form.value.AI_PROVIDER,
       AI_CHAT_MODEL: form.value.AI_CHAT_MODEL,
+      AI_THINKING_LEVEL: form.value.AI_THINKING_LEVEL,
       AI_BATCH_PROVIDER: useSeparateBatch.value ? form.value.AI_BATCH_PROVIDER : '',
       AI_BATCH_MODEL_ID: useSeparateBatch.value ? form.value.AI_BATCH_MODEL_ID : '',
       SCRAPE_CRON: form.value.SCRAPE_CRON,
@@ -569,6 +581,27 @@ async function save() {
                 <SelectItem v-for="m in currentProvider?.models ?? []" :key="m.id" :value="m.id">
                   {{ m.name }}
                 </SelectItem>
+              </SelectContent>
+            </Select>
+          </SettingsRow>
+
+          <SettingsRow
+            v-if="supportsCurrentModelThinking"
+            label="Thinking Level"
+            description="Higher levels may improve complex answers but increase time and usage"
+          >
+            <Select v-model="form.AI_THINKING_LEVEL">
+              <SelectTrigger>
+                <SelectValue placeholder="Select thinking level" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="off">Off</SelectItem>
+                <SelectItem value="minimal">Minimal</SelectItem>
+                <SelectItem value="low">Low</SelectItem>
+                <SelectItem value="medium">Medium</SelectItem>
+                <SelectItem value="high">High</SelectItem>
+                <SelectItem value="xhigh">Extra high</SelectItem>
+                <SelectItem value="max">Maximum</SelectItem>
               </SelectContent>
             </Select>
           </SettingsRow>

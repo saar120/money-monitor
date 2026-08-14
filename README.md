@@ -131,6 +131,8 @@ SCRAPE_START_DATE_MONTHS_BACK=3
 # AI (Anthropic by default — see config.ts for OpenAI, OpenCode Go, Google, OpenRouter options)
 ANTHROPIC_API_KEY=<your-api-key>
 ANTHROPIC_MODEL=claude-sonnet-4-6
+# Reasoning-capable models only: off, minimal, low, medium, high, xhigh, or max
+AI_THINKING_LEVEL=off
 # OpenCode Go is also available through its OpenAI-compatible API:
 # OPENCODE_API_KEY=<your-opencode-go-api-key>
 # AI_PROVIDER=opencode-go

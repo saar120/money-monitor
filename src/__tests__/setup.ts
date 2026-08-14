@@ -12,6 +12,7 @@ vi.mock('../config.js', () => ({
     ANTHROPIC_MODEL: 'claude-sonnet-4-6',
     AI_PROVIDER: 'anthropic',
     AI_CHAT_MODEL: '',
+    AI_THINKING_LEVEL: 'off',
     AI_BATCH_PROVIDER: '',
     AI_BATCH_MODEL_ID: '',
     OPENAI_API_KEY: '',
