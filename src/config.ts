@@ -255,7 +255,6 @@ export function getConfiguredThinkingLevel(
   if (!supportsReasoning || config.AI_THINKING_LEVEL === 'off') return undefined;
   return config.AI_THINKING_LEVEL;
 }
-
 /** Resolve the batch override, falling back to the chat thinking setting when requested. */
 export function getConfiguredBatchThinkingLevel(
   supportsReasoning: boolean,
