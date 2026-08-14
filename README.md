@@ -133,6 +133,8 @@ ANTHROPIC_API_KEY=<your-api-key>
 ANTHROPIC_MODEL=claude-sonnet-4-6
 # Reasoning-capable models only: off, minimal, low, medium, high, xhigh, or max
 AI_THINKING_LEVEL=off
+# Batch model override: inherit, off, minimal, low, medium, high, xhigh, or max
+AI_BATCH_THINKING_LEVEL=inherit
 # OpenCode Go is also available through its OpenAI-compatible API:
 # OPENCODE_API_KEY=<your-opencode-go-api-key>
 # AI_PROVIDER=opencode-go

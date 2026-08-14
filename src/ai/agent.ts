@@ -3,7 +3,12 @@ import { completeSimple } from '@earendil-works/pi-ai/compat';
 import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
 import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
 import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import { config, getBatchModelSpec, getConfiguredThinkingLevel } from '../config.js';
+import {
+  config,
+  getBatchModelSpec,
+  getConfiguredBatchThinkingLevel,
+  getConfiguredThinkingLevel,
+} from '../config.js';
 import { applyOwnership } from '../services/ownership.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
 import { db } from '../db/connection.js';
@@ -347,7 +352,7 @@ async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: numb
   const txnList = txns.map(formatTransactionForPrompt).join('\n');
 
   const { model, provider } = resolveModel(getBatchModelSpec());
-  const reasoning = getConfiguredThinkingLevel(model.reasoning);
+  const reasoning = getConfiguredBatchThinkingLevel(model.reasoning);
 
   // Resolve OAuth key if available
   const oauthKey = await resolveApiKey(provider);

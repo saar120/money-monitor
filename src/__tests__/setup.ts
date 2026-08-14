@@ -15,6 +15,7 @@ vi.mock('../config.js', () => ({
     AI_THINKING_LEVEL: 'off',
     AI_BATCH_PROVIDER: '',
     AI_BATCH_MODEL_ID: '',
+    AI_BATCH_THINKING_LEVEL: 'inherit',
     OPENAI_API_KEY: '',
     OPENCODE_API_KEY: '',
     GEMINI_API_KEY: '',

@@ -6,8 +6,14 @@ process.env.CREDENTIALS_MASTER_KEY =
 
 // Import actual implementations (bypassing the global mock from setup.ts)
 // config.ts has top-level await but works fine in vitest's ESM environment.
-const { parseModelSpec, getAIModelSpec, getBatchModelSpec, getConfiguredThinkingLevel, config } =
-  await vi.importActual<typeof import('./config.js')>('./config.js');
+const {
+  parseModelSpec,
+  getAIModelSpec,
+  getBatchModelSpec,
+  getConfiguredBatchThinkingLevel,
+  getConfiguredThinkingLevel,
+  config,
+} = await vi.importActual<typeof import('./config.js')>('./config.js');
 
 // ── parseModelSpec ───────────────────────────────────────────────────────────
 
@@ -120,6 +126,7 @@ describe('getBatchModelSpec', () => {
 describe('getConfiguredThinkingLevel', () => {
   beforeEach(() => {
     config.AI_THINKING_LEVEL = 'off';
+    config.AI_BATCH_THINKING_LEVEL = 'inherit';
   });
 
   it('does not request reasoning when it is disabled or the model does not support it', () => {
@@ -132,5 +139,22 @@ describe('getConfiguredThinkingLevel', () => {
   it('returns the selected level for reasoning-capable models', () => {
     config.AI_THINKING_LEVEL = 'xhigh';
     expect(getConfiguredThinkingLevel(true)).toBe('xhigh');
+  });
+});
+
+describe('getConfiguredBatchThinkingLevel', () => {
+  beforeEach(() => {
+    config.AI_THINKING_LEVEL = 'medium';
+    config.AI_BATCH_THINKING_LEVEL = 'inherit';
+  });
+
+  it('inherits the chat setting by default', () => {
+    expect(getConfiguredBatchThinkingLevel(true)).toBe('medium');
+  });
+
+  it('uses an explicit batch override only for reasoning-capable models', () => {
+    config.AI_BATCH_THINKING_LEVEL = 'low';
+    expect(getConfiguredBatchThinkingLevel(true)).toBe('low');
+    expect(getConfiguredBatchThinkingLevel(false)).toBeUndefined();
   });
 });

@@ -92,6 +92,7 @@ export function saveConfigFile(settings: Record<string, string>): void {
 // ── Zod schema ──────────────────────────────────────────────────────────────
 
 const THINKING_LEVELS = ['off', 'minimal', 'low', 'medium', 'high', 'xhigh', 'max'] as const;
+const BATCH_THINKING_LEVELS = ['inherit', ...THINKING_LEVELS] as const;
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('127.0.0.1'),
@@ -106,6 +107,7 @@ const envSchema = z.object({
   AI_THINKING_LEVEL: z.enum(THINKING_LEVELS).default('off'),
   AI_BATCH_PROVIDER: z.string().default(''),
   AI_BATCH_MODEL_ID: z.string().default(''),
+  AI_BATCH_THINKING_LEVEL: z.enum(BATCH_THINKING_LEVELS).default('inherit'),
   OPENAI_API_KEY: z.string().default(''),
   OPENCODE_API_KEY: z.string().default(''),
   GEMINI_API_KEY: z.string().default(''),
@@ -209,4 +211,16 @@ export function getConfiguredThinkingLevel(
 ): Exclude<Config['AI_THINKING_LEVEL'], 'off'> | undefined {
   if (!supportsReasoning || config.AI_THINKING_LEVEL === 'off') return undefined;
   return config.AI_THINKING_LEVEL;
+}
+
+/** Resolve the batch override, falling back to the chat thinking setting when requested. */
+export function getConfiguredBatchThinkingLevel(
+  supportsReasoning: boolean,
+): Exclude<Config['AI_THINKING_LEVEL'], 'off'> | undefined {
+  const level =
+    config.AI_BATCH_THINKING_LEVEL === 'inherit'
+      ? config.AI_THINKING_LEVEL
+      : config.AI_BATCH_THINKING_LEVEL;
+  if (!supportsReasoning || level === 'off') return undefined;
+  return level;
 }
