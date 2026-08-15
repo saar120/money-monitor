@@ -18,6 +18,10 @@ settings:
     CODE_SIGN_STYLE: Automatic
     ENABLE_USER_SCRIPT_SANDBOXING: YES
 
+packages:
+  CanonicalAPI:
+    path: CanonicalAPI
+
 targets:
   MoneyMonitor:
     type: application
@@ -26,6 +30,8 @@ targets:
       - path: MoneyMonitor
         excludes:
           - '**/*.md'
+    dependencies:
+      - package: CanonicalAPI
     settings:
       base:
         PRODUCT_BUNDLE_IDENTIFIER: com.example.MoneyMonitor

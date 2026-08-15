@@ -11,32 +11,39 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
 
     private(set) var requests: [Request] = []
 
-    func request(
-        method: String,
-        path: String,
-        body: Data?,
-        headers: [String: String]
-    ) async throws -> (status: Int, body: Data) {
+    func send(
+        _ request: CanonicalHTTPRequest,
+        body: CanonicalHTTPBody?,
+        baseURL: URL,
+        operationID: String
+    ) async throws -> (CanonicalHTTPResponse, CanonicalHTTPBody?) {
+        let method = request.method.rawValue
+        let path = request.path ?? ""
+        let headers = [
+            "Authorization": request.headerFields[.authorization],
+            "Accept": request.headerFields[.accept],
+        ].compactMapValues { $0 }
         requests.append(Request(method: method, path: path, headers: headers))
+        let response: (status: Int, body: Data)
         if path.hasPrefix("/api/v1/reference?") && method == "GET" {
-            return (200, Data(referenceJSON.utf8))
+            response = (200, Data(referenceJSON.utf8))
+        } else if path == "/api/v1/reference/1" && method == "PATCH" {
+            response = (200, Data(referenceJSON.utf8))
+        } else if path == "/api/v1/reference/1?expectedVersion=1" && method == "DELETE" {
+            response = (200, Data(deleteJSON.utf8))
+        } else if path == "/api/v1/reference/commands/refresh" && method == "POST" {
+            response = (200, Data(commandJSON.utf8))
+        } else if path == "/api/v1/diagnostics" && method == "GET" {
+            response = (200, Data(diagnosticsJSON.utf8))
+        } else if path == "/api/v1/pairing/status" && method == "GET" {
+            response = (200, Data(pairingJSON.utf8))
+        } else {
+            response = (404, Data(errorJSON.utf8))
         }
-        if path == "/api/v1/reference/1" && method == "PATCH" {
-            return (200, Data(referenceJSON.utf8))
-        }
-        if path == "/api/v1/reference/1?expectedVersion=1" && method == "DELETE" {
-            return (200, Data(deleteJSON.utf8))
-        }
-        if path == "/api/v1/reference/commands/refresh" && method == "POST" {
-            return (200, Data(commandJSON.utf8))
-        }
-        if path == "/api/v1/diagnostics" && method == "GET" {
-            return (200, Data(diagnosticsJSON.utf8))
-        }
-        if path == "/api/v1/pairing/status" && method == "GET" {
-            return (200, Data(pairingJSON.utf8))
-        }
-        return (404, Data(errorJSON.utf8))
+        return (
+            CanonicalHTTPResponse(status: .init(code: response.status), headerFields: [.contentType: "application/json"]),
+            CanonicalHTTPBody(response.body)
+        )
     }
 
     private let referenceJSON = """
@@ -148,19 +155,13 @@ final class CanonicalAPITests: XCTestCase {
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [CanonicalURLProtocol.self]
         let session = URLSession(configuration: configuration)
-        let transport = CanonicalURLSessionTransport(
+        let client = CanonicalAPIClient(
             baseURL: URL(string: "https://mac.tailnet.ts.net/money-monitor")!,
+            token: "issued-device-token",
             session: session
         )
 
-        let result = try await transport.request(
-            method: "GET",
-            path: "/api/v1/reference?id=1",
-            body: nil,
-            headers: [:]
-        )
-
-        XCTAssertEqual(result.status, 200)
+        _ = try await client.getReference()
         XCTAssertEqual(
             CanonicalURLProtocol.lastURL?.absoluteString,
             "https://mac.tailnet.ts.net/money-monitor/api/v1/reference?id=1"

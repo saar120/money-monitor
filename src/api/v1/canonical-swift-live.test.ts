@@ -1,8 +1,6 @@
 import { createServer as createHttpServer, type Server } from 'node:http';
 import { promisify } from 'node:util';
 import { execFile, spawnSync } from 'node:child_process';
-import { mkdtempSync, rmSync } from 'node:fs';
-import { tmpdir } from 'node:os';
 import { join } from 'node:path';
 import { afterEach, describe, expect, it } from 'vitest';
 import { createCanonicalHarness, type CanonicalHarness } from './test-harness.js';
@@ -64,18 +62,13 @@ describe('generated Swift client over a live canonical listener', () => {
       response.end(Buffer.from(await upstream.arrayBuffer()));
     });
 
-    const temporaryDirectory = mkdtempSync(join(tmpdir(), 'money-monitor-swift-live-'));
-    const binaryPath = join(temporaryDirectory, 'canonical-swift-live-runner');
     try {
       const proxyPort = await listen(proxy);
-      await execFileAsync('swiftc', [
-        join(process.cwd(), 'ios/MoneyMonitor/Generated/CanonicalAPI.swift'),
-        join(process.cwd(), 'scripts/canonical-swift-live-runner.swift'),
-        '-parse-as-library',
-        '-o',
-        binaryPath,
-      ]);
-      const { stdout } = await execFileAsync(binaryPath, [
+      const { stdout } = await execFileAsync('swift', [
+        'run',
+        '--package-path',
+        join(process.cwd(), 'ios/CanonicalAPI'),
+        'CanonicalAPILiveRunner',
         `http://127.0.0.1:${proxyPort}/money-monitor`,
         harness.macToken,
       ]);
@@ -84,7 +77,6 @@ describe('generated Swift client over a live canonical listener', () => {
       expect(stdout.trim()).toBe('1|123.45|ILS');
     } finally {
       if (proxy.listening) await close(proxy);
-      rmSync(temporaryDirectory, { recursive: true, force: true });
     }
   });
 });

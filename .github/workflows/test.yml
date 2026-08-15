@@ -21,3 +21,24 @@ jobs:
       - run: npm ci
 
       - run: npm test
+
+      - run: npm run build
+
+  swift-integration:
+    runs-on: macos-latest
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build the generated Swift OpenAPI package
+        run: swift build --package-path ios/CanonicalAPI
+
+      - name: Compile the iOS app and its generated-client tests
+        run: >-
+          xcodebuild
+          -project ios/MoneyMonitor.xcodeproj
+          -scheme MoneyMonitor
+          -sdk iphonesimulator
+          -configuration Debug
+          CODE_SIGNING_ALLOWED=NO
+          build-for-testing
