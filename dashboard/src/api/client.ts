@@ -20,9 +20,8 @@ export function clearApiToken(): void {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
-  const isFormDataBody = typeof FormData !== 'undefined' && options?.body instanceof FormData;
   const headers: Record<string, string> = {
-    ...(options?.body && !isFormDataBody ? { 'Content-Type': 'application/json' } : {}),
+    ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
     ...(options?.headers as Record<string, string>),
   };
 
@@ -116,67 +115,38 @@ export interface OneZeroImportInvalidRow {
   reason: string;
 }
 
-/**
- * The importer currently returns a date range as an object, but the optional
- * aliases keep this client compatible with older server builds while the
- * endpoint rolls out.
- */
-export interface OneZeroImportDateRange {
-  from?: string | null;
-  to?: string | null;
-  start?: string | null;
-  end?: string | null;
-  min?: string | null;
-  max?: string | null;
-}
-
-export interface OneZeroImportBalanceCandidate {
-  balance?: number | null;
-  amount?: number | null;
-  value?: number | null;
-  date?: string | null;
-  asOf?: string | null;
-}
-
 export interface OneZeroImportPreview {
-  importToken: string;
-  accountId: number;
-  fileName: string;
   rowCount: number;
-  dateRange: OneZeroImportDateRange | [string, string] | string | null;
+  dateRange: { from: string; to: string } | null;
   newCount: number;
   duplicateCount: number;
   matchedExistingCount: number;
   ambiguousCount: number;
   invalidRows: OneZeroImportInvalidRow[];
-  balanceCandidate: number | OneZeroImportBalanceCandidate | null;
 }
 
 export interface OneZeroImportCommitResult {
   imported: number;
   linked: number;
   duplicates: number;
-  ambiguous: number;
-  accountBalance?: number;
+}
+
+function oneZeroImportRequest<T>(accountId: number, file: File, commit = false) {
+  const query = new URLSearchParams({ fileName: file.name });
+  if (commit) query.set('commit', 'true');
+  return request<T>(`/accounts/${accountId}/onezero/import?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
 }
 
 export function previewOneZeroImport(accountId: number, file: File) {
-  const formData = new FormData();
-  formData.append('file', file);
-  return request<OneZeroImportPreview>(`/accounts/${accountId}/onezero/import/preview`, {
-    method: 'POST',
-    body: formData,
-  });
+  return oneZeroImportRequest<OneZeroImportPreview>(accountId, file);
 }
 
-export function commitOneZeroImport(
-  accountId: number,
-  data: { importToken: string; updateBalance?: boolean },
-) {
-  return request<OneZeroImportCommitResult>(`/accounts/${accountId}/onezero/import/commit`, {
-    method: 'POST',
-    body: JSON.stringify(data),
-  });
+export function commitOneZeroImport(accountId: number, file: File) {
+  return oneZeroImportRequest<OneZeroImportCommitResult>(accountId, file, true);
 }
 
 // ─── Transactions ───

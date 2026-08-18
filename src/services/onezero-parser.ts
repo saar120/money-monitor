@@ -20,12 +20,8 @@ export interface OneZeroParsedRow {
   row: number;
   movementDate: string;
   valueDate: string;
-  operationType: string;
   description: string;
   amount: number;
-  currency: string;
-  debitCredit: string;
-  balance: number | null;
   reference: string;
 }
 
@@ -159,22 +155,17 @@ export function parseOneZeroWorkbook(buffer: Buffer): OneZeroParseResult {
     rowCount += 1;
     const movementDate = parseDateCell(raw[0]);
     const valueDate = parseDateCell(raw[1]);
-    const operationType = nonEmptyText(raw[2]);
     const rawDescription = nonEmptyText(raw[3]);
     const amount = parseNumericCell(raw[4]);
     const currency = nonEmptyText(raw[5]).toUpperCase();
-    const debitCredit = nonEmptyText(raw[6]);
-    const balance = parseNumericCell(raw[7]);
     const reference = nonEmptyText(raw[8]);
 
     let reason: string | null = null;
     if (!movementDate) reason = 'Invalid movement date';
     else if (!valueDate) reason = 'Invalid value date';
-    else if (!operationType) reason = 'Missing operation type';
     else if (!rawDescription) reason = 'Missing description';
     else if (amount == null) reason = 'Invalid amount';
     else if (currency !== 'ILS') reason = 'Only ILS rows are supported';
-    else if (balance == null) reason = 'Invalid balance';
     else if (!reference) reason = 'Missing source reference';
     else if (seenReferences.has(reference)) reason = 'Duplicate source reference';
 
@@ -182,18 +173,14 @@ export function parseOneZeroWorkbook(buffer: Buffer): OneZeroParseResult {
       invalidRows.push({ row: rowNumber, reason });
       continue;
     }
-    if (!movementDate || !valueDate || amount == null || balance == null) continue;
+    if (!movementDate || !valueDate || amount == null) continue;
     seenReferences.add(reference);
     parsedRows.push({
       row: rowNumber,
       movementDate,
       valueDate,
-      operationType,
       description: sanitizeOneZeroDescription(rawDescription),
       amount,
-      currency,
-      debitCredit,
-      balance,
       reference,
     });
   }

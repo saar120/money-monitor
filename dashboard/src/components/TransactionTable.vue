@@ -220,16 +220,6 @@ function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') closeContextMenu();
 }
 
-async function handleTransactionsImported() {
-  try {
-    const accountData = await getAccounts();
-    allAccounts.value = accountData.accounts;
-  } catch (err) {
-    console.error('Failed to refresh accounts after import:', err);
-  }
-  fetchTransactions();
-}
-
 onMounted(async () => {
   const [accountData, catData, memberData] = await Promise.all([
     getAccounts(),
@@ -242,13 +232,11 @@ onMounted(async () => {
   fetchTransactions();
   document.addEventListener('click', closeContextMenu);
   document.addEventListener('keydown', handleKeydown);
-  window.addEventListener('money-monitor:transactions-imported', handleTransactionsImported);
 });
 
 onUnmounted(() => {
   document.removeEventListener('click', closeContextMenu);
   document.removeEventListener('keydown', handleKeydown);
-  window.removeEventListener('money-monitor:transactions-imported', handleTransactionsImported);
 });
 </script>
 

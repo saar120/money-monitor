@@ -1,13 +1,8 @@
 import { createScraper, CompanyTypes } from 'israeli-bank-scrapers-core';
+import { createHash } from 'node:crypto';
 import { eq, and } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import {
-  accounts,
-  transactions,
-  transactionSources,
-  scrapeLogs,
-  accountBalanceHistory,
-} from '../db/schema.js';
+import { accounts, transactions, scrapeLogs, accountBalanceHistory } from '../db/schema.js';
 import { getCredentials } from './credential-store.js';
 import { config } from '../config.js';
 import type {
@@ -25,91 +20,35 @@ import { broadcastSseEvent } from '../api/sse.js';
 import { batchCategorize } from '../ai/agent.js';
 import { applyOwnership } from '../services/ownership.js';
 import { ensureChromium } from './chromium.js';
-import { ensureOneZeroFetchPatch } from './one-zero-fetch-patch.js';
-import {
-  computeLegacyTransactionHash,
-  ONE_ZERO_SCRAPER_SOURCE,
-  ONE_ZERO_XLS_SOURCE,
-  sanitizeOneZeroDescription,
-  toExternalId,
-} from '../services/transaction-identity.js';
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
-function mapTransaction(
-  accountId: number,
-  txn: ScraperTransaction,
-  isOneZero = false,
-): NewTransaction {
+function computeHash(accountId: number, txn: ScraperTransaction): string {
+  const raw = `${accountId}:${txn.date}:${txn.chargedAmount}:${txn.description}`;
+  return createHash('sha256').update(raw).digest('hex');
+}
+
+function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransaction {
   const meta: Record<string, string> = {};
   if (txn.category) meta.bankCategory = txn.category;
-  const description = isOneZero ? sanitizeOneZeroDescription(txn.description) : txn.description;
 
   return {
     accountId,
-    identifier:
-      txn.identifier != null && Number.isSafeInteger(Number(txn.identifier))
-        ? Number(txn.identifier)
-        : null,
+    identifier: txn.identifier != null ? Number(txn.identifier) : null,
     date: toIsraelDateStr(txn.date),
     processedDate: toIsraelDateStr(txn.processedDate),
     originalAmount: txn.originalAmount,
     originalCurrency: txn.originalCurrency,
     chargedAmount: txn.chargedAmount,
-    description,
+    description: txn.description,
     memo: txn.memo ?? null,
     type: txn.type,
     status: txn.status,
     installmentNumber: txn.installments?.number ?? null,
     installmentTotal: txn.installments?.total ?? null,
     meta: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
-    hash: computeLegacyTransactionHash(accountId, txn.date, txn.chargedAmount, description),
+    hash: computeHash(accountId, txn),
   };
-}
-
-/**
- * Imported rows that collided with another legitimate transaction receive a
- * deterministic collision hash, so the legacy scraper hash cannot find them.
- * Only use this conservative fallback for rows explicitly marked as an XLS
- * One Zero source, and only when exactly one amount/date-pair candidate
- * exists. This prevents a later scrape from re-adding those rows without
- * weakening ordinary scraper deduplication.
- */
-function findImportedOneZeroTransaction(accountId: number, txn: ScraperTransaction): number | null {
-  const importedIds = db
-    .select({ transactionId: transactionSources.transactionId })
-    .from(transactionSources)
-    .where(
-      and(
-        eq(transactionSources.accountId, accountId),
-        eq(transactionSources.source, ONE_ZERO_XLS_SOURCE),
-      ),
-    )
-    .all()
-    .map((row) => row.transactionId);
-  if (importedIds.length === 0) return null;
-
-  const movementDate = toIsraelDateStr(txn.date);
-  const processedDate = toIsraelDateStr(txn.processedDate);
-  const candidates = db
-    .select({
-      id: transactions.id,
-      date: transactions.date,
-      processedDate: transactions.processedDate,
-      chargedAmount: transactions.chargedAmount,
-      description: transactions.description,
-    })
-    .from(transactions)
-    .where(eq(transactions.accountId, accountId))
-    .all()
-    .filter(
-      (candidate) =>
-        importedIds.includes(candidate.id) &&
-        Math.round(candidate.chargedAmount * 100) === Math.round(txn.chargedAmount * 100) &&
-        ((candidate.date === movementDate && candidate.processedDate === processedDate) ||
-          (candidate.date === processedDate && candidate.processedDate === movementDate)),
-    );
-  return candidates.length === 1 ? candidates[0].id : null;
 }
 
 /** Find or create a DB account row for a specific card returned by the scraper. */
@@ -244,10 +183,6 @@ export async function scrapeAccount(
     const accountType = getAccountType(account.companyId as CompanyId);
     const executablePath = await ensureChromium();
 
-    if (account.companyId === 'oneZero') {
-      ensureOneZeroFetchPatch();
-    }
-
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
       startDate,
@@ -365,82 +300,23 @@ export async function scrapeAccount(
         if (txn.status === 'pending') continue;
         accountFound++;
 
-        const mapped = mapTransaction(targetAccount.id, txn, targetAccount.companyId === 'oneZero');
-        const scraperExternalId =
-          targetAccount.companyId === 'oneZero' ? toExternalId(txn.identifier) : null;
+        const mapped = mapTransaction(targetAccount.id, txn);
         try {
-          // Provider identity is the strongest deduplication key. Check it
-          // before the legacy hash so a movement whose description/date changed
-          // between scraper runs cannot create a second transaction.
-          const exactScraperSourceId = scraperExternalId
-            ? db
-                .select({ transactionId: transactionSources.transactionId })
-                .from(transactionSources)
-                .where(
-                  and(
-                    eq(transactionSources.accountId, targetAccount.id),
-                    eq(transactionSources.source, ONE_ZERO_SCRAPER_SOURCE),
-                    eq(transactionSources.externalId, scraperExternalId),
-                  ),
-                )
-                .get()?.transactionId
-            : undefined;
-          const importedMatch =
-            exactScraperSourceId == null && targetAccount.companyId === 'oneZero'
-              ? findImportedOneZeroTransaction(targetAccount.id, txn)
-              : null;
-          let transactionId = exactScraperSourceId ?? importedMatch ?? undefined;
-          let inserted = false;
-          if (transactionId == null) {
-            const insertResult = db
-              .insert(transactions)
-              .values({
-                ...mapped,
-                expenseOwnerType: targetAccount.memberId != null ? 'member' : 'unassigned',
-                expenseOwnerMemberId: targetAccount.memberId ?? null,
-                ownerSource: targetAccount.memberId != null ? 'account' : 'unassigned',
-                ownerConfidence: targetAccount.memberId != null ? 1 : null,
-                scrapeSessionId: sessionId ?? null,
-              })
-              .onConflictDoNothing({ target: transactions.hash })
-              .run();
-            if (insertResult.changes > 0) {
-              transactionId = Number(insertResult.lastInsertRowid);
-              inserted = true;
-              accountNew++;
-              newIds.push(transactionId);
-            } else {
-              transactionId = db
-                .select({ id: transactions.id })
-                .from(transactions)
-                .where(eq(transactions.hash, mapped.hash))
-                .get()?.id;
-            }
-          }
-
-          // Keep provider movement IDs as text, even though the legacy
-          // transactions.identifier column is integer for backwards compatibility.
-          // When a later scrape sees a transaction imported from XLS and the
-          // canonical legacy hash matches, attach its scraper identity instead of
-          // creating another row.
-          if (scraperExternalId && transactionId != null) {
-            if (inserted || exactScraperSourceId == null) {
-              db.insert(transactionSources)
-                .values({
-                  transactionId,
-                  accountId: targetAccount.id,
-                  source: ONE_ZERO_SCRAPER_SOURCE,
-                  externalId: scraperExternalId,
-                })
-                .onConflictDoNothing({
-                  target: [
-                    transactionSources.accountId,
-                    transactionSources.source,
-                    transactionSources.externalId,
-                  ],
-                })
-                .run();
-            }
+          const insertResult = db
+            .insert(transactions)
+            .values({
+              ...mapped,
+              expenseOwnerType: targetAccount.memberId != null ? 'member' : 'unassigned',
+              expenseOwnerMemberId: targetAccount.memberId ?? null,
+              ownerSource: targetAccount.memberId != null ? 'account' : 'unassigned',
+              ownerConfidence: targetAccount.memberId != null ? 1 : null,
+              scrapeSessionId: sessionId ?? null,
+            })
+            .onConflictDoNothing({ target: transactions.hash })
+            .run();
+          if (insertResult.changes > 0) {
+            accountNew++;
+            newIds.push(Number(insertResult.lastInsertRowid));
           }
         } catch (dbErr) {
           console.error(

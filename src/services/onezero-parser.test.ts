@@ -46,7 +46,6 @@ describe('One Zero workbook parser', () => {
       movementDate: '2026-08-04',
       valueDate: '2026-08-03',
       amount: -150,
-      currency: 'ILS',
       description: 'טקסט',
       reference: '25-21913030',
     });

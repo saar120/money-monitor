@@ -6,7 +6,6 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { dbPath, demoDbPath } from '../paths.js';
-import { ensureTransactionSourcesSchema } from './schema-repairs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, 'migrations');
@@ -44,7 +43,6 @@ realSqlite.pragma('foreign_keys = ON');
 const realDb = drizzle(realSqlite, { schema });
 
 migrate(realDb, { migrationsFolder });
-ensureTransactionSourcesSchema(realSqlite);
 
 import { runBackfills } from './backfills.js';
 runBackfills(realDb, realSqlite);
@@ -73,7 +71,6 @@ export function swapToDemo(): void {
     const newDb = drizzle(newSqlite, { schema });
 
     migrate(newDb, { migrationsFolder });
-    ensureTransactionSourcesSchema(newSqlite);
     runBackfills(newDb, newSqlite);
 
     // Only commit state after everything succeeds

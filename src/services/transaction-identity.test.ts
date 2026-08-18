@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { claimOneZeroSourceTarget, oneZeroDateFieldsOverlap } from './transaction-identity.js';
+import { oneZeroDateFieldsOverlap } from './transaction-identity.js';
 
 describe('One Zero date matching', () => {
   it.each([
@@ -37,16 +37,5 @@ describe('One Zero date matching', () => {
         { date: '2026-06-04', processedDate: '2026-06-05' },
       ),
     ).toBe(false);
-  });
-
-  it('claims an existing source target so a second legitimate reference cannot reuse it', () => {
-    const claimed = new Set<number>();
-    expect(claimOneZeroSourceTarget(42, claimed)).toBe(true);
-
-    // This models the fallback candidate filter in analyzeImport: the target
-    // already represented by the duplicate source row is no longer available.
-    const fallbackCandidates = [42].filter((id) => !claimed.has(id));
-    expect(fallbackCandidates).toEqual([]);
-    expect(claimOneZeroSourceTarget(undefined, claimed)).toBe(false);
   });
 });

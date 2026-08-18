@@ -99,7 +99,6 @@ describe('database migrations', () => {
       'members',
       'ownership_rules',
       'scrape_logs',
-      'transaction_sources',
       'transactions',
     ];
 

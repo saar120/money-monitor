@@ -1,10 +1,5 @@
 import { createHash } from 'node:crypto';
 
-/** Source namespaces are deliberately separate: movement IDs and statement references
- * are issued by different One Zero systems and can legitimately overlap. */
-export const ONE_ZERO_XLS_SOURCE = 'oneZero:xls' as const;
-export const ONE_ZERO_SCRAPER_SOURCE = 'oneZero:scraper' as const;
-
 const HEBREW_WORDS_REGEX = /[\u0590-\u05FF][\u0590-\u05FF"'\-_ /\\]*[\u0590-\u05FF]/g;
 
 /**
@@ -45,18 +40,8 @@ export function computeLegacyTransactionHash(
 }
 
 /** A deterministic collision suffix for legitimate same-day identical transactions. */
-export function computeCollisionTransactionHash(
-  baseHash: string,
-  source: string,
-  externalId: string,
-) {
-  return createHash('sha256').update(`${baseHash}:${source}:${externalId}`).digest('hex');
-}
-
-export function toExternalId(value: string | number | null | undefined): string | null {
-  if (value == null) return null;
-  const externalId = String(value).trim();
-  return externalId.length > 0 ? externalId : null;
+export function computeCollisionTransactionHash(baseHash: string, externalId: string) {
+  return createHash('sha256').update(`${baseHash}:oneZero:xls:${externalId}`).digest('hex');
 }
 
 /**
@@ -75,20 +60,4 @@ export function oneZeroDateFieldsOverlap(
     source.valueDate === existing.date ||
     source.valueDate === existing.processedDate
   );
-}
-
-/**
- * Reserve an existing transaction that already owns a statement source ID.
- * Returning false for an absent ID keeps callers from claiming fallback targets
- * when the source lookup did not resolve to a transaction.
- */
-export function claimOneZeroSourceTarget(
-  transactionId: number | null | undefined,
-  claimed: Set<number>,
-): boolean {
-  if (transactionId == null || !Number.isSafeInteger(transactionId) || transactionId <= 0) {
-    return false;
-  }
-  claimed.add(transactionId);
-  return true;
 }

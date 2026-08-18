@@ -1,7 +1,6 @@
 import Fastify, { type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
-import multipart from '@fastify/multipart';
 import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
@@ -93,10 +92,6 @@ export async function createServer() {
       }
     },
     methods: ['GET', 'HEAD', 'POST', 'PUT', 'PATCH', 'DELETE', 'OPTIONS'],
-  });
-
-  await app.register(multipart, {
-    limits: { fileSize: 10 * 1024 * 1024, files: 1 },
   });
 
   // API token authentication
