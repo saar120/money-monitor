@@ -20,8 +20,9 @@ export function clearApiToken(): void {
 }
 
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
+  const isFormDataBody = typeof FormData !== 'undefined' && options?.body instanceof FormData;
   const headers: Record<string, string> = {
-    ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
+    ...(options?.body && !isFormDataBody ? { 'Content-Type': 'application/json' } : {}),
     ...(options?.headers as Record<string, string>),
   };
 
@@ -105,6 +106,76 @@ export function updateAccount(
 export function deleteAccount(id: number, deleteTransactions = false) {
   return request<{ deleted: boolean }>(`/accounts/${id}?deleteTransactions=${deleteTransactions}`, {
     method: 'DELETE',
+  });
+}
+
+// ─── One Zero statement import ───
+
+export interface OneZeroImportInvalidRow {
+  row: number;
+  reason: string;
+}
+
+/**
+ * The importer currently returns a date range as an object, but the optional
+ * aliases keep this client compatible with older server builds while the
+ * endpoint rolls out.
+ */
+export interface OneZeroImportDateRange {
+  from?: string | null;
+  to?: string | null;
+  start?: string | null;
+  end?: string | null;
+  min?: string | null;
+  max?: string | null;
+}
+
+export interface OneZeroImportBalanceCandidate {
+  balance?: number | null;
+  amount?: number | null;
+  value?: number | null;
+  date?: string | null;
+  asOf?: string | null;
+}
+
+export interface OneZeroImportPreview {
+  importToken: string;
+  accountId: number;
+  fileName: string;
+  rowCount: number;
+  dateRange: OneZeroImportDateRange | [string, string] | string | null;
+  newCount: number;
+  duplicateCount: number;
+  matchedExistingCount: number;
+  ambiguousCount: number;
+  invalidRows: OneZeroImportInvalidRow[];
+  balanceCandidate: number | OneZeroImportBalanceCandidate | null;
+}
+
+export interface OneZeroImportCommitResult {
+  imported: number;
+  linked: number;
+  duplicates: number;
+  ambiguous: number;
+  accountBalance?: number;
+}
+
+export function previewOneZeroImport(accountId: number, file: File) {
+  const formData = new FormData();
+  formData.append('file', file);
+  return request<OneZeroImportPreview>(`/accounts/${accountId}/onezero/import/preview`, {
+    method: 'POST',
+    body: formData,
+  });
+}
+
+export function commitOneZeroImport(
+  accountId: number,
+  data: { importToken: string; updateBalance?: boolean },
+) {
+  return request<OneZeroImportCommitResult>(`/accounts/${accountId}/onezero/import/commit`, {
+    method: 'POST',
+    body: JSON.stringify(data),
   });
 }
 

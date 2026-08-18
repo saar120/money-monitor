@@ -6,6 +6,7 @@ import { readdirSync, readFileSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { dbPath, demoDbPath } from '../paths.js';
+import { ensureTransactionSourcesSchema } from './schema-repairs.js';
 
 const __dirname = dirname(fileURLToPath(import.meta.url));
 const migrationsFolder = join(__dirname, 'migrations');
@@ -13,23 +14,25 @@ const migrationsFolder = join(__dirname, 'migrations');
 // Validate that all migration file chunks (split by --> statement-breakpoint) contain
 // only one top-level statement. Without breakpoints, better-sqlite3's prepare() throws
 // "contains more than one statement". This catches hand-written migrations early.
-const sqlFiles = readdirSync(migrationsFolder).filter(f => f.endsWith('.sql'));
+const sqlFiles = readdirSync(migrationsFolder).filter((f) => f.endsWith('.sql'));
 for (const file of sqlFiles) {
-	const sql = readFileSync(join(migrationsFolder, file), 'utf-8');
-	const chunks = sql.split('--> statement-breakpoint');
-	for (const chunk of chunks) {
-		// Strip compound blocks (trigger/view bodies between BEGIN...END) so we only
-		// count top-level statements — inner statements inside triggers are fine.
-		const stripped = chunk.replace(/BEGIN[\s\S]*?END;/gi, 'COMPOUND_BLOCK;');
-		const lines = stripped.split('\n').filter(l => !l.startsWith('--') && l.trim());
-		const stmtStarts = lines.filter(l => /^\s*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|PRAGMA)\b/i.test(l));
-		if (stmtStarts.length > 1) {
-			throw new Error(
-				`Migration "${file}" has a chunk with ${stmtStarts.length} top-level statements but no "--> statement-breakpoint" between them. ` +
-				`Add "--> statement-breakpoint" between each SQL statement.`
-			);
-		}
-	}
+  const sql = readFileSync(join(migrationsFolder, file), 'utf-8');
+  const chunks = sql.split('--> statement-breakpoint');
+  for (const chunk of chunks) {
+    // Strip compound blocks (trigger/view bodies between BEGIN...END) so we only
+    // count top-level statements — inner statements inside triggers are fine.
+    const stripped = chunk.replace(/BEGIN[\s\S]*?END;/gi, 'COMPOUND_BLOCK;');
+    const lines = stripped.split('\n').filter((l) => !l.startsWith('--') && l.trim());
+    const stmtStarts = lines.filter((l) =>
+      /^\s*(CREATE|ALTER|DROP|INSERT|UPDATE|DELETE|PRAGMA)\b/i.test(l),
+    );
+    if (stmtStarts.length > 1) {
+      throw new Error(
+        `Migration "${file}" has a chunk with ${stmtStarts.length} top-level statements but no "--> statement-breakpoint" between them. ` +
+          `Add "--> statement-breakpoint" between each SQL statement.`,
+      );
+    }
+  }
 }
 
 // --- Real database (always initialized) ---
@@ -41,6 +44,7 @@ realSqlite.pragma('foreign_keys = ON');
 const realDb = drizzle(realSqlite, { schema });
 
 migrate(realDb, { migrationsFolder });
+ensureTransactionSourcesSchema(realSqlite);
 
 import { runBackfills } from './backfills.js';
 runBackfills(realDb, realSqlite);
@@ -54,7 +58,6 @@ export let sqlite: BetterSqlite3Database = realSqlite;
 
 let _isDemoMode = false;
 let demoSqlite: BetterSqlite3Database | null = null;
-let demoDb: BetterSQLite3Database<typeof schema> | null = null;
 
 export function isDemoMode(): boolean {
   return _isDemoMode;
@@ -70,11 +73,11 @@ export function swapToDemo(): void {
     const newDb = drizzle(newSqlite, { schema });
 
     migrate(newDb, { migrationsFolder });
+    ensureTransactionSourcesSchema(newSqlite);
     runBackfills(newDb, newSqlite);
 
     // Only commit state after everything succeeds
     demoSqlite = newSqlite;
-    demoDb = newDb;
     db = newDb;
     sqlite = newSqlite;
     _isDemoMode = true;
@@ -88,7 +91,6 @@ function closeDemoConnection(): void {
   if (demoSqlite) {
     demoSqlite.close();
     demoSqlite = null;
-    demoDb = null;
   }
 }
 

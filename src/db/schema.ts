@@ -78,6 +78,38 @@ export const transactions = sqliteTable(
   ],
 );
 
+/**
+ * Provider/source identities for transactions. A transaction may have more than one
+ * identity (for example, an XLS statement reference and a later scraper movement ID),
+ * while each provider namespace is unique for an account.
+ */
+export const transactionSources = sqliteTable(
+  'transaction_sources',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    transactionId: integer('transaction_id')
+      .notNull()
+      .references(() => transactions.id, { onDelete: 'cascade' }),
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    source: text('source').notNull(),
+    externalId: text('external_id').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [
+    uniqueIndex('idx_transaction_sources_account_source_external').on(
+      table.accountId,
+      table.source,
+      table.externalId,
+    ),
+    index('idx_transaction_sources_transaction').on(table.transactionId),
+    index('idx_transaction_sources_account').on(table.accountId),
+  ],
+);
+
 export const members = sqliteTable('members', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),
