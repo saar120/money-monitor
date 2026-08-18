@@ -108,6 +108,47 @@ export function deleteAccount(id: number, deleteTransactions = false) {
   });
 }
 
+// ─── One Zero statement import ───
+
+export interface OneZeroImportInvalidRow {
+  row: number;
+  reason: string;
+}
+
+export interface OneZeroImportPreview {
+  rowCount: number;
+  dateRange: { from: string; to: string } | null;
+  newCount: number;
+  duplicateCount: number;
+  matchedExistingCount: number;
+  ambiguousCount: number;
+  invalidRows: OneZeroImportInvalidRow[];
+}
+
+export interface OneZeroImportCommitResult {
+  imported: number;
+  linked: number;
+  duplicates: number;
+}
+
+function oneZeroImportRequest<T>(accountId: number, file: File, commit = false) {
+  const query = new URLSearchParams({ fileName: file.name });
+  if (commit) query.set('commit', 'true');
+  return request<T>(`/accounts/${accountId}/onezero/import?${query}`, {
+    method: 'POST',
+    headers: { 'Content-Type': 'application/octet-stream' },
+    body: file,
+  });
+}
+
+export function previewOneZeroImport(accountId: number, file: File) {
+  return oneZeroImportRequest<OneZeroImportPreview>(accountId, file);
+}
+
+export function commitOneZeroImport(accountId: number, file: File) {
+  return oneZeroImportRequest<OneZeroImportCommitResult>(accountId, file, true);
+}
+
 // ─── Transactions ───
 
 export interface Transaction {

@@ -22,6 +22,7 @@ import { ownershipRoutes } from './api/ownership.routes.js';
 import { demoRoutes } from './api/demo.routes.js';
 import { alertsRoutes } from './api/alerts.routes.js';
 import { budgetsRoutes } from './api/budgets.routes.js';
+import { oneZeroImportRoutes } from './api/onezero-import.routes.js';
 import { startScheduler, stopScheduler, checkAndRunMissedScrape } from './scraper/scheduler.js';
 import { startTelegramBot, stopTelegramBot, restartTelegramBot } from './telegram/bot.js';
 import { closeImageBrowser, setServerPort } from './services/html-to-image.js';
@@ -137,6 +138,7 @@ export async function createServer() {
   await app.register(ownershipRoutes);
   await app.register(alertsRoutes);
   await app.register(budgetsRoutes);
+  await app.register(oneZeroImportRoutes);
   await app.register(demoRoutes);
 
   // Serve dashboard static files in production

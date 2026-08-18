@@ -7,8 +7,11 @@ import {
   updateAccount,
   deleteAccount,
   triggerScrape,
+  previewOneZeroImport,
+  commitOneZeroImport,
   type Account,
   type Member,
+  type OneZeroImportPreview,
 } from '../api/client';
 import { useOtpFlow } from '../composables/useOtpFlow';
 import { useSseConnection } from '../composables/useSseConnection';
@@ -58,7 +61,11 @@ import {
   Settings,
   ChevronDown,
   KeyRound,
+  FileSpreadsheet,
 } from 'lucide-vue-next';
+
+type BrowserFile = InstanceType<typeof globalThis.File>;
+type BrowserInput = InstanceType<typeof globalThis.HTMLInputElement>;
 
 const expandedSettings = ref(new Set<number>());
 
@@ -88,6 +95,18 @@ const updateCredsValues = ref<Record<string, string>>({});
 const updateCredsFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
 const updateCredsSaving = ref(false);
 
+// One Zero statement import
+const oneZeroImportOpen = ref(false);
+const oneZeroImportAccount = ref<Account | null>(null);
+const oneZeroImportFile = ref<BrowserFile | null>(null);
+const oneZeroImportPreview = ref<OneZeroImportPreview | null>(null);
+const oneZeroImportLoading = ref(false);
+const oneZeroImportCommitting = ref(false);
+const oneZeroImportError = ref('');
+const oneZeroImportSuccess = ref('');
+const oneZeroImportCommitted = ref(false);
+const oneZeroImportInput = ref<BrowserInput | null>(null);
+
 const updateCredsProvider = computed(() =>
   updateCredsAccount.value
     ? (PROVIDERS.find((p) => p.id === updateCredsAccount.value!.companyId) ?? null)
@@ -113,6 +132,122 @@ watch(newCompanyId, () => {
   credentialValues.value = {};
   credentialFields.value = [{ key: '', value: '' }];
 });
+
+watch(oneZeroImportOpen, (open) => {
+  if (!open) resetOneZeroImport();
+});
+
+const oneZeroImportBlocked = computed(() => {
+  const preview = oneZeroImportPreview.value;
+  return !!preview && (preview.ambiguousCount > 0 || preview.invalidRows.length > 0);
+});
+
+const oneZeroImportCanCommit = computed(() => {
+  const preview = oneZeroImportPreview.value;
+  return (
+    !!preview &&
+    !!oneZeroImportAccount.value &&
+    !oneZeroImportLoading.value &&
+    !oneZeroImportCommitting.value &&
+    !oneZeroImportCommitted.value &&
+    !oneZeroImportBlocked.value &&
+    !!oneZeroImportFile.value
+  );
+});
+
+const oneZeroImportStats = computed(() => {
+  const preview = oneZeroImportPreview.value;
+  if (!preview) return [];
+  return [
+    ['New', preview.newCount],
+    ['Already imported', preview.duplicateCount],
+    ['Matched scraped', preview.matchedExistingCount],
+    ['Ambiguous', preview.ambiguousCount],
+  ] as const;
+});
+
+function importErrorMessage(err: unknown): string {
+  return err instanceof Error
+    ? err.message
+    : 'The import could not be completed. Please try again.';
+}
+
+function formatImportDate(value: string | null | undefined): string {
+  if (!value) return '';
+  const date = new Date(value);
+  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('he-IL');
+}
+
+function importDateRangeLabel(range: OneZeroImportPreview['dateRange']): string {
+  if (!range) return 'Not provided';
+  return `${formatImportDate(range.from)} – ${formatImportDate(range.to)}`;
+}
+
+function resetOneZeroImport() {
+  oneZeroImportAccount.value = null;
+  resetOneZeroImportPreview();
+  oneZeroImportCommitting.value = false;
+  if (oneZeroImportInput.value) oneZeroImportInput.value.value = '';
+}
+
+function resetOneZeroImportPreview() {
+  oneZeroImportFile.value = null;
+  oneZeroImportPreview.value = null;
+  oneZeroImportLoading.value = false;
+  oneZeroImportError.value = '';
+  oneZeroImportSuccess.value = '';
+  oneZeroImportCommitted.value = false;
+}
+
+function openOneZeroImport(account: Account) {
+  resetOneZeroImport();
+  oneZeroImportAccount.value = account;
+  oneZeroImportOpen.value = true;
+}
+
+async function handleOneZeroImportFileChange(event: Event) {
+  const input = event.target as BrowserInput;
+  const file = input.files?.[0] ?? null;
+  resetOneZeroImportPreview();
+
+  if (!file || !oneZeroImportAccount.value) return;
+  if (!/\.xlsx?$/i.test(file.name)) {
+    oneZeroImportError.value = 'Choose a One Zero Excel statement (.xls or .xlsx).';
+    input.value = '';
+    return;
+  }
+
+  oneZeroImportFile.value = file;
+  oneZeroImportLoading.value = true;
+  try {
+    oneZeroImportPreview.value = await previewOneZeroImport(oneZeroImportAccount.value.id, file);
+  } catch (err) {
+    oneZeroImportError.value = importErrorMessage(err);
+  } finally {
+    oneZeroImportLoading.value = false;
+  }
+}
+
+async function commitOneZeroStatement() {
+  if (!oneZeroImportCanCommit.value || !oneZeroImportAccount.value || !oneZeroImportFile.value) {
+    return;
+  }
+
+  oneZeroImportCommitting.value = true;
+  oneZeroImportError.value = '';
+  try {
+    const result = await commitOneZeroImport(
+      oneZeroImportAccount.value.id,
+      oneZeroImportFile.value,
+    );
+    oneZeroImportCommitted.value = true;
+    oneZeroImportSuccess.value = `Imported ${result.imported} new transaction${result.imported === 1 ? '' : 's'} (${result.linked} matched existing, ${result.duplicates} already imported).`;
+  } catch (err) {
+    oneZeroImportError.value = importErrorMessage(err);
+  } finally {
+    oneZeroImportCommitting.value = false;
+  }
+}
 
 // SSE & OTP/Manual login
 const scrapingAccounts = ref(new Set<number>());
@@ -531,6 +666,16 @@ onMounted(() => {
 
               <div class="flex items-center gap-2 flex-shrink-0">
                 <Button
+                  v-if="account.companyId === 'oneZero'"
+                  variant="secondary"
+                  size="sm"
+                  @click="openOneZeroImport(account)"
+                >
+                  <FileSpreadsheet class="h-3 w-3 mr-1.5" />
+                  Import statement
+                </Button>
+
+                <Button
                   variant="secondary"
                   size="sm"
                   :disabled="scrapingAccounts.has(account.id)"
@@ -583,6 +728,181 @@ onMounted(() => {
         </Card>
       </div>
     </div>
+
+    <!-- One Zero statement import dialog -->
+    <Dialog v-model:open="oneZeroImportOpen">
+      <DialogContent
+        class="sm:max-w-lg flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0"
+      >
+        <DialogHeader class="shrink-0 border-b border-separator/60 px-6 py-4 pr-14">
+          <DialogTitle>Import One Zero statement</DialogTitle>
+        </DialogHeader>
+
+        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
+          <div class="space-y-3">
+            <p class="text-[13px] text-text-secondary">
+              Upload an Excel statement to add transactions to
+              <span class="font-medium text-text-primary">{{
+                oneZeroImportAccount?.displayName
+              }}</span
+              >. The file is checked for duplicates and ambiguous matches before anything is saved.
+            </p>
+
+            <div class="space-y-2">
+              <span class="text-[13px] font-medium">Statement file</span>
+              <div
+                class="flex min-w-0 items-center gap-2 rounded-lg border border-separator/70 bg-bg-primary px-2.5 py-2"
+              >
+                <input
+                  id="one-zero-import-file"
+                  ref="oneZeroImportInput"
+                  type="file"
+                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
+                  class="peer sr-only"
+                  :disabled="
+                    oneZeroImportLoading || oneZeroImportCommitting || oneZeroImportCommitted
+                  "
+                  aria-describedby="one-zero-import-file-help"
+                  @change="handleOneZeroImportFileChange"
+                />
+                <label
+                  for="one-zero-import-file"
+                  class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md bg-primary/10 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30"
+                  :class="{
+                    'pointer-events-none opacity-50':
+                      oneZeroImportLoading || oneZeroImportCommitting || oneZeroImportCommitted,
+                  }"
+                >
+                  Choose file
+                </label>
+                <span
+                  class="min-w-0 flex-1 truncate text-[13px] text-text-primary"
+                  :title="oneZeroImportFile?.name || 'No file chosen'"
+                >
+                  {{ oneZeroImportFile?.name || 'No file chosen' }}
+                </span>
+              </div>
+              <p id="one-zero-import-file-help" class="text-[11px] text-text-tertiary">
+                Excel files only (.xls or .xlsx).
+              </p>
+            </div>
+
+            <div
+              v-if="oneZeroImportLoading"
+              class="flex items-center gap-2 rounded-lg border border-separator/60 bg-bg-secondary px-3 py-2.5 text-[13px] text-text-secondary"
+            >
+              <Loader2 class="h-4 w-4 animate-spin text-primary" />
+              Checking the statement…
+            </div>
+
+            <div
+              v-if="oneZeroImportError"
+              class="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[13px] text-destructive"
+              role="alert"
+            >
+              {{ oneZeroImportError }}
+            </div>
+
+            <div v-if="oneZeroImportPreview" class="space-y-3">
+              <div class="rounded-lg border border-separator/60 bg-bg-secondary p-3">
+                <div class="mb-2.5 flex items-center justify-between gap-3">
+                  <div class="min-w-0">
+                    <p
+                      class="truncate text-[13px] font-medium text-text-primary"
+                      :title="oneZeroImportFile?.name"
+                    >
+                      {{ oneZeroImportFile?.name }}
+                    </p>
+                    <p class="mt-0.5 text-[11px] text-text-tertiary">
+                      {{ oneZeroImportPreview.rowCount }} rows ·
+                      {{ importDateRangeLabel(oneZeroImportPreview.dateRange) }}
+                    </p>
+                  </div>
+                  <Badge variant="secondary" class="flex-shrink-0 text-[11px]">Preview</Badge>
+                </div>
+
+                <div class="grid grid-cols-2 gap-1.5 text-[12px]">
+                  <div
+                    v-for="[label, value] in oneZeroImportStats"
+                    :key="label"
+                    class="rounded-md bg-bg-primary px-2.5 py-1.5"
+                  >
+                    <div class="text-text-tertiary">{{ label }}</div>
+                    <div
+                      class="text-[15px] font-semibold text-text-primary"
+                      :class="{ 'text-destructive': label === 'Ambiguous' && value > 0 }"
+                    >
+                      {{ value }}
+                    </div>
+                  </div>
+                </div>
+              </div>
+
+              <div
+                v-if="
+                  oneZeroImportPreview.invalidRows.length || oneZeroImportPreview.ambiguousCount
+                "
+                class="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[12px] text-destructive"
+                role="alert"
+              >
+                <p class="font-medium">This statement needs attention before it can be imported.</p>
+                <p v-if="oneZeroImportPreview.ambiguousCount" class="mt-1">
+                  {{ oneZeroImportPreview.ambiguousCount }} row{{
+                    oneZeroImportPreview.ambiguousCount === 1 ? '' : 's'
+                  }}
+                  matched more than one existing transaction.
+                </p>
+                <p v-if="oneZeroImportPreview.invalidRows.length" class="mt-1">
+                  {{ oneZeroImportPreview.invalidRows.length }} invalid row{{
+                    oneZeroImportPreview.invalidRows.length === 1 ? '' : 's'
+                  }}
+                  were found.
+                </p>
+                <ul
+                  v-if="oneZeroImportPreview.invalidRows.length"
+                  class="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]"
+                >
+                  <li
+                    v-for="invalid in oneZeroImportPreview.invalidRows.slice(0, 5)"
+                    :key="invalid.row"
+                  >
+                    Row {{ invalid.row }}: {{ invalid.reason }}
+                  </li>
+                </ul>
+                <p v-if="oneZeroImportPreview.invalidRows.length > 5" class="mt-1 text-[11px]">
+                  And {{ oneZeroImportPreview.invalidRows.length - 5 }} more invalid rows.
+                </p>
+              </div>
+
+              <div
+                v-if="oneZeroImportSuccess"
+                class="rounded-lg border border-success/25 bg-success/5 px-3 py-2.5 text-[13px] text-success"
+                role="status"
+              >
+                {{ oneZeroImportSuccess }}
+              </div>
+            </div>
+          </div>
+        </div>
+
+        <DialogFooter class="shrink-0 gap-2 border-t border-separator/60 px-6 py-4 sm:gap-2">
+          <DialogClose as-child>
+            <Button variant="secondary" class="w-full sm:w-auto">
+              {{ oneZeroImportCommitted ? 'Done' : 'Cancel' }}
+            </Button>
+          </DialogClose>
+          <Button
+            variant="filled"
+            class="w-full sm:w-auto"
+            :disabled="!oneZeroImportCanCommit"
+            @click="commitOneZeroStatement"
+          >
+            <Loader2 v-if="oneZeroImportCommitting" class="h-4 w-4 mr-2 animate-spin" />
+            {{ oneZeroImportCommitting ? 'Importing…' : 'Import reviewed rows' }}
+          </Button>
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
 
     <!-- Add Account Dialog -->
     <Dialog v-model:open="showAddDialog">
