@@ -335,6 +335,27 @@ struct BootstrapRecentTransaction: Codable, Equatable, Sendable {
     let account: BootstrapTransactionAccount
 }
 
+extension BootstrapRecentTransaction {
+    /// The bootstrap's recent-activity projection is intentionally smaller
+    /// than the authenticated transaction DTO. It is still safe to retain in
+    /// a Saved View, so fill unavailable command-only fields conservatively.
+    var mobileTransaction: MobileTransaction {
+        MobileTransaction(
+            id: id,
+            occurredOn: occurredOn,
+            displayName: displayName,
+            amount: amount,
+            direction: direction,
+            status: status,
+            category: category,
+            account: account,
+            needsReview: false,
+            excludedFromReports: false,
+            owner: nil
+        )
+    }
+}
+
 struct BootstrapTransactionCategory: Codable, Equatable, Sendable {
     let id: String
     let label: String
