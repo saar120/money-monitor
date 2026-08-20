@@ -2086,7 +2086,11 @@ struct AppEnvironmentTests {
             applicationSupportDirectory: directory
         )
         let bootstrap = try pairingFlowBootstrap()
-        let snapshot = BootstrapSnapshot(bootstrap: bootstrap, savedAt: pairingFlowNow)
+        let snapshot = BootstrapSnapshot(
+            bootstrap: bootstrap,
+            homeOverview: try acceptedHomeOverviewFixture(),
+            savedAt: pairingFlowNow
+        )
 
         try await store.save(snapshot)
 

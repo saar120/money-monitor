@@ -26,10 +26,6 @@ let package = Package(
                 .product(name: "OpenAPIURLSession", package: "swift-openapi-urlsession"),
                 .product(name: "HTTPTypes", package: "swift-http-types"),
             ],
-            exclude: [
-                "openapi.json",
-                "openapi-generator-config.yaml",
-            ]
         ),
         .executableTarget(
             name: "CanonicalAPILiveRunner",

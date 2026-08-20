@@ -59,9 +59,113 @@ export const canonicalMetaSchema = z
     estimated: z.boolean().optional(),
     resourceVersion: resourceVersionSchema.optional(),
     refreshHints: z.array(refreshHintSchema).max(20).optional(),
+    missingSections: z.array(z.string().trim().min(1).max(64)).max(20).optional(),
     receipt: mutationReceiptSchema.optional(),
   })
   .strict();
+
+const financialDateSchema = z
+  .string()
+  .regex(/^\d{4}-\d{2}-\d{2}$/, 'Dates must use YYYY-MM-DD')
+  .refine((value) => {
+    const parsed = new Date(`${value}T00:00:00.000Z`);
+    return Number.isFinite(parsed.getTime()) && parsed.toISOString().slice(0, 10) === value;
+  }, 'Dates must be valid calendar dates');
+
+const financialPeriodSchema = z
+  .object({ startDate: financialDateSchema, endDate: financialDateSchema })
+  .strict()
+  .refine((period) => period.startDate <= period.endDate, 'Period end date cannot precede start date');
+
+const homeDrillDownSchema = z
+  .object({
+    category: z.string().trim().min(1).max(80).optional(),
+    startDate: financialDateSchema,
+    endDate: financialDateSchema,
+  })
+  .strict();
+
+const homeCategorySchema = z
+  .object({
+    label: z.string().trim().min(1).max(80),
+    amount: moneySchema,
+    share: z.number().finite().min(0).max(1),
+    transactionCount: z.number().int().nonnegative(),
+    textSummary: z.string().trim().min(1).max(240),
+    drillDown: homeDrillDownSchema,
+  })
+  .strict();
+
+const homeCashFlowPointSchema = z
+  .object({
+    period: financialPeriodSchema,
+    income: moneySchema,
+    expenses: moneySchema,
+    net: moneySchema,
+    textSummary: z.string().trim().min(1).max(240),
+    drillDown: homeDrillDownSchema,
+  })
+  .strict();
+
+const homeAccountFreshnessSchema = z
+  .object({
+    displayName: z.string().trim().min(1).max(80),
+    status: z.enum(['current', 'stale', 'unknown']),
+    lastSuccessfulSyncAt: z.string().datetime({ offset: true }).nullable(),
+  })
+  .strict();
+
+const homeBudgetSchema = z
+  .object({
+    state: z.enum(['on_track', 'watch', 'at_limit', 'over_budget', 'unavailable']),
+    name: z.string().trim().min(1).max(80),
+    spent: moneySchema,
+    limit: moneySchema,
+    remaining: moneySchema,
+    period: financialPeriodSchema,
+  })
+  .strict();
+
+export const homeOverviewDataSchema = z
+  .object({
+    financialDate: financialDateSchema,
+    calculatedAt: z.string().datetime({ offset: true }),
+    baseCurrencyCode: z.literal('ILS'),
+    availableMoney: moneySchema.nullable(),
+    spending: z
+      .object({
+        current: z.object({ amount: moneySchema, period: financialPeriodSchema }).strict(),
+        comparison: z.object({ amount: moneySchema, period: financialPeriodSchema }).strict(),
+        change: moneySchema,
+      })
+      .strict(),
+    budget: homeBudgetSchema.nullable(),
+    netWorth: z
+      .object({ total: moneySchema.nullable(), liquid: moneySchema.nullable() })
+      .strict(),
+    categories: z.array(homeCategorySchema).max(100),
+    cashFlow: z.array(homeCashFlowPointSchema).max(24),
+    accountFreshness: z.array(homeAccountFreshnessSchema).max(100),
+    isEmpty: z.boolean(),
+  })
+  .strict();
+
+export const homeOverviewResponseSchema = z
+  .object({
+    data: homeOverviewDataSchema,
+    meta: canonicalMetaSchema
+      .extend({
+        calculationVersion: z.literal('home-overview-1'),
+        completeness: completenessSchema,
+        estimated: z.boolean(),
+        missingSections: z.array(z.enum(['availableMoney', 'budget', 'netWorth', 'categories', 'cashFlow', 'accountFreshness'])).max(6),
+      })
+      .strict(),
+  })
+  .strict();
+
+export type HomeOverviewData = z.infer<typeof homeOverviewDataSchema>;
+export type HomeOverviewResponse = z.infer<typeof homeOverviewResponseSchema>;
 
 export const canonicalErrorCodeSchema = z.enum([
   'authentication_required',

@@ -6,6 +6,7 @@ import {
   canonicalErrorEnvelopeSchema,
   createCanonicalMeta,
   diagnosticsResponseSchema,
+  homeOverviewResponseSchema,
   pairingStatusResponseSchema,
   referenceCommandRequestSchema,
   referenceCommandResponseSchema,
@@ -16,6 +17,7 @@ import {
   referenceUpdateRequestSchema,
   type ReferenceResource,
 } from './contract.js';
+import { createHomeOverviewProjection } from './home-overview.js';
 import { CanonicalApiError, sendCanonicalError } from './errors.js';
 import {
   CANONICAL_ROUTE_DEFINITIONS,
@@ -116,6 +118,7 @@ export function registerCanonicalRoutes(
   options: CanonicalServerOptions,
   clock: () => Date,
 ): void {
+  const homeOverview = createHomeOverviewProjection(options.sqlite);
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1')) reply.header('Cache-Control', 'no-store');
     return payload;
@@ -146,6 +149,34 @@ export function registerCanonicalRoutes(
       }
       request.canonicalIdentity = identity;
     };
+
+  app.get(
+    '/api/v1/home',
+    { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/home')) },
+    async () => {
+      const now = clock();
+      const data = homeOverview.read(now);
+      const missingSections = [
+        ...(data.availableMoney === null ? (['availableMoney'] as const) : []),
+        ...(data.netWorth.total === null ? (['netWorth'] as const) : []),
+        ...(data.accountFreshness.some((account) => account.status === 'unknown')
+          ? (['accountFreshness'] as const)
+          : []),
+      ];
+      const candidate = {
+        data,
+        meta: createCanonicalMeta(now, {
+          calculationVersion: 'home-overview-1',
+          completeness: missingSections.length === 0 ? 'complete' : 'partial',
+          estimated: false,
+          missingSections,
+        }),
+      };
+      const parsed = homeOverviewResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
 
   app.get(
     '/api/v1/reference',

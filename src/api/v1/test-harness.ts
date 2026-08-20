@@ -26,6 +26,8 @@ export interface CanonicalHarnessOptions {
   clock?: () => Date;
   seed?: ReferenceSeed;
   allowUnknownOutcomeSimulation?: boolean;
+  /** Avoid TCP binds in sandboxed unit tests; Fastify injection remains available. */
+  startListeners?: boolean;
 }
 
 type DesktopServer = Awaited<ReturnType<typeof createServer>>;
@@ -144,10 +146,12 @@ export async function createCanonicalHarness(
   });
 
   try {
-    const [macPort, iPhonePort] = await Promise.all([
-      macServer.start({ port: 0, host: '127.0.0.1' }),
-      iPhoneServer.start(mobileServerStartOptions()),
-    ]);
+    const [macPort, iPhonePort] = options.startListeners === false
+      ? [0, 0]
+      : await Promise.all([
+          macServer.start({ port: 0, host: '127.0.0.1' }),
+          iPhoneServer.start(mobileServerStartOptions()),
+        ]);
     const macBaseUrl = `http://127.0.0.1:${macPort}`;
     const iPhoneBaseUrl = `http://127.0.0.1:${iPhonePort}`;
     const mac = new CanonicalMacClient({ baseUrl: macBaseUrl, token: CANONICAL_TEST_MAC_TOKEN });

@@ -10,7 +10,6 @@ import { db, sqlite, closeAll } from './db/connection.js';
 import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
-import { summaryRoutes } from './api/summary.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
 import { categoriesRoutes } from './api/categories.routes.js';
 import { exchangeRatesRoutes } from './api/exchange-rates.routes.js';
@@ -207,7 +206,6 @@ export async function createServer(options: CreateServerOptions = {}) {
 	  await app.register(scrapeRoutes);
     await app.register(accountsRoutes);
     await app.register(transactionsRoutes);
-    await app.register(summaryRoutes);
     await app.register(aiRoutes);
     await app.register(categoriesRoutes);
     await app.register(exchangeRatesRoutes);

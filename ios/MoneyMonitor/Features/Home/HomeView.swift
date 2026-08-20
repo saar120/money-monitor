@@ -20,16 +20,9 @@ struct HomeView: View {
     var body: some View {
         Group {
             switch presentationState {
-            case let .ready(presentation):
-                homeContent(presentation)
-            case .missing:
-                unavailableHome(
-                    message: "Pair again to load a verified snapshot from your Mac."
-                )
-            case .invalid:
-                unavailableHome(
-                    message: "The Mac response could not be presented safely. Pair again to reload it."
-                )
+            case let .ready(presentation): homeContent(presentation)
+            case .missing: unavailableHome(message: missingMessage)
+            case .invalid: unavailableHome(message: "The Mac Home projection could not be presented safely. Retry to reload it.")
             }
         }
         .background(MoneyMonitorTheme.canvas)
@@ -37,7 +30,7 @@ struct HomeView: View {
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
                 Button {
-                    Task { await refreshHome() }
+                    Task { await environment.refreshHomeOverview() }
                 } label: {
                     Label("Refresh Home data", systemImage: "arrow.clockwise")
                 }
@@ -76,9 +69,7 @@ struct HomeView: View {
             titleVisibility: .visible
         ) {
             Button("Disconnect and remove saved data", role: .destructive) {
-                Task {
-                    await environment.disconnect()
-                }
+                Task { await environment.disconnect() }
             }
             Button("Cancel", role: .cancel) {}
         } message: {
@@ -86,459 +77,222 @@ struct HomeView: View {
         }
     }
 
-    private func beginRePairing(qrPayload: Data) {
-        isRePairScannerPresented = false
-        let currentDeviceName = deviceName()
-
-        Task {
-            await environment.pair(
-                qrPayload: qrPayload,
-                deviceName: currentDeviceName
-            )
-        }
-    }
-
-    private var presentationState: PresentationState {
-        guard let bootstrap = environment.latestBootstrap else { return .missing }
-        do {
-            return .ready(try HomePresentationBuilder().makePresentation(from: bootstrap))
-        } catch {
-            return .invalid
-        }
-    }
-
-    private func homeContent(_ presentation: HomePresentation) -> some View {
-        ScrollView {
-            LazyVStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xxLarge) {
-                sourceContext(presentation)
-
-                if let message = refreshFailureMessage {
-                    statusNotice(
-                        message,
-                        systemImage: "arrow.clockwise.circle",
-                        color: MoneyMonitorTheme.warning
-                    )
-                }
-
-                if presentation.isPartial || hasUnavailableSection(in: presentation) {
-                    statusNotice(
-                        "Some Home data is unavailable.",
-                        systemImage: "exclamationmark.triangle.fill",
-                        color: MoneyMonitorTheme.warning
-                    )
-                }
-
-                summarySection(presentation.summary)
-                budgetSection(presentation.budget)
-                reviewSection(presentation.review)
-                recentActivitySection(presentation.recentActivity)
-            }
-            .padding(.horizontal, MoneyMonitorTheme.Spacing.large)
-            .padding(.vertical, MoneyMonitorTheme.Spacing.standard)
-        }
-        // A short Home snapshot can otherwise have no vertical overscroll area,
-        // preventing SwiftUI from recognizing the pull-to-refresh gesture.
-        .scrollBounceBehavior(.always, axes: .vertical)
-        .refreshable {
-            await refreshHome()
-        }
-    }
-
-    /// Keeps a pull gesture from cancelling the live refresh before the Mac's
-    /// response can replace Home's accepted bootstrap snapshot. The toolbar
-    /// button and SwiftUI's refresh control intentionally share this launcher.
-    private func refreshHome() async {
-        let refresh = Task { @MainActor in
-            await environment.refreshBootstrap()
-        }
-        await refresh.value
-    }
-
-    private func sourceContext(_ presentation: HomePresentation) -> some View {
-        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xSmall) {
-            Text(presentation.sourceLabel)
-                .font(.subheadline.weight(.semibold))
-            Text(presentation.calculatedLabel)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    @ViewBuilder
-    private func summarySection(
-        _ section: HomePresentationSection<HomePresentation.Summary>
-    ) -> some View {
-        switch section {
-        case let .available(summary):
-            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xLarge) {
-                amountMetric(summary.spending, prominence: .primary)
-
-                ViewThatFits(in: .horizontal) {
-                    HStack(alignment: .top, spacing: MoneyMonitorTheme.Spacing.xLarge) {
-                        amountMetric(summary.income, prominence: .supporting)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                        Divider()
-                        amountMetric(summary.netWorth, prominence: .supporting)
-                            .frame(maxWidth: .infinity, alignment: .leading)
-                    }
-
-                    VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.large) {
-                        amountMetric(summary.income, prominence: .supporting)
-                        Divider()
-                        amountMetric(summary.netWorth, prominence: .supporting)
-                    }
-                }
-            }
-        case .unavailable:
-            unavailableSection(title: "Summary")
-        }
-    }
-
-    @ViewBuilder
-    private func budgetSection(
-        _ section: HomePresentationSection<HomePresentation.Budget>
-    ) -> some View {
-        switch section {
-        case let .available(budget):
-            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
-                Text(budget.title)
-                    .font(.headline)
-
-                Label(
-                    budget.status.rawValue,
-                    systemImage: budgetStatusSymbol(budget.status)
-                )
-                .font(.subheadline.weight(.semibold))
-                .foregroundStyle(budgetStatusColor(budget.status))
-
-                if let periodLabel = budget.periodLabel {
-                    Text(periodLabel)
-                        .font(.footnote)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let remaining = budget.remaining {
-                    amountMetric(remaining, prominence: .supporting)
-                        .padding(.top, MoneyMonitorTheme.Spacing.xSmall)
-                }
-
-                if budget.spent != nil || budget.limit != nil {
-                    ViewThatFits(in: .horizontal) {
-                        HStack(alignment: .top, spacing: MoneyMonitorTheme.Spacing.xLarge) {
-                            if let spent = budget.spent {
-                                amountMetric(spent, prominence: .compact)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                            if let limit = budget.limit {
-                                amountMetric(limit, prominence: .compact)
-                                    .frame(maxWidth: .infinity, alignment: .leading)
-                            }
-                        }
-
-                        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
-                            if let spent = budget.spent {
-                                amountMetric(spent, prominence: .compact)
-                            }
-                            if let limit = budget.limit {
-                                amountMetric(limit, prominence: .compact)
-                            }
-                        }
-                    }
-                }
-            }
-        case .unavailable:
-            unavailableSection(title: "Budget")
-        }
-    }
-
-    @ViewBuilder
-    private func reviewSection(
-        _ section: HomePresentationSection<HomePresentation.Review>
-    ) -> some View {
-        switch section {
-        case let .available(review):
-            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
-                Text(review.title)
-                    .font(.headline)
-                Label(
-                    review.message,
-                    systemImage: review.count == 0 ? "checkmark.circle" : "tray.full"
-                )
-                .font(.body)
-            }
-            .accessibilityElement(children: .combine)
-        case .unavailable:
-            unavailableSection(title: "Review")
-        }
-    }
-
-    @ViewBuilder
-    private func recentActivitySection(
-        _ section: HomePresentationSection<HomePresentation.RecentActivity>
-    ) -> some View {
-        switch section {
-        case let .available(activity):
-            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
-                Text(activity.title)
-                    .font(.headline)
-
-                if activity.items.isEmpty {
-                    Text("No recent activity")
-                        .font(.subheadline)
-                        .foregroundStyle(.secondary)
-                } else {
-                    ForEach(Array(activity.items.enumerated()), id: \.element.id) { index, item in
-                        transactionRow(item)
-                        if index < activity.items.count - 1 {
-                            Divider()
-                        }
-                    }
-                }
-            }
-        case .unavailable:
-            unavailableSection(title: "Recent activity")
-        }
-    }
-
-    private func transactionRow(_ item: HomePresentation.RecentActivity.Item) -> some View {
-        ViewThatFits(in: .horizontal) {
-            HStack(alignment: .firstTextBaseline, spacing: MoneyMonitorTheme.Spacing.standard) {
-                transactionContext(item)
-                Spacer(minLength: MoneyMonitorTheme.Spacing.medium)
-                transactionAmount(item)
-            }
-
-            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
-                transactionContext(item)
-                transactionAmount(item)
-                    .frame(maxWidth: .infinity, alignment: .leading)
-            }
-        }
-        .padding(.vertical, MoneyMonitorTheme.Spacing.xSmall)
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(transactionAccessibilityLabel(item))
-    }
-
-    private func transactionContext(_ item: HomePresentation.RecentActivity.Item) -> some View {
-        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xSmall) {
-            Text(verbatim: item.merchant)
-                .font(.body.weight(.medium))
-            if let category = item.category {
-                Text(verbatim: category)
-                    .font(.subheadline)
-                    .foregroundStyle(.secondary)
-            }
-            Text(verbatim: item.account)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-            Text(item.occurredOn.formatted)
-                .font(.footnote)
-                .foregroundStyle(.secondary)
-        }
-    }
-
-    private func transactionAmount(_ item: HomePresentation.RecentActivity.Item) -> some View {
-        VStack(alignment: .trailing, spacing: MoneyMonitorTheme.Spacing.xSmall) {
-            Text(item.amount.formatted)
-                .font(.body.weight(.semibold))
-                .monospacedDigit()
-                .foregroundStyle(transactionAmountColor(item.direction))
-
-            if item.direction == .unavailable {
-                Text("Direction unavailable")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-            if let statusLabel = transactionStatusLabel(item.status) {
-                Text(statusLabel)
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-    }
-
-    private func amountMetric(
-        _ amount: HomePresentation.Amount,
-        prominence: AmountProminence
-    ) -> some View {
-        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xSmall) {
-            Text(amount.title)
-                .font(prominence.titleFont)
-                .foregroundStyle(prominence == .primary ? .primary : .secondary)
-            Text(amount.formatted)
-                .font(prominence.amountFont)
-                .fontWeight(.semibold)
-                .monospacedDigit()
-                .minimumScaleFactor(0.8)
-            if let periodLabel = amount.periodLabel {
-                Text(periodLabel)
-                    .font(.footnote)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func unavailableSection(title: String) -> some View {
-        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.small) {
-            Text(title)
-                .font(.headline)
-            Label("Data unavailable", systemImage: "exclamationmark.circle")
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-        }
-        .accessibilityElement(children: .combine)
-    }
-
-    private func statusNotice(
-        _ message: String,
-        systemImage: String,
-        color: Color
-    ) -> some View {
-        Label(message, systemImage: systemImage)
-            .font(.subheadline)
-            .foregroundStyle(color)
-            .accessibilityElement(children: .combine)
-    }
-
-    private func unavailableHome(message: String) -> some View {
-        ContentUnavailableView(
-            "Home data unavailable",
-            systemImage: "macbook.and.iphone",
-            description: Text(message)
-        )
-    }
-
-    private var refreshFailureMessage: String? {
-        guard case let .failed(failure) = environment.bootstrapRefreshState else {
-            return nil
-        }
-        switch failure {
-        case .unavailable:
-            return "Couldn’t refresh from the Mac. The displayed calculation was not replaced."
-        case .invalidResponse:
-            return "The latest response could not be used. The displayed calculation was not replaced."
-        case .incompatible:
-            return "Update Money Monitor on this iPhone and Mac before refreshing."
-        case .accessRevoked:
-            return "This iPhone is no longer paired with the Mac."
-        case .missingCredential:
-            return "The saved Mac connection is missing."
-        case .secureStorageUnavailable:
-            return "The saved Mac connection could not be accessed securely."
-        }
-    }
-
-    private func hasUnavailableSection(in presentation: HomePresentation) -> Bool {
-        if case .unavailable = presentation.summary { return true }
-        if case .unavailable = presentation.budget { return true }
-        if case .unavailable = presentation.review { return true }
-        if case .unavailable = presentation.recentActivity { return true }
-        return false
-    }
-
-    private func budgetStatusSymbol(_ status: HomePresentation.Budget.Status) -> String {
-        switch status {
-        case .onTrack:
-            return "checkmark.circle.fill"
-        case .watch:
-            return "exclamationmark.triangle.fill"
-        case .overBudget:
-            return "exclamationmark.circle.fill"
-        case .unavailable:
-            return "minus.circle"
-        }
-    }
-
-    private func budgetStatusColor(_ status: HomePresentation.Budget.Status) -> Color {
-        switch status {
-        case .onTrack:
-            return MoneyMonitorTheme.positive
-        case .watch:
-            return MoneyMonitorTheme.warning
-        case .overBudget:
-            return MoneyMonitorTheme.negative
-        case .unavailable:
-            return .secondary
-        }
-    }
-
-    private func transactionAmountColor(
-        _ direction: HomePresentation.RecentActivity.Item.Direction
-    ) -> Color {
-        switch direction {
-        case .debit:
-            return MoneyMonitorTheme.negative
-        case .credit:
-            return MoneyMonitorTheme.positive
-        case .unavailable:
-            return .primary
-        }
-    }
-
-    private func transactionStatusLabel(
-        _ status: HomePresentation.RecentActivity.Item.Status
-    ) -> String? {
-        switch status {
-        case .posted:
-            return nil
-        case .pending:
-            return "Pending"
-        case .unavailable:
-            return "Status unavailable"
-        }
-    }
-
-    private func transactionAccessibilityLabel(
-        _ item: HomePresentation.RecentActivity.Item
-    ) -> String {
-        let direction: String
-        switch item.direction {
-        case .debit:
-            direction = "Debit"
-        case .credit:
-            direction = "Credit"
-        case .unavailable:
-            direction = "Direction unavailable"
-        }
-
-        var parts = [
-            item.merchant,
-            direction,
-            item.amount.formatted,
-            item.occurredOn.formatted,
-            item.account,
-        ]
-        if let category = item.category { parts.append(category) }
-        if let status = transactionStatusLabel(item.status) { parts.append(status) }
-        return parts.joined(separator: ", ")
-    }
-
     private enum PresentationState {
-        case ready(HomePresentation)
+        case ready(HomeOverviewPresentation)
         case missing
         case invalid
     }
 
-    private enum AmountProminence: Equatable {
-        case primary
-        case supporting
-        case compact
+    private var presentationState: PresentationState {
+        guard let overview = environment.latestHomeOverview else { return .missing }
+        do { return .ready(try HomeOverviewPresentationBuilder().makePresentation(from: overview)) }
+        catch { return .invalid }
+    }
 
-        var titleFont: Font {
-            self == .primary ? .headline : .subheadline
+    private var missingMessage: String {
+        switch environment.trustState {
+        case .savedView, .staleSavedView:
+            "This Saved View has no accepted Home projection. Reconnect to load Home from your Mac."
+        case .failed:
+            "Home could not be refreshed. Retry when your Mac is available."
+        case .noSnapshot, .incompatible:
+            "Pair again to load a verified Home projection from your Mac."
+        default:
+            "Connect to your Mac to load Home."
         }
+    }
 
-        var amountFont: Font {
-            switch self {
-            case .primary:
-                return .largeTitle
-            case .supporting:
-                return .title2
-            case .compact:
-                return .body
+    private func beginRePairing(qrPayload: Data) {
+        isRePairScannerPresented = false
+        Task { await environment.pair(qrPayload: qrPayload, deviceName: deviceName()) }
+    }
+
+    private func homeContent(_ presentation: HomeOverviewPresentation) -> some View {
+        ScrollView {
+            LazyVStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.large) {
+                trustContext(presentation)
+                if presentation.isEmpty {
+                    Text("No financial activity is available for this period yet.")
+                        .font(.subheadline)
+                        .foregroundStyle(.secondary)
+                        .accessibilityLabel("No financial activity is available for this period yet")
+                }
+                summarySection(presentation)
+                budgetSection(presentation.budget)
+                categorySection(presentation.categories)
+                cashFlowSection(presentation.cashFlow)
+                freshnessSection(presentation.accountFreshness)
+                Text("Financial date \(presentation.financialDate) · Calculated \(presentation.calculatedAt.formatted(date: .abbreviated, time: .shortened))")
+                    .font(.footnote)
+                    .foregroundStyle(.secondary)
+                    .accessibilityElement(children: .combine)
+            }
+            .padding(.horizontal, MoneyMonitorTheme.Spacing.large)
+            .padding(.vertical, MoneyMonitorTheme.Spacing.standard)
+        }
+        .scrollBounceBehavior(.always, axes: .vertical)
+        .refreshable { await environment.refreshHomeOverview() }
+    }
+
+    private func trustContext(_ presentation: HomeOverviewPresentation) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xSmall) {
+            Text(trustLabel)
+                .font(.subheadline.weight(.semibold))
+            Text(presentation.completeness == "partial" ? "Partial Home data · affected values are marked unavailable." : "Mac is the source of truth.")
+                .font(.footnote)
+                .foregroundStyle(presentation.completeness == "partial" ? MoneyMonitorTheme.warning : .secondary)
+        }
+        .accessibilityElement(children: .combine)
+    }
+
+    private var trustLabel: String {
+        switch environment.trustState {
+        case .savedView: "Saved View"
+        case .staleSavedView: "Stale Saved View"
+        case .partial: "Partial"
+        case .checking: "Checking with Mac…"
+        case .failed: "Home refresh failed"
+        default: "Live Home"
+        }
+    }
+
+    private func amountMetric(_ title: String, _ amount: HomeOverviewPresentation.Amount?, prominence: Font.TextStyle = .body) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.xSmall) {
+            Text(title).font(.subheadline).foregroundStyle(.secondary)
+            Text(amount?.formatted ?? "Unavailable")
+                .font(.system(prominence == .title ? .title2 : .body, design: .rounded).weight(.semibold))
+                .monospacedDigit()
+        }
+        .accessibilityElement(children: .combine)
+        .accessibilityLabel("\(title): \(amount?.formatted ?? "Unavailable")")
+    }
+
+    private func summarySection(_ presentation: HomeOverviewPresentation) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
+            amountMetric("Available money", presentation.availableMoney, prominence: .title)
+            HStack(alignment: .top, spacing: MoneyMonitorTheme.Spacing.large) {
+                amountMetric("Spending", presentation.currentSpending)
+                Divider()
+                amountMetric("Prior period", presentation.comparisonSpending)
+                Divider()
+                amountMetric("Net worth", presentation.netWorth.total)
+            }
+            .frame(maxWidth: .infinity, alignment: .leading)
+            Text("Change vs prior period: \(presentation.spendingChange.formatted)")
+                .font(.footnote)
+                .foregroundStyle(.secondary)
+        }
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .background(MoneyMonitorTheme.quietControl, in: RoundedRectangle(cornerRadius: 16))
+    }
+
+    @ViewBuilder
+    private func budgetSection(_ budget: HomeOverviewBudget?) -> some View {
+        if let budget {
+            VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.small) {
+                Text(budget.name).font(.headline)
+                amountMetric("Budget remaining", try? HomeOverviewPresentationBuilder().makeAmount(budget.remaining))
+                Text("\(budget.state.replacingOccurrences(of: "_", with: " ").capitalized) · \(budget.period.startDate)–\(budget.period.endDate)")
+                    .font(.footnote).foregroundStyle(.secondary)
+            }
+            .padding(MoneyMonitorTheme.Spacing.large)
+            .background(MoneyMonitorTheme.quietControl, in: RoundedRectangle(cornerRadius: 16))
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    private func categorySection(_ categories: [HomeOverviewPresentation.Category]) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
+            Text("Spending by category").font(.headline)
+            if categories.isEmpty {
+                Text("No spending data for this period.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(categories) { category in
+                    NavigationLink {
+                        HomeOverviewDrillDownView(title: category.label, summary: category.textSummary, period: category.drillDown)
+                    } label: {
+                        HStack {
+                            Text(category.textSummary).font(.subheadline).multilineTextAlignment(.leading)
+                            Spacer()
+                            Image(systemName: "chevron.forward").foregroundStyle(.secondary).accessibilityHidden(true)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
             }
         }
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .background(MoneyMonitorTheme.quietControl, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func cashFlowSection(_ cashFlow: [HomeOverviewPresentation.CashFlow]) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
+            Text("Cash flow").font(.headline)
+            if cashFlow.isEmpty {
+                Text("No cash-flow data yet.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(cashFlow.suffix(3)) { point in
+                    NavigationLink {
+                        HomeOverviewDrillDownView(title: "Cash flow", summary: point.textSummary, period: point.drillDown)
+                    } label: {
+                        HStack {
+                            Text(point.textSummary).font(.subheadline).multilineTextAlignment(.leading)
+                            Spacer()
+                            Image(systemName: "chevron.forward").foregroundStyle(.secondary).accessibilityHidden(true)
+                        }
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .background(MoneyMonitorTheme.quietControl, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func freshnessSection(_ accounts: [HomeOverviewAccountFreshness]) -> some View {
+        VStack(alignment: .leading, spacing: MoneyMonitorTheme.Spacing.medium) {
+            Text("Account freshness").font(.headline)
+            if accounts.isEmpty {
+                Text("No accounts configured.").font(.subheadline).foregroundStyle(.secondary)
+            } else {
+                ForEach(accounts) { account in
+                    HStack {
+                        Text(account.displayName)
+                        Spacer()
+                        Text(account.status.capitalized)
+                            .foregroundStyle(account.status == "stale" ? MoneyMonitorTheme.warning : .secondary)
+                    }
+                    .font(.subheadline)
+                }
+            }
+        }
+        .padding(MoneyMonitorTheme.Spacing.large)
+        .background(MoneyMonitorTheme.quietControl, in: RoundedRectangle(cornerRadius: 16))
+        .accessibilityElement(children: .contain)
+    }
+
+    private func unavailableHome(message: String) -> some View {
+        ContentUnavailableView("Home unavailable", systemImage: "house", description: Text(message))
+    }
+}
+
+private struct HomeOverviewDrillDownView: View {
+    let title: String
+    let summary: String
+    let period: HomeOverviewDrillDown
+
+    var body: some View {
+        List {
+            Section(title) {
+                Text(summary).accessibilityAddTraits(.isHeader)
+                LabeledContent("Period", value: "\(period.startDate) – \(period.endDate)")
+                if let category = period.category {
+                    LabeledContent("Category", value: category)
+                }
+            }
+        }
+        .navigationTitle(title)
     }
 }

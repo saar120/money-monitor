@@ -6,6 +6,7 @@ enum APIEndpoint: Equatable {
     case pairingStatus
     case pairingExchange
     case bootstrap
+    case homeOverview
     case transactions(MobileTransactionQuery)
     case transactionDetail(id: String)
     case planning
@@ -30,6 +31,8 @@ enum APIEndpoint: Equatable {
             "api/mobile/v1/pairing/exchange"
         case .bootstrap:
             "api/mobile/v1/bootstrap"
+        case .homeOverview:
+            "api/v1/home"
         case .transactions:
             "api/mobile/v1/transactions"
         case let .transactionDetail(id):
@@ -47,7 +50,7 @@ enum APIEndpoint: Equatable {
 
     var httpMethod: String {
         switch self {
-        case .health, .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory:
+        case .health, .bootstrap, .homeOverview, .transactions, .transactionDetail, .planning, .netWorthHistory:
             "GET"
         case .pairingStart, .pairingStatus, .pairingExchange, .reviewResolve, .reviewSkip:
             "POST"
@@ -56,7 +59,7 @@ enum APIEndpoint: Equatable {
 
     var authorizationPolicy: AuthorizationPolicy {
         switch self {
-        case .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory, .reviewResolve, .reviewSkip:
+        case .bootstrap, .homeOverview, .transactions, .transactionDetail, .planning, .netWorthHistory, .reviewResolve, .reviewSkip:
             .deviceBearer
         case .health, .pairingStart, .pairingStatus, .pairingExchange:
             .none

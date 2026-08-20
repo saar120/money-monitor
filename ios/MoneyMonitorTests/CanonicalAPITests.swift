@@ -37,6 +37,8 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
             response = (200, Data(diagnosticsJSON.utf8))
         } else if path == "/api/v1/pairing/status" && method == "GET" {
             response = (200, Data(pairingJSON.utf8))
+        } else if path == "/api/v1/home" && method == "GET" {
+            response = (200, Data(homeJSON.utf8))
         } else {
             response = (404, Data(errorJSON.utf8))
         }
@@ -114,6 +116,29 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
     }
     """
 
+    private let homeJSON = """
+    {
+      "data": {
+        "financialDate": "2026-08-20",
+        "calculatedAt": "2026-08-20T10:00:00.000Z",
+        "baseCurrencyCode": "ILS",
+        "availableMoney": { "value": "8200.00", "currencyCode": "ILS" },
+        "spending": {
+          "current": { "amount": { "value": "1200.00", "currencyCode": "ILS" }, "period": { "startDate": "2026-08-01", "endDate": "2026-08-20" } },
+          "comparison": { "amount": { "value": "900.00", "currencyCode": "ILS" }, "period": { "startDate": "2026-07-01", "endDate": "2026-07-20" } },
+          "change": { "value": "300.00", "currencyCode": "ILS" }
+        },
+        "budget": null,
+        "netWorth": { "total": null, "liquid": null },
+        "categories": [], "cashFlow": [], "accountFreshness": [], "isEmpty": false
+      },
+      "meta": {
+        "apiVersion": "1", "generatedAt": "2026-08-20T10:00:00.000Z", "source": "mac-authoritative",
+        "calculationVersion": "home-overview-1", "completeness": "complete", "estimated": false, "missingSections": []
+      }
+    }
+    """
+
     private let errorJSON = """
     {
       "error": { "code": "resource_not_found", "message": "The requested resource was not found." },
@@ -142,7 +167,21 @@ final class CanonicalURLProtocol: URLProtocol, @unchecked Sendable {
             headerFields: ["Content-Type": "application/json"]
         )!
         client?.urlProtocol(self, didReceive: response, cacheStoragePolicy: .notAllowed)
-        client?.urlProtocol(self, didLoad: Data("{}".utf8))
+        client?.urlProtocol(self, didLoad: Data("""
+        {
+          "data": {
+            "financialDate": "2026-08-20", "calculatedAt": "2026-08-20T10:00:00.000Z", "baseCurrencyCode": "ILS",
+            "availableMoney": null,
+            "spending": {
+              "current": { "amount": { "value": "0.00", "currencyCode": "ILS" }, "period": { "startDate": "2026-08-01", "endDate": "2026-08-20" } },
+              "comparison": { "amount": { "value": "0.00", "currencyCode": "ILS" }, "period": { "startDate": "2026-07-01", "endDate": "2026-07-20" } },
+              "change": { "value": "0.00", "currencyCode": "ILS" }
+            },
+            "budget": null, "netWorth": { "total": null, "liquid": null }, "categories": [], "cashFlow": [], "accountFreshness": [], "isEmpty": true
+          },
+          "meta": { "apiVersion": "1", "generatedAt": "2026-08-20T10:00:00.000Z", "source": "mac-authoritative", "calculationVersion": "home-overview-1", "completeness": "complete", "estimated": false, "missingSections": [] }
+        }
+        """.utf8))
         client?.urlProtocolDidFinishLoading(self)
     }
 
@@ -150,7 +189,7 @@ final class CanonicalURLProtocol: URLProtocol, @unchecked Sendable {
 }
 
 final class CanonicalAPITests: XCTestCase {
-    func testURLSessionTransportPreservesMountedBasePath() async throws {
+    func testGeneratedHomeClientPreservesMountedBasePath() async throws {
         CanonicalURLProtocol.lastURL = nil
         let configuration = URLSessionConfiguration.ephemeral
         configuration.protocolClasses = [CanonicalURLProtocol.self]
@@ -161,10 +200,11 @@ final class CanonicalAPITests: XCTestCase {
             session: session
         )
 
-        _ = try await client.getReference()
+        let home = try await client.getHomeOverview()
+        XCTAssertEqual(home.data.financialDate, "2026-08-20")
         XCTAssertEqual(
             CanonicalURLProtocol.lastURL?.absoluteString,
-            "https://mac.tailnet.ts.net/money-monitor/api/v1/reference?id=1"
+            "https://mac.tailnet.ts.net/money-monitor/api/v1/home"
         )
     }
 
@@ -202,6 +242,18 @@ final class CanonicalAPITests: XCTestCase {
         XCTAssertEqual(transport.requests[1].path, "/api/v1/reference/1")
         XCTAssertEqual(transport.requests[2].path, "/api/v1/reference/1?expectedVersion=1")
         XCTAssertEqual(transport.requests[0].headers["Authorization"], "Bearer issued-device-token")
+    }
+
+    func testGeneratedClientReadsTypedHomeOverview() async throws {
+        let transport = CanonicalTransportStub()
+        let client = CanonicalAPIClient(transport: transport, token: "issued-device-token")
+
+        let home = try await client.getHomeOverview()
+
+        XCTAssertEqual(home.data.financialDate, "2026-08-20")
+        XCTAssertEqual(home.data.availableMoney?.value, "8200.00")
+        XCTAssertEqual(home.data.spending.current.amount.currencyCode, "ILS")
+        XCTAssertEqual(transport.requests.last?.path, "/api/v1/home")
     }
 
     func testGeneratedClientDecodesStableCodedErrors() async throws {

@@ -1,8 +1,16 @@
 import Foundation
+import CanonicalAPI
 
 protocol MobileAPIClient: Sendable {
     func health(baseURL: URL) async throws -> HealthResponse
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
+    func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope
+}
+
+extension MobileAPIClient {
+    func homeOverview(credential _: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope {
+        throw MobileClientError.invalidRequest
+    }
 }
 
 protocol MobileTransactionAPIClient: Sendable {
@@ -121,6 +129,34 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         return bootstrap
     }
 
+    func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope {
+        do {
+            let generatedClient = CanonicalAPIClient(
+                transport: MobileCanonicalTransportAdapter(
+                    transport: transport,
+                    baseURL: credential.profile.baseURL
+                ),
+                token: credential.token
+            )
+            let generatedResponse = try await generatedClient.getHomeOverview()
+            let encoder = JSONEncoder()
+            encoder.dateEncodingStrategy = .iso8601
+            let envelope = try CanonicalHomeOverviewDecoder.decode(
+                try encoder.encode(generatedResponse)
+            )
+            guard envelope.meta.apiVersion == String(credential.profile.apiVersion) else {
+                throw MobileClientError.identityMismatch
+            }
+            return envelope
+        } catch let error as MobileClientError {
+            throw error
+        } catch is CanonicalAPIError {
+            throw MobileClientError.invalidPayload
+        } catch {
+            throw MobileClientError.invalidPayload
+        }
+    }
+
     private func send(_ request: URLRequest, endpoint: APIEndpoint) async throws
         -> MobileHTTPResponse
     {
@@ -140,6 +176,44 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
             )
         }
         return response
+    }
+}
+
+private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked Sendable {
+    let transport: any MobileHTTPTransport
+    let baseURL: URL
+
+    func send(
+        _ request: CanonicalHTTPRequest,
+        body: CanonicalHTTPBody?,
+        baseURL _: URL,
+        operationID _: String
+    ) async throws -> (CanonicalHTTPResponse, CanonicalHTTPBody?) {
+        guard body == nil, let requestPath = request.path,
+              var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
+              let pathComponents = URLComponents(string: requestPath)
+        else {
+            throw MobileClientError.invalidRequest
+        }
+
+        let mountedPath = components.path.hasSuffix("/") ? String(components.path.dropLast()) : components.path
+        components.path = mountedPath + pathComponents.path
+        components.query = pathComponents.query
+        guard let url = components.url else { throw MobileClientError.invalidRequest }
+
+        var urlRequest = URLRequest(url: url)
+        urlRequest.httpMethod = request.method.rawValue
+        for field in request.headerFields {
+            urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        let response = try await transport.send(urlRequest)
+        return (
+            CanonicalHTTPResponse(
+                status: .init(code: response.statusCode),
+                headerFields: [.contentType: "application/json"]
+            ),
+            CanonicalHTTPBody(response.data)
+        )
     }
 }
 

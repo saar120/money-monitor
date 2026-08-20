@@ -18,6 +18,7 @@ public typealias ReferenceCommandRequest = Components.Schemas.ReferenceCommandRe
 public typealias ReferenceCommandResponse = Components.Schemas.ReferenceCommandResponse
 public typealias DiagnosticsResponse = Components.Schemas.DiagnosticsResponse
 public typealias PairingStatusResponse = Components.Schemas.PairingStatusResponse
+public typealias HomeOverviewResponse = Components.Schemas.HomeOverviewResponse
 
 public typealias ReferenceResourceAmount = Components.Schemas.ReferenceResource.AmountPayload
 public typealias ReferenceResponseData = Components.Schemas.ReferenceResponse.DataPayload
@@ -175,6 +176,18 @@ public struct CanonicalAPIClient: Sendable {
 
     public func getPairingStatus() async throws -> PairingStatusResponse {
         let output = try await client.getPairingStatus()
+        switch output {
+        case let .ok(response):
+            return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func getHomeOverview() async throws -> HomeOverviewResponse {
+        let output = try await client.getHomeOverview()
         switch output {
         case let .ok(response):
             return try response.body.json
