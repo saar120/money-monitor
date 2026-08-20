@@ -10,7 +10,6 @@ import { db, sqlite, closeAll } from './db/connection.js';
 import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
-import { summaryRoutes } from './api/summary.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
 import { categoriesRoutes } from './api/categories.routes.js';
 import { exchangeRatesRoutes } from './api/exchange-rates.routes.js';
@@ -32,6 +31,7 @@ import type { CanonicalAuthenticator } from './api/v1/policy.js';
 import { CanonicalApiError, sendCanonicalError } from './api/v1/errors.js';
 import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
+import type { ExchangeRateResult } from './services/exchange-rates.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -46,6 +46,8 @@ export interface CreateServerOptions {
   /** Explicitly disable first-install canonical seeding. */
   seedCanonical?: ReferenceSeed | false;
   logger?: boolean;
+  /** Injectable Mac-owned rates for deterministic canonical Home tests. */
+  homeExchangeRates?: () => Promise<ExchangeRateResult>;
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
@@ -198,16 +200,16 @@ export async function createServer(options: CreateServerOptions = {}) {
           throw new Error('canonical credentials are invalid');
         }),
       logger: options.logger ?? false,
+      homeExchangeRates: options.homeExchangeRates,
     },
     clock,
   );
 
   // Register route modules
-	if (options.registerLegacyRoutes ?? true) {
-	  await app.register(scrapeRoutes);
+  if (options.registerLegacyRoutes ?? true) {
+    await app.register(scrapeRoutes);
     await app.register(accountsRoutes);
     await app.register(transactionsRoutes);
-    await app.register(summaryRoutes);
     await app.register(aiRoutes);
     await app.register(categoriesRoutes);
     await app.register(exchangeRatesRoutes);
@@ -217,11 +219,11 @@ export async function createServer(options: CreateServerOptions = {}) {
     await app.register(settingsRoutes);
     await app.register(membersRoutes);
     await app.register(ownershipRoutes);
-	  await app.register(alertsRoutes);
-	  await app.register(budgetsRoutes);
-	  await app.register(oneZeroImportRoutes);
-	  await app.register(demoRoutes);
-	}
+    await app.register(alertsRoutes);
+    await app.register(budgetsRoutes);
+    await app.register(oneZeroImportRoutes);
+    await app.register(demoRoutes);
+  }
 
   // Serve dashboard static files in production
   const __dirname = fileURLToPath(new URL('.', import.meta.url));

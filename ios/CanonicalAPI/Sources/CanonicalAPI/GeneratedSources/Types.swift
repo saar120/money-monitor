@@ -11,6 +11,11 @@ public import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// Read the Mac-calculated Home overview projection
+    ///
+    /// - Remark: HTTP `GET /api/v1/home`.
+    /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)`.
+    func getHomeOverview(_ input: Operations.GetHomeOverview.Input) async throws -> Operations.GetHomeOverview.Output
     /// Read the canonical foundation resource
     ///
     /// - Remark: HTTP `GET /api/v1/reference`.
@@ -45,6 +50,13 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// Read the Mac-calculated Home overview projection
+    ///
+    /// - Remark: HTTP `GET /api/v1/home`.
+    /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)`.
+    public func getHomeOverview(headers: Operations.GetHomeOverview.Input.Headers = .init()) async throws -> Operations.GetHomeOverview.Output {
+        try await getHomeOverview(Operations.GetHomeOverview.Input(headers: headers))
+    }
     /// Read the canonical foundation resource
     ///
     /// - Remark: HTTP `GET /api/v1/reference`.
@@ -249,6 +261,8 @@ public enum Components {
             public typealias RefreshHintsPayload = [Components.Schemas.CanonicalMeta.RefreshHintsPayloadPayload]
             /// - Remark: Generated from `#/components/schemas/CanonicalMeta/refreshHints`.
             public var refreshHints: Components.Schemas.CanonicalMeta.RefreshHintsPayload?
+            /// - Remark: Generated from `#/components/schemas/CanonicalMeta/missingSections`.
+            public var missingSections: [Swift.String]?
             /// - Remark: Generated from `#/components/schemas/CanonicalMeta/receipt`.
             public struct ReceiptPayload: Codable, Hashable, Sendable {
                 /// - Remark: Generated from `#/components/schemas/CanonicalMeta/receipt/idempotencyKey`.
@@ -300,6 +314,7 @@ public enum Components {
             ///   - estimated:
             ///   - resourceVersion:
             ///   - refreshHints:
+            ///   - missingSections:
             ///   - receipt:
             public init(
                 apiVersion: Components.Schemas.CanonicalMeta.ApiVersionPayload,
@@ -310,6 +325,7 @@ public enum Components {
                 estimated: Swift.Bool? = nil,
                 resourceVersion: Swift.Int? = nil,
                 refreshHints: Components.Schemas.CanonicalMeta.RefreshHintsPayload? = nil,
+                missingSections: [Swift.String]? = nil,
                 receipt: Components.Schemas.CanonicalMeta.ReceiptPayload? = nil
             ) {
                 self.apiVersion = apiVersion
@@ -320,6 +336,7 @@ public enum Components {
                 self.estimated = estimated
                 self.resourceVersion = resourceVersion
                 self.refreshHints = refreshHints
+                self.missingSections = missingSections
                 self.receipt = receipt
             }
             public enum CodingKeys: String, CodingKey {
@@ -331,6 +348,7 @@ public enum Components {
                 case estimated
                 case resourceVersion
                 case refreshHints
+                case missingSections
                 case receipt
             }
             public init(from decoder: any Swift.Decoder) throws {
@@ -367,6 +385,10 @@ public enum Components {
                     Components.Schemas.CanonicalMeta.RefreshHintsPayload.self,
                     forKey: .refreshHints
                 )
+                self.missingSections = try container.decodeIfPresent(
+                    [Swift.String].self,
+                    forKey: .missingSections
+                )
                 self.receipt = try container.decodeIfPresent(
                     Components.Schemas.CanonicalMeta.ReceiptPayload.self,
                     forKey: .receipt
@@ -380,6 +402,7 @@ public enum Components {
                     "estimated",
                     "resourceVersion",
                     "refreshHints",
+                    "missingSections",
                     "receipt"
                 ])
             }
@@ -597,6 +620,3002 @@ public enum Components {
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "error",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/HomeOverviewData`.
+        public struct HomeOverviewData: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/financialDate`.
+            public var financialDate: Swift.String
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/calculatedAt`.
+            public var calculatedAt: Foundation.Date
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/baseCurrencyCode`.
+            @frozen public enum BaseCurrencyCodePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case ils = "ILS"
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/baseCurrencyCode`.
+            public var baseCurrencyCode: Components.Schemas.HomeOverviewData.BaseCurrencyCodePayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/availableMoney`.
+            public struct AvailableMoneyPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/availableMoney/value`.
+                public var value: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/availableMoney/currencyCode`.
+                public var currencyCode: Swift.String
+                /// Creates a new `AvailableMoneyPayload`.
+                ///
+                /// - Parameters:
+                ///   - value:
+                ///   - currencyCode:
+                public init(
+                    value: Swift.String,
+                    currencyCode: Swift.String
+                ) {
+                    self.value = value
+                    self.currencyCode = currencyCode
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case value
+                    case currencyCode
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.value = try container.decode(
+                        Swift.String.self,
+                        forKey: .value
+                    )
+                    self.currencyCode = try container.decode(
+                        Swift.String.self,
+                        forKey: .currencyCode
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "value",
+                        "currencyCode"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/availableMoney`.
+            public var availableMoney: Components.Schemas.HomeOverviewData.AvailableMoneyPayload?
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending`.
+            public struct SpendingPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current`.
+                public struct CurrentPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/amount`.
+                    public struct AmountPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/amount/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/amount/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `AmountPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/amount`.
+                    public var amount: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.AmountPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/period`.
+                    public struct PeriodPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/period/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/period/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `PeriodPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current/period`.
+                    public var period: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.PeriodPayload
+                    /// Creates a new `CurrentPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - amount:
+                    ///   - period:
+                    public init(
+                        amount: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.AmountPayload,
+                        period: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.PeriodPayload
+                    ) {
+                        self.amount = amount
+                        self.period = period
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case amount
+                        case period
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.amount = try container.decode(
+                            Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.AmountPayload.self,
+                            forKey: .amount
+                        )
+                        self.period = try container.decode(
+                            Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.PeriodPayload.self,
+                            forKey: .period
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "amount",
+                            "period"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/current`.
+                public var current: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison`.
+                public struct ComparisonPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/amount`.
+                    public struct AmountPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/amount/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/amount/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `AmountPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/amount`.
+                    public var amount: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.AmountPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/period`.
+                    public struct PeriodPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/period/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/period/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `PeriodPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison/period`.
+                    public var period: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.PeriodPayload
+                    /// Creates a new `ComparisonPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - amount:
+                    ///   - period:
+                    public init(
+                        amount: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.AmountPayload,
+                        period: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.PeriodPayload
+                    ) {
+                        self.amount = amount
+                        self.period = period
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case amount
+                        case period
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.amount = try container.decode(
+                            Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.AmountPayload.self,
+                            forKey: .amount
+                        )
+                        self.period = try container.decode(
+                            Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.PeriodPayload.self,
+                            forKey: .period
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "amount",
+                            "period"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/comparison`.
+                public var comparison: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/change`.
+                public struct ChangePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/change/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/change/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `ChangePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending/change`.
+                public var change: Components.Schemas.HomeOverviewData.SpendingPayload.ChangePayload
+                /// Creates a new `SpendingPayload`.
+                ///
+                /// - Parameters:
+                ///   - current:
+                ///   - comparison:
+                ///   - change:
+                public init(
+                    current: Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload,
+                    comparison: Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload,
+                    change: Components.Schemas.HomeOverviewData.SpendingPayload.ChangePayload
+                ) {
+                    self.current = current
+                    self.comparison = comparison
+                    self.change = change
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case current
+                    case comparison
+                    case change
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.current = try container.decode(
+                        Components.Schemas.HomeOverviewData.SpendingPayload.CurrentPayload.self,
+                        forKey: .current
+                    )
+                    self.comparison = try container.decode(
+                        Components.Schemas.HomeOverviewData.SpendingPayload.ComparisonPayload.self,
+                        forKey: .comparison
+                    )
+                    self.change = try container.decode(
+                        Components.Schemas.HomeOverviewData.SpendingPayload.ChangePayload.self,
+                        forKey: .change
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "current",
+                        "comparison",
+                        "change"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/spending`.
+            public var spending: Components.Schemas.HomeOverviewData.SpendingPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget`.
+            public struct BudgetPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/state`.
+                @frozen public enum StatePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case onTrack = "on_track"
+                    case watch = "watch"
+                    case atLimit = "at_limit"
+                    case overBudget = "over_budget"
+                    case unavailable = "unavailable"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/state`.
+                public var state: Components.Schemas.HomeOverviewData.BudgetPayload.StatePayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/spent`.
+                public struct SpentPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/spent/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/spent/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `SpentPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/spent`.
+                public var spent: Components.Schemas.HomeOverviewData.BudgetPayload.SpentPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/limit`.
+                public struct LimitPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/limit/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/limit/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `LimitPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/limit`.
+                public var limit: Components.Schemas.HomeOverviewData.BudgetPayload.LimitPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/remaining`.
+                public struct RemainingPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/remaining/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/remaining/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `RemainingPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/remaining`.
+                public var remaining: Components.Schemas.HomeOverviewData.BudgetPayload.RemainingPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/period`.
+                public struct PeriodPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/period/startDate`.
+                    public var startDate: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/period/endDate`.
+                    public var endDate: Swift.String
+                    /// Creates a new `PeriodPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - startDate:
+                    ///   - endDate:
+                    public init(
+                        startDate: Swift.String,
+                        endDate: Swift.String
+                    ) {
+                        self.startDate = startDate
+                        self.endDate = endDate
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case startDate
+                        case endDate
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.startDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .startDate
+                        )
+                        self.endDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .endDate
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "startDate",
+                            "endDate"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget/period`.
+                public var period: Components.Schemas.HomeOverviewData.BudgetPayload.PeriodPayload
+                /// Creates a new `BudgetPayload`.
+                ///
+                /// - Parameters:
+                ///   - state:
+                ///   - name:
+                ///   - spent:
+                ///   - limit:
+                ///   - remaining:
+                ///   - period:
+                public init(
+                    state: Components.Schemas.HomeOverviewData.BudgetPayload.StatePayload,
+                    name: Swift.String,
+                    spent: Components.Schemas.HomeOverviewData.BudgetPayload.SpentPayload,
+                    limit: Components.Schemas.HomeOverviewData.BudgetPayload.LimitPayload,
+                    remaining: Components.Schemas.HomeOverviewData.BudgetPayload.RemainingPayload,
+                    period: Components.Schemas.HomeOverviewData.BudgetPayload.PeriodPayload
+                ) {
+                    self.state = state
+                    self.name = name
+                    self.spent = spent
+                    self.limit = limit
+                    self.remaining = remaining
+                    self.period = period
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case state
+                    case name
+                    case spent
+                    case limit
+                    case remaining
+                    case period
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.state = try container.decode(
+                        Components.Schemas.HomeOverviewData.BudgetPayload.StatePayload.self,
+                        forKey: .state
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.spent = try container.decode(
+                        Components.Schemas.HomeOverviewData.BudgetPayload.SpentPayload.self,
+                        forKey: .spent
+                    )
+                    self.limit = try container.decode(
+                        Components.Schemas.HomeOverviewData.BudgetPayload.LimitPayload.self,
+                        forKey: .limit
+                    )
+                    self.remaining = try container.decode(
+                        Components.Schemas.HomeOverviewData.BudgetPayload.RemainingPayload.self,
+                        forKey: .remaining
+                    )
+                    self.period = try container.decode(
+                        Components.Schemas.HomeOverviewData.BudgetPayload.PeriodPayload.self,
+                        forKey: .period
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "state",
+                        "name",
+                        "spent",
+                        "limit",
+                        "remaining",
+                        "period"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/budget`.
+            public var budget: Components.Schemas.HomeOverviewData.BudgetPayload?
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth`.
+            public struct NetWorthPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/total`.
+                public struct TotalPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/total/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/total/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `TotalPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/total`.
+                public var total: Components.Schemas.HomeOverviewData.NetWorthPayload.TotalPayload?
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/liquid`.
+                public struct LiquidPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/liquid/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/liquid/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `LiquidPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth/liquid`.
+                public var liquid: Components.Schemas.HomeOverviewData.NetWorthPayload.LiquidPayload?
+                /// Creates a new `NetWorthPayload`.
+                ///
+                /// - Parameters:
+                ///   - total:
+                ///   - liquid:
+                public init(
+                    total: Components.Schemas.HomeOverviewData.NetWorthPayload.TotalPayload? = nil,
+                    liquid: Components.Schemas.HomeOverviewData.NetWorthPayload.LiquidPayload? = nil
+                ) {
+                    self.total = total
+                    self.liquid = liquid
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case total
+                    case liquid
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.total = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewData.NetWorthPayload.TotalPayload.self,
+                        forKey: .total
+                    )
+                    self.liquid = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewData.NetWorthPayload.LiquidPayload.self,
+                        forKey: .liquid
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "total",
+                        "liquid"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/netWorth`.
+            public var netWorth: Components.Schemas.HomeOverviewData.NetWorthPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload`.
+            public struct CategoriesPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/label`.
+                public var label: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/amount`.
+                public struct AmountPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/amount/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/amount/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `AmountPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/amount`.
+                public var amount: Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.AmountPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/share`.
+                public var share: Swift.Double
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/transactionCount`.
+                public var transactionCount: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/textSummary`.
+                public var textSummary: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/drillDown`.
+                public struct DrillDownPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/drillDown/category`.
+                    public var category: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/drillDown/startDate`.
+                    public var startDate: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/drillDown/endDate`.
+                    public var endDate: Swift.String
+                    /// Creates a new `DrillDownPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - category:
+                    ///   - startDate:
+                    ///   - endDate:
+                    public init(
+                        category: Swift.String? = nil,
+                        startDate: Swift.String,
+                        endDate: Swift.String
+                    ) {
+                        self.category = category
+                        self.startDate = startDate
+                        self.endDate = endDate
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case category
+                        case startDate
+                        case endDate
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.category = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .category
+                        )
+                        self.startDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .startDate
+                        )
+                        self.endDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .endDate
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "category",
+                            "startDate",
+                            "endDate"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CategoriesPayload/drillDown`.
+                public var drillDown: Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.DrillDownPayload
+                /// Creates a new `CategoriesPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - label:
+                ///   - amount:
+                ///   - share:
+                ///   - transactionCount:
+                ///   - textSummary:
+                ///   - drillDown:
+                public init(
+                    label: Swift.String,
+                    amount: Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.AmountPayload,
+                    share: Swift.Double,
+                    transactionCount: Swift.Int,
+                    textSummary: Swift.String,
+                    drillDown: Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.DrillDownPayload
+                ) {
+                    self.label = label
+                    self.amount = amount
+                    self.share = share
+                    self.transactionCount = transactionCount
+                    self.textSummary = textSummary
+                    self.drillDown = drillDown
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case label
+                    case amount
+                    case share
+                    case transactionCount
+                    case textSummary
+                    case drillDown
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.label = try container.decode(
+                        Swift.String.self,
+                        forKey: .label
+                    )
+                    self.amount = try container.decode(
+                        Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.AmountPayload.self,
+                        forKey: .amount
+                    )
+                    self.share = try container.decode(
+                        Swift.Double.self,
+                        forKey: .share
+                    )
+                    self.transactionCount = try container.decode(
+                        Swift.Int.self,
+                        forKey: .transactionCount
+                    )
+                    self.textSummary = try container.decode(
+                        Swift.String.self,
+                        forKey: .textSummary
+                    )
+                    self.drillDown = try container.decode(
+                        Components.Schemas.HomeOverviewData.CategoriesPayloadPayload.DrillDownPayload.self,
+                        forKey: .drillDown
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "label",
+                        "amount",
+                        "share",
+                        "transactionCount",
+                        "textSummary",
+                        "drillDown"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/categories`.
+            public typealias CategoriesPayload = [Components.Schemas.HomeOverviewData.CategoriesPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/categories`.
+            public var categories: Components.Schemas.HomeOverviewData.CategoriesPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload`.
+            public struct CashFlowPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/period`.
+                public struct PeriodPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/period/startDate`.
+                    public var startDate: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/period/endDate`.
+                    public var endDate: Swift.String
+                    /// Creates a new `PeriodPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - startDate:
+                    ///   - endDate:
+                    public init(
+                        startDate: Swift.String,
+                        endDate: Swift.String
+                    ) {
+                        self.startDate = startDate
+                        self.endDate = endDate
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case startDate
+                        case endDate
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.startDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .startDate
+                        )
+                        self.endDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .endDate
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "startDate",
+                            "endDate"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/period`.
+                public var period: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.PeriodPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/income`.
+                public struct IncomePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/income/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/income/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `IncomePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/income`.
+                public var income: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.IncomePayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/expenses`.
+                public struct ExpensesPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/expenses/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/expenses/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `ExpensesPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/expenses`.
+                public var expenses: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.ExpensesPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/net`.
+                public struct NetPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/net/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/net/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `NetPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/net`.
+                public var net: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.NetPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/textSummary`.
+                public var textSummary: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/drillDown`.
+                public struct DrillDownPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/drillDown/category`.
+                    public var category: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/drillDown/startDate`.
+                    public var startDate: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/drillDown/endDate`.
+                    public var endDate: Swift.String
+                    /// Creates a new `DrillDownPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - category:
+                    ///   - startDate:
+                    ///   - endDate:
+                    public init(
+                        category: Swift.String? = nil,
+                        startDate: Swift.String,
+                        endDate: Swift.String
+                    ) {
+                        self.category = category
+                        self.startDate = startDate
+                        self.endDate = endDate
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case category
+                        case startDate
+                        case endDate
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.category = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .category
+                        )
+                        self.startDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .startDate
+                        )
+                        self.endDate = try container.decode(
+                            Swift.String.self,
+                            forKey: .endDate
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "category",
+                            "startDate",
+                            "endDate"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/CashFlowPayload/drillDown`.
+                public var drillDown: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.DrillDownPayload
+                /// Creates a new `CashFlowPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - period:
+                ///   - income:
+                ///   - expenses:
+                ///   - net:
+                ///   - textSummary:
+                ///   - drillDown:
+                public init(
+                    period: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.PeriodPayload,
+                    income: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.IncomePayload,
+                    expenses: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.ExpensesPayload,
+                    net: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.NetPayload,
+                    textSummary: Swift.String,
+                    drillDown: Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.DrillDownPayload
+                ) {
+                    self.period = period
+                    self.income = income
+                    self.expenses = expenses
+                    self.net = net
+                    self.textSummary = textSummary
+                    self.drillDown = drillDown
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case period
+                    case income
+                    case expenses
+                    case net
+                    case textSummary
+                    case drillDown
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.period = try container.decode(
+                        Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.PeriodPayload.self,
+                        forKey: .period
+                    )
+                    self.income = try container.decode(
+                        Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.IncomePayload.self,
+                        forKey: .income
+                    )
+                    self.expenses = try container.decode(
+                        Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.ExpensesPayload.self,
+                        forKey: .expenses
+                    )
+                    self.net = try container.decode(
+                        Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.NetPayload.self,
+                        forKey: .net
+                    )
+                    self.textSummary = try container.decode(
+                        Swift.String.self,
+                        forKey: .textSummary
+                    )
+                    self.drillDown = try container.decode(
+                        Components.Schemas.HomeOverviewData.CashFlowPayloadPayload.DrillDownPayload.self,
+                        forKey: .drillDown
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "period",
+                        "income",
+                        "expenses",
+                        "net",
+                        "textSummary",
+                        "drillDown"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/cashFlow`.
+            public typealias CashFlowPayload = [Components.Schemas.HomeOverviewData.CashFlowPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/cashFlow`.
+            public var cashFlow: Components.Schemas.HomeOverviewData.CashFlowPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/AccountFreshnessPayload`.
+            public struct AccountFreshnessPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/AccountFreshnessPayload/displayName`.
+                public var displayName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/AccountFreshnessPayload/status`.
+                @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case current = "current"
+                    case stale = "stale"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/AccountFreshnessPayload/status`.
+                public var status: Components.Schemas.HomeOverviewData.AccountFreshnessPayloadPayload.StatusPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewData/AccountFreshnessPayload/lastSuccessfulSyncAt`.
+                public var lastSuccessfulSyncAt: Foundation.Date?
+                /// Creates a new `AccountFreshnessPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - displayName:
+                ///   - status:
+                ///   - lastSuccessfulSyncAt:
+                public init(
+                    displayName: Swift.String,
+                    status: Components.Schemas.HomeOverviewData.AccountFreshnessPayloadPayload.StatusPayload,
+                    lastSuccessfulSyncAt: Foundation.Date? = nil
+                ) {
+                    self.displayName = displayName
+                    self.status = status
+                    self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case displayName
+                    case status
+                    case lastSuccessfulSyncAt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.displayName = try container.decode(
+                        Swift.String.self,
+                        forKey: .displayName
+                    )
+                    self.status = try container.decode(
+                        Components.Schemas.HomeOverviewData.AccountFreshnessPayloadPayload.StatusPayload.self,
+                        forKey: .status
+                    )
+                    self.lastSuccessfulSyncAt = try container.decodeIfPresent(
+                        Foundation.Date.self,
+                        forKey: .lastSuccessfulSyncAt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "displayName",
+                        "status",
+                        "lastSuccessfulSyncAt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/accountFreshness`.
+            public typealias AccountFreshnessPayload = [Components.Schemas.HomeOverviewData.AccountFreshnessPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/accountFreshness`.
+            public var accountFreshness: Components.Schemas.HomeOverviewData.AccountFreshnessPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewData/isEmpty`.
+            public var isEmpty: Swift.Bool
+            /// Creates a new `HomeOverviewData`.
+            ///
+            /// - Parameters:
+            ///   - financialDate:
+            ///   - calculatedAt:
+            ///   - baseCurrencyCode:
+            ///   - availableMoney:
+            ///   - spending:
+            ///   - budget:
+            ///   - netWorth:
+            ///   - categories:
+            ///   - cashFlow:
+            ///   - accountFreshness:
+            ///   - isEmpty:
+            public init(
+                financialDate: Swift.String,
+                calculatedAt: Foundation.Date,
+                baseCurrencyCode: Components.Schemas.HomeOverviewData.BaseCurrencyCodePayload,
+                availableMoney: Components.Schemas.HomeOverviewData.AvailableMoneyPayload? = nil,
+                spending: Components.Schemas.HomeOverviewData.SpendingPayload,
+                budget: Components.Schemas.HomeOverviewData.BudgetPayload? = nil,
+                netWorth: Components.Schemas.HomeOverviewData.NetWorthPayload,
+                categories: Components.Schemas.HomeOverviewData.CategoriesPayload,
+                cashFlow: Components.Schemas.HomeOverviewData.CashFlowPayload,
+                accountFreshness: Components.Schemas.HomeOverviewData.AccountFreshnessPayload,
+                isEmpty: Swift.Bool
+            ) {
+                self.financialDate = financialDate
+                self.calculatedAt = calculatedAt
+                self.baseCurrencyCode = baseCurrencyCode
+                self.availableMoney = availableMoney
+                self.spending = spending
+                self.budget = budget
+                self.netWorth = netWorth
+                self.categories = categories
+                self.cashFlow = cashFlow
+                self.accountFreshness = accountFreshness
+                self.isEmpty = isEmpty
+            }
+            public enum CodingKeys: String, CodingKey {
+                case financialDate
+                case calculatedAt
+                case baseCurrencyCode
+                case availableMoney
+                case spending
+                case budget
+                case netWorth
+                case categories
+                case cashFlow
+                case accountFreshness
+                case isEmpty
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.financialDate = try container.decode(
+                    Swift.String.self,
+                    forKey: .financialDate
+                )
+                self.calculatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .calculatedAt
+                )
+                self.baseCurrencyCode = try container.decode(
+                    Components.Schemas.HomeOverviewData.BaseCurrencyCodePayload.self,
+                    forKey: .baseCurrencyCode
+                )
+                self.availableMoney = try container.decodeIfPresent(
+                    Components.Schemas.HomeOverviewData.AvailableMoneyPayload.self,
+                    forKey: .availableMoney
+                )
+                self.spending = try container.decode(
+                    Components.Schemas.HomeOverviewData.SpendingPayload.self,
+                    forKey: .spending
+                )
+                self.budget = try container.decodeIfPresent(
+                    Components.Schemas.HomeOverviewData.BudgetPayload.self,
+                    forKey: .budget
+                )
+                self.netWorth = try container.decode(
+                    Components.Schemas.HomeOverviewData.NetWorthPayload.self,
+                    forKey: .netWorth
+                )
+                self.categories = try container.decode(
+                    Components.Schemas.HomeOverviewData.CategoriesPayload.self,
+                    forKey: .categories
+                )
+                self.cashFlow = try container.decode(
+                    Components.Schemas.HomeOverviewData.CashFlowPayload.self,
+                    forKey: .cashFlow
+                )
+                self.accountFreshness = try container.decode(
+                    Components.Schemas.HomeOverviewData.AccountFreshnessPayload.self,
+                    forKey: .accountFreshness
+                )
+                self.isEmpty = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .isEmpty
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "financialDate",
+                    "calculatedAt",
+                    "baseCurrencyCode",
+                    "availableMoney",
+                    "spending",
+                    "budget",
+                    "netWorth",
+                    "categories",
+                    "cashFlow",
+                    "accountFreshness",
+                    "isEmpty"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse`.
+        public struct HomeOverviewResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data`.
+            public struct DataPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/financialDate`.
+                public var financialDate: Swift.String
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/calculatedAt`.
+                public var calculatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/baseCurrencyCode`.
+                @frozen public enum BaseCurrencyCodePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case ils = "ILS"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/baseCurrencyCode`.
+                public var baseCurrencyCode: Components.Schemas.HomeOverviewResponse.DataPayload.BaseCurrencyCodePayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/availableMoney`.
+                public struct AvailableMoneyPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/availableMoney/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/availableMoney/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `AvailableMoneyPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/availableMoney`.
+                public var availableMoney: Components.Schemas.HomeOverviewResponse.DataPayload.AvailableMoneyPayload?
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending`.
+                public struct SpendingPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current`.
+                    public struct CurrentPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/amount`.
+                        public struct AmountPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/amount/value`.
+                            public var value: Swift.String
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/amount/currencyCode`.
+                            public var currencyCode: Swift.String
+                            /// Creates a new `AmountPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - value:
+                            ///   - currencyCode:
+                            public init(
+                                value: Swift.String,
+                                currencyCode: Swift.String
+                            ) {
+                                self.value = value
+                                self.currencyCode = currencyCode
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case value
+                                case currencyCode
+                            }
+                            public init(from decoder: any Swift.Decoder) throws {
+                                let container = try decoder.container(keyedBy: CodingKeys.self)
+                                self.value = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .value
+                                )
+                                self.currencyCode = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .currencyCode
+                                )
+                                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                    "value",
+                                    "currencyCode"
+                                ])
+                            }
+                        }
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/amount`.
+                        public var amount: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.AmountPayload
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/period`.
+                        public struct PeriodPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/period/startDate`.
+                            public var startDate: Swift.String
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/period/endDate`.
+                            public var endDate: Swift.String
+                            /// Creates a new `PeriodPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - startDate:
+                            ///   - endDate:
+                            public init(
+                                startDate: Swift.String,
+                                endDate: Swift.String
+                            ) {
+                                self.startDate = startDate
+                                self.endDate = endDate
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case startDate
+                                case endDate
+                            }
+                            public init(from decoder: any Swift.Decoder) throws {
+                                let container = try decoder.container(keyedBy: CodingKeys.self)
+                                self.startDate = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .startDate
+                                )
+                                self.endDate = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .endDate
+                                )
+                                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                    "startDate",
+                                    "endDate"
+                                ])
+                            }
+                        }
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current/period`.
+                        public var period: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.PeriodPayload
+                        /// Creates a new `CurrentPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - amount:
+                        ///   - period:
+                        public init(
+                            amount: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.AmountPayload,
+                            period: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.PeriodPayload
+                        ) {
+                            self.amount = amount
+                            self.period = period
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case amount
+                            case period
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.amount = try container.decode(
+                                Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.AmountPayload.self,
+                                forKey: .amount
+                            )
+                            self.period = try container.decode(
+                                Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.PeriodPayload.self,
+                                forKey: .period
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "amount",
+                                "period"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/current`.
+                    public var current: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison`.
+                    public struct ComparisonPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/amount`.
+                        public struct AmountPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/amount/value`.
+                            public var value: Swift.String
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/amount/currencyCode`.
+                            public var currencyCode: Swift.String
+                            /// Creates a new `AmountPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - value:
+                            ///   - currencyCode:
+                            public init(
+                                value: Swift.String,
+                                currencyCode: Swift.String
+                            ) {
+                                self.value = value
+                                self.currencyCode = currencyCode
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case value
+                                case currencyCode
+                            }
+                            public init(from decoder: any Swift.Decoder) throws {
+                                let container = try decoder.container(keyedBy: CodingKeys.self)
+                                self.value = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .value
+                                )
+                                self.currencyCode = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .currencyCode
+                                )
+                                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                    "value",
+                                    "currencyCode"
+                                ])
+                            }
+                        }
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/amount`.
+                        public var amount: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.AmountPayload
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/period`.
+                        public struct PeriodPayload: Codable, Hashable, Sendable {
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/period/startDate`.
+                            public var startDate: Swift.String
+                            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/period/endDate`.
+                            public var endDate: Swift.String
+                            /// Creates a new `PeriodPayload`.
+                            ///
+                            /// - Parameters:
+                            ///   - startDate:
+                            ///   - endDate:
+                            public init(
+                                startDate: Swift.String,
+                                endDate: Swift.String
+                            ) {
+                                self.startDate = startDate
+                                self.endDate = endDate
+                            }
+                            public enum CodingKeys: String, CodingKey {
+                                case startDate
+                                case endDate
+                            }
+                            public init(from decoder: any Swift.Decoder) throws {
+                                let container = try decoder.container(keyedBy: CodingKeys.self)
+                                self.startDate = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .startDate
+                                )
+                                self.endDate = try container.decode(
+                                    Swift.String.self,
+                                    forKey: .endDate
+                                )
+                                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                    "startDate",
+                                    "endDate"
+                                ])
+                            }
+                        }
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison/period`.
+                        public var period: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.PeriodPayload
+                        /// Creates a new `ComparisonPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - amount:
+                        ///   - period:
+                        public init(
+                            amount: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.AmountPayload,
+                            period: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.PeriodPayload
+                        ) {
+                            self.amount = amount
+                            self.period = period
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case amount
+                            case period
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.amount = try container.decode(
+                                Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.AmountPayload.self,
+                                forKey: .amount
+                            )
+                            self.period = try container.decode(
+                                Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.PeriodPayload.self,
+                                forKey: .period
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "amount",
+                                "period"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/comparison`.
+                    public var comparison: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/change`.
+                    public struct ChangePayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/change/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/change/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `ChangePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending/change`.
+                    public var change: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ChangePayload
+                    /// Creates a new `SpendingPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - current:
+                    ///   - comparison:
+                    ///   - change:
+                    public init(
+                        current: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload,
+                        comparison: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload,
+                        change: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ChangePayload
+                    ) {
+                        self.current = current
+                        self.comparison = comparison
+                        self.change = change
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case current
+                        case comparison
+                        case change
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.current = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.CurrentPayload.self,
+                            forKey: .current
+                        )
+                        self.comparison = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ComparisonPayload.self,
+                            forKey: .comparison
+                        )
+                        self.change = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.ChangePayload.self,
+                            forKey: .change
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "current",
+                            "comparison",
+                            "change"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/spending`.
+                public var spending: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget`.
+                public struct BudgetPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/state`.
+                    @frozen public enum StatePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case onTrack = "on_track"
+                        case watch = "watch"
+                        case atLimit = "at_limit"
+                        case overBudget = "over_budget"
+                        case unavailable = "unavailable"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/state`.
+                    public var state: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.StatePayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/name`.
+                    public var name: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/spent`.
+                    public struct SpentPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/spent/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/spent/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `SpentPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/spent`.
+                    public var spent: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.SpentPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/limit`.
+                    public struct LimitPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/limit/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/limit/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `LimitPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/limit`.
+                    public var limit: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.LimitPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/remaining`.
+                    public struct RemainingPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/remaining/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/remaining/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `RemainingPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/remaining`.
+                    public var remaining: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.RemainingPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/period`.
+                    public struct PeriodPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/period/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/period/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `PeriodPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget/period`.
+                    public var period: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.PeriodPayload
+                    /// Creates a new `BudgetPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - state:
+                    ///   - name:
+                    ///   - spent:
+                    ///   - limit:
+                    ///   - remaining:
+                    ///   - period:
+                    public init(
+                        state: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.StatePayload,
+                        name: Swift.String,
+                        spent: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.SpentPayload,
+                        limit: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.LimitPayload,
+                        remaining: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.RemainingPayload,
+                        period: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.PeriodPayload
+                    ) {
+                        self.state = state
+                        self.name = name
+                        self.spent = spent
+                        self.limit = limit
+                        self.remaining = remaining
+                        self.period = period
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case state
+                        case name
+                        case spent
+                        case limit
+                        case remaining
+                        case period
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.state = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.StatePayload.self,
+                            forKey: .state
+                        )
+                        self.name = try container.decode(
+                            Swift.String.self,
+                            forKey: .name
+                        )
+                        self.spent = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.SpentPayload.self,
+                            forKey: .spent
+                        )
+                        self.limit = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.LimitPayload.self,
+                            forKey: .limit
+                        )
+                        self.remaining = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.RemainingPayload.self,
+                            forKey: .remaining
+                        )
+                        self.period = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.PeriodPayload.self,
+                            forKey: .period
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "state",
+                            "name",
+                            "spent",
+                            "limit",
+                            "remaining",
+                            "period"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/budget`.
+                public var budget: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload?
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth`.
+                public struct NetWorthPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/total`.
+                    public struct TotalPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/total/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/total/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `TotalPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/total`.
+                    public var total: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.TotalPayload?
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/liquid`.
+                    public struct LiquidPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/liquid/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/liquid/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `LiquidPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth/liquid`.
+                    public var liquid: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.LiquidPayload?
+                    /// Creates a new `NetWorthPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - total:
+                    ///   - liquid:
+                    public init(
+                        total: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.TotalPayload? = nil,
+                        liquid: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.LiquidPayload? = nil
+                    ) {
+                        self.total = total
+                        self.liquid = liquid
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case total
+                        case liquid
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.total = try container.decodeIfPresent(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.TotalPayload.self,
+                            forKey: .total
+                        )
+                        self.liquid = try container.decodeIfPresent(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.LiquidPayload.self,
+                            forKey: .liquid
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "total",
+                            "liquid"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/netWorth`.
+                public var netWorth: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload`.
+                public struct CategoriesPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/label`.
+                    public var label: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/amount`.
+                    public struct AmountPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/amount/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/amount/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `AmountPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/amount`.
+                    public var amount: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.AmountPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/share`.
+                    public var share: Swift.Double
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/transactionCount`.
+                    public var transactionCount: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/textSummary`.
+                    public var textSummary: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/drillDown`.
+                    public struct DrillDownPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/drillDown/category`.
+                        public var category: Swift.String?
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/drillDown/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/drillDown/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `DrillDownPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - category:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            category: Swift.String? = nil,
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.category = category
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case category
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.category = try container.decodeIfPresent(
+                                Swift.String.self,
+                                forKey: .category
+                            )
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "category",
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CategoriesPayload/drillDown`.
+                    public var drillDown: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.DrillDownPayload
+                    /// Creates a new `CategoriesPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - label:
+                    ///   - amount:
+                    ///   - share:
+                    ///   - transactionCount:
+                    ///   - textSummary:
+                    ///   - drillDown:
+                    public init(
+                        label: Swift.String,
+                        amount: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.AmountPayload,
+                        share: Swift.Double,
+                        transactionCount: Swift.Int,
+                        textSummary: Swift.String,
+                        drillDown: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.DrillDownPayload
+                    ) {
+                        self.label = label
+                        self.amount = amount
+                        self.share = share
+                        self.transactionCount = transactionCount
+                        self.textSummary = textSummary
+                        self.drillDown = drillDown
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case label
+                        case amount
+                        case share
+                        case transactionCount
+                        case textSummary
+                        case drillDown
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.label = try container.decode(
+                            Swift.String.self,
+                            forKey: .label
+                        )
+                        self.amount = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.AmountPayload.self,
+                            forKey: .amount
+                        )
+                        self.share = try container.decode(
+                            Swift.Double.self,
+                            forKey: .share
+                        )
+                        self.transactionCount = try container.decode(
+                            Swift.Int.self,
+                            forKey: .transactionCount
+                        )
+                        self.textSummary = try container.decode(
+                            Swift.String.self,
+                            forKey: .textSummary
+                        )
+                        self.drillDown = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload.DrillDownPayload.self,
+                            forKey: .drillDown
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "label",
+                            "amount",
+                            "share",
+                            "transactionCount",
+                            "textSummary",
+                            "drillDown"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/categories`.
+                public typealias CategoriesPayload = [Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/categories`.
+                public var categories: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload`.
+                public struct CashFlowPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/period`.
+                    public struct PeriodPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/period/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/period/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `PeriodPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/period`.
+                    public var period: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.PeriodPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/income`.
+                    public struct IncomePayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/income/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/income/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `IncomePayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/income`.
+                    public var income: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.IncomePayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/expenses`.
+                    public struct ExpensesPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/expenses/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/expenses/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `ExpensesPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/expenses`.
+                    public var expenses: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.ExpensesPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/net`.
+                    public struct NetPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/net/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/net/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `NetPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/net`.
+                    public var net: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.NetPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/textSummary`.
+                    public var textSummary: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/drillDown`.
+                    public struct DrillDownPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/drillDown/category`.
+                        public var category: Swift.String?
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/drillDown/startDate`.
+                        public var startDate: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/drillDown/endDate`.
+                        public var endDate: Swift.String
+                        /// Creates a new `DrillDownPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - category:
+                        ///   - startDate:
+                        ///   - endDate:
+                        public init(
+                            category: Swift.String? = nil,
+                            startDate: Swift.String,
+                            endDate: Swift.String
+                        ) {
+                            self.category = category
+                            self.startDate = startDate
+                            self.endDate = endDate
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case category
+                            case startDate
+                            case endDate
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.category = try container.decodeIfPresent(
+                                Swift.String.self,
+                                forKey: .category
+                            )
+                            self.startDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .startDate
+                            )
+                            self.endDate = try container.decode(
+                                Swift.String.self,
+                                forKey: .endDate
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "category",
+                                "startDate",
+                                "endDate"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/CashFlowPayload/drillDown`.
+                    public var drillDown: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.DrillDownPayload
+                    /// Creates a new `CashFlowPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - period:
+                    ///   - income:
+                    ///   - expenses:
+                    ///   - net:
+                    ///   - textSummary:
+                    ///   - drillDown:
+                    public init(
+                        period: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.PeriodPayload,
+                        income: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.IncomePayload,
+                        expenses: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.ExpensesPayload,
+                        net: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.NetPayload,
+                        textSummary: Swift.String,
+                        drillDown: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.DrillDownPayload
+                    ) {
+                        self.period = period
+                        self.income = income
+                        self.expenses = expenses
+                        self.net = net
+                        self.textSummary = textSummary
+                        self.drillDown = drillDown
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case period
+                        case income
+                        case expenses
+                        case net
+                        case textSummary
+                        case drillDown
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.period = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.PeriodPayload.self,
+                            forKey: .period
+                        )
+                        self.income = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.IncomePayload.self,
+                            forKey: .income
+                        )
+                        self.expenses = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.ExpensesPayload.self,
+                            forKey: .expenses
+                        )
+                        self.net = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.NetPayload.self,
+                            forKey: .net
+                        )
+                        self.textSummary = try container.decode(
+                            Swift.String.self,
+                            forKey: .textSummary
+                        )
+                        self.drillDown = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload.DrillDownPayload.self,
+                            forKey: .drillDown
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "period",
+                            "income",
+                            "expenses",
+                            "net",
+                            "textSummary",
+                            "drillDown"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/cashFlow`.
+                public typealias CashFlowPayload = [Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/cashFlow`.
+                public var cashFlow: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/AccountFreshnessPayload`.
+                public struct AccountFreshnessPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/AccountFreshnessPayload/displayName`.
+                    public var displayName: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/AccountFreshnessPayload/status`.
+                    @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case current = "current"
+                        case stale = "stale"
+                        case unknown = "unknown"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/AccountFreshnessPayload/status`.
+                    public var status: Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayloadPayload.StatusPayload
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/AccountFreshnessPayload/lastSuccessfulSyncAt`.
+                    public var lastSuccessfulSyncAt: Foundation.Date?
+                    /// Creates a new `AccountFreshnessPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - displayName:
+                    ///   - status:
+                    ///   - lastSuccessfulSyncAt:
+                    public init(
+                        displayName: Swift.String,
+                        status: Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayloadPayload.StatusPayload,
+                        lastSuccessfulSyncAt: Foundation.Date? = nil
+                    ) {
+                        self.displayName = displayName
+                        self.status = status
+                        self.lastSuccessfulSyncAt = lastSuccessfulSyncAt
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case displayName
+                        case status
+                        case lastSuccessfulSyncAt
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.displayName = try container.decode(
+                            Swift.String.self,
+                            forKey: .displayName
+                        )
+                        self.status = try container.decode(
+                            Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayloadPayload.StatusPayload.self,
+                            forKey: .status
+                        )
+                        self.lastSuccessfulSyncAt = try container.decodeIfPresent(
+                            Foundation.Date.self,
+                            forKey: .lastSuccessfulSyncAt
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "displayName",
+                            "status",
+                            "lastSuccessfulSyncAt"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/accountFreshness`.
+                public typealias AccountFreshnessPayload = [Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/accountFreshness`.
+                public var accountFreshness: Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data/isEmpty`.
+                public var isEmpty: Swift.Bool
+                /// Creates a new `DataPayload`.
+                ///
+                /// - Parameters:
+                ///   - financialDate:
+                ///   - calculatedAt:
+                ///   - baseCurrencyCode:
+                ///   - availableMoney:
+                ///   - spending:
+                ///   - budget:
+                ///   - netWorth:
+                ///   - categories:
+                ///   - cashFlow:
+                ///   - accountFreshness:
+                ///   - isEmpty:
+                public init(
+                    financialDate: Swift.String,
+                    calculatedAt: Foundation.Date,
+                    baseCurrencyCode: Components.Schemas.HomeOverviewResponse.DataPayload.BaseCurrencyCodePayload,
+                    availableMoney: Components.Schemas.HomeOverviewResponse.DataPayload.AvailableMoneyPayload? = nil,
+                    spending: Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload,
+                    budget: Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload? = nil,
+                    netWorth: Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload,
+                    categories: Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayload,
+                    cashFlow: Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayload,
+                    accountFreshness: Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayload,
+                    isEmpty: Swift.Bool
+                ) {
+                    self.financialDate = financialDate
+                    self.calculatedAt = calculatedAt
+                    self.baseCurrencyCode = baseCurrencyCode
+                    self.availableMoney = availableMoney
+                    self.spending = spending
+                    self.budget = budget
+                    self.netWorth = netWorth
+                    self.categories = categories
+                    self.cashFlow = cashFlow
+                    self.accountFreshness = accountFreshness
+                    self.isEmpty = isEmpty
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case financialDate
+                    case calculatedAt
+                    case baseCurrencyCode
+                    case availableMoney
+                    case spending
+                    case budget
+                    case netWorth
+                    case categories
+                    case cashFlow
+                    case accountFreshness
+                    case isEmpty
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.financialDate = try container.decode(
+                        Swift.String.self,
+                        forKey: .financialDate
+                    )
+                    self.calculatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .calculatedAt
+                    )
+                    self.baseCurrencyCode = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.BaseCurrencyCodePayload.self,
+                        forKey: .baseCurrencyCode
+                    )
+                    self.availableMoney = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.AvailableMoneyPayload.self,
+                        forKey: .availableMoney
+                    )
+                    self.spending = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.SpendingPayload.self,
+                        forKey: .spending
+                    )
+                    self.budget = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.BudgetPayload.self,
+                        forKey: .budget
+                    )
+                    self.netWorth = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.NetWorthPayload.self,
+                        forKey: .netWorth
+                    )
+                    self.categories = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.CategoriesPayload.self,
+                        forKey: .categories
+                    )
+                    self.cashFlow = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.CashFlowPayload.self,
+                        forKey: .cashFlow
+                    )
+                    self.accountFreshness = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.DataPayload.AccountFreshnessPayload.self,
+                        forKey: .accountFreshness
+                    )
+                    self.isEmpty = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .isEmpty
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "financialDate",
+                        "calculatedAt",
+                        "baseCurrencyCode",
+                        "availableMoney",
+                        "spending",
+                        "budget",
+                        "netWorth",
+                        "categories",
+                        "cashFlow",
+                        "accountFreshness",
+                        "isEmpty"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/data`.
+            public var data: Components.Schemas.HomeOverviewResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.HomeOverviewResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/source`.
+                public var source: Components.Schemas.HomeOverviewResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/calculationVersion`.
+                @frozen public enum CalculationVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case homeOverview1 = "home-overview-1"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/calculationVersion`.
+                public var calculationVersion: Components.Schemas.HomeOverviewResponse.MetaPayload.CalculationVersionPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/completeness`.
+                public var completeness: Components.Schemas.HomeOverviewResponse.MetaPayload.CompletenessPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/estimated`.
+                public var estimated: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.HomeOverviewResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.HomeOverviewResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/MissingSectionsPayload`.
+                @frozen public enum MissingSectionsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case availableMoney = "availableMoney"
+                    case budget = "budget"
+                    case netWorth = "netWorth"
+                    case categories = "categories"
+                    case cashFlow = "cashFlow"
+                    case accountFreshness = "accountFreshness"
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/missingSections`.
+                public typealias MissingSectionsPayload = [Components.Schemas.HomeOverviewResponse.MetaPayload.MissingSectionsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/missingSections`.
+                public var missingSections: Components.Schemas.HomeOverviewResponse.MetaPayload.MissingSectionsPayload
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/receipt`.
+                public var receipt: Components.Schemas.HomeOverviewResponse.MetaPayload.ReceiptPayload?
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                public init(
+                    apiVersion: Components.Schemas.HomeOverviewResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.HomeOverviewResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Components.Schemas.HomeOverviewResponse.MetaPayload.CalculationVersionPayload,
+                    completeness: Components.Schemas.HomeOverviewResponse.MetaPayload.CompletenessPayload,
+                    estimated: Swift.Bool,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.HomeOverviewResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: Components.Schemas.HomeOverviewResponse.MetaPayload.MissingSectionsPayload,
+                    receipt: Components.Schemas.HomeOverviewResponse.MetaPayload.ReceiptPayload? = nil
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.CalculationVersionPayload.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decode(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.MissingSectionsPayload.self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.HomeOverviewResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta`.
+            public var meta: Components.Schemas.HomeOverviewResponse.MetaPayload
+            /// Creates a new `HomeOverviewResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.HomeOverviewResponse.DataPayload,
+                meta: Components.Schemas.HomeOverviewResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.HomeOverviewResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.HomeOverviewResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
                     "meta"
                 ])
             }
@@ -897,6 +3916,8 @@ public enum Components {
                 public typealias RefreshHintsPayload = [Components.Schemas.ReferenceResponse.MetaPayload.RefreshHintsPayloadPayload]
                 /// - Remark: Generated from `#/components/schemas/ReferenceResponse/meta/refreshHints`.
                 public var refreshHints: Components.Schemas.ReferenceResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/ReferenceResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
                 /// - Remark: Generated from `#/components/schemas/ReferenceResponse/meta/receipt`.
                 public struct ReceiptPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/ReferenceResponse/meta/receipt/idempotencyKey`.
@@ -948,6 +3969,7 @@ public enum Components {
                 ///   - estimated:
                 ///   - resourceVersion:
                 ///   - refreshHints:
+                ///   - missingSections:
                 ///   - receipt:
                 public init(
                     apiVersion: Components.Schemas.ReferenceResponse.MetaPayload.ApiVersionPayload,
@@ -958,6 +3980,7 @@ public enum Components {
                     estimated: Swift.Bool,
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.ReferenceResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
                     receipt: Components.Schemas.ReferenceResponse.MetaPayload.ReceiptPayload? = nil
                 ) {
                     self.apiVersion = apiVersion
@@ -968,6 +3991,7 @@ public enum Components {
                     self.estimated = estimated
                     self.resourceVersion = resourceVersion
                     self.refreshHints = refreshHints
+                    self.missingSections = missingSections
                     self.receipt = receipt
                 }
                 public enum CodingKeys: String, CodingKey {
@@ -979,6 +4003,7 @@ public enum Components {
                     case estimated
                     case resourceVersion
                     case refreshHints
+                    case missingSections
                     case receipt
                 }
                 public init(from decoder: any Swift.Decoder) throws {
@@ -1015,6 +4040,10 @@ public enum Components {
                         Components.Schemas.ReferenceResponse.MetaPayload.RefreshHintsPayload.self,
                         forKey: .refreshHints
                     )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
                     self.receipt = try container.decodeIfPresent(
                         Components.Schemas.ReferenceResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
@@ -1028,6 +4057,7 @@ public enum Components {
                         "estimated",
                         "resourceVersion",
                         "refreshHints",
+                        "missingSections",
                         "receipt"
                     ])
                 }
@@ -1278,6 +4308,8 @@ public enum Components {
                 public typealias RefreshHintsPayload = [Components.Schemas.ReferenceDeleteResponse.MetaPayload.RefreshHintsPayloadPayload]
                 /// - Remark: Generated from `#/components/schemas/ReferenceDeleteResponse/meta/refreshHints`.
                 public var refreshHints: Components.Schemas.ReferenceDeleteResponse.MetaPayload.RefreshHintsPayload
+                /// - Remark: Generated from `#/components/schemas/ReferenceDeleteResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
                 /// - Remark: Generated from `#/components/schemas/ReferenceDeleteResponse/meta/receipt`.
                 public struct ReceiptPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/ReferenceDeleteResponse/meta/receipt/idempotencyKey`.
@@ -1329,6 +4361,7 @@ public enum Components {
                 ///   - estimated:
                 ///   - resourceVersion:
                 ///   - refreshHints:
+                ///   - missingSections:
                 ///   - receipt:
                 public init(
                     apiVersion: Components.Schemas.ReferenceDeleteResponse.MetaPayload.ApiVersionPayload,
@@ -1339,6 +4372,7 @@ public enum Components {
                     estimated: Swift.Bool? = nil,
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.ReferenceDeleteResponse.MetaPayload.RefreshHintsPayload,
+                    missingSections: [Swift.String]? = nil,
                     receipt: Components.Schemas.ReferenceDeleteResponse.MetaPayload.ReceiptPayload? = nil
                 ) {
                     self.apiVersion = apiVersion
@@ -1349,6 +4383,7 @@ public enum Components {
                     self.estimated = estimated
                     self.resourceVersion = resourceVersion
                     self.refreshHints = refreshHints
+                    self.missingSections = missingSections
                     self.receipt = receipt
                 }
                 public enum CodingKeys: String, CodingKey {
@@ -1360,6 +4395,7 @@ public enum Components {
                     case estimated
                     case resourceVersion
                     case refreshHints
+                    case missingSections
                     case receipt
                 }
                 public init(from decoder: any Swift.Decoder) throws {
@@ -1396,6 +4432,10 @@ public enum Components {
                         Components.Schemas.ReferenceDeleteResponse.MetaPayload.RefreshHintsPayload.self,
                         forKey: .refreshHints
                     )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
                     self.receipt = try container.decodeIfPresent(
                         Components.Schemas.ReferenceDeleteResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
@@ -1409,6 +4449,7 @@ public enum Components {
                         "estimated",
                         "resourceVersion",
                         "refreshHints",
+                        "missingSections",
                         "receipt"
                     ])
                 }
@@ -1638,6 +4679,8 @@ public enum Components {
                 public typealias RefreshHintsPayload = [Components.Schemas.ReferenceCommandResponse.MetaPayload.RefreshHintsPayloadPayload]
                 /// - Remark: Generated from `#/components/schemas/ReferenceCommandResponse/meta/refreshHints`.
                 public var refreshHints: Components.Schemas.ReferenceCommandResponse.MetaPayload.RefreshHintsPayload
+                /// - Remark: Generated from `#/components/schemas/ReferenceCommandResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
                 /// - Remark: Generated from `#/components/schemas/ReferenceCommandResponse/meta/receipt`.
                 public struct ReceiptPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/ReferenceCommandResponse/meta/receipt/idempotencyKey`.
@@ -1689,6 +4732,7 @@ public enum Components {
                 ///   - estimated:
                 ///   - resourceVersion:
                 ///   - refreshHints:
+                ///   - missingSections:
                 ///   - receipt:
                 public init(
                     apiVersion: Components.Schemas.ReferenceCommandResponse.MetaPayload.ApiVersionPayload,
@@ -1699,6 +4743,7 @@ public enum Components {
                     estimated: Swift.Bool? = nil,
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.ReferenceCommandResponse.MetaPayload.RefreshHintsPayload,
+                    missingSections: [Swift.String]? = nil,
                     receipt: Components.Schemas.ReferenceCommandResponse.MetaPayload.ReceiptPayload
                 ) {
                     self.apiVersion = apiVersion
@@ -1709,6 +4754,7 @@ public enum Components {
                     self.estimated = estimated
                     self.resourceVersion = resourceVersion
                     self.refreshHints = refreshHints
+                    self.missingSections = missingSections
                     self.receipt = receipt
                 }
                 public enum CodingKeys: String, CodingKey {
@@ -1720,6 +4766,7 @@ public enum Components {
                     case estimated
                     case resourceVersion
                     case refreshHints
+                    case missingSections
                     case receipt
                 }
                 public init(from decoder: any Swift.Decoder) throws {
@@ -1756,6 +4803,10 @@ public enum Components {
                         Components.Schemas.ReferenceCommandResponse.MetaPayload.RefreshHintsPayload.self,
                         forKey: .refreshHints
                     )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
                     self.receipt = try container.decode(
                         Components.Schemas.ReferenceCommandResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
@@ -1769,6 +4820,7 @@ public enum Components {
                         "estimated",
                         "resourceVersion",
                         "refreshHints",
+                        "missingSections",
                         "receipt"
                     ])
                 }
@@ -1930,6 +4982,8 @@ public enum Components {
                 public typealias RefreshHintsPayload = [Components.Schemas.DiagnosticsResponse.MetaPayload.RefreshHintsPayloadPayload]
                 /// - Remark: Generated from `#/components/schemas/DiagnosticsResponse/meta/refreshHints`.
                 public var refreshHints: Components.Schemas.DiagnosticsResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/DiagnosticsResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
                 /// - Remark: Generated from `#/components/schemas/DiagnosticsResponse/meta/receipt`.
                 public struct ReceiptPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/DiagnosticsResponse/meta/receipt/idempotencyKey`.
@@ -1981,6 +5035,7 @@ public enum Components {
                 ///   - estimated:
                 ///   - resourceVersion:
                 ///   - refreshHints:
+                ///   - missingSections:
                 ///   - receipt:
                 public init(
                     apiVersion: Components.Schemas.DiagnosticsResponse.MetaPayload.ApiVersionPayload,
@@ -1991,6 +5046,7 @@ public enum Components {
                     estimated: Swift.Bool? = nil,
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.DiagnosticsResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
                     receipt: Components.Schemas.DiagnosticsResponse.MetaPayload.ReceiptPayload? = nil
                 ) {
                     self.apiVersion = apiVersion
@@ -2001,6 +5057,7 @@ public enum Components {
                     self.estimated = estimated
                     self.resourceVersion = resourceVersion
                     self.refreshHints = refreshHints
+                    self.missingSections = missingSections
                     self.receipt = receipt
                 }
                 public enum CodingKeys: String, CodingKey {
@@ -2012,6 +5069,7 @@ public enum Components {
                     case estimated
                     case resourceVersion
                     case refreshHints
+                    case missingSections
                     case receipt
                 }
                 public init(from decoder: any Swift.Decoder) throws {
@@ -2048,6 +5106,10 @@ public enum Components {
                         Components.Schemas.DiagnosticsResponse.MetaPayload.RefreshHintsPayload.self,
                         forKey: .refreshHints
                     )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
                     self.receipt = try container.decodeIfPresent(
                         Components.Schemas.DiagnosticsResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
@@ -2061,6 +5123,7 @@ public enum Components {
                         "estimated",
                         "resourceVersion",
                         "refreshHints",
+                        "missingSections",
                         "receipt"
                     ])
                 }
@@ -2212,6 +5275,8 @@ public enum Components {
                 public typealias RefreshHintsPayload = [Components.Schemas.PairingStatusResponse.MetaPayload.RefreshHintsPayloadPayload]
                 /// - Remark: Generated from `#/components/schemas/PairingStatusResponse/meta/refreshHints`.
                 public var refreshHints: Components.Schemas.PairingStatusResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/PairingStatusResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
                 /// - Remark: Generated from `#/components/schemas/PairingStatusResponse/meta/receipt`.
                 public struct ReceiptPayload: Codable, Hashable, Sendable {
                     /// - Remark: Generated from `#/components/schemas/PairingStatusResponse/meta/receipt/idempotencyKey`.
@@ -2263,6 +5328,7 @@ public enum Components {
                 ///   - estimated:
                 ///   - resourceVersion:
                 ///   - refreshHints:
+                ///   - missingSections:
                 ///   - receipt:
                 public init(
                     apiVersion: Components.Schemas.PairingStatusResponse.MetaPayload.ApiVersionPayload,
@@ -2273,6 +5339,7 @@ public enum Components {
                     estimated: Swift.Bool? = nil,
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.PairingStatusResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
                     receipt: Components.Schemas.PairingStatusResponse.MetaPayload.ReceiptPayload? = nil
                 ) {
                     self.apiVersion = apiVersion
@@ -2283,6 +5350,7 @@ public enum Components {
                     self.estimated = estimated
                     self.resourceVersion = resourceVersion
                     self.refreshHints = refreshHints
+                    self.missingSections = missingSections
                     self.receipt = receipt
                 }
                 public enum CodingKeys: String, CodingKey {
@@ -2294,6 +5362,7 @@ public enum Components {
                     case estimated
                     case resourceVersion
                     case refreshHints
+                    case missingSections
                     case receipt
                 }
                 public init(from decoder: any Swift.Decoder) throws {
@@ -2330,6 +5399,10 @@ public enum Components {
                         Components.Schemas.PairingStatusResponse.MetaPayload.RefreshHintsPayload.self,
                         forKey: .refreshHints
                     )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
                     self.receipt = try container.decodeIfPresent(
                         Components.Schemas.PairingStatusResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
@@ -2343,6 +5416,7 @@ public enum Components {
                         "estimated",
                         "resourceVersion",
                         "refreshHints",
+                        "missingSections",
                         "receipt"
                     ])
                 }
@@ -2394,6 +5468,167 @@ public enum Components {
 
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 public enum Operations {
+    /// Read the Mac-calculated Home overview projection
+    ///
+    /// - Remark: HTTP `GET /api/v1/home`.
+    /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)`.
+    public enum GetHomeOverview {
+        public static let id: Swift.String = "getHomeOverview"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/home/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetHomeOverview.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetHomeOverview.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetHomeOverview.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.GetHomeOverview.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/home/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/home/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.HomeOverviewResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.HomeOverviewResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetHomeOverview.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetHomeOverview.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetHomeOverview.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetHomeOverview.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/home/GET/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/home/GET/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetHomeOverview.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetHomeOverview.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.GetHomeOverview.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.GetHomeOverview.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Read the canonical foundation resource
     ///
     /// - Remark: HTTP `GET /api/v1/reference`.

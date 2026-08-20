@@ -3,6 +3,8 @@ import {
   canonicalErrorEnvelopeSchema,
   canonicalMetaSchema,
   diagnosticsResponseSchema,
+  homeOverviewDataSchema,
+  homeOverviewResponseSchema,
   moneySchema,
   pairingStatusResponseSchema,
   referenceCommandRequestSchema,
@@ -27,8 +29,36 @@ export interface CanonicalOpenApiDocument {
   };
 }
 
+function normalizeNullableSchema(value: unknown): unknown {
+  if (Array.isArray(value)) return value.map(normalizeNullableSchema);
+  if (!value || typeof value !== 'object') return value;
+
+  const record = value as Record<string, unknown>;
+  const normalizedEntries = Object.fromEntries(
+    Object.entries(record).map(([key, child]) => [key, normalizeNullableSchema(child)]),
+  );
+  const anyOf = normalizedEntries.anyOf;
+  if (Array.isArray(anyOf) && anyOf.length === 2) {
+    const nullable = anyOf.find(
+      (candidate) =>
+        candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).type === 'null',
+    );
+    const valueSchema = anyOf.find(
+      (candidate) =>
+        candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).type !== 'null',
+    );
+    if (nullable && valueSchema && typeof valueSchema === 'object') {
+      const schema = { ...(valueSchema as Record<string, unknown>) };
+      const type = schema.type;
+      if (typeof type === 'string') schema.type = [type, 'null'];
+      return schema;
+    }
+  }
+  return normalizedEntries;
+}
+
 function jsonSchema(schema: z.ZodType): Record<string, unknown> {
-  return z.toJSONSchema(schema) as Record<string, unknown>;
+  return normalizeNullableSchema(z.toJSONSchema(schema)) as Record<string, unknown>;
 }
 
 function response(ref: string, description = 'Successful response') {
@@ -62,6 +92,13 @@ function secured(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string) {
 /** Generated from the runtime schemas rather than maintained as a second DTO. */
 export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
   const paths: CanonicalOpenApiDocument['paths'] = {
+    '/api/v1/home': {
+      get: {
+        ...secured('GET', '/api/v1/home'),
+        summary: 'Read the Mac-calculated Home overview projection',
+        responses: { '200': response('HomeOverviewResponse'), '4XX': errorResponse() },
+      },
+    },
     '/api/v1/reference': {
       get: {
         ...secured('GET', '/api/v1/reference'),
@@ -173,6 +210,8 @@ export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
         Money: jsonSchema(moneySchema),
         CanonicalMeta: jsonSchema(canonicalMetaSchema),
         CanonicalErrorEnvelope: jsonSchema(canonicalErrorEnvelopeSchema),
+        HomeOverviewData: jsonSchema(homeOverviewDataSchema),
+        HomeOverviewResponse: jsonSchema(homeOverviewResponseSchema),
         ReferenceResource: jsonSchema(referenceResourceSchema),
         ReferenceResponse: jsonSchema(referenceResponseSchema),
         ReferenceReadQuery: jsonSchema(referenceReadQuerySchema),

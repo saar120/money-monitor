@@ -38,6 +38,91 @@ public struct Client: APIProtocol {
     private var converter: Converter {
         client.converter
     }
+    /// Read the Mac-calculated Home overview projection
+    ///
+    /// - Remark: HTTP `GET /api/v1/home`.
+    /// - Remark: Generated from `#/paths//api/v1/home/get(getHomeOverview)`.
+    public func getHomeOverview(_ input: Operations.GetHomeOverview.Input) async throws -> Operations.GetHomeOverview.Output {
+        try await client.send(
+            input: input,
+            forOperation: Operations.GetHomeOverview.id,
+            serializer: { input in
+                let path = try converter.renderedPath(
+                    template: "/api/v1/home",
+                    parameters: []
+                )
+                var request: HTTPTypes.HTTPRequest = .init(
+                    soar_path: path,
+                    method: .get
+                )
+                suppressMutabilityWarning(&request)
+                converter.setAcceptHeader(
+                    in: &request.headerFields,
+                    contentTypes: input.headers.accept
+                )
+                return (request, nil)
+            },
+            deserializer: { response, responseBody in
+                switch response.status.code {
+                case 200:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetHomeOverview.Output.Ok.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.HomeOverviewResponse.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .ok(.init(body: body))
+                case 400 ... 499:
+                    let contentType = converter.extractContentTypeIfPresent(in: response.headerFields)
+                    let body: Operations.GetHomeOverview.Output.ClientError.Body
+                    let chosenContentType = try converter.bestContentType(
+                        received: contentType,
+                        options: [
+                            "application/json"
+                        ]
+                    )
+                    switch chosenContentType {
+                    case "application/json":
+                        body = try await converter.getResponseBodyAsJSON(
+                            Components.Schemas.CanonicalErrorEnvelope.self,
+                            from: responseBody,
+                            transforming: { value in
+                                .json(value)
+                            }
+                        )
+                    default:
+                        preconditionFailure("bestContentType chose an invalid content type.")
+                    }
+                    return .clientError(
+                        statusCode: response.status.code,
+                        .init(body: body)
+                    )
+                default:
+                    return .undocumented(
+                        statusCode: response.status.code,
+                        .init(
+                            headerFields: response.headerFields,
+                            body: responseBody
+                        )
+                    )
+                }
+            }
+        )
+    }
     /// Read the canonical foundation resource
     ///
     /// - Remark: HTTP `GET /api/v1/reference`.

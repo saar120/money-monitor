@@ -22,6 +22,23 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/home': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read the Mac-calculated Home overview projection */
+    get: operations['getHomeOverview'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
   '/api/v1/pairing/status': {
     parameters: {
       query?: never;
@@ -135,6 +152,7 @@ export type components = {
       estimated?: boolean;
       /** Format: date-time */
       generatedAt: string;
+      missingSections?: string[];
       receipt?: {
         idempotencyKey: string;
         replayed: boolean;
@@ -162,6 +180,270 @@ export type components = {
         estimated?: boolean;
         /** Format: date-time */
         generatedAt: string;
+        missingSections?: string[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints?: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    HomeOverviewData: {
+      accountFreshness: {
+        displayName: string;
+        /** Format: date-time */
+        lastSuccessfulSyncAt: string | null;
+        /** @enum {string} */
+        status: 'current' | 'stale' | 'unknown';
+      }[];
+      availableMoney: {
+        currencyCode: string;
+        value: string;
+      } | null;
+      /** @constant */
+      baseCurrencyCode: 'ILS';
+      budget: {
+        limit: {
+          currencyCode: string;
+          value: string;
+        };
+        name: string;
+        period: {
+          endDate: string;
+          startDate: string;
+        };
+        remaining: {
+          currencyCode: string;
+          value: string;
+        };
+        spent: {
+          currencyCode: string;
+          value: string;
+        };
+        /** @enum {string} */
+        state: 'on_track' | 'watch' | 'at_limit' | 'over_budget' | 'unavailable';
+      } | null;
+      /** Format: date-time */
+      calculatedAt: string;
+      cashFlow: {
+        drillDown: {
+          category?: string;
+          endDate: string;
+          startDate: string;
+        };
+        expenses: {
+          currencyCode: string;
+          value: string;
+        };
+        income: {
+          currencyCode: string;
+          value: string;
+        };
+        net: {
+          currencyCode: string;
+          value: string;
+        };
+        period: {
+          endDate: string;
+          startDate: string;
+        };
+        textSummary: string;
+      }[];
+      categories: {
+        amount: {
+          currencyCode: string;
+          value: string;
+        };
+        drillDown: {
+          category?: string;
+          endDate: string;
+          startDate: string;
+        };
+        label: string;
+        share: number;
+        textSummary: string;
+        transactionCount: number;
+      }[];
+      financialDate: string;
+      isEmpty: boolean;
+      netWorth: {
+        liquid: {
+          currencyCode: string;
+          value: string;
+        } | null;
+        total: {
+          currencyCode: string;
+          value: string;
+        } | null;
+      };
+      spending: {
+        change: {
+          currencyCode: string;
+          value: string;
+        };
+        comparison: {
+          amount: {
+            currencyCode: string;
+            value: string;
+          };
+          period: {
+            endDate: string;
+            startDate: string;
+          };
+        };
+        current: {
+          amount: {
+            currencyCode: string;
+            value: string;
+          };
+          period: {
+            endDate: string;
+            startDate: string;
+          };
+        };
+      };
+    };
+    HomeOverviewResponse: {
+      data: {
+        accountFreshness: {
+          displayName: string;
+          /** Format: date-time */
+          lastSuccessfulSyncAt: string | null;
+          /** @enum {string} */
+          status: 'current' | 'stale' | 'unknown';
+        }[];
+        availableMoney: {
+          currencyCode: string;
+          value: string;
+        } | null;
+        /** @constant */
+        baseCurrencyCode: 'ILS';
+        budget: {
+          limit: {
+            currencyCode: string;
+            value: string;
+          };
+          name: string;
+          period: {
+            endDate: string;
+            startDate: string;
+          };
+          remaining: {
+            currencyCode: string;
+            value: string;
+          };
+          spent: {
+            currencyCode: string;
+            value: string;
+          };
+          /** @enum {string} */
+          state: 'on_track' | 'watch' | 'at_limit' | 'over_budget' | 'unavailable';
+        } | null;
+        /** Format: date-time */
+        calculatedAt: string;
+        cashFlow: {
+          drillDown: {
+            category?: string;
+            endDate: string;
+            startDate: string;
+          };
+          expenses: {
+            currencyCode: string;
+            value: string;
+          };
+          income: {
+            currencyCode: string;
+            value: string;
+          };
+          net: {
+            currencyCode: string;
+            value: string;
+          };
+          period: {
+            endDate: string;
+            startDate: string;
+          };
+          textSummary: string;
+        }[];
+        categories: {
+          amount: {
+            currencyCode: string;
+            value: string;
+          };
+          drillDown: {
+            category?: string;
+            endDate: string;
+            startDate: string;
+          };
+          label: string;
+          share: number;
+          textSummary: string;
+          transactionCount: number;
+        }[];
+        financialDate: string;
+        isEmpty: boolean;
+        netWorth: {
+          liquid: {
+            currencyCode: string;
+            value: string;
+          } | null;
+          total: {
+            currencyCode: string;
+            value: string;
+          } | null;
+        };
+        spending: {
+          change: {
+            currencyCode: string;
+            value: string;
+          };
+          comparison: {
+            amount: {
+              currencyCode: string;
+              value: string;
+            };
+            period: {
+              endDate: string;
+              startDate: string;
+            };
+          };
+          current: {
+            amount: {
+              currencyCode: string;
+              value: string;
+            };
+            period: {
+              endDate: string;
+              startDate: string;
+            };
+          };
+        };
+      };
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        /** @constant */
+        calculationVersion: 'home-overview-1';
+        /** @enum {string} */
+        completeness: 'complete' | 'partial';
+        estimated: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections: (
+          | 'availableMoney'
+          | 'spending'
+          | 'budget'
+          | 'netWorth'
+          | 'categories'
+          | 'cashFlow'
+          | 'accountFreshness'
+        )[];
         receipt?: {
           idempotencyKey: string;
           replayed: boolean;
@@ -194,6 +476,7 @@ export type components = {
         estimated?: boolean;
         /** Format: date-time */
         generatedAt: string;
+        missingSections?: string[];
         receipt?: {
           idempotencyKey: string;
           replayed: boolean;
@@ -228,6 +511,7 @@ export type components = {
         estimated?: boolean;
         /** Format: date-time */
         generatedAt: string;
+        missingSections?: string[];
         receipt: {
           idempotencyKey: string;
           replayed: boolean;
@@ -257,6 +541,7 @@ export type components = {
         estimated?: boolean;
         /** Format: date-time */
         generatedAt: string;
+        missingSections?: string[];
         receipt?: {
           idempotencyKey: string;
           replayed: boolean;
@@ -307,6 +592,7 @@ export type components = {
         estimated: false;
         /** Format: date-time */
         generatedAt: string;
+        missingSections?: string[];
         receipt?: {
           idempotencyKey: string;
           replayed: boolean;
@@ -362,6 +648,35 @@ export interface operations {
         };
         content: {
           'application/json': components['schemas']['DiagnosticsResponse'];
+        };
+      };
+    };
+  };
+  getHomeOverview: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['HomeOverviewResponse'];
         };
       };
     };
@@ -529,6 +844,7 @@ export interface operations {
   };
 }
 export enum ApiPaths {
+  getHomeOverview = '/api/v1/home',
   getReference = '/api/v1/reference',
   updateReference = '/api/v1/reference/{id}',
   deleteReference = '/api/v1/reference/{id}',

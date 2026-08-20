@@ -58,6 +58,10 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
     let serverID: UUID
     let savedAt: Date
     let bootstrap: BootstrapSuccessEnvelope
+    /// The canonical Home overview is accepted and retained alongside the
+    /// remaining mobile read models so Saved View does not fall back to the
+    /// retired bootstrap Home projection.
+    let homeOverview: CanonicalHomeOverviewEnvelope?
     /// Optional to preserve compatibility with encrypted snapshots written
     /// before Phase 3. This is mobile-safe data only, never a desktop row.
     let planning: MobilePlanningSnapshot?
@@ -71,6 +75,7 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
 
     init(
         bootstrap: BootstrapSuccessEnvelope,
+        homeOverview: CanonicalHomeOverviewEnvelope? = nil,
         planning: MobilePlanningSnapshot? = nil,
         netWorthHistory: MobileNetWorthHistory? = nil,
         transactions: [MobileTransaction]? = nil,
@@ -80,6 +85,7 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
         serverID = bootstrap.meta.server.id
         self.savedAt = savedAt
         self.bootstrap = bootstrap
+        self.homeOverview = homeOverview
         self.planning = planning
         self.netWorthHistory = netWorthHistory
         self.transactions = transactions.map(Self.boundedTransactions)
@@ -90,6 +96,7 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
         case serverID
         case savedAt
         case bootstrap
+        case homeOverview
         case planning
         case netWorthHistory
         case transactions
@@ -101,6 +108,7 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
         serverID = try container.decode(UUID.self, forKey: .serverID)
         savedAt = try container.decode(Date.self, forKey: .savedAt)
         bootstrap = try container.decode(BootstrapSuccessEnvelope.self, forKey: .bootstrap)
+        homeOverview = try container.decodeIfPresent(CanonicalHomeOverviewEnvelope.self, forKey: .homeOverview)
         planning = try container.decodeIfPresent(MobilePlanningSnapshot.self, forKey: .planning)
         netWorthHistory = try container.decodeIfPresent(MobileNetWorthHistory.self, forKey: .netWorthHistory)
         let decodedTransactions = try container.decodeIfPresent([MobileTransaction].self, forKey: .transactions)
@@ -113,6 +121,7 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
         try container.encode(serverID, forKey: .serverID)
         try container.encode(savedAt, forKey: .savedAt)
         try container.encode(bootstrap, forKey: .bootstrap)
+        try container.encodeIfPresent(homeOverview, forKey: .homeOverview)
         try container.encodeIfPresent(planning, forKey: .planning)
         try container.encodeIfPresent(netWorthHistory, forKey: .netWorthHistory)
         try container.encodeIfPresent(transactions, forKey: .transactions)
@@ -309,6 +318,7 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var pairingState: PairingFlowState = .restoring
     @Published private(set) var serverURL: URL?
     @Published private(set) var latestBootstrap: BootstrapSuccessEnvelope?
+    @Published private(set) var latestHomeOverview: CanonicalHomeOverviewEnvelope?
     @Published private(set) var latestPlanningSnapshot: MobilePlanningSnapshot?
     @Published private(set) var latestNetWorthHistory: MobileNetWorthHistory?
     @Published private(set) var latestSavedTransactions: [MobileTransaction] = []
@@ -438,6 +448,7 @@ final class AppEnvironment: ObservableObject {
         hasSavedCredential = false
         pairedMacName = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -488,8 +499,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActive(operationID)
-            try await saveSnapshot(bootstrap, operationID: operationID)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActive(operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                operationID: operationID
+            )
+            try ensureActive(operationID)
+            latestHomeOverview = homeOverview
             finishConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -589,8 +607,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActive(operationID)
-            try await saveSnapshot(bootstrap, operationID: operationID)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActive(operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                operationID: operationID
+            )
+            try ensureActive(operationID)
+            latestHomeOverview = homeOverview
             finishConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -664,8 +689,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActiveRefresh(operationID)
-            try await saveSnapshot(bootstrap, refreshOperationID: operationID)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActiveRefresh(operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                refreshOperationID: operationID
+            )
+            try ensureActiveRefresh(operationID)
+            latestHomeOverview = homeOverview
             finishRefreshConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -697,6 +729,59 @@ final class AppEnvironment: ObservableObject {
     /// pull-to-refresh affordances. It intentionally performs one request.
     func retryBootstrap() async {
         await refreshBootstrap()
+    }
+
+    /// Refreshes Home through the canonical shared projection. The legacy
+    /// bootstrap remains available to Activity and Plan, but Home never uses
+    /// its embedded summary and therefore cannot drift from the Mac view.
+    func refreshHomeOverview() async {
+        guard
+            activeOperationID == nil,
+            activeRefreshOperationID == nil,
+            case .connected = connectionState
+        else { return }
+
+        let operationID = UUID()
+        activeRefreshOperationID = operationID
+        refreshSnapshotFreshness()
+        bootstrapRefreshState = .refreshing
+
+        do {
+            guard let credential = try await profileStore.load() else {
+                finishRefreshAsNotConfigured(operationID: operationID)
+                return
+            }
+            try ensureActiveRefresh(operationID)
+            let bootstrap = try await apiClient.bootstrap(credential: credential)
+            try ensureActiveRefresh(operationID)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
+            try ensureActiveRefresh(operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                refreshOperationID: operationID
+            )
+            try ensureActiveRefresh(operationID)
+            latestHomeOverview = homeOverview
+            finishRefreshConnected(
+                credential: credential,
+                bootstrap: bootstrap,
+                operationID: operationID
+            )
+        } catch {
+            guard activeRefreshOperationID == operationID else { return }
+            if Self.isAuthoritativeRevocation(error) {
+                await finishRefreshAsRevoked(operationID: operationID)
+                return
+            }
+            if Task.isCancelled || Self.isCancellation(error) {
+                activeRefreshOperationID = nil
+                bootstrapRefreshState = .idle
+                return
+            }
+            activeRefreshOperationID = nil
+            bootstrapRefreshState = .failed(Self.bootstrapRefreshFailure(for: error))
+        }
     }
 
     /// Hook for a connectivity-restored notification. The app has no timer
@@ -1005,6 +1090,7 @@ final class AppEnvironment: ObservableObject {
         connectionState = .notConfigured
         serverURL = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -1035,6 +1121,7 @@ final class AppEnvironment: ObservableObject {
         connectionState = .connecting
         serverURL = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -1108,6 +1195,7 @@ final class AppEnvironment: ObservableObject {
             guard activeOperationID == operationID else { return }
 
             latestBootstrap = snapshot.bootstrap
+            latestHomeOverview = snapshot.homeOverview
             latestPlanningSnapshot = snapshot.planning
             latestNetWorthHistory = snapshot.netWorthHistory
             latestSavedTransactions = Self.boundedSavedTransactions(
@@ -1123,6 +1211,7 @@ final class AppEnvironment: ObservableObject {
         } catch {
             guard activeOperationID == operationID else { return }
             latestBootstrap = nil
+            latestHomeOverview = nil
             latestPlanningSnapshot = nil
             latestNetWorthHistory = nil
             latestSavedTransactions = []
@@ -1132,6 +1221,7 @@ final class AppEnvironment: ObservableObject {
 
     private func saveSnapshot(
         _ bootstrap: BootstrapSuccessEnvelope,
+        homeOverview: CanonicalHomeOverviewEnvelope,
         operationID: UUID
     ) async throws {
         guard Self.isPersistableSnapshot(bootstrap) else {
@@ -1142,6 +1232,7 @@ final class AppEnvironment: ObservableObject {
         try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
+                homeOverview: homeOverview,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
                 transactions: transactions,
@@ -1163,6 +1254,7 @@ final class AppEnvironment: ObservableObject {
         try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
+                homeOverview: latestHomeOverview,
                 planning: planning,
                 netWorthHistory: netWorthHistory,
                 transactions: boundedTransactions,
@@ -1173,6 +1265,7 @@ final class AppEnvironment: ObservableObject {
 
     private func saveSnapshot(
         _ bootstrap: BootstrapSuccessEnvelope,
+        homeOverview: CanonicalHomeOverviewEnvelope,
         refreshOperationID: UUID
     ) async throws {
         guard Self.isPersistableSnapshot(bootstrap) else {
@@ -1183,6 +1276,7 @@ final class AppEnvironment: ObservableObject {
         try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
+                homeOverview: homeOverview,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
                 transactions: transactions,
@@ -1229,6 +1323,7 @@ final class AppEnvironment: ObservableObject {
         hasSavedCredential = false
         pairedMacName = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -1274,6 +1369,7 @@ final class AppEnvironment: ObservableObject {
         invalidateBootstrapRefresh()
         serverURL = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -1320,6 +1416,7 @@ final class AppEnvironment: ObservableObject {
         pairedMacName = nil
         serverURL = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []
@@ -1338,6 +1435,7 @@ final class AppEnvironment: ObservableObject {
         advanceMobileReadEpoch()
         serverURL = nil
         latestBootstrap = nil
+        latestHomeOverview = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
         latestSavedTransactions = []

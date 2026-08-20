@@ -12,6 +12,7 @@ import { createMobileServer, type MobileServerStartOptions } from '../../mobile/
 import { createCanonicalMobileAuthenticator } from '../../mobile/production-mobile-access.js';
 import { MOBILE_READ_CAPABILITY, MobileDeviceRegistry } from '../../mobile/device-registry.js';
 import type { ReferenceSeed } from './store.js';
+import type { ExchangeRateResult } from '../../services/exchange-rates.js';
 
 /** Stable non-secret fixtures; the registry stores only the digest. */
 export const CANONICAL_TEST_MAC_TOKEN = 'mac-test-token';
@@ -26,6 +27,9 @@ export interface CanonicalHarnessOptions {
   clock?: () => Date;
   seed?: ReferenceSeed;
   allowUnknownOutcomeSimulation?: boolean;
+  /** Avoid TCP binds in sandboxed unit tests; Fastify injection remains available. */
+  startListeners?: boolean;
+  homeExchangeRates?: () => Promise<ExchangeRateResult>;
 }
 
 type DesktopServer = Awaited<ReturnType<typeof createServer>>;
@@ -132,22 +136,27 @@ export async function createCanonicalHarness(
     clock,
     logger: false,
     seedCanonical: seed,
+    homeExchangeRates: options.homeExchangeRates,
   } satisfies CreateServerOptions);
   const iPhoneServer = createMobileServer({
     canonical: {
       sqlite,
       authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
       allowUnknownOutcomeSimulation: options.allowUnknownOutcomeSimulation,
+      homeExchangeRates: options.homeExchangeRates,
     },
     clock,
     logger: false,
   });
 
   try {
-    const [macPort, iPhonePort] = await Promise.all([
-      macServer.start({ port: 0, host: '127.0.0.1' }),
-      iPhoneServer.start(mobileServerStartOptions()),
-    ]);
+    const [macPort, iPhonePort] =
+      options.startListeners === false
+        ? [0, 0]
+        : await Promise.all([
+            macServer.start({ port: 0, host: '127.0.0.1' }),
+            iPhoneServer.start(mobileServerStartOptions()),
+          ]);
     const macBaseUrl = `http://127.0.0.1:${macPort}`;
     const iPhoneBaseUrl = `http://127.0.0.1:${iPhonePort}`;
     const mac = new CanonicalMacClient({ baseUrl: macBaseUrl, token: CANONICAL_TEST_MAC_TOKEN });

@@ -2,6 +2,7 @@ import { z } from 'zod';
 import {
   canonicalErrorEnvelopeSchema,
   diagnosticsResponseSchema,
+  homeOverviewResponseSchema,
   pairingStatusResponseSchema,
   referenceCommandResponseSchema,
   referenceDeleteResponseSchema,
@@ -27,6 +28,8 @@ export type ReferenceCommandRequest = components['schemas']['ReferenceCommandReq
 export type ReferenceCommandResponse = components['schemas']['ReferenceCommandResponse'];
 export type DiagnosticsResponse = components['schemas']['DiagnosticsResponse'];
 export type PairingStatusResponse = components['schemas']['PairingStatusResponse'];
+export type HomeOverviewResponse = components['schemas']['HomeOverviewResponse'];
+export type HomeOverviewData = HomeOverviewResponse['data'];
 
 type JsonContent<Value> = Value extends { content: { 'application/json': infer Content } }
   ? Content
@@ -161,6 +164,15 @@ export class CanonicalApiClient {
       undefined,
       pairingStatusResponseSchema,
     );
+  }
+
+  public getHomeOverview(): Promise<HomeOverviewData> {
+    return this.request<HomeOverviewResponse>(
+      'GET',
+      ApiPaths.getHomeOverview,
+      undefined,
+      homeOverviewResponseSchema,
+    ).then((response) => response.data);
   }
 
   public requestRefresh(request: ReferenceCommandRequest): Promise<ReferenceCommandResponse> {

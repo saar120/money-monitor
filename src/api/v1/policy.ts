@@ -22,6 +22,13 @@ export interface CanonicalRouteDefinition {
 export const CANONICAL_ROUTE_DEFINITIONS: readonly CanonicalRouteDefinition[] = [
   {
     method: 'GET',
+    path: '/api/v1/home',
+    policy: 'shared',
+    operationId: 'getHomeOverview',
+    summary: 'Read the Mac-calculated Home overview projection',
+  },
+  {
+    method: 'GET',
     path: '/api/v1/reference',
     policy: 'shared',
     operationId: 'getReference',

@@ -245,76 +245,76 @@ export function getNeedsReviewCount() {
   return request<{ count: number }>('/transactions/needs-review/count');
 }
 
-// ─── Summary ───
+// ─── Canonical Home overview ───
 
-export interface SummaryItem {
-  category?: string;
-  month?: string;
-  accountId?: number;
-  displayName?: string;
-  ownerType?: OwnerType;
-  ownerMemberId?: number | null;
-  memberName?: string | null;
-  totalAmount: number;
-  transactionCount: number;
+export interface HomeMoney {
+  value: string;
+  currencyCode: string;
 }
 
-export interface CashflowItem {
-  month: string;
-  income: number;
-  expense: number;
+export interface HomePeriod {
+  startDate: string;
+  endDate: string;
 }
 
-export interface SummaryFilters {
-  groupBy?: 'category' | 'month' | 'account' | 'expense-owner' | 'cashflow' | 'cashflow-detail';
-  accountId?: number;
-  accountType?: 'bank' | 'credit_card';
-  startDate?: string;
-  endDate?: string;
-  expensesOnly?: boolean;
-  ownerType?: OwnerType | 'all';
-  ownerMemberId?: number;
+export interface HomeOverview {
+  financialDate: string;
+  calculatedAt: string;
+  baseCurrencyCode: 'ILS';
+  availableMoney: HomeMoney | null;
+  spending: {
+    current: { amount: HomeMoney; period: HomePeriod };
+    comparison: { amount: HomeMoney; period: HomePeriod };
+    change: HomeMoney;
+  };
+  budget: {
+    state: 'on_track' | 'watch' | 'at_limit' | 'over_budget' | 'unavailable';
+    name: string;
+    spent: HomeMoney;
+    limit: HomeMoney;
+    remaining: HomeMoney;
+    period: HomePeriod;
+  } | null;
+  netWorth: { total: HomeMoney | null; liquid: HomeMoney | null };
+  categories: Array<{
+    label: string;
+    amount: HomeMoney;
+    share: number;
+    transactionCount: number;
+    textSummary: string;
+    drillDown: HomePeriod & { category?: string };
+  }>;
+  cashFlow: Array<{
+    period: HomePeriod;
+    income: HomeMoney;
+    expenses: HomeMoney;
+    net: HomeMoney;
+    textSummary: string;
+    drillDown: HomePeriod;
+  }>;
+  accountFreshness: Array<{
+    displayName: string;
+    status: 'current' | 'stale' | 'unknown';
+    lastSuccessfulSyncAt: string | null;
+  }>;
+  isEmpty: boolean;
 }
 
-export function getSummary(params: SummaryFilters = {}) {
-  const query = new URLSearchParams();
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined) query.set(key, String(value));
-  });
-  return request<{ groupBy: string; summary: SummaryItem[] }>(`/transactions/summary?${query}`);
+export interface HomeOverviewEnvelope {
+  data: HomeOverview;
+  meta: {
+    apiVersion: '1';
+    generatedAt: string;
+    source: 'mac-authoritative';
+    calculationVersion: 'home-overview-1';
+    completeness: 'complete' | 'partial';
+    estimated: boolean;
+    missingSections: string[];
+  };
 }
 
-export function getCashflowSummary(params: Omit<SummaryFilters, 'groupBy'> = {}) {
-  const query = new URLSearchParams({ groupBy: 'cashflow' });
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined) query.set(key, String(value));
-  });
-  return request<{ groupBy: 'cashflow'; summary: CashflowItem[] }>(
-    `/transactions/summary?${query}`,
-  );
-}
-
-export interface CategoryAmount {
-  category: string;
-  amount: number;
-}
-
-export interface CashflowDetailData {
-  income: CategoryAmount[];
-  expenses: CategoryAmount[];
-  totalIncome: number;
-  totalExpenses: number;
-  surplus: number;
-}
-
-export function getCashflowDetail(params: Omit<SummaryFilters, 'groupBy'> = {}) {
-  const query = new URLSearchParams({ groupBy: 'cashflow-detail' });
-  Object.entries(params).forEach(([key, value]) => {
-    if (value !== undefined) query.set(key, String(value));
-  });
-  return request<{ groupBy: 'cashflow-detail'; summary: CashflowDetailData }>(
-    `/transactions/summary?${query}`,
-  );
+export function getHomeOverview() {
+  return request<HomeOverviewEnvelope>('/v1/home');
 }
 
 // ─── Scraping ───

@@ -1,204 +1,97 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, watch } from 'vue';
-import { useRoute } from 'vue-router';
+import { computed, onMounted } from 'vue';
+import { useRouter } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart, BarChart } from 'echarts/charts';
 import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
-import { getSummary, getAccounts, getMembers, type OwnerType } from '../api/client';
-import CashflowSankey from './CashflowSankey.vue';
+import { getHomeOverview, type HomeOverview } from '../api/client';
 import { useApi } from '../composables/useApi';
-import { useSseConnection } from '../composables/useSseConnection';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import { Skeleton } from '@/components/ui/skeleton';
 import { formatCurrency } from '@/lib/format';
 import { useChartTheme } from '@/composables/useChartTheme';
-import { BarChart3 } from 'lucide-vue-next';
+import { BarChart3, ArrowRight } from 'lucide-vue-next';
 
 use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent]);
 
+const router = useRouter();
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const overview = useApi(getHomeOverview);
 
-const route = useRoute();
-const selectedOwner = ref('all');
-
-function israelDate(d: Date): string {
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-}
-const [y, m] = israelDate(new Date()).split('-').map(Number) as [number, number];
-// Allow URL query params to override dates (used by Puppeteer screenshots)
-const thisMonthStart = (route.query.startDate as string) ?? `${y}-${String(m).padStart(2, '0')}-01`;
-const thisMonthEnd = (route.query.endDate as string) ?? israelDate(new Date(y, m, 0));
-const lastMonthStart = israelDate(new Date(y, m - 2, 1));
-const lastMonthEnd = israelDate(new Date(y, m - 1, 0));
-
-const accountsData = useApi(() => getAccounts());
-const membersData = useApi(() => getMembers());
-const ownerFilter = computed(() => ({
-  ownerType: selectedOwner.value.startsWith('member:')
-    ? ('member' as OwnerType)
-    : selectedOwner.value !== 'all'
-      ? (selectedOwner.value as OwnerType)
-      : undefined,
-  ownerMemberId: selectedOwner.value.startsWith('member:')
-    ? Number(selectedOwner.value.slice('member:'.length))
-    : undefined,
-}));
-const categorySummary = useApi(() =>
-  getSummary({
-    groupBy: 'category',
-    startDate: thisMonthStart,
-    endDate: thisMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const monthlySummary = useApi(() =>
-  getSummary({ groupBy: 'month', expensesOnly: true, ...ownerFilter.value }),
-);
-const accountSummary = useApi(() =>
-  getSummary({
-    groupBy: 'account',
-    startDate: thisMonthStart,
-    endDate: thisMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const lastMonthSummary = useApi(() =>
-  getSummary({
-    groupBy: 'category',
-    startDate: lastMonthStart,
-    endDate: lastMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const bankAccounts = computed(() =>
-  (accountsData.data.value?.accounts ?? []).filter((a) => a.accountType === 'bank'),
-);
-
-function refreshAll() {
-  accountsData.execute();
-  membersData.execute();
-  categorySummary.execute();
-  monthlySummary.execute();
-  accountSummary.execute();
-  lastMonthSummary.execute();
+function numeric(value: { value: string } | null): number {
+  return value ? Number(value.value) : 0;
 }
 
-const throttledRefresh = useThrottleFn(refreshAll, 2000);
+function displayMoney(value: { value: string; currencyCode: string } | null): string {
+  return value ? formatCurrency(numeric(value)) : 'Unavailable';
+}
 
-// Refresh when scraping completes
-const { connect: connectSse } = useSseConnection({
-  'account-scrape-done': throttledRefresh,
-  'session-completed': throttledRefresh,
-});
+function refresh() {
+  overview.execute();
+}
 
-watch(selectedOwner, () => {
-  refreshAll();
-});
+function openDrillDown(drillDown: { startDate: string; endDate: string; category?: string }) {
+  router.push({
+    path: '/transactions',
+    query: {
+      startDate: drillDown.startDate,
+      endDate: drillDown.endDate,
+      ...(drillDown.category ? { category: drillDown.category } : {}),
+    },
+  });
+}
 
-// Refresh when window regains focus (catches any external data changes)
-const visibility = useDocumentVisibility();
-watch(visibility, (state) => {
-  if (state === 'visible') throttledRefresh();
-});
+onMounted(refresh);
 
-onMounted(() => {
-  refreshAll();
-  connectSse();
-});
-
-const thisMonthTotal = computed(
-  () => categorySummary.data.value?.summary.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0,
-);
-const lastMonthTotal = computed(
-  () => lastMonthSummary.data.value?.summary.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0,
-);
-
-const chartColors = [
-  '#007AFF',
-  '#34C759',
-  '#FF9500',
-  '#AF52DE',
-  '#FF2D55',
-  '#5AC8FA',
-  '#FFCC00',
-  '#FF3B30',
-  '#30D158',
-  '#64D2FF',
-];
-
-const doughnutOption = computed(() => {
-  const items = categorySummary.data.value?.summary ?? [];
-  if (items.length === 0) return null;
+const data = computed<HomeOverview | null>(() => overview.data.value?.data ?? null);
+const categoryOption = computed(() => {
+  if (!data.value?.categories.length) return null;
   return {
     tooltip: {
       trigger: 'item' as const,
       backgroundColor: bgPrimary.value,
       borderColor: separator.value,
-      borderWidth: 1,
       textStyle: { color: textPrimary.value, fontSize: 12 },
-      formatter(params: any) {
-        return `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`;
-      },
+      formatter: (params: any) => `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`,
     },
     legend: {
       bottom: 0,
       textStyle: { color: textSecondary.value, fontSize: 11 },
       itemWidth: 8,
       itemHeight: 8,
-      itemGap: 8,
       icon: 'circle',
     },
-    series: [
-      {
-        type: 'pie',
-        radius: ['50%', '72%'],
-        center: ['50%', '38%'],
-        padAngle: 2,
-        itemStyle: { borderRadius: 6 },
-        label: { show: false },
-        data: items.map((s, i) => ({
-          name: s.category ?? 'uncategorized',
-          value: Math.abs(s.totalAmount),
-          itemStyle: { color: chartColors[i % chartColors.length] },
-        })),
-      },
-    ],
+    series: [{
+      type: 'pie',
+      radius: ['50%', '72%'],
+      center: ['50%', '38%'],
+      itemStyle: { borderRadius: 6 },
+      label: { show: false },
+      data: data.value.categories.map((category, index) => ({
+        name: category.label,
+        value: numeric(category.amount),
+        itemStyle: { color: ['#007AFF', '#34C759', '#FF9500', '#AF52DE', '#FF2D55', '#5AC8FA'][index % 6] },
+      })),
+    }],
   };
 });
 
-const barOption = computed(() => {
-  const items = (monthlySummary.data.value?.summary ?? []).slice(0, 12).reverse();
-  if (items.length === 0) return null;
+const cashFlowOption = computed(() => {
+  if (!data.value?.cashFlow.length) return null;
+  const items = data.value.cashFlow;
   return {
     tooltip: {
       trigger: 'axis' as const,
       backgroundColor: bgPrimary.value,
       borderColor: separator.value,
-      borderWidth: 1,
       textStyle: { color: textPrimary.value, fontSize: 12 },
-      formatter(params: any) {
-        const p = Array.isArray(params) ? params[0] : params;
-        return `${p.axisValueLabel}<br/><b>${formatCurrency(p.value)}</b>`;
-      },
     },
     grid: { left: 12, right: 12, top: 10, bottom: 10, containLabel: true },
     xAxis: {
       type: 'category' as const,
-      data: items.map((s) => s.month ?? ''),
+      data: items.map((item) => item.period.startDate.slice(0, 7)),
       axisLabel: { color: textSecondary.value, fontSize: 11 },
       axisLine: { lineStyle: { color: separator.value } },
       axisTick: { show: false },
@@ -209,204 +102,127 @@ const barOption = computed(() => {
       splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
     },
     series: [
-      {
-        type: 'bar',
-        data: items.map((s) => Math.abs(s.totalAmount)),
-        itemStyle: { color: '#007AFF', borderRadius: [6, 6, 0, 0] },
-      },
+      { name: 'Income', type: 'bar', data: items.map((item) => numeric(item.income)), itemStyle: { color: '#34C759' } },
+      { name: 'Expenses', type: 'bar', data: items.map((item) => numeric(item.expenses)), itemStyle: { color: '#FF9500' } },
     ],
   };
 });
+
+function freshnessLabel(status: HomeOverview['accountFreshness'][number]['status']): string {
+  return status === 'current' ? 'Current' : status === 'stale' ? 'Stale' : 'Unknown';
+}
 </script>
 
 <template>
   <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
-    <Teleport to="#toolbar-actions">
-      <Select v-model="selectedOwner">
-        <SelectTrigger class="w-40 h-8">
-          <SelectValue placeholder="All owners" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All owners</SelectItem>
-          <SelectItem value="shared">Together</SelectItem>
-          <SelectItem
-            v-for="member in membersData.data.value?.members.filter((m) => m.isActive) ?? []"
-            :key="member.id"
-            :value="`member:${member.id}`"
-          >
-            {{ member.name }}
-          </SelectItem>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-        </SelectContent>
-      </Select>
-    </Teleport>
     <div class="flex-1 min-h-0 overflow-y-auto space-y-5">
-      <!-- Bank Balances + Spending — compact top row -->
-      <div class="grid grid-cols-[auto_1fr] gap-4 items-end">
-        <h2 v-if="bankAccounts.length > 0" class="text-[13px] font-semibold text-text-secondary">
-          Bank Balances
-        </h2>
-        <div v-else-if="accountsData.loading.value" />
-        <div v-else />
-        <h2 class="text-[13px] font-semibold text-text-secondary">Spending</h2>
+      <div v-if="overview.loading.value && !data" class="grid grid-cols-3 gap-3">
+        <Skeleton v-for="i in 3" :key="i" class="h-24 rounded-xl" />
       </div>
-      <!-- All cards in one flat flex row so they share the same height -->
-      <div class="flex gap-3 items-stretch">
-        <!-- Bank Balances -->
-        <template v-if="bankAccounts.length > 0">
-          <Card v-for="account in bankAccounts" :key="account.id" class="min-w-[180px]">
+      <div v-else-if="overview.error.value && !data" class="rounded-xl border border-destructive/30 p-6 text-center">
+        <p class="text-destructive text-sm">Home data could not be loaded.</p>
+        <button class="mt-2 text-sm text-primary underline" @click="refresh">Retry</button>
+      </div>
+      <template v-else-if="data">
+        <div
+          v-if="overview.data.value?.meta.completeness === 'partial'"
+          class="rounded-xl border border-warning/30 bg-warning/10 px-4 py-3 text-sm"
+          role="status"
+        >
+          Partial Home data — unavailable values are marked individually.
+        </div>
+
+        <div class="grid grid-cols-2 lg:grid-cols-4 gap-3">
+          <Card>
             <CardContent class="py-4 px-5">
-              <p class="text-[12px] font-medium truncate text-text-secondary">
-                {{ account.displayName }}
-              </p>
-              <p v-if="account.balance != null" class="text-[17px] font-semibold mt-1 tabular-nums">
-                {{ formatCurrency(account.balance) }}
-              </p>
-              <p v-else class="text-[12px] text-text-tertiary mt-1">No balance data</p>
+              <p class="text-[12px] text-text-secondary">Available money</p>
+              <p class="text-[18px] font-semibold mt-1 tabular-nums">{{ displayMoney(data.availableMoney) }}</p>
             </CardContent>
           </Card>
-        </template>
-        <Skeleton v-else-if="accountsData.loading.value" class="h-16 w-48 rounded-xl" />
-
-        <!-- Spacer between sections -->
-        <div class="w-4 flex-shrink-0" />
-
-        <!-- Spending -->
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">This Month</p>
-            <div v-if="categorySummary.loading.value"><Skeleton class="h-6 w-24 mt-1" /></div>
-            <p v-else class="text-[18px] font-semibold mt-1 tabular-nums">
-              {{ formatCurrency(thisMonthTotal) }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Last Month</p>
-            <div v-if="lastMonthSummary.loading.value"><Skeleton class="h-6 w-24 mt-1" /></div>
-            <p v-else class="text-[18px] font-semibold mt-1 tabular-nums">
-              {{ formatCurrency(lastMonthTotal) }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Difference</p>
-            <div v-if="categorySummary.loading.value || lastMonthSummary.loading.value">
-              <Skeleton class="h-6 w-24 mt-1" />
-            </div>
-            <template v-else>
-              <p
-                class="text-[18px] font-semibold mt-1 tabular-nums"
-                :class="
-                  Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal)
-                    ? 'text-destructive'
-                    : 'text-success'
-                "
-              >
-                {{ formatCurrency(Math.abs(Math.abs(thisMonthTotal) - Math.abs(lastMonthTotal))) }}
-              </p>
-              <Badge
-                v-if="Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal)"
-                variant="destructive"
-                class="mt-1.5 text-[10px]"
-                >↑ More than last month</Badge
-              >
-              <Badge v-else class="mt-1.5 text-[10px] bg-success/10 text-success"
-                >↓ Less than last month</Badge
-              >
-            </template>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Charts Row — constrained height -->
-      <div id="overview-charts" class="grid grid-cols-2 gap-4">
-        <Card id="chart-spending-by-category">
-          <CardHeader class="py-4 px-5">
-            <CardTitle class="text-[15px]">Spending by Category</CardTitle>
-          </CardHeader>
-          <CardContent class="px-5 pb-4 pt-0">
-            <div class="h-[300px]">
-              <VChart
-                v-if="doughnutOption"
-                :option="doughnutOption"
-                autoresize
-                class="h-full w-full"
-              />
-              <Skeleton
-                v-else-if="categorySummary.loading.value"
-                class="h-full w-full rounded-lg"
-              />
-              <div v-else class="flex flex-col items-center justify-center text-center">
-                <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
-                <p class="text-text-secondary text-[13px]">No data yet</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id="chart-monthly-trend">
-          <CardHeader class="py-4 px-5">
-            <CardTitle class="text-[15px]">Monthly Trend</CardTitle>
-          </CardHeader>
-          <CardContent class="px-5 pb-4 pt-0">
-            <div class="h-[240px]">
-              <VChart v-if="barOption" :option="barOption" autoresize class="h-full w-full" />
-              <Skeleton v-else-if="monthlySummary.loading.value" class="h-full w-full rounded-lg" />
-              <div v-else class="flex flex-col items-center justify-center h-full text-center">
-                <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
-                <p class="text-text-secondary text-[13px]">No data yet</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Cashflow Sankey -->
-      <CashflowSankey
-        :owner-type="ownerFilter.ownerType"
-        :owner-member-id="ownerFilter.ownerMemberId"
-      />
-
-      <!-- Per Account -->
-      <div v-if="accountSummary.loading.value" class="space-y-2">
-        <h2 class="text-[13px] font-semibold text-text-secondary">Per Account (This Month)</h2>
-        <div
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))"
-        >
-          <Skeleton v-for="i in 3" :key="i" class="h-16 w-full rounded-xl" />
-        </div>
-      </div>
-      <div v-else-if="accountSummary.data.value">
-        <h2 class="text-[13px] font-semibold text-text-secondary mb-3">Per Account (This Month)</h2>
-        <p
-          v-if="accountSummary.data.value.summary.length === 0"
-          class="text-text-tertiary text-[13px]"
-        >
-          No account data yet
-        </p>
-        <div
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))"
-        >
-          <Card v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
+          <Card>
             <CardContent class="py-4 px-5">
-              <p class="text-[12px] font-medium truncate text-text-secondary">
-                {{ acc.displayName }}
-              </p>
-              <p class="text-[17px] font-semibold mt-1 tabular-nums">
-                {{ formatCurrency(acc.totalAmount) }}
-              </p>
-              <p class="text-[11px] text-text-tertiary mt-0.5">
-                {{ acc.transactionCount }} transactions
-              </p>
+              <p class="text-[12px] text-text-secondary">Spending this period</p>
+              <p class="text-[18px] font-semibold mt-1 tabular-nums">{{ displayMoney(data.spending.current.amount) }}</p>
+              <p class="text-[11px] text-text-tertiary">{{ data.spending.current.period.startDate }} – {{ data.spending.current.period.endDate }}</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent class="py-4 px-5">
+              <p class="text-[12px] text-text-secondary">Compared with prior period</p>
+              <p class="text-[18px] font-semibold mt-1 tabular-nums">{{ displayMoney(data.spending.change) }}</p>
+              <p class="text-[11px] text-text-tertiary">Server-calculated change</p>
+            </CardContent>
+          </Card>
+          <Card>
+            <CardContent class="py-4 px-5">
+              <p class="text-[12px] text-text-secondary">Net worth</p>
+              <p class="text-[18px] font-semibold mt-1 tabular-nums">{{ displayMoney(data.netWorth.total) }}</p>
+              <p class="text-[11px] text-text-tertiary">Mac-calculated</p>
             </CardContent>
           </Card>
         </div>
-      </div>
+
+        <Card v-if="data.budget">
+          <CardContent class="py-4 px-5 flex items-center justify-between gap-3">
+            <div>
+              <p class="text-[12px] text-text-secondary">{{ data.budget.name }}</p>
+              <p class="text-[17px] font-semibold mt-1">{{ displayMoney(data.budget.remaining) }} remaining</p>
+              <p class="text-[11px] text-text-tertiary">{{ displayMoney(data.budget.spent) }} of {{ displayMoney(data.budget.limit) }} · {{ data.budget.state.replace('_', ' ') }}</p>
+            </div>
+            <span class="text-xs capitalize">{{ data.budget.state.replace('_', ' ') }}</span>
+          </CardContent>
+        </Card>
+
+        <div class="grid grid-cols-1 lg:grid-cols-2 gap-4">
+          <Card id="chart-spending-by-category">
+            <CardHeader class="py-4 px-5"><CardTitle class="text-[15px]">Spending by category</CardTitle></CardHeader>
+            <CardContent class="px-5 pb-4 pt-0">
+              <div class="h-[260px]">
+                <VChart v-if="categoryOption" :option="categoryOption" autoresize class="h-full w-full" aria-label="Spending by category chart" />
+                <div v-else class="flex flex-col items-center justify-center h-full text-center"><BarChart3 class="h-8 w-8 text-text-tertiary mb-2" /><p class="text-text-secondary text-[13px]">No spending data yet</p></div>
+              </div>
+              <ul class="space-y-1 text-sm" aria-label="Spending by category details">
+                <li v-for="category in data.categories" :key="category.label">
+                  <button class="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted" @click="openDrillDown(category.drillDown)">
+                    <span>{{ category.textSummary }}</span><ArrowRight class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+
+          <Card id="chart-cashflow">
+            <CardHeader class="py-4 px-5"><CardTitle class="text-[15px]">Cash flow</CardTitle></CardHeader>
+            <CardContent class="px-5 pb-4 pt-0">
+              <div class="h-[260px]">
+                <VChart v-if="cashFlowOption" :option="cashFlowOption" autoresize class="h-full w-full" aria-label="Cash flow chart" />
+                <div v-else class="flex flex-col items-center justify-center h-full text-center"><BarChart3 class="h-8 w-8 text-text-tertiary mb-2" /><p class="text-text-secondary text-[13px]">No cash flow data yet</p></div>
+              </div>
+              <ul class="space-y-1 text-sm" aria-label="Cash flow details">
+                <li v-for="point in data.cashFlow.slice(-3)" :key="point.period.startDate">
+                  <button class="w-full flex items-center justify-between gap-2 rounded-md px-2 py-1 text-left hover:bg-muted" @click="openDrillDown(point.drillDown)">
+                    <span>{{ point.textSummary }}</span><ArrowRight class="h-4 w-4 shrink-0" aria-hidden="true" />
+                  </button>
+                </li>
+              </ul>
+            </CardContent>
+          </Card>
+        </div>
+
+        <Card>
+          <CardHeader class="py-4 px-5"><CardTitle class="text-[15px]">Account freshness</CardTitle></CardHeader>
+          <CardContent class="px-5 pb-4 pt-0">
+            <p v-if="data.accountFreshness.length === 0" class="text-sm text-text-tertiary">No accounts configured.</p>
+            <ul v-else class="divide-y divide-border" aria-label="Account freshness details">
+              <li v-for="account in data.accountFreshness" :key="account.displayName" class="flex items-center justify-between py-2 text-sm">
+                <span>{{ account.displayName }}</span><span>{{ freshnessLabel(account.status) }}</span>
+              </li>
+            </ul>
+          </CardContent>
+        </Card>
+
+        <p class="text-[11px] text-text-tertiary">Calculated {{ data.calculatedAt }} · Financial date {{ data.financialDate }} · {{ data.isEmpty ? 'No financial data yet.' : 'Mac is the source of truth.' }}</p>
+      </template>
     </div>
   </div>
 </template>

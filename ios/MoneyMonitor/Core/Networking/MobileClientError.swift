@@ -197,7 +197,7 @@ private extension APIEndpoint {
         switch self {
         case .pairingStart, .pairingStatus, .pairingExchange:
             true
-        case .health, .bootstrap, .transactions, .transactionDetail, .planning, .netWorthHistory, .reviewResolve, .reviewSkip:
+        case .health, .bootstrap, .homeOverview, .transactions, .transactionDetail, .planning, .netWorthHistory, .reviewResolve, .reviewSkip:
             false
         }
     }

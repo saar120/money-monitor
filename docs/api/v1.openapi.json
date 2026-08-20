@@ -7,6 +7,32 @@
   },
   "servers": [{ "url": "http://127.0.0.1" }],
   "paths": {
+    "/api/v1/home": {
+      "get": {
+        "operationId": "getHomeOverview",
+        "security": [{ "bearerAuth": [] }],
+        "x-route-policy": "shared",
+        "summary": "Read the Mac-calculated Home overview projection",
+        "responses": {
+          "200": {
+            "description": "Successful response",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/HomeOverviewResponse" }
+              }
+            }
+          },
+          "4XX": {
+            "description": "Stable coded error",
+            "content": {
+              "application/json": {
+                "schema": { "$ref": "#/components/schemas/CanonicalErrorEnvelope" }
+              }
+            }
+          }
+        }
+      }
+    },
     "/api/v1/reference": {
       "get": {
         "operationId": "getReference",
@@ -239,6 +265,11 @@
               "additionalProperties": false
             }
           },
+          "missingSections": {
+            "maxItems": 20,
+            "type": "array",
+            "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+          },
           "receipt": {
             "type": "object",
             "properties": {
@@ -320,6 +351,721 @@
           }
         },
         "required": ["error", "meta"],
+        "additionalProperties": false
+      },
+      "HomeOverviewData": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "financialDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+          "calculatedAt": {
+            "type": "string",
+            "format": "date-time",
+            "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+          },
+          "baseCurrencyCode": { "type": "string", "const": "ILS" },
+          "availableMoney": {
+            "type": ["object", "null"],
+            "properties": {
+              "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+              "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+            },
+            "required": ["value", "currencyCode"],
+            "additionalProperties": false
+          },
+          "spending": {
+            "type": "object",
+            "properties": {
+              "current": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "period": {
+                    "type": "object",
+                    "properties": {
+                      "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                      "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                    },
+                    "required": ["startDate", "endDate"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["amount", "period"],
+                "additionalProperties": false
+              },
+              "comparison": {
+                "type": "object",
+                "properties": {
+                  "amount": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "period": {
+                    "type": "object",
+                    "properties": {
+                      "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                      "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                    },
+                    "required": ["startDate", "endDate"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["amount", "period"],
+                "additionalProperties": false
+              },
+              "change": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["current", "comparison", "change"],
+            "additionalProperties": false
+          },
+          "budget": {
+            "type": ["object", "null"],
+            "properties": {
+              "state": {
+                "type": "string",
+                "enum": ["on_track", "watch", "at_limit", "over_budget", "unavailable"]
+              },
+              "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+              "spent": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              },
+              "limit": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              },
+              "remaining": {
+                "type": "object",
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              },
+              "period": {
+                "type": "object",
+                "properties": {
+                  "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                  "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                },
+                "required": ["startDate", "endDate"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["state", "name", "spent", "limit", "remaining", "period"],
+            "additionalProperties": false
+          },
+          "netWorth": {
+            "type": "object",
+            "properties": {
+              "total": {
+                "type": ["object", "null"],
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              },
+              "liquid": {
+                "type": ["object", "null"],
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              }
+            },
+            "required": ["total", "liquid"],
+            "additionalProperties": false
+          },
+          "categories": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                "amount": {
+                  "type": "object",
+                  "properties": {
+                    "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                    "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["value", "currencyCode"],
+                  "additionalProperties": false
+                },
+                "share": { "type": "number", "minimum": 0, "maximum": 1 },
+                "transactionCount": {
+                  "type": "integer",
+                  "minimum": 0,
+                  "maximum": 9007199254740991
+                },
+                "textSummary": { "type": "string", "minLength": 1, "maxLength": 240 },
+                "drillDown": {
+                  "type": "object",
+                  "properties": {
+                    "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                    "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                  },
+                  "required": ["startDate", "endDate"],
+                  "additionalProperties": false
+                }
+              },
+              "required": [
+                "label",
+                "amount",
+                "share",
+                "transactionCount",
+                "textSummary",
+                "drillDown"
+              ],
+              "additionalProperties": false
+            }
+          },
+          "cashFlow": {
+            "maxItems": 24,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "period": {
+                  "type": "object",
+                  "properties": {
+                    "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                    "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                  },
+                  "required": ["startDate", "endDate"],
+                  "additionalProperties": false
+                },
+                "income": {
+                  "type": "object",
+                  "properties": {
+                    "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                    "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["value", "currencyCode"],
+                  "additionalProperties": false
+                },
+                "expenses": {
+                  "type": "object",
+                  "properties": {
+                    "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                    "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["value", "currencyCode"],
+                  "additionalProperties": false
+                },
+                "net": {
+                  "type": "object",
+                  "properties": {
+                    "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                    "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                  },
+                  "required": ["value", "currencyCode"],
+                  "additionalProperties": false
+                },
+                "textSummary": { "type": "string", "minLength": 1, "maxLength": 240 },
+                "drillDown": {
+                  "type": "object",
+                  "properties": {
+                    "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                    "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                  },
+                  "required": ["startDate", "endDate"],
+                  "additionalProperties": false
+                }
+              },
+              "required": ["period", "income", "expenses", "net", "textSummary", "drillDown"],
+              "additionalProperties": false
+            }
+          },
+          "accountFreshness": {
+            "maxItems": 100,
+            "type": "array",
+            "items": {
+              "type": "object",
+              "properties": {
+                "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                "status": { "type": "string", "enum": ["current", "stale", "unknown"] },
+                "lastSuccessfulSyncAt": {
+                  "type": ["string", "null"],
+                  "format": "date-time",
+                  "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                }
+              },
+              "required": ["displayName", "status", "lastSuccessfulSyncAt"],
+              "additionalProperties": false
+            }
+          },
+          "isEmpty": { "type": "boolean" }
+        },
+        "required": [
+          "financialDate",
+          "calculatedAt",
+          "baseCurrencyCode",
+          "availableMoney",
+          "spending",
+          "budget",
+          "netWorth",
+          "categories",
+          "cashFlow",
+          "accountFreshness",
+          "isEmpty"
+        ],
+        "additionalProperties": false
+      },
+      "HomeOverviewResponse": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "data": {
+            "type": "object",
+            "properties": {
+              "financialDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+              "calculatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "baseCurrencyCode": { "type": "string", "const": "ILS" },
+              "availableMoney": {
+                "type": ["object", "null"],
+                "properties": {
+                  "value": { "type": "string", "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$" },
+                  "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                },
+                "required": ["value", "currencyCode"],
+                "additionalProperties": false
+              },
+              "spending": {
+                "type": "object",
+                "properties": {
+                  "current": {
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                          },
+                          "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                        },
+                        "required": ["value", "currencyCode"],
+                        "additionalProperties": false
+                      },
+                      "period": {
+                        "type": "object",
+                        "properties": {
+                          "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                        },
+                        "required": ["startDate", "endDate"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["amount", "period"],
+                    "additionalProperties": false
+                  },
+                  "comparison": {
+                    "type": "object",
+                    "properties": {
+                      "amount": {
+                        "type": "object",
+                        "properties": {
+                          "value": {
+                            "type": "string",
+                            "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                          },
+                          "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                        },
+                        "required": ["value", "currencyCode"],
+                        "additionalProperties": false
+                      },
+                      "period": {
+                        "type": "object",
+                        "properties": {
+                          "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                          "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                        },
+                        "required": ["startDate", "endDate"],
+                        "additionalProperties": false
+                      }
+                    },
+                    "required": ["amount", "period"],
+                    "additionalProperties": false
+                  },
+                  "change": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["current", "comparison", "change"],
+                "additionalProperties": false
+              },
+              "budget": {
+                "type": ["object", "null"],
+                "properties": {
+                  "state": {
+                    "type": "string",
+                    "enum": ["on_track", "watch", "at_limit", "over_budget", "unavailable"]
+                  },
+                  "name": { "type": "string", "minLength": 1, "maxLength": 80 },
+                  "spent": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "limit": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "remaining": {
+                    "type": "object",
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "period": {
+                    "type": "object",
+                    "properties": {
+                      "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                      "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                    },
+                    "required": ["startDate", "endDate"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["state", "name", "spent", "limit", "remaining", "period"],
+                "additionalProperties": false
+              },
+              "netWorth": {
+                "type": "object",
+                "properties": {
+                  "total": {
+                    "type": ["object", "null"],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  },
+                  "liquid": {
+                    "type": ["object", "null"],
+                    "properties": {
+                      "value": {
+                        "type": "string",
+                        "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                      },
+                      "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                    },
+                    "required": ["value", "currencyCode"],
+                    "additionalProperties": false
+                  }
+                },
+                "required": ["total", "liquid"],
+                "additionalProperties": false
+              },
+              "categories": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "label": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "amount": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                        },
+                        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                      },
+                      "required": ["value", "currencyCode"],
+                      "additionalProperties": false
+                    },
+                    "share": { "type": "number", "minimum": 0, "maximum": 1 },
+                    "transactionCount": {
+                      "type": "integer",
+                      "minimum": 0,
+                      "maximum": 9007199254740991
+                    },
+                    "textSummary": { "type": "string", "minLength": 1, "maxLength": 240 },
+                    "drillDown": {
+                      "type": "object",
+                      "properties": {
+                        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                        "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                      },
+                      "required": ["startDate", "endDate"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": [
+                    "label",
+                    "amount",
+                    "share",
+                    "transactionCount",
+                    "textSummary",
+                    "drillDown"
+                  ],
+                  "additionalProperties": false
+                }
+              },
+              "cashFlow": {
+                "maxItems": 24,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "period": {
+                      "type": "object",
+                      "properties": {
+                        "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                        "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                      },
+                      "required": ["startDate", "endDate"],
+                      "additionalProperties": false
+                    },
+                    "income": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                        },
+                        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                      },
+                      "required": ["value", "currencyCode"],
+                      "additionalProperties": false
+                    },
+                    "expenses": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                        },
+                        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                      },
+                      "required": ["value", "currencyCode"],
+                      "additionalProperties": false
+                    },
+                    "net": {
+                      "type": "object",
+                      "properties": {
+                        "value": {
+                          "type": "string",
+                          "pattern": "^-?(?:0|[1-9]\\d*)(?:\\.\\d{1,4})?$"
+                        },
+                        "currencyCode": { "type": "string", "pattern": "^[A-Z]{3}$" }
+                      },
+                      "required": ["value", "currencyCode"],
+                      "additionalProperties": false
+                    },
+                    "textSummary": { "type": "string", "minLength": 1, "maxLength": 240 },
+                    "drillDown": {
+                      "type": "object",
+                      "properties": {
+                        "category": { "type": "string", "minLength": 1, "maxLength": 80 },
+                        "startDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" },
+                        "endDate": { "type": "string", "pattern": "^\\d{4}-\\d{2}-\\d{2}$" }
+                      },
+                      "required": ["startDate", "endDate"],
+                      "additionalProperties": false
+                    }
+                  },
+                  "required": ["period", "income", "expenses", "net", "textSummary", "drillDown"],
+                  "additionalProperties": false
+                }
+              },
+              "accountFreshness": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "displayName": { "type": "string", "minLength": 1, "maxLength": 80 },
+                    "status": { "type": "string", "enum": ["current", "stale", "unknown"] },
+                    "lastSuccessfulSyncAt": {
+                      "type": ["string", "null"],
+                      "format": "date-time",
+                      "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+                    }
+                  },
+                  "required": ["displayName", "status", "lastSuccessfulSyncAt"],
+                  "additionalProperties": false
+                }
+              },
+              "isEmpty": { "type": "boolean" }
+            },
+            "required": [
+              "financialDate",
+              "calculatedAt",
+              "baseCurrencyCode",
+              "availableMoney",
+              "spending",
+              "budget",
+              "netWorth",
+              "categories",
+              "cashFlow",
+              "accountFreshness",
+              "isEmpty"
+            ],
+            "additionalProperties": false
+          },
+          "meta": {
+            "type": "object",
+            "properties": {
+              "apiVersion": { "type": "string", "const": "1" },
+              "generatedAt": {
+                "type": "string",
+                "format": "date-time",
+                "pattern": "^(?:(?:\\d\\d[2468][048]|\\d\\d[13579][26]|\\d\\d0[48]|[02468][048]00|[13579][26]00)-02-29|\\d{4}-(?:(?:0[13578]|1[02])-(?:0[1-9]|[12]\\d|3[01])|(?:0[469]|11)-(?:0[1-9]|[12]\\d|30)|(?:02)-(?:0[1-9]|1\\d|2[0-8])))T(?:(?:[01]\\d|2[0-3]):[0-5]\\d(?::[0-5]\\d(?:\\.\\d+)?)?(?:Z|([+-](?:[01]\\d|2[0-3]):[0-5]\\d)))$"
+              },
+              "source": { "type": "string", "const": "mac-authoritative" },
+              "calculationVersion": { "type": "string", "const": "home-overview-1" },
+              "completeness": { "type": "string", "enum": ["complete", "partial"] },
+              "estimated": { "type": "boolean" },
+              "resourceVersion": { "type": "integer", "minimum": 1, "maximum": 9007199254740991 },
+              "refreshHints": {
+                "maxItems": 20,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "domain": { "type": "string", "minLength": 1, "maxLength": 64 },
+                    "resourceIds": {
+                      "maxItems": 100,
+                      "type": "array",
+                      "items": {
+                        "type": "integer",
+                        "exclusiveMinimum": 0,
+                        "maximum": 9007199254740991
+                      }
+                    }
+                  },
+                  "required": ["domain", "resourceIds"],
+                  "additionalProperties": false
+                }
+              },
+              "missingSections": {
+                "maxItems": 7,
+                "type": "array",
+                "items": {
+                  "type": "string",
+                  "enum": [
+                    "availableMoney",
+                    "spending",
+                    "budget",
+                    "netWorth",
+                    "categories",
+                    "cashFlow",
+                    "accountFreshness"
+                  ]
+                }
+              },
+              "receipt": {
+                "type": "object",
+                "properties": {
+                  "idempotencyKey": { "type": "string", "minLength": 1, "maxLength": 128 },
+                  "replayed": { "type": "boolean" }
+                },
+                "required": ["idempotencyKey", "replayed"],
+                "additionalProperties": false
+              }
+            },
+            "required": [
+              "apiVersion",
+              "generatedAt",
+              "source",
+              "calculationVersion",
+              "completeness",
+              "estimated",
+              "missingSections"
+            ],
+            "additionalProperties": false
+          }
+        },
+        "required": ["data", "meta"],
         "additionalProperties": false
       },
       "ReferenceResource": {
@@ -409,6 +1155,11 @@
                   "required": ["domain", "resourceIds"],
                   "additionalProperties": false
                 }
+              },
+              "missingSections": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
               },
               "receipt": {
                 "type": "object",
@@ -508,6 +1259,11 @@
                   "additionalProperties": false
                 }
               },
+              "missingSections": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
               "receipt": {
                 "type": "object",
                 "properties": {
@@ -597,6 +1353,11 @@
                   "additionalProperties": false
                 }
               },
+              "missingSections": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
               "receipt": {
                 "type": "object",
                 "properties": {
@@ -667,6 +1428,11 @@
                   "additionalProperties": false
                 }
               },
+              "missingSections": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
+              },
               "receipt": {
                 "type": "object",
                 "properties": {
@@ -731,6 +1497,11 @@
                   "required": ["domain", "resourceIds"],
                   "additionalProperties": false
                 }
+              },
+              "missingSections": {
+                "maxItems": 20,
+                "type": "array",
+                "items": { "type": "string", "minLength": 1, "maxLength": 64 }
               },
               "receipt": {
                 "type": "object",
