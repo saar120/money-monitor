@@ -1,0 +1,4 @@
+interface:
+  display_name: 'Run Money Monitor'
+  short_description: 'Run and validate Money Monitor locally'
+  default_prompt: 'Use $run-money-monitor to build, test, and launch Money Monitor locally.'
