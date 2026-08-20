@@ -76,6 +76,7 @@ describe('production mobile access composition', () => {
     let pairingSequence = 0;
     const access = createProductionMobileAccess({
       db: database.db,
+      sqlite: database.sqlite,
       serverId: SERVER_ID_INPUT,
       publicIdKey: PUBLIC_ID_KEY,
       server: {
@@ -151,6 +152,7 @@ describe('production mobile access composition', () => {
     let netWorthReads = 0;
     const access = createProductionMobileAccess({
       db: database.db,
+      sqlite: database.sqlite,
       serverId: SERVER_ID,
       publicIdKey: PUBLIC_ID_KEY,
       server: {
@@ -425,6 +427,7 @@ describe('production mobile access composition', () => {
     expect(() =>
       createProductionMobileAccess({
         db: database.db,
+        sqlite: database.sqlite,
         serverId: 'not-a-uuid',
         publicIdKey: PUBLIC_ID_KEY,
         server: {

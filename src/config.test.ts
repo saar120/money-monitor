@@ -178,7 +178,6 @@ describe('getConfiguredThinkingLevel', () => {
     expect(getConfiguredThinkingLevel(true)).toBe('xhigh');
   });
 });
-
 describe('getConfiguredBatchThinkingLevel', () => {
   beforeEach(() => {
     config.AI_THINKING_LEVEL = 'medium';

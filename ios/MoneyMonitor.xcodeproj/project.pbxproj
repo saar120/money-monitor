@@ -26,7 +26,9 @@
 		71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */; };
 		728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */ = {isa = PBXBuildFile; fileRef = 8AF5864E43B418E8C7ABE2A0 /* BootstrapResponse.swift */; };
 		A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */; };
+		7A5C500AC579D6327C1C8DE7 /* CanonicalAPIExports.swift in Sources */ = {isa = PBXBuildFile; fileRef = B9CB96AD59DF4C9B7678C39F /* CanonicalAPIExports.swift */; };
 		7D721163F0FBAC06B5BFAED5 /* PairingQRCodeScannerView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 264F768B1D59D058AFF698FB /* PairingQRCodeScannerView.swift */; };
+		7D81AFD1D68FD35847B02B8B /* CanonicalAPITests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */; };
 		7DDB0439F2DE0F3610B27D02 /* BootstrapPayloadDecoder.swift in Sources */ = {isa = PBXBuildFile; fileRef = DA872CFBBAF05F2186565BD1 /* BootstrapPayloadDecoder.swift */; };
 		7F052AC076A2A6E5DF5B3C71 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = DC8D351D2AF3162EBD77BD39 /* Assets.xcassets */; };
 		81E5D60B265B5781CCBD6929 /* PairedMacCredential.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */; };
@@ -49,6 +51,7 @@
 		D8EE52F1D00B4E3096634123 /* MobilePairingClientTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 439850C5236B5B6CE83AEAE9 /* MobilePairingClientTests.swift */; };
 		D91D56AD6769745936839702 /* HomePresentationTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 5FF9DEA9D7FE3ECB8EDD3229 /* HomePresentationTests.swift */; };
 		DD61B8A2EABE199806670FE6 /* HomeView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 852898A30196C020329CC8CE /* HomeView.swift */; };
+		E1700529C17EA56B53B30378 /* CanonicalAPI in Frameworks */ = {isa = PBXBuildFile; productRef = 465475D480EA2CD3AF9ED46E /* CanonicalAPI */; };
 		E41FE0F99AF810BDF84D351E /* MobileBootstrap in Resources */ = {isa = PBXBuildFile; fileRef = 943F75BB795B80837FB113A4 /* MobileBootstrap */; };
 		E5E227B2403728C7EB2D44FC /* PairingScannerViewFactory.swift in Sources */ = {isa = PBXBuildFile; fileRef = 862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */; };
 		EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 9D8AAFD34E5B02A00BF45B40 /* FeaturePlaceholderView.swift */; };
@@ -93,6 +96,7 @@
 		5FF9DEA9D7FE3ECB8EDD3229 /* HomePresentationTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomePresentationTests.swift; sourceTree = "<group>"; };
 		71BB21A8A060955889668C8E /* KeychainPairedProfileStore.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStore.swift; sourceTree = "<group>"; };
 		72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorApp.swift; sourceTree = "<group>"; };
+		7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalAPITests.swift; sourceTree = "<group>"; };
 		7DC40058FEF8F831775FA932 /* PairingModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingModels.swift; sourceTree = "<group>"; };
 		852898A30196C020329CC8CE /* HomeView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HomeView.swift; sourceTree = "<group>"; };
 		862AD8410442475CA14DF2B2 /* PairingScannerViewFactory.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingScannerViewFactory.swift; sourceTree = "<group>"; };
@@ -107,8 +111,10 @@
 		ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MobileReviewCommand.swift; sourceTree = "<group>"; };
 		B323DAD803194452F179885B /* MoneyMonitorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorUITests.swift; sourceTree = "<group>"; };
+		B9CB96AD59DF4C9B7678C39F /* CanonicalAPIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalAPIExports.swift; sourceTree = "<group>"; };
 		BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedMacCredential.swift; sourceTree = "<group>"; };
 		BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStoreTests.swift; sourceTree = "<group>"; };
+		C550269ADC01E9ABC2875404 /* CanonicalAPI */ = {isa = PBXFileReference; lastKnownFileType = folder; name = CanonicalAPI; path = CanonicalAPI; sourceTree = SOURCE_ROOT; };
 		C5A2A2AD72B86547C6F76FCD /* PairingQRScannerState.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairingQRScannerState.swift; sourceTree = "<group>"; };
 		D09F0DA76CF6F330EB5C2A86 /* HealthResponse.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = HealthResponse.swift; sourceTree = "<group>"; };
 		D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = MoneyMonitor.app; sourceTree = BUILT_PRODUCTS_DIR; };
@@ -125,6 +131,17 @@
 		F5805774225F7A81353A0B3E /* SecureItemClient.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SecureItemClient.swift; sourceTree = "<group>"; };
 		F716CCD8D4DB516D2E22B93B /* AdvisorView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AdvisorView.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		7ADD2F7E379B115D76DC673E /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				E1700529C17EA56B53B30378 /* CanonicalAPI in Frameworks */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
 
 /* Begin PBXGroup section */
 		00C5FE381BDEC5DD2CCEF5EB /* Onboarding */ = {
@@ -177,6 +194,14 @@
 			path = Resources;
 			sourceTree = "<group>";
 		};
+		444313582CD88601BEBB2924 /* Packages */ = {
+			isa = PBXGroup;
+			children = (
+				C550269ADC01E9ABC2875404 /* CanonicalAPI */,
+			);
+			name = Packages;
+			sourceTree = "<group>";
+		};
 		4D61D0612612261250AB9903 /* Core */ = {
 			isa = PBXGroup;
 			children = (
@@ -202,6 +227,7 @@
 			isa = PBXGroup;
 			children = (
 				0FF2F2FACC1376743EC08E7D /* APIEndpoint.swift */,
+				B9CB96AD59DF4C9B7678C39F /* CanonicalAPIExports.swift */,
 				40B580C813C8AA247459146E /* MobileAPIClient.swift */,
 				1F729F0B394ACAE161346DC6 /* MobileClientError.swift */,
 				25FA27402293EAE7E2AC6704 /* MobileHTTPTransport.swift */,
@@ -237,6 +263,7 @@
 				1212A043B7E830A01E98677F /* APIEndpointTests.swift */,
 				9134E698C17470BA8DEAFA33 /* AppEnvironmentTests.swift */,
 				F1122FE95DC0F0F46BC94EE0 /* BootstrapResponseTests.swift */,
+				7D5DE0E453B7A27CDAF1CABA /* CanonicalAPITests.swift */,
 				5FF9DEA9D7FE3ECB8EDD3229 /* HomePresentationTests.swift */,
 				BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */,
 				3785A80B8904A2FC585452B1 /* MobileAPIClientTests.swift */,
@@ -330,6 +357,7 @@
 				82AAFE15DFD3F881BCFD14D7 /* MoneyMonitor */,
 				9BAAF6A5CD3BE8D43A72CF21 /* MoneyMonitorTests */,
 				CB5142E60385ED0E4007B181 /* MoneyMonitorUITests */,
+				444313582CD88601BEBB2924 /* Packages */,
 				B1C00A6E67AE6F97C8A6D50B /* Products */,
 			);
 			sourceTree = "<group>";
@@ -397,6 +425,7 @@
 			buildPhases = (
 				F9BB7EE3583A4C4E2512072E /* Sources */,
 				7198232965CC76653A3962A2 /* Resources */,
+				7ADD2F7E379B115D76DC673E /* Frameworks */,
 			);
 			buildRules = (
 			);
@@ -404,6 +433,7 @@
 			);
 			name = MoneyMonitor;
 			packageProductDependencies = (
+				465475D480EA2CD3AF9ED46E /* CanonicalAPI */,
 			);
 			productName = MoneyMonitor;
 			productReference = D6F545C8F7F60B79271CDE04 /* MoneyMonitor.app */;
@@ -439,6 +469,9 @@
 			);
 			mainGroup = E96F5F3F4E603838B5701C17;
 			minimizedProjectReferenceProxies = 1;
+			packageReferences = (
+				04362647FE8F5091BBE90C3D /* XCLocalSwiftPackageReference "CanonicalAPI" */,
+			);
 			preferredProjectObjectVersion = 77;
 			productRefGroup = B1C00A6E67AE6F97C8A6D50B /* Products */;
 			projectDirPath = "";
@@ -487,6 +520,7 @@
 				04A80739371145D79C4C522C /* APIEndpointTests.swift in Sources */,
 				A1F1DF811E331549CF42A903 /* AppEnvironmentTests.swift in Sources */,
 				71EE5588C7F1752585B1F175 /* BootstrapResponseTests.swift in Sources */,
+				7D81AFD1D68FD35847B02B8B /* CanonicalAPITests.swift in Sources */,
 				D91D56AD6769745936839702 /* HomePresentationTests.swift in Sources */,
 				3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */,
 				CB4312AFF291EE2E386CD2AF /* MobileAPIClientTests.swift in Sources */,
@@ -509,6 +543,7 @@
 				5A69573C603680807107967D /* BootstrapRefreshState.swift in Sources */,
 				728FA5B44F2DB086D5CAFD10 /* BootstrapResponse.swift in Sources */,
 				A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */,
+				7A5C500AC579D6327C1C8DE7 /* CanonicalAPIExports.swift in Sources */,
 				5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */,
 				F0AEE6F85CBB2BDBCFD2C863 /* ConnectionState.swift in Sources */,
 				EA8C1ACCFF4A912379F3CB27 /* FeaturePlaceholderView.swift in Sources */,
@@ -832,6 +867,20 @@
 			defaultConfigurationName = Debug;
 		};
 /* End XCConfigurationList section */
+
+/* Begin XCLocalSwiftPackageReference section */
+		04362647FE8F5091BBE90C3D /* XCLocalSwiftPackageReference "CanonicalAPI" */ = {
+			isa = XCLocalSwiftPackageReference;
+			relativePath = CanonicalAPI;
+		};
+/* End XCLocalSwiftPackageReference section */
+
+/* Begin XCSwiftPackageProductDependency section */
+		465475D480EA2CD3AF9ED46E /* CanonicalAPI */ = {
+			isa = XCSwiftPackageProductDependency;
+			productName = CanonicalAPI;
+		};
+/* End XCSwiftPackageProductDependency section */
 	};
 	rootObject = B9DE11FD7F2AB4BCEBBE5055 /* Project object */;
 }

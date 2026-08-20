@@ -1,4 +1,5 @@
 import Fastify, { type FastifyError } from 'fastify';
+import type Database from 'better-sqlite3';
 import { validateBootstrapPayload } from './bootstrap-contract.js';
 import {
   MOBILE_ERROR_DEFINITIONS,
@@ -32,6 +33,11 @@ import {
   registerMobileReviewCommandRoutes,
   type MobileReviewCommandRouteDependencies,
 } from './review-command-routes.js';
+import { CanonicalApiError, sendCanonicalError } from '../api/v1/errors.js';
+import { registerCanonicalRoutes } from '../api/v1/server.js';
+import type { CanonicalAuthenticator } from '../api/v1/policy.js';
+import { CanonicalFoundationStore } from '../api/v1/store.js';
+import type { ReferenceSeed } from '../api/v1/store.js';
 
 export const MOBILE_SERVER_HOST = '127.0.0.1' as const;
 
@@ -49,6 +55,14 @@ export interface MobileServerErrorEvent {
 }
 
 export interface CreateMobileServerOptions {
+  /** The same /api/v1 registrar used by the Mac-local listener. */
+  canonical?: {
+    sqlite: Database.Database;
+    authenticate: CanonicalAuthenticator;
+    seed?: ReferenceSeed;
+    /** Test-only fault injection; production never sets this. */
+    allowUnknownOutcomeSimulation?: boolean;
+  };
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
   transactions?: MobileTransactionRouteDependencies;
@@ -109,6 +123,9 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
   });
 
   app.setErrorHandler((error: FastifyError, request, reply) => {
+    if (error instanceof CanonicalApiError) {
+      return sendCanonicalError(reply, error.code, request.id, error.details);
+    }
     const code = errorCodeFor(error);
 
     // Log only request metadata and an allow-listed code. Raw exceptions can
@@ -131,6 +148,9 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
   });
 
   app.setNotFoundHandler((request, reply) => {
+    if (request.url.startsWith('/api/v1')) {
+      return sendCanonicalError(reply, 'route_not_found', request.id);
+    }
     return sendMobileError(reply, 'route_not_found', request.id);
   });
 
@@ -176,6 +196,23 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
 
   if (options.reviewCommands) {
     registerMobileReviewCommandRoutes(app, options.reviewCommands, clock);
+  }
+
+  if (options.canonical) {
+    const canonicalStore = new CanonicalFoundationStore(options.canonical.sqlite);
+    if (options.canonical.seed) canonicalStore.seedReferenceOnce(options.canonical.seed);
+    registerCanonicalRoutes(
+      app,
+      canonicalStore,
+      {
+        sqlite: options.canonical.sqlite,
+        listener: 'paired-iphone',
+        authenticate: options.canonical.authenticate,
+        logger: options.logger ?? false,
+        allowUnknownOutcomeSimulation: options.canonical.allowUnknownOutcomeSimulation,
+      },
+      clock,
+    );
   }
 
   async function start(startOptions: MobileServerStartOptions = {}): Promise<number> {
