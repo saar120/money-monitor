@@ -130,11 +130,13 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
     }
 
     func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope {
+        let responseRecorder = MobileCanonicalResponseRecorder()
         do {
             let generatedClient = CanonicalAPIClient(
                 transport: MobileCanonicalTransportAdapter(
                     transport: transport,
-                    baseURL: credential.profile.baseURL
+                    baseURL: credential.profile.baseURL,
+                    responseRecorder: responseRecorder
                 ),
                 token: credential.token
             )
@@ -150,9 +152,20 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
             return envelope
         } catch let error as MobileClientError {
             throw error
-        } catch is CanonicalAPIError {
-            throw MobileClientError.invalidPayload
         } catch {
+            if let response = responseRecorder.response,
+               !(200 ..< 300).contains(response.statusCode)
+            {
+                throw MobileClientError.classifyHTTP(
+                    statusCode: response.statusCode,
+                    data: response.data,
+                    endpoint: .homeOverview,
+                    decoder: payloadDecoder
+                )
+            }
+            if error is CanonicalAPIError {
+                throw MobileClientError.invalidPayload
+            }
             throw MobileClientError.invalidPayload
         }
     }
@@ -179,9 +192,27 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
     }
 }
 
+private final class MobileCanonicalResponseRecorder: @unchecked Sendable {
+    private let lock = NSLock()
+    private var latestResponse: MobileHTTPResponse?
+
+    var response: MobileHTTPResponse? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestResponse
+    }
+
+    func record(_ response: MobileHTTPResponse) {
+        lock.lock()
+        latestResponse = response
+        lock.unlock()
+    }
+}
+
 private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked Sendable {
     let transport: any MobileHTTPTransport
     let baseURL: URL
+    let responseRecorder: MobileCanonicalResponseRecorder
 
     func send(
         _ request: CanonicalHTTPRequest,
@@ -207,6 +238,7 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
             urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
         let response = try await transport.send(urlRequest)
+        responseRecorder.record(response)
         return (
             CanonicalHTTPResponse(
                 status: .init(code: response.statusCode),

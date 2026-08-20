@@ -499,10 +499,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActive(operationID)
-            latestHomeOverview = try? await apiClient.homeOverview(credential: credential)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActive(operationID)
-            try await saveSnapshot(bootstrap, operationID: operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                operationID: operationID
+            )
             try ensureActive(operationID)
+            latestHomeOverview = homeOverview
             finishConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -602,10 +607,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActive(operationID)
-            latestHomeOverview = try? await apiClient.homeOverview(credential: credential)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActive(operationID)
-            try await saveSnapshot(bootstrap, operationID: operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                operationID: operationID
+            )
             try ensureActive(operationID)
+            latestHomeOverview = homeOverview
             finishConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -679,10 +689,15 @@ final class AppEnvironment: ObservableObject {
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActiveRefresh(operationID)
-            latestHomeOverview = try? await apiClient.homeOverview(credential: credential)
+            let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActiveRefresh(operationID)
-            try await saveSnapshot(bootstrap, refreshOperationID: operationID)
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                refreshOperationID: operationID
+            )
             try ensureActiveRefresh(operationID)
+            latestHomeOverview = homeOverview
             finishRefreshConnected(
                 credential: credential,
                 bootstrap: bootstrap,
@@ -737,25 +752,22 @@ final class AppEnvironment: ObservableObject {
                 return
             }
             try ensureActiveRefresh(operationID)
+            let bootstrap = try await apiClient.bootstrap(credential: credential)
+            try ensureActiveRefresh(operationID)
             let homeOverview = try await apiClient.homeOverview(credential: credential)
             try ensureActiveRefresh(operationID)
-            latestHomeOverview = homeOverview
-            if let bootstrap = latestBootstrap, Self.isPersistableSnapshot(bootstrap) {
-                try await saveValidatedSnapshot(
-                    BootstrapSnapshot(
-                        bootstrap: bootstrap,
-                        homeOverview: homeOverview,
-                        planning: latestPlanningSnapshot,
-                        netWorthHistory: latestNetWorthHistory,
-                        transactions: savedTransactions(for: bootstrap),
-                        savedAt: clock()
-                    )
-                )
-            }
+            try await saveSnapshot(
+                bootstrap,
+                homeOverview: homeOverview,
+                refreshOperationID: operationID
+            )
             try ensureActiveRefresh(operationID)
-            activeRefreshOperationID = nil
-            snapshotState = .live
-            bootstrapRefreshState = .idle
+            latestHomeOverview = homeOverview
+            finishRefreshConnected(
+                credential: credential,
+                bootstrap: bootstrap,
+                operationID: operationID
+            )
         } catch {
             guard activeRefreshOperationID == operationID else { return }
             if Self.isAuthoritativeRevocation(error) {
@@ -1209,6 +1221,7 @@ final class AppEnvironment: ObservableObject {
 
     private func saveSnapshot(
         _ bootstrap: BootstrapSuccessEnvelope,
+        homeOverview: CanonicalHomeOverviewEnvelope,
         operationID: UUID
     ) async throws {
         guard Self.isPersistableSnapshot(bootstrap) else {
@@ -1219,7 +1232,7 @@ final class AppEnvironment: ObservableObject {
         try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
-                homeOverview: latestHomeOverview,
+                homeOverview: homeOverview,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
                 transactions: transactions,
@@ -1252,6 +1265,7 @@ final class AppEnvironment: ObservableObject {
 
     private func saveSnapshot(
         _ bootstrap: BootstrapSuccessEnvelope,
+        homeOverview: CanonicalHomeOverviewEnvelope,
         refreshOperationID: UUID
     ) async throws {
         guard Self.isPersistableSnapshot(bootstrap) else {
@@ -1262,7 +1276,7 @@ final class AppEnvironment: ObservableObject {
         try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
-                homeOverview: latestHomeOverview,
+                homeOverview: homeOverview,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
                 transactions: transactions,

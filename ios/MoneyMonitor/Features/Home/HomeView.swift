@@ -1,5 +1,6 @@
 import SwiftUI
 import UIKit
+import Charts
 
 struct HomeView: View {
     @EnvironmentObject private var environment: AppEnvironment
@@ -207,6 +208,19 @@ struct HomeView: View {
             if categories.isEmpty {
                 Text("No spending data for this period.").font(.subheadline).foregroundStyle(.secondary)
             } else {
+                Chart {
+                    ForEach(categories) { category in
+                        BarMark(
+                            x: .value("Category", category.label),
+                            y: .value("Spending", NSDecimalNumber(decimal: category.amount.value).doubleValue)
+                        )
+                        .foregroundStyle(.blue)
+                    }
+                }
+                .frame(minHeight: 180)
+                .chartYAxisLabel("ILS")
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Spending by category chart")
                 ForEach(categories) { category in
                     NavigationLink {
                         HomeOverviewDrillDownView(title: category.label, summary: category.textSummary, period: category.drillDown)
@@ -232,6 +246,24 @@ struct HomeView: View {
             if cashFlow.isEmpty {
                 Text("No cash-flow data yet.").font(.subheadline).foregroundStyle(.secondary)
             } else {
+                Chart {
+                    ForEach(cashFlow) { point in
+                        LineMark(
+                            x: .value("Period", point.period.startDate),
+                            y: .value("Net cash flow", NSDecimalNumber(decimal: point.net.value).doubleValue)
+                        )
+                        .foregroundStyle(.green)
+                        PointMark(
+                            x: .value("Period", point.period.startDate),
+                            y: .value("Net cash flow", NSDecimalNumber(decimal: point.net.value).doubleValue)
+                        )
+                        .foregroundStyle(.green)
+                    }
+                }
+                .frame(minHeight: 180)
+                .chartYAxisLabel("ILS")
+                .accessibilityElement(children: .contain)
+                .accessibilityLabel("Cash flow chart")
                 ForEach(cashFlow.suffix(3)) { point in
                     NavigationLink {
                         HomeOverviewDrillDownView(title: "Cash flow", summary: point.textSummary, period: point.drillDown)

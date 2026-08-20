@@ -391,6 +391,31 @@ struct MobileAPIClientTests {
     }
 
     @Test
+    func canonicalHomeErrorsPreserveAuthenticationAndAuthorizationSemantics() async throws {
+        let cases: [(Int, String, MobileClientError)] = [
+            (401, "authentication_revoked", .authentication(.revoked)),
+            (401, "authentication_expired", .authentication(.expired)),
+            (403, "capability_required", .authorization(.capabilityRequired)),
+        ]
+
+        for (statusCode, code, expectedError) in cases {
+            let transport = StubMobileHTTPTransport(
+                responses: [
+                    MobileHTTPResponse(
+                        data: mobileErrorPayload(code),
+                        statusCode: statusCode
+                    ),
+                ]
+            )
+            let client = URLSessionMobileAPIClient(transport: transport)
+
+            await #expect(throws: expectedError) {
+                try await client.homeOverview(credential: makeMobileAPICredential())
+            }
+        }
+    }
+
+    @Test
     func errorsNeverIncludeTheBearerTokenOrRawServerMessage() async throws {
         let token = String(repeating: "S", count: 43)
         let payload = Data(

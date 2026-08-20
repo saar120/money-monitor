@@ -39,10 +39,15 @@ private enum PairingBootstrapBehavior: Sendable {
 
 private actor PairingFlowAPIClient: MobileAPIClient {
     private let behavior: PairingBootstrapBehavior
+    private let homeBehavior: Result<CanonicalHomeOverviewEnvelope, MobileClientError>?
     private var bootstrapCallCount = 0
 
-    init(behavior: PairingBootstrapBehavior) {
+    init(
+        behavior: PairingBootstrapBehavior,
+        homeBehavior: Result<CanonicalHomeOverviewEnvelope, MobileClientError>? = nil
+    ) {
         self.behavior = behavior
+        self.homeBehavior = homeBehavior
     }
 
     func health(baseURL _: URL) async throws -> HealthResponse {
@@ -61,6 +66,18 @@ private actor PairingFlowAPIClient: MobileAPIClient {
         }
     }
 
+    func homeOverview(credential _: PairedMacCredential) async throws
+        -> CanonicalHomeOverviewEnvelope
+    {
+        let behavior = try homeBehavior ?? .success(acceptedHomeOverviewFixture())
+        switch behavior {
+        case let .success(home):
+            return home
+        case let .failure(error):
+            throw error
+        }
+    }
+
     func bootstrapCalls() -> Int {
         bootstrapCallCount
     }
@@ -72,15 +89,26 @@ private enum ControlledBootstrapBehavior: Sendable {
     case suspended
 }
 
+private enum ControlledHomeBehavior: Sendable {
+    case success(CanonicalHomeOverviewEnvelope)
+    case failure(MobileClientError)
+}
+
 private actor ControlledBootstrapAPIClient: MobileAPIClient {
     private var behaviors: [ControlledBootstrapBehavior]
+    private var homeBehaviors: [ControlledHomeBehavior]
     private var bootstrapCallCount = 0
+    private var homeCallCount = 0
     private var pendingCalls: [
         Int: CheckedContinuation<BootstrapSuccessEnvelope, any Error>
     ] = [:]
 
-    init(behaviors: [ControlledBootstrapBehavior]) {
+    init(
+        behaviors: [ControlledBootstrapBehavior],
+        homeBehaviors: [ControlledHomeBehavior] = []
+    ) {
         self.behaviors = behaviors
+        self.homeBehaviors = homeBehaviors
     }
 
     func health(baseURL _: URL) async throws -> HealthResponse {
@@ -108,12 +136,31 @@ private actor ControlledBootstrapAPIClient: MobileAPIClient {
         }
     }
 
+    func homeOverview(credential _: PairedMacCredential) async throws
+        -> CanonicalHomeOverviewEnvelope
+    {
+        homeCallCount += 1
+        let behavior = homeBehaviors.isEmpty
+            ? .success(try acceptedHomeOverviewFixture())
+            : homeBehaviors.removeFirst()
+        switch behavior {
+        case let .success(home):
+            return home
+        case let .failure(error):
+            throw error
+        }
+    }
+
     func hasReceived(call number: Int) -> Bool {
         bootstrapCallCount >= number
     }
 
     func calls() -> Int {
         bootstrapCallCount
+    }
+
+    func homeCalls() -> Int {
+        homeCallCount
     }
 
     func resolve(
@@ -1323,6 +1370,116 @@ struct AppEnvironmentTests {
             environment.connectionState
                 == .connected(lastCheckedAt: replacement.meta.generatedAt)
         )
+    }
+
+    @MainActor
+    @Test
+    func homeAndBootstrapCommitTogetherDuringHomeRefresh() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = original
+        let originalHome = try acceptedHomeOverviewFixture()
+        let replacementHome = try alternateHomeOverviewFixture()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .success(replacement)],
+            homeBehaviors: [.success(originalHome), .success(replacementHome)]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+        await environment.restoreSavedConnection()
+
+        await environment.refreshHomeOverview()
+
+        #expect(await apiClient.calls() == 2)
+        #expect(await apiClient.homeCalls() == 2)
+        #expect(environment.latestBootstrap == replacement)
+        #expect(environment.latestHomeOverview == replacementHome)
+        let stored = try await snapshotStore.load(for: credential.profile.serverID)
+        #expect(stored?.bootstrap == replacement)
+        #expect(stored?.homeOverview == replacementHome)
+        #expect(stored?.savedAt == pairingFlowNow)
+    }
+
+    @MainActor
+    @Test
+    func failedHomeDuringBootstrapRefreshPreservesTheLastCoherentSnapshot() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = try refreshBootstrapFixture("bootstrap-empty.json")
+        let originalHome = try acceptedHomeOverviewFixture()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .success(replacement)],
+            homeBehaviors: [.success(originalHome), .failure(.transport(.offline))]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+        await environment.restoreSavedConnection()
+        let accepted = try #require(await snapshotStore.load(for: credential.profile.serverID))
+
+        await environment.refreshBootstrap()
+
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.latestHomeOverview == originalHome)
+        let stored = try await snapshotStore.load(for: credential.profile.serverID)
+        #expect(stored == accepted)
+    }
+
+    @MainActor
+    @Test
+    func authoritativeHomeRevocationClearsCredentialAndCoherentSnapshot() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = try refreshBootstrapFixture("bootstrap-empty.json")
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .success(replacement)],
+            homeBehaviors: [.success(try acceptedHomeOverviewFixture()), .failure(.authentication(.revoked))]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+        await environment.restoreSavedConnection()
+
+        await environment.refreshBootstrap()
+
+        #expect(await store.load() == nil)
+        let stored = try await snapshotStore.load(for: credential.profile.serverID)
+        #expect(stored == nil)
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.latestHomeOverview == nil)
     }
 
     @MainActor

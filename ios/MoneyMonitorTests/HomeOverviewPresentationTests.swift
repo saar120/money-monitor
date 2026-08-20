@@ -60,8 +60,10 @@ struct HomeOverviewPresentationTests {
         #expect(presentation.netWorth.total == nil)
         #expect(presentation.currentSpending.value == Decimal(string: "1200.00"))
         #expect(presentation.categories.first?.textSummary.contains("Food") == true)
+        #expect(presentation.categories.first?.amount.value == Decimal(string: "1200.00"))
         #expect(presentation.categories.first?.drillDown.startDate == "2026-08-01")
         #expect(presentation.cashFlow.first?.textSummary.contains("income") == true)
+        #expect(presentation.cashFlow.first?.net.value == Decimal(string: "3800.00"))
         #expect(presentation.accountFreshness.first?.status == "stale")
         #expect(presentation.completeness == "partial")
     }
@@ -124,4 +126,15 @@ func acceptedHomeOverviewFixture() throws -> CanonicalHomeOverviewEnvelope {
       "meta": { "apiVersion": "1", "generatedAt": "2026-08-20T10:00:00Z", "source": "mac-authoritative", "calculationVersion": "home-overview-1", "completeness": "complete", "estimated": false, "missingSections": [] }
     }
     """#.utf8))
+}
+
+func alternateHomeOverviewFixture() throws -> CanonicalHomeOverviewEnvelope {
+    let original = try acceptedHomeOverviewFixture()
+    let encoder = JSONEncoder()
+    encoder.dateEncodingStrategy = .iso8601
+    let encoded = try encoder.encode(original)
+    let shifted = String(decoding: encoded, as: UTF8.self)
+        .replacingOccurrences(of: "2026-08-20", with: "2026-08-21")
+        .replacingOccurrences(of: "10:00:00.000Z", with: "11:00:00.000Z")
+    return try CanonicalHomeOverviewDecoder.decode(Data(shifted.utf8))
 }
