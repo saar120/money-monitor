@@ -2,6 +2,7 @@ node_modules/
 dist/
 data/
 .env
+.DS_Store
 *.db
 *.db-journal
 dashboard/node_modules/
@@ -13,3 +14,7 @@ electron/*.js
 electron/*.mjs
 electron/*.js.map
 electron/*.mjs.map
+electron/**/*.js
+electron/**/*.mjs
+electron/**/*.js.map
+electron/**/*.mjs.map

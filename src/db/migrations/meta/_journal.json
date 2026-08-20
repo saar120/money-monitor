@@ -148,6 +148,27 @@
       "when": 1775660740496,
       "tag": "0020_household_ownership",
       "breakpoints": true
+    },
+    {
+      "idx": 21,
+      "version": "6",
+      "when": 1784067600000,
+      "tag": "0021_mobile_devices",
+      "breakpoints": true
+    },
+    {
+      "idx": 22,
+      "version": "6",
+      "when": 1784154000000,
+      "tag": "0022_charged_currency",
+      "breakpoints": true
+    },
+    {
+      "idx": 23,
+      "version": "6",
+      "when": 1784394000000,
+      "tag": "0023_mobile_command_receipts",
+      "breakpoints": true
     }
   ]
 }

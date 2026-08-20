@@ -26,6 +26,9 @@ vi.mock('../config.js', () => ({
     TELEGRAM_ALLOWED_USERS: undefined,
     SCRAPE_TIMEOUT: 120000,
     SCRAPE_SHOW_BROWSER: false,
+    MOBILE_ACCESS_ENABLED: false,
+    MOBILE_ACCESS_HTTPS_PORT: 8443,
+    MOBILE_SERVER_ID: '00000000-0000-4000-8000-000000000001',
   },
   isElectronMode: false,
   loadConfigFile: () => null,
@@ -33,6 +36,7 @@ vi.mock('../config.js', () => ({
 }));
 
 vi.mock('../paths.js', () => ({
+  usesElectronUserData: false,
   dataDir: '/tmp/test-money-monitor',
   dbPath: ':memory:',
   credentialsPath: '/tmp/test-money-monitor/credentials.enc',

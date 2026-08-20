@@ -12,8 +12,45 @@ const {
   getBatchModelSpec,
   getConfiguredBatchThinkingLevel,
   getConfiguredThinkingLevel,
+  applyConfigFileToEnvironment,
   config,
+  SECRET_KEYS,
 } = await vi.importActual<typeof import('./config.js')>('./config.js');
+
+describe('mobile access defaults', () => {
+  it('is opt-in and owns the documented HTTPS listener', () => {
+    expect(config.MOBILE_ACCESS_ENABLED).toBe(false);
+    expect(config.MOBILE_ACCESS_HTTPS_PORT).toBe(8443);
+  });
+
+  it('treats the mobile public-ID key as an encrypted secret', () => {
+    expect(SECRET_KEYS.has('MOBILE_PUBLIC_ID_KEY')).toBe(true);
+  });
+});
+
+describe('Electron config environment loading', () => {
+  it('loads only schema-known keys without changing unknown config values', () => {
+    const raw = {
+      PORT: '4321',
+      CLAUDE_CODE_OAUTH_TOKEN: 'leave-this-unknown-value-unchanged',
+    };
+    const environment: NodeJS.ProcessEnv = {};
+
+    applyConfigFileToEnvironment(raw, environment);
+
+    expect(environment.PORT).toBe('4321');
+    expect(environment.CLAUDE_CODE_OAUTH_TOKEN).toBeUndefined();
+    expect(raw.CLAUDE_CODE_OAUTH_TOKEN).toBe('leave-this-unknown-value-unchanged');
+  });
+
+  it('does not override a known value supplied by the Electron main process', () => {
+    const environment: NodeJS.ProcessEnv = { API_TOKEN: 'session-token' };
+
+    applyConfigFileToEnvironment({ API_TOKEN: 'stored-token' }, environment);
+
+    expect(environment.API_TOKEN).toBe('session-token');
+  });
+});
 
 // ── parseModelSpec ───────────────────────────────────────────────────────────
 

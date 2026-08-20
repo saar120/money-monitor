@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "upgrade_required",
+    "message": "Update Money Monitor on this iPhone and Mac to continue."
+  },
+  "meta": {
+    "apiVersion": "1",
+    "requestId": "fixture-incompatible-01"
+  }
+}

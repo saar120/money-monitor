@@ -97,6 +97,7 @@ describe('database migrations', () => {
       'holdings',
       'liabilities',
       'members',
+      'mobile_devices',
       'ownership_rules',
       'scrape_logs',
       'transactions',
@@ -138,6 +139,7 @@ describe('database migrations', () => {
     expect(txColNames).toContain('charged_amount');
     expect(txColNames).toContain('description');
     expect(txColNames).toContain('category');
+    expect(txColNames).toContain('charged_currency');
     expect(txColNames).toContain('expense_owner_type');
     expect(txColNames).toContain('expense_owner_member_id');
     expect(txColNames).toContain('owner_source');
@@ -169,6 +171,15 @@ describe('database migrations', () => {
     const ruleColNames = ruleCols.map((c) => c.name);
     expect(ruleColNames).toContain('target_owner_type');
     expect(ruleColNames).toContain('description_contains');
+
+    const mobileDeviceCols = sqlite.prepare("PRAGMA table_info('mobile_devices')").all() as Array<{
+      name: string;
+    }>;
+    const mobileDeviceColNames = mobileDeviceCols.map((c) => c.name);
+    expect(mobileDeviceColNames).toContain('id');
+    expect(mobileDeviceColNames).toContain('token_digest');
+    expect(mobileDeviceColNames).toContain('capabilities');
+    expect(mobileDeviceColNames).toContain('revoked_at');
 
     sqlite.close();
   });

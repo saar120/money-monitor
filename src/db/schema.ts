@@ -34,6 +34,7 @@ export const transactions = sqliteTable(
     originalAmount: real('original_amount').notNull(),
     originalCurrency: text('original_currency').notNull().default('ILS'),
     chargedAmount: real('charged_amount').notNull(),
+    chargedCurrency: text('charged_currency').notNull().default('ILS'),
     description: text('description').notNull(),
     memo: text('memo'),
     type: text('type').notNull().default('normal'),
@@ -286,3 +287,65 @@ export const liabilities = sqliteTable('liabilities', {
     .notNull()
     .default(sql`(datetime('now'))`),
 });
+
+/**
+ * Individually revocable credentials for approved mobile devices.
+ * `tokenDigest` is a one-way digest; the raw bearer token is never persisted
+ * by the Mac application.
+ */
+export const mobileDevices = sqliteTable(
+  'mobile_devices',
+  {
+    id: text('id').primaryKey(),
+    name: text('name').notNull(),
+    tokenDigest: text('token_digest').notNull(),
+    capabilities: text('capabilities').notNull().default('["mobile.read"]'),
+    protocolVersion: integer('protocol_version').notNull().default(1),
+    tokenVersion: integer('token_version').notNull().default(1),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+    lastUsedAt: text('last_used_at'),
+    expiresAt: text('expires_at'),
+    rotatedAt: text('rotated_at'),
+    revokedAt: text('revoked_at'),
+  },
+  (table) => [
+    uniqueIndex('idx_mobile_devices_token_digest').on(table.tokenDigest),
+    index('idx_mobile_devices_revoked_at').on(table.revokedAt),
+  ],
+);
+
+/**
+ * Durable, redacted receipts for mobile mutations. Payload values intentionally
+ * never enter this table; a replay returns the stable outcome by key.
+ */
+export const mobileCommandReceipts = sqliteTable(
+  'mobile_command_receipts',
+  {
+    idempotencyKey: text('idempotency_key').primaryKey(),
+    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    commandType: text('command_type').notNull(),
+    targetReference: text('target_reference').notNull(),
+    requestFingerprint: text('request_fingerprint').notNull(),
+    outcome: text('outcome').notNull(),
+    resultNeedsReview: integer('result_needs_review', { mode: 'boolean' }).notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [index('idx_mobile_command_receipts_device').on(table.deviceId)],
+);
+
+/** Metadata-only audit trail for accepted, conflicted, or rejected commands. */
+export const mobileCommandAuditEvents = sqliteTable(
+  'mobile_command_audit_events',
+  {
+    id: integer('id').primaryKey({ autoIncrement: true }),
+    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    commandType: text('command_type').notNull(),
+    targetReference: text('target_reference').notNull(),
+    requestId: text('request_id').notNull(),
+    outcome: text('outcome').notNull(),
+    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+  },
+  (table) => [index('idx_mobile_command_audit_events_device').on(table.deviceId)],
+);

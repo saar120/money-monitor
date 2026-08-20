@@ -31,6 +31,7 @@ export interface ScraperTransaction {
   originalAmount: number;
   originalCurrency: string;
   chargedAmount: number;
+  chargedCurrency?: string;
   description: string;
   memo?: string;
   installments?: {

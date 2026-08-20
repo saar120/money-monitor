@@ -1,0 +1,27 @@
+[
+  {
+    "name": "NFKC full-width compatibility",
+    "input": "  Ｍａｒｋｅｔ   רמי  ",
+    "expected": "Market רמי"
+  },
+  {
+    "name": "ECMAScript byte-order-mark whitespace",
+    "input": "\uFEFFalpha\uFEFF\uFEFFbeta\uFEFF",
+    "expected": "alpha beta"
+  },
+  {
+    "name": "U+0085 is not ECMAScript whitespace",
+    "input": "a\u0085b",
+    "expected": "a\u0085b"
+  },
+  {
+    "name": "Unicode ECMAScript whitespace run",
+    "input": "one\u1680two\u2003three\u202Ffour\u3000five",
+    "expected": "one two three four five"
+  },
+  {
+    "name": "Hebrew combining text",
+    "input": "  שָׁלוֹם\u00A0  עולם  ",
+    "expected": "שָׁלוֹם עולם"
+  }
+]

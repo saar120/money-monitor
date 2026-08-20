@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "pairing_replayed",
+    "message": "This pairing credential has already been claimed."
+  },
+  "meta": {
+    "apiVersion": "1",
+    "requestId": "req-2"
+  }
+}

@@ -59,6 +59,22 @@ describe('database schema', () => {
       const liability = insertLiability(testDb.db);
       expect(liability.id).toBeGreaterThan(0);
     });
+
+    it('accepts a mobile device without storing a raw token', () => {
+      const device = testDb.db
+        .insert(schema.mobileDevices)
+        .values({
+          id: 'device-1',
+          name: 'Personal iPhone',
+          tokenDigest: 'a'.repeat(64),
+        })
+        .returning()
+        .get();
+
+      expect(device.capabilities).toBe('["mobile.read"]');
+      expect(device.revokedAt).toBeNull();
+      expect(Object.keys(device)).not.toContain('token');
+    });
   });
 
   // ── Foreign key constraints ──
@@ -161,6 +177,28 @@ describe('database schema', () => {
       insertHolding(testDb.db, asset1.id, { name: 'Cash' });
       const h2 = insertHolding(testDb.db, asset2.id, { name: 'Cash' });
       expect(h2.id).toBeGreaterThan(0);
+    });
+
+    it('enforces unique mobile token digests', () => {
+      testDb.db
+        .insert(schema.mobileDevices)
+        .values({
+          id: 'device-1',
+          name: 'First iPhone',
+          tokenDigest: 'b'.repeat(64),
+        })
+        .run();
+
+      expect(() => {
+        testDb.db
+          .insert(schema.mobileDevices)
+          .values({
+            id: 'device-2',
+            name: 'Second iPhone',
+            tokenDigest: 'b'.repeat(64),
+          })
+          .run();
+      }).toThrow();
     });
 
     it('enforces unique asset snapshot per asset+date', () => {
@@ -370,6 +408,12 @@ describe('database schema', () => {
       const account = insertAccount(testDb.db);
       const tx = insertTransaction(testDb.db, account.id);
       expect(tx.status).toBe('completed');
+    });
+
+    it('sets charged currency to ILS by default for transactions', () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id);
+      expect(tx.chargedCurrency).toBe('ILS');
     });
 
     it('sets scrapeSessionId to null by default for transactions', () => {

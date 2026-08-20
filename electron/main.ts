@@ -22,6 +22,40 @@ import { existsSync, readFileSync, writeFileSync } from 'node:fs';
 import { execFile, execFileSync } from 'node:child_process';
 import { promisify } from 'node:util';
 import { fileURLToPath } from 'node:url';
+import { NodeExecFileAdapter } from './mobile-access/exec-file-adapter.js';
+import {
+  MobileAccessControl,
+  type MobileAccessControlSnapshot,
+} from './mobile-access/mobile-access-control.js';
+import { MobileAccessRuntime } from './mobile-access/mobile-access-runtime.js';
+import { FileServeOwnershipStore } from './mobile-access/serve-ownership-store.js';
+import { resolveTailscaleExecutable } from './mobile-access/tailscale-executable.js';
+
+/**
+ * A desktop app can outlive the terminal or task runner that launched it.
+ * Node reports the resulting closed stdout/stderr pipe asynchronously, so
+ * console calls otherwise surface as an uncaught EPIPE and terminate Electron.
+ */
+function installBrokenPipeGuards(): void {
+  for (const stream of [process.stdout, process.stderr]) {
+    stream.on('error', (error: NodeJS.ErrnoException) => {
+      if (error.code === 'EPIPE') return;
+      // A listener is required to keep an asynchronous stream error from
+      // terminating the process. Do not write another diagnostic here: the
+      // destination may be the same failed stream.
+    });
+  }
+}
+
+function logMobileAccess(event: string, status: string, diagnostic: string): void {
+  if (process.stdout.destroyed || !process.stdout.writable) return;
+  console.info(`[MobileAccess] ${event} ${status} ${diagnostic}`);
+}
+
+installBrokenPipeGuards();
+import { TailscaleServeCoordinator } from './mobile-access/tailscale-serve-coordinator.js';
+import { startDesktopServer } from './security/desktop-server-bind-policy.js';
+import { isTrustedRendererURL, safeExternalURL } from './security/trusted-renderer.js';
 
 const execFileAsync = promisify(execFile);
 
@@ -165,6 +199,205 @@ console.log(`[Electron] Power save blocker started (id: ${powerSaveId})`);
 let mainWindow: BrowserWindow | null = null;
 let tray: Tray | null = null;
 let isQuitting = false;
+let mobileAccessControl: MobileAccessControl | null = null;
+let trustedRendererOrigin: string | null = null;
+
+function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
+  const senderURL = event.senderFrame?.url ?? event.sender.getURL();
+  if (
+    event.sender !== mainWindow?.webContents ||
+    !trustedRendererOrigin ||
+    !isTrustedRendererURL(senderURL, trustedRendererOrigin)
+  ) {
+    throw new Error('Renderer is not authorized for this operation');
+  }
+}
+
+function unavailableMobileAccessSnapshot(
+  lastActionError?: 'invalid_request',
+): MobileAccessControlSnapshot {
+  return {
+    enabled: false,
+    transport: {
+      status: 'stopped',
+      diagnostic: isMac ? 'integrationUnavailable' : 'platformUnsupported',
+    },
+    pairingAvailable: false,
+    pendingRequests: [],
+    devices: [],
+    ...(lastActionError ? { lastActionError } : {}),
+  };
+}
+
+function registerMobileAccessIpc(): void {
+  ipcMain.handle('mobile-access:get-state', (event) => {
+    assertTrustedRenderer(event);
+    return mobileAccessControl?.getSnapshot() ?? unavailableMobileAccessSnapshot();
+  });
+
+  ipcMain.handle('mobile-access:set-enabled', (event, enabled: unknown) => {
+    assertTrustedRenderer(event);
+    if (typeof enabled !== 'boolean') return unavailableMobileAccessSnapshot('invalid_request');
+    return mobileAccessControl?.setEnabled(enabled) ?? unavailableMobileAccessSnapshot();
+  });
+
+  ipcMain.handle('mobile-access:create-pairing', (event, replacementDeviceId: unknown) => {
+    assertTrustedRenderer(event);
+    if (replacementDeviceId !== undefined && typeof replacementDeviceId !== 'string') {
+      return { status: 'unavailable', reason: 'invalid_request' };
+    }
+    return (
+      mobileAccessControl?.createPairing(replacementDeviceId) ?? {
+        status: 'unavailable',
+        reason: 'pairing_unavailable',
+      }
+    );
+  });
+
+  ipcMain.handle('mobile-access:retry', (event) => {
+    assertTrustedRenderer(event);
+    return mobileAccessControl?.resume() ?? unavailableMobileAccessSnapshot();
+  });
+
+  ipcMain.handle('mobile-access:approve-pairing', (event, pairingId: unknown) => {
+    assertTrustedRenderer(event);
+    return (
+      mobileAccessControl?.approve(typeof pairingId === 'string' ? pairingId : '') ?? {
+        status: 'operation_failed',
+        reason: 'pairing_unavailable',
+      }
+    );
+  });
+
+  ipcMain.handle('mobile-access:reject-pairing', (event, pairingId: unknown) => {
+    assertTrustedRenderer(event);
+    return (
+      mobileAccessControl?.reject(typeof pairingId === 'string' ? pairingId : '') ?? {
+        status: 'operation_failed',
+        reason: 'pairing_unavailable',
+      }
+    );
+  });
+
+  ipcMain.handle('mobile-access:revoke-device', (event, deviceId: unknown) => {
+    assertTrustedRenderer(event);
+    if (!mobileAccessControl || typeof deviceId !== 'string') {
+      return unavailableMobileAccessSnapshot('invalid_request');
+    }
+    return mobileAccessControl.revoke(deviceId);
+  });
+
+  ipcMain.handle('mobile-access:set-review-access', (event, deviceId: unknown, enabled: unknown) => {
+    assertTrustedRenderer(event);
+    if (!mobileAccessControl || typeof deviceId !== 'string' || typeof enabled !== 'boolean') {
+      return unavailableMobileAccessSnapshot('invalid_request');
+    }
+    return mobileAccessControl.setReviewAccess(deviceId, enabled);
+  });
+}
+
+registerMobileAccessIpc();
+
+async function startMobileAccessIfEnabled(): Promise<void> {
+  if (!isMac) {
+    console.info('[MobileAccess] startupSkipped unsupported platformUnsupported');
+    return;
+  }
+
+  try {
+    const { config, saveConfigFile } = await import('../dist/config.js');
+    const connection = await import('../dist/db/connection.js');
+    const { db } = connection;
+    const { getNetWorth } = await import('../dist/services/net-worth.js');
+    const { resolveReview } = await import('../dist/services/transactions.js');
+    const { createProductionMobileAccess } =
+      await import('../dist/mobile/production-mobile-access.js');
+    const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
+
+    if (!config.MOBILE_SERVER_ID || !config.MOBILE_PUBLIC_ID_KEY) {
+      throw new Error('Mobile identity is unavailable');
+    }
+
+    const production = createProductionMobileAccess({
+      db,
+      serverId: config.MOBILE_SERVER_ID,
+      publicIdKey: config.MOBILE_PUBLIC_ID_KEY,
+      server: {
+        displayName: `${app.getName()} on this Mac`,
+        serverVersion: app.getVersion(),
+        minimumClientVersion: '0.1.0',
+      },
+      readNetWorthIls: async () => (await getNetWorth()).total,
+      resolveReview,
+      // The bootstrap ports intentionally retain the real database used for
+      // device credentials. While the desktop swaps to its demo database,
+      // fail the entire mobile snapshot closed instead of mixing sources.
+      isMobileReadAvailable: () => !connection.isDemoMode(),
+    });
+
+    const serveCoordinator = new TailscaleServeCoordinator({
+      process: new NodeExecFileAdapter(),
+      ownershipStore: new FileServeOwnershipStore(
+        join(dataDir, 'mobile-access', 'tailscale-serve-ownership.json'),
+      ),
+      executable: resolveTailscaleExecutable(),
+      httpsPort: config.MOBILE_ACCESS_HTTPS_PORT,
+    });
+
+    const runtime = new MobileAccessRuntime({
+      serverFactory: {
+        async start({ host }) {
+          const server = createMobileServer({
+            bootstrap: production.bootstrapDependencies,
+            pairing: production.pairingDependencies,
+            transactions: production.transactionDependencies,
+            planning: production.planningDependencies,
+            netWorthHistory: production.netWorthHistoryDependencies,
+            reviewCommands: production.reviewCommandDependencies,
+          });
+          try {
+            const port = await server.start({ host });
+            return { port, close: server.shutdown };
+          } catch {
+            await server.shutdown().catch(() => undefined);
+            throw new Error('Mobile server startup failed');
+          }
+        },
+      },
+      serveCoordinator,
+      logger: {
+        log({ event, status, diagnostic }) {
+          // These are fixed enums. Do not add command output, target URLs,
+          // tokens, pairing payloads, or exception text to this log entry.
+          logMobileAccess(event, status, diagnostic);
+        },
+      },
+    });
+
+    const control = new MobileAccessControl({
+      runtime,
+      persistEnabled(enabled) {
+        saveConfigFile({ MOBILE_ACCESS_ENABLED: String(enabled) });
+      },
+      createPairingManager(publicUrl) {
+        return production.createPairingManager(publicUrl);
+      },
+      deviceRegistry: production.deviceRegistry,
+      onPairingManagerChanged(manager) {
+        if (!manager) production.clearPairingManager();
+      },
+    });
+
+    mobileAccessControl = control;
+    await control.startFromConfiguration(config.MOBILE_ACCESS_ENABLED);
+  } catch {
+    mobileAccessControl = null;
+    // Mobile Access is opt-in and must never prevent the desktop app from
+    // starting. Details are intentionally omitted because import/process
+    // errors can contain local paths or command output.
+    console.warn('[MobileAccess] startupCompleted failed integrationUnavailable');
+  }
+}
 
 function sendAccentColor() {
   if (!mainWindow) return;
@@ -214,7 +447,10 @@ function createWindow(port: number) {
     mainWindow?.show();
   });
 
-  mainWindow.loadURL(`http://localhost:${port}`);
+  const appOrigin = `http://localhost:${port}`;
+  trustedRendererOrigin = appOrigin;
+  process.env.MM_RENDERER_ORIGIN = appOrigin;
+  mainWindow.loadURL(appOrigin);
 
   // Send accent color once page is ready + lock zoom level
   mainWindow.webContents.on('did-finish-load', () => {
@@ -225,17 +461,21 @@ function createWindow(port: number) {
   });
 
   // ── Block browser-like navigation (back/forward, dropped URLs, ctrl+click) ──
-  const appOrigin = `http://localhost:${port}`;
-  mainWindow.webContents.on('will-navigate', (e, url) => {
-    if (!url.startsWith(appOrigin)) {
-      e.preventDefault();
-      shell.openExternal(url);
-    }
-  });
+  const handleNavigation = (event: Electron.Event, url: string) => {
+    if (isTrustedRendererURL(url, appOrigin)) return;
+    event.preventDefault();
+    const externalURL = safeExternalURL(url);
+    if (externalURL) void shell.openExternal(externalURL);
+  };
+  mainWindow.webContents.on('will-navigate', handleNavigation);
+  mainWindow.webContents.on('will-redirect', handleNavigation);
 
   // Block ctrl+click / middle-click / target="_blank" from opening new windows
   mainWindow.webContents.setWindowOpenHandler(({ url }) => {
-    shell.openExternal(url);
+    if (!isTrustedRendererURL(url, appOrigin)) {
+      const externalURL = safeExternalURL(url);
+      if (externalURL) void shell.openExternal(externalURL);
+    }
     return { action: 'deny' };
   });
 
@@ -271,6 +511,8 @@ function createWindow(port: number) {
   });
 
   mainWindow.on('closed', () => {
+    trustedRendererOrigin = null;
+    delete process.env.MM_RENDERER_ORIGIN;
     mainWindow = null;
   });
 }
@@ -406,19 +648,25 @@ function setupAutoUpdater() {
     sendUpdateStatus('error', { error: err.message });
   });
 
-  ipcMain.handle('auto-update:check', async () => {
+  ipcMain.handle('auto-update:check', async (event) => {
+    assertTrustedRenderer(event);
     const result = await autoUpdater.checkForUpdatesAndNotify();
     return { updateAvailable: !!result?.updateInfo };
   });
 
-  ipcMain.handle('auto-update:install', () => {
+  ipcMain.handle('auto-update:install', (event) => {
+    assertTrustedRenderer(event);
     isQuitting = true;
     autoUpdater.quitAndInstall();
   });
 
-  ipcMain.handle('auto-update:get-enabled', () => isAutoUpdateEnabled());
+  ipcMain.handle('auto-update:get-enabled', (event) => {
+    assertTrustedRenderer(event);
+    return isAutoUpdateEnabled();
+  });
 
-  ipcMain.handle('auto-update:set-enabled', (_event, enabled: boolean) => {
+  ipcMain.handle('auto-update:set-enabled', (event, enabled: boolean) => {
+    assertTrustedRenderer(event);
     setAutoUpdateEnabled(enabled);
     if (enabled) {
       startPeriodicChecks();
@@ -564,11 +812,13 @@ app.whenReady().then(async () => {
     // Start server import
     const { createServer } = await import('../dist/server.js');
     const { start, shutdown, onResume } = await createServer();
-    const port = await start({ port: 0 });
+    const port = await startDesktopServer(start);
 
     console.log(`[Electron] Server started on port ${port}`);
 
     console.log(`[Electron] Data directory: ${dataDir}`);
+
+    await startMobileAccessIfEnabled();
 
     createWindow(port);
     createTray(port);
@@ -598,6 +848,7 @@ app.whenReady().then(async () => {
     powerMonitor.on('resume', () => {
       console.log('[Electron] System resumed from sleep — restarting background services');
       onResume();
+      void mobileAccessControl?.resume();
       mainWindow?.webContents.reload();
     });
 
@@ -611,7 +862,10 @@ app.whenReady().then(async () => {
       if (quitting) return;
       quitting = true;
       e.preventDefault();
-      shutdown()
+      (async () => {
+        await mobileAccessControl?.shutdown();
+        await shutdown();
+      })()
         .catch((err) => console.error('[Electron] Shutdown error:', err))
         .finally(() => app.exit(0));
     });
