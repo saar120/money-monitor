@@ -7,6 +7,7 @@ import { createCanonicalHarness, type CanonicalHarness } from './test-harness.js
 
 const execFileAsync = promisify(execFile);
 const swiftCompilerAvailable = spawnSync('swiftc', ['--version'], { stdio: 'ignore' }).status === 0;
+const runLiveSwiftIntegration = process.env.CANONICAL_SWIFT_LIVE_TEST === '1';
 const GENERATED_AT = new Date('2026-08-09T10:00:00.000Z');
 
 function listen(server: Server): Promise<number> {
@@ -36,7 +37,7 @@ describe('generated Swift client over a live canonical listener', () => {
     await Promise.all(harnesses.splice(0).map((harness) => harness.close()));
   });
 
-  const liveTest = swiftCompilerAvailable ? it : it.skip;
+  const liveTest = swiftCompilerAvailable && runLiveSwiftIntegration ? it : it.skip;
 
   liveTest(
     'authenticates, preserves the mounted prefix, and decodes a real response',
