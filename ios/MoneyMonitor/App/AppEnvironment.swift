@@ -52,6 +52,7 @@ enum BootstrapSnapshotStoreError: Error, Equatable {
 
 struct BootstrapSnapshot: Codable, Equatable, Sendable {
     static let currentVersion = 1
+    static let savedTransactionLimit = 200
 
     let version: Int
     let serverID: UUID
@@ -63,11 +64,16 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
     /// One bounded aggregate-only chart response; it shares the same encrypted
     /// snapshot envelope as the rest of the mobile-safe planning data.
     let netWorthHistory: MobileNetWorthHistory?
+    /// Optional for compatibility with snapshots written before Saved View
+    /// Activity existed. This is a bounded, mobile-safe recent-transaction
+    /// projection, never an assertion of complete history.
+    let transactions: [MobileTransaction]?
 
     init(
         bootstrap: BootstrapSuccessEnvelope,
         planning: MobilePlanningSnapshot? = nil,
         netWorthHistory: MobileNetWorthHistory? = nil,
+        transactions: [MobileTransaction]? = nil,
         savedAt: Date
     ) {
         version = Self.currentVersion
@@ -76,6 +82,46 @@ struct BootstrapSnapshot: Codable, Equatable, Sendable {
         self.bootstrap = bootstrap
         self.planning = planning
         self.netWorthHistory = netWorthHistory
+        self.transactions = transactions.map(Self.boundedTransactions)
+    }
+
+    private enum CodingKeys: String, CodingKey {
+        case version
+        case serverID
+        case savedAt
+        case bootstrap
+        case planning
+        case netWorthHistory
+        case transactions
+    }
+
+    init(from decoder: any Decoder) throws {
+        let container = try decoder.container(keyedBy: CodingKeys.self)
+        version = try container.decode(Int.self, forKey: .version)
+        serverID = try container.decode(UUID.self, forKey: .serverID)
+        savedAt = try container.decode(Date.self, forKey: .savedAt)
+        bootstrap = try container.decode(BootstrapSuccessEnvelope.self, forKey: .bootstrap)
+        planning = try container.decodeIfPresent(MobilePlanningSnapshot.self, forKey: .planning)
+        netWorthHistory = try container.decodeIfPresent(MobileNetWorthHistory.self, forKey: .netWorthHistory)
+        let decodedTransactions = try container.decodeIfPresent([MobileTransaction].self, forKey: .transactions)
+        transactions = decodedTransactions.map(Self.boundedTransactions)
+    }
+
+    func encode(to encoder: any Encoder) throws {
+        var container = encoder.container(keyedBy: CodingKeys.self)
+        try container.encode(version, forKey: .version)
+        try container.encode(serverID, forKey: .serverID)
+        try container.encode(savedAt, forKey: .savedAt)
+        try container.encode(bootstrap, forKey: .bootstrap)
+        try container.encodeIfPresent(planning, forKey: .planning)
+        try container.encodeIfPresent(netWorthHistory, forKey: .netWorthHistory)
+        try container.encodeIfPresent(transactions, forKey: .transactions)
+    }
+
+    private static func boundedTransactions(_ transactions: [MobileTransaction]) -> [MobileTransaction] {
+        var seen = Set<String>()
+        let unique = transactions.filter { seen.insert($0.id).inserted }
+        return Array(unique.prefix(savedTransactionLimit))
     }
 }
 
@@ -265,9 +311,11 @@ final class AppEnvironment: ObservableObject {
     @Published private(set) var latestBootstrap: BootstrapSuccessEnvelope?
     @Published private(set) var latestPlanningSnapshot: MobilePlanningSnapshot?
     @Published private(set) var latestNetWorthHistory: MobileNetWorthHistory?
+    @Published private(set) var latestSavedTransactions: [MobileTransaction] = []
     @Published private(set) var bootstrapRefreshState: BootstrapRefreshState = .idle
     @Published private(set) var snapshotState: BootstrapSnapshotState = .none
     @Published private(set) var financialContentLockState: FinancialContentLockState = .notRequired
+    @Published private(set) var pairedMacName: String? = nil
 
     private let apiClient: any MobileAPIClient
     private let transactionClient: any MobileTransactionAPIClient
@@ -284,7 +332,27 @@ final class AppEnvironment: ObservableObject {
     private var activeRefreshOperationID: UUID?
     private var featureRevocationCleanupInProgress = false
     private var mobileReadEpoch = 0
+    private var snapshotPersistenceTail: Task<Void, Never>?
     private var lastBackgroundedAt: Date?
+    private var hasSavedCredential = false
+
+    /// A single projection for shell/status-row consumers. It is computed from
+    /// the published primitives so a controlled clock can move a Saved View
+    /// across the 24-hour boundary without timer polling.
+    var trustState: GlobalTrustState {
+        GlobalTrustStateProjection.project(
+            hasSavedCredential: hasSavedCredential,
+            connectionState: connectionState,
+            pairingState: pairingState,
+            refreshState: bootstrapRefreshState,
+            snapshotState: snapshotState,
+            bootstrap: latestBootstrap,
+            now: clock()
+        )
+    }
+
+    /// Descriptive alias for consumers that prefer the full state name.
+    var globalTrustState: GlobalTrustState { trustState }
 
     init() {
         let store = KeychainPairedProfileStore()
@@ -367,8 +435,13 @@ final class AppEnvironment: ObservableObject {
         activeOperationID = nil
         invalidateBootstrapRefresh()
         pairingState = .idle
+        hasSavedCredential = false
+        pairedMacName = nil
         latestBootstrap = nil
         latestPlanningSnapshot = nil
+        latestNetWorthHistory = nil
+        latestSavedTransactions = []
+        snapshotState = .none
 
         guard let baseURL = Self.normalizedHTTPSURL(from: rawAddress) else {
             connectionState = .failed(
@@ -401,10 +474,14 @@ final class AppEnvironment: ObservableObject {
 
         do {
             guard let credential = try await profileStore.load() else {
+                hasSavedCredential = false
+                pairedMacName = nil
                 finishAsNotConfigured(operationID: operationID)
                 return
             }
             try ensureActive(operationID)
+            hasSavedCredential = true
+            pairedMacName = credential.profile.deviceName
 
             await restoreSnapshotIfUsable(for: credential, operationID: operationID)
             try ensureActive(operationID)
@@ -435,6 +512,7 @@ final class AppEnvironment: ObservableObject {
                     operationID: operationID,
                     fallbackFailure: .savedAccessRevoked
                 )
+                bootstrapRefreshState = .failed(.accessRevoked)
                 return
             }
             if latestBootstrap != nil {
@@ -443,11 +521,22 @@ final class AppEnvironment: ObservableObject {
                 bootstrapRefreshState = .failed(Self.bootstrapRefreshFailure(for: error))
                 return
             }
+            let isIncompatible: Bool
+            if case .upgradeRequired = error as? MobileClientError {
+                isIncompatible = true
+            } else {
+                isIncompatible = false
+            }
             finish(
                 error: error,
                 operationID: operationID,
-                fallbackFailure: .savedConnectionUnavailable
+                fallbackFailure: isIncompatible
+                    ? .incompatibleVersion
+                    : .savedConnectionUnavailable
             )
+            if isIncompatible {
+                bootstrapRefreshState = .failed(.incompatible)
+            }
         }
     }
 
@@ -494,6 +583,8 @@ final class AppEnvironment: ObservableObject {
             try ensureActive(operationID)
             let credential = try await pairingClient.exchange(session)
             credentialWasStored = true
+            hasSavedCredential = true
+            pairedMacName = credential.profile.deviceName
             try ensureActive(operationID)
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
@@ -506,6 +597,28 @@ final class AppEnvironment: ObservableObject {
                 operationID: operationID
             )
         } catch {
+            // Pairing persists the credential before the first authenticated
+            // bootstrap. If that first bootstrap authoritatively revokes the
+            // just-paired device, it must follow the same fail-closed cleanup
+            // path as restore and refresh rather than leaving local access.
+            if credentialWasStored, Self.isAuthoritativeRevocation(error) {
+                do {
+                    try await deleteSecureAccess()
+                } catch {
+                    finish(
+                        error: error,
+                        operationID: operationID,
+                        fallbackFailure: .secureStorageUnavailable
+                    )
+                    return
+                }
+                finish(
+                    error: error,
+                    operationID: operationID,
+                    fallbackFailure: .savedAccessRevoked
+                )
+                return
+            }
             finish(
                 error: error,
                 operationID: operationID,
@@ -517,25 +630,37 @@ final class AppEnvironment: ObservableObject {
     }
 
     func refreshBootstrap() async {
+        let canRecoverWithoutSnapshot = hasSavedCredential && trustState == .noSnapshot
+        let isConnected: Bool
+        if case .connected = connectionState {
+            isConnected = true
+        } else {
+            isConnected = false
+        }
         guard
             activeOperationID == nil,
             activeRefreshOperationID == nil,
-            case .connected = connectionState
+            (canRecoverWithoutSnapshot || isConnected)
         else {
             return
         }
 
         let operationID = UUID()
         activeRefreshOperationID = operationID
+        refreshSnapshotFreshness()
         bootstrapRefreshState = .refreshing
 
         do {
             let credential = try await profileStore.load()
             try ensureActiveRefresh(operationID)
             guard let credential else {
+                hasSavedCredential = false
+                pairedMacName = nil
                 finishRefreshAsNotConfigured(operationID: operationID)
                 return
             }
+            hasSavedCredential = true
+            pairedMacName = credential.profile.deviceName
 
             let bootstrap = try await apiClient.bootstrap(credential: credential)
             try ensureActiveRefresh(operationID)
@@ -560,9 +685,30 @@ final class AppEnvironment: ObservableObject {
                 return
             }
 
+            if let bootstrap = latestBootstrap {
+                snapshotState = freshnessState(for: bootstrap.meta.generatedAt)
+            }
             activeRefreshOperationID = nil
             bootstrapRefreshState = .failed(Self.bootstrapRefreshFailure(for: error))
         }
+    }
+
+    /// Explicit recovery entry point for the global status row and feature
+    /// pull-to-refresh affordances. It intentionally performs one request.
+    func retryBootstrap() async {
+        await refreshBootstrap()
+    }
+
+    /// Hook for a connectivity-restored notification. The app has no timer
+    /// loop; callers invoke this only when the system reports a change.
+    func connectivityRestored() async {
+        await refreshBootstrap()
+    }
+
+    /// Re-evaluate age-sensitive presentation with the injected clock. This
+    /// is also called before refreshes and on foreground return.
+    func reevaluateSnapshotFreshness() {
+        refreshSnapshotFreshness()
     }
 
     var isFinancialContentLocked: Bool {
@@ -585,20 +731,41 @@ final class AppEnvironment: ObservableObject {
             lastBackgroundedAt = clock()
             return
         }
+        let returnedFromBackground = lastBackgroundedAt != nil
         defer { lastBackgroundedAt = nil }
+        refreshSnapshotFreshness()
         guard
             financialContentLockState == .unlocked,
             let lastBackgroundedAt,
             clock().timeIntervalSince(lastBackgroundedAt) > Self.backgroundGrace
         else {
+            if returnedFromBackground {
+                Task { @MainActor [weak self] in
+                    await self?.refreshBootstrap()
+                }
+            }
             return
         }
         financialContentLockState = .locked
+        if returnedFromBackground {
+            Task { @MainActor [weak self] in
+                await self?.refreshBootstrap()
+            }
+        }
     }
 
     func transactions(
         query: MobileTransactionQuery
     ) async throws -> MobileTransactionListEnvelope {
+        // A Saved View is deliberately local and read-only. The trust row may
+        // be `.failed` while a valid snapshot remains on screen, so use the
+        // snapshot source whenever it is retained and the connection is not
+        // currently live; this avoids implying that a failed retry refreshed
+        // Activity data.
+        if snapshotState.isSavedView, !trustState.isLive {
+            return savedTransactions(for: query)
+        }
+
         let session = try await mobileReadSession()
         do {
             let envelope = try await transactionClient.transactions(
@@ -606,6 +773,22 @@ final class AppEnvironment: ObservableObject {
                 credential: session.credential
             )
             try ensureCurrentMobileReadEpoch(session.epoch)
+            if let bootstrap = latestBootstrap {
+                let savedTransactions = Self.boundedSavedTransactions(
+                    envelope.data.transactions + latestSavedTransactions
+                )
+                try await persistSnapshotIfCacheable(
+                    bootstrap: bootstrap,
+                    planning: latestPlanningSnapshot,
+                    netWorthHistory: latestNetWorthHistory,
+                    transactions: savedTransactions
+                )
+                try ensureCurrentMobileReadEpoch(session.epoch)
+                latestSavedTransactions = savedTransactions
+            } else {
+                try ensureCurrentMobileReadEpoch(session.epoch)
+                mergeSavedTransactions(envelope.data.transactions)
+            }
             return envelope
         } catch {
             if Self.isAuthoritativeRevocation(error) {
@@ -613,6 +796,79 @@ final class AppEnvironment: ObservableObject {
             }
             throw error
         }
+    }
+
+    /// Applies the Activity query language to the bounded local cache. Cursor
+    /// pagination is intentionally disabled: Saved View Activity is a finite
+    /// recent window, not a claim of complete history.
+    private func savedTransactions(for query: MobileTransactionQuery) -> MobileTransactionListEnvelope {
+        let desired = query.firstPage
+        let filtered = latestSavedTransactions.filter { transaction in
+            guard desired.includeExcluded || !transaction.excludedFromReports else { return false }
+            if let search = desired.query {
+                let haystack: [String] = [
+                    transaction.displayName,
+                    transaction.category?.label,
+                    transaction.account.displayName,
+                    transaction.account.identifierMask,
+                ].compactMap { $0 }
+                guard haystack.contains(where: { Self.matches($0, search: search) }) else { return false }
+            }
+            if let startDate = desired.startDate, transaction.occurredOn < startDate { return false }
+            if let endDate = desired.endDate, transaction.occurredOn > endDate { return false }
+            if let direction = desired.direction, transaction.direction != direction { return false }
+            if let status = desired.status, transaction.status != status { return false }
+            if desired.needsReview && !transaction.needsReview { return false }
+            if let accountID = desired.accountID, transaction.account.id != accountID { return false }
+            return true
+        }
+
+        let limit = max(0, min(desired.limit, BootstrapSnapshot.savedTransactionLimit))
+        let page = Array(filtered.prefix(limit))
+        let generatedAt = latestBootstrap?.meta.generatedAt ?? clock()
+        let financialDate = latestBootstrap?.meta.financialDate ?? ""
+        return MobileTransactionListEnvelope(
+            data: MobileTransactionListData(
+                financialDate: financialDate,
+                transactions: page,
+                page: MobileTransactionPage(hasMore: false, nextCursor: nil)
+            ),
+            meta: MobileTransactionMetadata(
+                apiVersion: MobileTransactionMetadata.supportedAPIVersion,
+                generatedAt: generatedAt,
+                source: .unknown,
+                server: MobileTransactionServer(
+                    id: latestBootstrap?.meta.server.id ?? UUID(),
+                    protocolVersion: BootstrapServer.supportedProtocolVersion
+                )
+            )
+        )
+    }
+
+    private static func matches(_ value: String, search: String) -> Bool {
+        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            .localizedCaseInsensitiveContains(
+                search.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
+            )
+    }
+
+    private func mergeSavedTransactions(_ incoming: [MobileTransaction]) {
+        latestSavedTransactions = Self.boundedSavedTransactions(
+            incoming + latestSavedTransactions
+        )
+    }
+
+    private static func boundedSavedTransactions(_ transactions: [MobileTransaction]) -> [MobileTransaction] {
+        var seen = Set<String>()
+        let unique = transactions.filter { seen.insert($0.id).inserted }
+        return Array(
+            unique
+                .sorted {
+                    if $0.occurredOn == $1.occurredOn { return $0.id > $1.id }
+                    return $0.occurredOn > $1.occurredOn
+                }
+                .prefix(BootstrapSnapshot.savedTransactionLimit)
+        )
     }
 
     func transactionDetail(id: String) async throws -> MobileTransactionDetailEnvelope {
@@ -690,14 +946,12 @@ final class AppEnvironment: ObservableObject {
             try ensureCurrentMobileReadEpoch(session.epoch)
             latestPlanningSnapshot = envelope.data
             if let bootstrap = latestBootstrap {
-                try await snapshotStore.save(
-                    BootstrapSnapshot(
-                        bootstrap: bootstrap,
-                        planning: envelope.data,
-                        netWorthHistory: latestNetWorthHistory,
-                        savedAt: clock()
-                    )
+                try await persistSnapshotIfCacheable(
+                    bootstrap: bootstrap,
+                    planning: envelope.data,
+                    netWorthHistory: latestNetWorthHistory
                 )
+                try ensureCurrentMobileReadEpoch(session.epoch)
             }
             return envelope.data
         } catch {
@@ -721,14 +975,12 @@ final class AppEnvironment: ObservableObject {
             try ensureCurrentMobileReadEpoch(session.epoch)
             latestNetWorthHistory = envelope.data
             if let bootstrap = latestBootstrap {
-                try await snapshotStore.save(
-                    BootstrapSnapshot(
-                        bootstrap: bootstrap,
-                        planning: latestPlanningSnapshot,
-                        netWorthHistory: envelope.data,
-                        savedAt: clock()
-                    )
+                try await persistSnapshotIfCacheable(
+                    bootstrap: bootstrap,
+                    planning: latestPlanningSnapshot,
+                    netWorthHistory: envelope.data
                 )
+                try ensureCurrentMobileReadEpoch(session.epoch)
             }
             return envelope.data
         } catch {
@@ -755,6 +1007,7 @@ final class AppEnvironment: ObservableObject {
         latestBootstrap = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
+        latestSavedTransactions = []
     }
 
     func disconnect() async {
@@ -784,6 +1037,7 @@ final class AppEnvironment: ObservableObject {
         latestBootstrap = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
+        latestSavedTransactions = []
         snapshotState = .none
         financialContentLockState = .notRequired
         return operationID
@@ -853,14 +1107,13 @@ final class AppEnvironment: ObservableObject {
             }
             guard activeOperationID == operationID else { return }
 
-            if clock().timeIntervalSince(snapshot.savedAt) > Self.snapshotRetention {
-                try await snapshotStore.delete()
-                return
-            }
-
             latestBootstrap = snapshot.bootstrap
             latestPlanningSnapshot = snapshot.planning
             latestNetWorthHistory = snapshot.netWorthHistory
+            latestSavedTransactions = Self.boundedSavedTransactions(
+                snapshot.transactions
+                    ?? snapshot.bootstrap.data.recentTransactions.map(\.mobileTransaction)
+            )
             serverURL = credential.profile.baseURL
             connectionState = .connected(lastCheckedAt: snapshot.bootstrap.meta.generatedAt)
             snapshotState = freshnessState(for: snapshot.bootstrap.meta.generatedAt)
@@ -870,8 +1123,10 @@ final class AppEnvironment: ObservableObject {
         } catch {
             guard activeOperationID == operationID else { return }
             latestBootstrap = nil
+            latestPlanningSnapshot = nil
+            latestNetWorthHistory = nil
+            latestSavedTransactions = []
             snapshotState = .corrupt
-            try? await snapshotStore.delete()
         }
     }
 
@@ -879,38 +1134,104 @@ final class AppEnvironment: ObservableObject {
         _ bootstrap: BootstrapSuccessEnvelope,
         operationID: UUID
     ) async throws {
-        try await snapshotStore.save(
+        guard Self.isPersistableSnapshot(bootstrap) else {
+            try ensureActive(operationID)
+            return
+        }
+        let transactions = savedTransactions(for: bootstrap)
+        try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
+                transactions: transactions,
                 savedAt: clock()
             )
         )
         try ensureActive(operationID)
+        latestSavedTransactions = transactions
+    }
+
+    private func persistSnapshotIfCacheable(
+        bootstrap: BootstrapSuccessEnvelope,
+        planning: MobilePlanningSnapshot?,
+        netWorthHistory: MobileNetWorthHistory?,
+        transactions: [MobileTransaction]? = nil
+    ) async throws {
+        guard Self.isPersistableSnapshot(bootstrap) else { return }
+        let boundedTransactions = transactions ?? self.savedTransactions(for: bootstrap)
+        try await saveValidatedSnapshot(
+            BootstrapSnapshot(
+                bootstrap: bootstrap,
+                planning: planning,
+                netWorthHistory: netWorthHistory,
+                transactions: boundedTransactions,
+                savedAt: clock()
+            )
+        )
     }
 
     private func saveSnapshot(
         _ bootstrap: BootstrapSuccessEnvelope,
         refreshOperationID: UUID
     ) async throws {
-        try await snapshotStore.save(
+        guard Self.isPersistableSnapshot(bootstrap) else {
+            try ensureActiveRefresh(refreshOperationID)
+            return
+        }
+        let transactions = savedTransactions(for: bootstrap)
+        try await saveValidatedSnapshot(
             BootstrapSnapshot(
                 bootstrap: bootstrap,
                 planning: latestPlanningSnapshot,
                 netWorthHistory: latestNetWorthHistory,
+                transactions: transactions,
                 savedAt: clock()
             )
         )
         try ensureActiveRefresh(refreshOperationID)
+        latestSavedTransactions = transactions
+    }
+
+    private func savedTransactions(for bootstrap: BootstrapSuccessEnvelope) -> [MobileTransaction] {
+        Self.boundedSavedTransactions(
+            bootstrap.data.recentTransactions.map(\.mobileTransaction) + latestSavedTransactions
+        )
+    }
+
+    /// Snapshot I/O can suspend in Keychain or disk work. Queue every write
+    /// and deletion in invocation order so a pre-revocation save is always
+    /// followed by the revocation deletion, and a later re-pair save follows
+    /// that deletion rather than being overwritten by stale work.
+    private func saveValidatedSnapshot(_ snapshot: BootstrapSnapshot) async throws {
+        let predecessor = snapshotPersistenceTail
+        let write = Task { [snapshotStore] in
+            if let predecessor { await predecessor.value }
+            try await snapshotStore.save(snapshot)
+        }
+        snapshotPersistenceTail = Task { _ = try? await write.value }
+        try await write.value
+    }
+
+    private func deletePersistedSnapshot() async throws {
+        let predecessor = snapshotPersistenceTail
+        let deletion = Task { [snapshotStore] in
+            if let predecessor { await predecessor.value }
+            try await snapshotStore.delete()
+        }
+        snapshotPersistenceTail = Task { _ = try? await deletion.value }
+        try await deletion.value
     }
 
     private func deleteSecureAccess() async throws {
-        try await snapshotStore.delete()
+        try await deletePersistedSnapshot()
         try await profileStore.delete()
+        hasSavedCredential = false
+        pairedMacName = nil
         latestBootstrap = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
+        latestSavedTransactions = []
         snapshotState = .none
         financialContentLockState = .notRequired
     }
@@ -920,6 +1241,22 @@ final class AppEnvironment: ObservableObject {
             return .stale(generatedAt: generatedAt)
         }
         return .cached(generatedAt: generatedAt)
+    }
+
+    private func refreshSnapshotFreshness() {
+        switch snapshotState {
+        case let .cached(generatedAt), let .stale(generatedAt):
+            snapshotState = freshnessState(for: generatedAt)
+        case .none, .live, .corrupt:
+            break
+        }
+    }
+
+    private static func isPersistableSnapshot(
+        _ bootstrap: BootstrapSuccessEnvelope
+    ) -> Bool {
+        bootstrap.meta.cacheability.status == .cacheable
+            && bootstrap.meta.completeness.status == .complete
     }
 
     private func finishFeatureReadAsRevoked(expectedEpoch: Int) async throws {
@@ -939,6 +1276,7 @@ final class AppEnvironment: ObservableObject {
         latestBootstrap = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
+        latestSavedTransactions = []
         pairingState = .disconnecting
         connectionState = .connecting
 
@@ -962,6 +1300,8 @@ final class AppEnvironment: ObservableObject {
     ) {
         guard activeRefreshOperationID == operationID else { return }
         activeRefreshOperationID = nil
+        hasSavedCredential = true
+        pairedMacName = credential.profile.deviceName
         serverURL = credential.profile.baseURL
         latestBootstrap = bootstrap
         snapshotState = .live
@@ -976,10 +1316,13 @@ final class AppEnvironment: ObservableObject {
         guard activeRefreshOperationID == operationID else { return }
         activeRefreshOperationID = nil
         advanceMobileReadEpoch()
+        hasSavedCredential = false
+        pairedMacName = nil
         serverURL = nil
         latestBootstrap = nil
         latestPlanningSnapshot = nil
         latestNetWorthHistory = nil
+        latestSavedTransactions = []
         snapshotState = .none
         financialContentLockState = .notRequired
         pairingState = .idle
@@ -995,6 +1338,10 @@ final class AppEnvironment: ObservableObject {
         advanceMobileReadEpoch()
         serverURL = nil
         latestBootstrap = nil
+        latestPlanningSnapshot = nil
+        latestNetWorthHistory = nil
+        latestSavedTransactions = []
+        snapshotState = .none
         pairingState = .disconnecting
         connectionState = .connecting
 
@@ -1021,6 +1368,8 @@ final class AppEnvironment: ObservableObject {
     ) {
         guard activeOperationID == operationID else { return }
         activeOperationID = nil
+        hasSavedCredential = true
+        pairedMacName = credential.profile.deviceName
         serverURL = credential.profile.baseURL
         latestBootstrap = bootstrap
         snapshotState = .live
@@ -1034,6 +1383,8 @@ final class AppEnvironment: ObservableObject {
     private func finishAsNotConfigured(operationID: UUID) {
         guard activeOperationID == operationID else { return }
         activeOperationID = nil
+        hasSavedCredential = false
+        pairedMacName = nil
         pairingState = .idle
         connectionState = .notConfigured
         snapshotState = .none
@@ -1074,7 +1425,6 @@ final class AppEnvironment: ObservableObject {
     }
 
     private static let snapshotStaleThreshold: TimeInterval = 24 * 60 * 60
-    private static let snapshotRetention: TimeInterval = 30 * 24 * 60 * 60
     private static let backgroundGrace: TimeInterval = 2 * 60
 
     private static func isAuthoritativeRevocation(_ error: any Error) -> Bool {

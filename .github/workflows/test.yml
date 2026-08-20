@@ -30,8 +30,20 @@ jobs:
     steps:
       - uses: actions/checkout@v4
 
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+
+      - run: npm ci
+
       - name: Build the generated Swift OpenAPI package
         run: swift build --package-path ios/CanonicalAPI
+
+      - name: Exercise the generated Swift client over a live listener
+        run: >-
+          CANONICAL_SWIFT_LIVE_TEST=1
+          npx vitest run src/api/v1/canonical-swift-live.test.ts
 
       - name: Compile the iOS app and its generated-client tests
         run: >-

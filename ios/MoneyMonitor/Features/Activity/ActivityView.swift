@@ -15,6 +15,7 @@ struct ActivityView: View {
             emptyDescription: filters.isDefault
                 ? "Transactions from your Mac will appear here."
                 : "Try changing or resetting the filters.",
+            savedViewNotice: savedViewNotice,
             reload: reload,
             loadNextPage: loadNextPage
         )
@@ -52,6 +53,13 @@ struct ActivityView: View {
 
     private var request: MobileTransactionQuery {
         filters.makeQuery()
+    }
+
+    private var savedViewNotice: String? {
+        guard environment.snapshotState.isSavedView, !environment.trustState.isLive else {
+            return nil
+        }
+        return "Saved View · showing up to 200 recent transactions. History may be incomplete."
     }
 
     private func loadNextPage() async {
@@ -359,10 +367,12 @@ final class TransactionListModel: ObservableObject {
 }
 
 struct TransactionListResults: View {
+    @EnvironmentObject private var environment: AppEnvironment
     @ObservedObject var model: TransactionListModel
     let desiredQuery: MobileTransactionQuery
     let emptyTitle: String
     let emptyDescription: String
+    let savedViewNotice: String?
     let reload: () async -> Void
     let loadNextPage: () async -> Void
 
@@ -391,6 +401,15 @@ struct TransactionListResults: View {
             }
         } else {
             List {
+                if let savedViewNotice {
+                    Section {
+                        Label(savedViewNotice, systemImage: "lock.doc.fill")
+                            .font(.footnote)
+                            .foregroundStyle(MoneyMonitorTheme.warning)
+                            .accessibilityIdentifier("saved-view-activity-notice")
+                    }
+                }
+
                 if let message = model.refreshMessage {
                     Section {
                         Label(message, systemImage: "arrow.clockwise.circle")
@@ -402,10 +421,17 @@ struct TransactionListResults: View {
                 ForEach(TransactionPresentation.groups(model.transactions)) { group in
                     Section(group.title) {
                         ForEach(group.transactions) { transaction in
-                            NavigationLink {
-                                TransactionDetailView(transactionID: transaction.id)
-                            } label: {
-                                TransactionRowView(transaction: transaction)
+                            Group {
+                                if isSavedView {
+                                    TransactionRowView(transaction: transaction)
+                                        .accessibilityHint("Saved View transaction details require a live Mac connection.")
+                                } else {
+                                    NavigationLink {
+                                        TransactionDetailView(transactionID: transaction.id)
+                                    } label: {
+                                        TransactionRowView(transaction: transaction)
+                                    }
+                                }
                             }
                             .onAppear {
                                 guard transaction.id == model.transactions.last?.id else { return }
@@ -436,6 +462,10 @@ struct TransactionListResults: View {
             .listStyle(.plain)
             .accessibilityIdentifier("transaction-list")
         }
+    }
+
+    private var isSavedView: Bool {
+        savedViewNotice != nil || !environment.trustState.isLive
     }
 
     @ViewBuilder
@@ -694,9 +724,9 @@ struct TransactionFiltersView: View {
                     Toggle("Only needs review", isOn: $draft.needsReview)
                     Toggle("Include excluded", isOn: $draft.includeExcluded)
                 }
-            }
-            .navigationTitle("Filters")
-            .navigationBarTitleDisplayMode(.inline)
+        }
+        .navigationTitle("Filters")
+        .navigationBarTitleDisplayMode(.inline)
             .toolbar {
                 ToolbarItem(placement: .cancellationAction) {
                     Button("Cancel") { dismiss() }
@@ -713,6 +743,7 @@ struct TransactionFiltersView: View {
                 }
             }
         }
+        .globalTrustStatusInset()
         .presentationDetents([.large])
     }
 
@@ -977,17 +1008,17 @@ struct TransactionDetailView: View {
                     }
                 }
                 .buttonStyle(.borderedProminent)
-                .disabled(reviewModel.state == .submitting || environment.snapshotState != .live)
+                .disabled(reviewModel.state == .submitting || !environment.trustState.isLive)
                 .accessibilityHint("Requires live access to your Mac and marks this item reviewed.")
 
                 Button("Skip review") {
                     isSkipConfirmationPresented = true
                 }
                 .buttonStyle(.bordered)
-                .disabled(reviewModel.state == .submitting || environment.snapshotState != .live)
+                .disabled(reviewModel.state == .submitting || !environment.trustState.isLive)
                 .accessibilityHint("Requires live access to your Mac and clears only this review flag.")
 
-                if environment.snapshotState != .live {
+                if !environment.trustState.isLive {
                     Text("Live Mac access is required. Review changes are never queued on this iPhone.")
                         .font(.caption)
                         .foregroundStyle(.secondary)

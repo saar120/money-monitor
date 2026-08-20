@@ -25,6 +25,7 @@ struct TransactionSearchView: View {
                     desiredQuery: request,
                     emptyTitle: "No results",
                     emptyDescription: "Try another search or reset the filters.",
+                    savedViewNotice: savedViewNotice,
                     reload: reload,
                     loadNextPage: loadNextPage
                 )
@@ -84,6 +85,13 @@ struct TransactionSearchView: View {
 
     private var taskKey: SearchTaskKey {
         SearchTaskKey(query: normalizedQuery, filters: filters)
+    }
+
+    private var savedViewNotice: String? {
+        guard environment.snapshotState.isSavedView, !environment.trustState.isLive else {
+            return nil
+        }
+        return "Saved View · showing up to 200 recent transactions. History may be incomplete."
     }
 
     private func loadNextPage() async {

@@ -11,7 +11,12 @@ struct RootView: View {
 
     var body: some View {
         Group {
-            if environment.isFinancialContentLocked, scenePhase == .active {
+            if environment.trustState == .revoked {
+                GlobalTrustRecoveryView(
+                    state: environment.trustState,
+                    scannerFactory: scannerFactory
+                )
+            } else if environment.isFinancialContentLocked, scenePhase == .active {
                 // The active lock screen replaces the privacy cover. Stacking
                 // both views makes the cover's branding overlap the unlock UI.
                 FinancialContentLockView()
@@ -33,7 +38,12 @@ struct RootView: View {
 
     @ViewBuilder
     private var appContent: some View {
-        if environment.pairingState == .restoring {
+        if shouldShowRecovery {
+            GlobalTrustRecoveryView(
+                state: environment.trustState,
+                scannerFactory: scannerFactory
+            )
+        } else if environment.pairingState == .restoring {
             RestoringConnectionView()
         } else {
             switch environment.connectionState {
@@ -44,6 +54,30 @@ struct RootView: View {
                     ConnectMacView(scannerFactory: scannerFactory)
                 }
             }
+        }
+    }
+
+    private var shouldShowRecovery: Bool {
+        switch environment.trustState {
+        case .noSnapshot, .incompatible, .revoked:
+            true
+        case .checking:
+            // A paired retry can begin from `.noSnapshot` while the root
+            // connection state is still not configured. Keep the recovery
+            // surface mounted until that one request resolves instead of
+            // falling through to onboarding.
+            if environment.pairingState == .restoring {
+                false
+            } else if case .connected = environment.connectionState {
+                false
+            } else {
+                true
+            }
+        case .failed(.secureStorageUnavailable):
+            true
+        case .disconnected, .live, .partial, .savedView, .staleSavedView,
+             .failed:
+            false
         }
     }
 }
@@ -114,24 +148,28 @@ private struct MainTabView: View {
                 NavigationStack {
                     HomeView(scannerFactory: scannerFactory)
                 }
+                .globalTrustStatusInset()
             }
 
             Tab("Activity", systemImage: "list.bullet.rectangle", value: .activity) {
                 NavigationStack {
                     ActivityView()
                 }
+                .globalTrustStatusInset()
             }
 
             Tab("Plan", systemImage: "chart.pie", value: .plan) {
                 NavigationStack {
                     PlanView()
                 }
+                .globalTrustStatusInset()
             }
 
             Tab("Advisor", systemImage: "sparkles", value: .advisor) {
                 NavigationStack {
                     AdvisorView()
                 }
+                .globalTrustStatusInset()
             }
 
             Tab(

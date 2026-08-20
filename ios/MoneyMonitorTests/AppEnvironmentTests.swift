@@ -259,6 +259,74 @@ private actor SnapshotSecureItemClient: SecureItemClient {
     }
 }
 
+private actor SnapshotLoadFailureStore: BootstrapSnapshotStore {
+    private var deleteCallCount = 0
+
+    func load(for _: UUID) async throws -> BootstrapSnapshot? {
+        throw BootstrapSnapshotStoreError.decryptionFailed
+    }
+
+    func save(_: BootstrapSnapshot) async throws {}
+
+    func delete() async throws {
+        deleteCallCount += 1
+    }
+
+    func deletes() -> Int {
+        deleteCallCount
+    }
+}
+
+private actor RevocationRaceSnapshotStore: BootstrapSnapshotStore {
+    private var snapshot: BootstrapSnapshot?
+    private var blockNextSave = false
+    private var saveIsBlocked = false
+    private var saveContinuation: CheckedContinuation<Void, Never>?
+    private var deleteCallCount = 0
+
+    func load(for serverID: UUID) async throws -> BootstrapSnapshot? {
+        guard let snapshot else { return nil }
+        guard snapshot.serverID == serverID else {
+            throw BootstrapSnapshotStoreError.serverMismatch
+        }
+        return snapshot
+    }
+
+    func save(_ snapshot: BootstrapSnapshot) async throws {
+        if blockNextSave {
+            blockNextSave = false
+            saveIsBlocked = true
+            await withCheckedContinuation { continuation in
+                saveContinuation = continuation
+            }
+            saveIsBlocked = false
+        }
+        self.snapshot = snapshot
+    }
+
+    func delete() async throws {
+        deleteCallCount += 1
+        snapshot = nil
+    }
+
+    func blockNextSaveOperation() {
+        blockNextSave = true
+    }
+
+    func isSaveBlocked() -> Bool {
+        saveIsBlocked
+    }
+
+    func releaseSave() {
+        saveContinuation?.resume()
+        saveContinuation = nil
+    }
+
+    func deletes() -> Int {
+        deleteCallCount
+    }
+}
+
 private struct FixedDeviceAuthenticator: DeviceAuthenticationClient {
     let outcome: DeviceAuthenticationOutcome
 
@@ -491,6 +559,16 @@ private func waitForBlockedDelete(store: PairingFlowProfileStore) async {
         await Task.yield()
     }
     Issue.record("Timed out waiting for credential deletion to block")
+}
+
+private func waitForBlockedSave(store: RevocationRaceSnapshotStore) async {
+    for _ in 0 ..< 100 {
+        if await store.isSaveBlocked() {
+            return
+        }
+        await Task.yield()
+    }
+    Issue.record("Timed out waiting for snapshot save to block")
 }
 
 private func pairingFlowQRPayload() throws -> Data {
@@ -1039,6 +1117,38 @@ struct AppEnvironmentTests {
 
     @MainActor
     @Test
+    func authoritativeRevocationDuringFirstPairBootstrapClearsNewCredential() async throws {
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore()
+        let pairingClient = PairingFlowClient(
+            credential: credential,
+            profileStore: store,
+            expiresAt: pairingFlowNow.addingTimeInterval(60)
+        )
+        let apiClient = PairingFlowAPIClient(
+            behavior: .failure(.authentication(.revoked))
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: pairingClient,
+            profileStore: store
+        )
+
+        await environment.pair(
+            qrPayload: try pairingFlowQRPayload(),
+            deviceName: "Personal iPhone"
+        )
+
+        #expect(await pairingClient.calls().exchange == 1)
+        #expect(await store.load() == nil)
+        #expect(await store.deletes() == 1)
+        #expect(environment.pairingState == .failed(.savedAccessRevoked))
+        #expect(environment.bootstrapRefreshState == .failed(.accessRevoked))
+        #expect(environment.trustState == .revoked)
+    }
+
+    @MainActor
+    @Test
     func repairUsesStoredDeviceNameSoLocalRenameCannotBreakRotationBinding() async throws {
         let original = try pairingFlowCredential(token: "A", deviceName: "Registered iPhone")
         let rotated = try pairingFlowCredential(token: "B", deviceName: "Registered iPhone")
@@ -1317,6 +1427,30 @@ struct AppEnvironmentTests {
         #expect(environment.bootstrapRefreshState == .failed(.incompatible))
         #expect(environment.latestBootstrap == original)
         #expect(environment.connectionState == connectedState)
+        #expect(await store.load() == credential)
+    }
+
+    @MainActor
+    @Test
+    func initialUpgradeRequirementRoutesToIncompatibleRecovery() async throws {
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.upgradeRequired)),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.pairingState == .failed(.incompatibleVersion))
+        #expect(environment.bootstrapRefreshState == .failed(.incompatible))
+        #expect(environment.trustState == .incompatible)
         #expect(await store.load() == credential)
     }
 
@@ -2110,7 +2244,7 @@ struct AppEnvironmentTests {
 
     @MainActor
     @Test
-    func restoreDeletesSnapshotBeyondThirtyDayRetention() async throws {
+    func restoreRetainsSnapshotBeyondThirtyDaysAndMarksItStale() async throws {
         let bootstrap = try pairingFlowBootstrap()
         let credential = try pairingFlowCredential()
         let profileStore = PairingFlowProfileStore(credential: credential)
@@ -2136,9 +2270,376 @@ struct AppEnvironmentTests {
 
         await environment.restoreSavedConnection()
 
-        #expect(environment.latestBootstrap == nil)
-        #expect(environment.snapshotState == .none)
+        #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.snapshotState == .stale(generatedAt: bootstrap.meta.generatedAt))
+        #expect(try await snapshotStore.load(for: credential.profile.serverID) != nil)
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+        #expect(environment.pairingState == .idle)
+    }
+
+    @Test
+    func globalTrustProjectionUsesTheLockedPriorityAndControlledClock() throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let generatedAt = bootstrap.meta.generatedAt
+        let connected = ConnectionState.connected(lastCheckedAt: generatedAt)
+
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: connected,
+                pairingState: .idle,
+                refreshState: .idle,
+                snapshotState: .cached(generatedAt: generatedAt),
+                bootstrap: bootstrap,
+                now: generatedAt.addingTimeInterval(24 * 60 * 60)
+            ) == .savedView(generatedAt: generatedAt)
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: connected,
+                pairingState: .idle,
+                refreshState: .idle,
+                snapshotState: .cached(generatedAt: generatedAt),
+                bootstrap: bootstrap,
+                now: generatedAt.addingTimeInterval((24 * 60 * 60) + 1)
+            ) == .staleSavedView(generatedAt: generatedAt)
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: connected,
+                pairingState: .idle,
+                refreshState: .refreshing,
+                snapshotState: .stale(generatedAt: generatedAt),
+                bootstrap: bootstrap,
+                now: generatedAt.addingTimeInterval(3 * 24 * 60 * 60)
+            ) == .checking
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: .notConfigured,
+                pairingState: .failed(.savedConnectionUnavailable),
+                refreshState: .refreshing,
+                snapshotState: .none,
+                bootstrap: nil,
+                now: generatedAt
+            ) == .checking
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: connected,
+                pairingState: .idle,
+                refreshState: .idle,
+                snapshotState: .live,
+                bootstrap: try refreshBootstrapFixture("bootstrap-partial-error.json"),
+                now: generatedAt
+            ) == .partial
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: .notConfigured,
+                pairingState: .failed(.savedConnectionUnavailable),
+                refreshState: .idle,
+                snapshotState: .none,
+                bootstrap: nil,
+                now: generatedAt
+            ) == .noSnapshot
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: .connected(lastCheckedAt: generatedAt),
+                pairingState: .idle,
+                refreshState: .failed(.incompatible),
+                snapshotState: .none,
+                bootstrap: nil,
+                now: generatedAt
+            ) == .incompatible
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: true,
+                connectionState: .notConfigured,
+                pairingState: .failed(.savedAccessRevoked),
+                refreshState: .failed(.accessRevoked),
+                snapshotState: .none,
+                bootstrap: nil,
+                now: generatedAt
+            ) == .revoked
+        )
+        #expect(
+            GlobalTrustStateProjection.project(
+                hasSavedCredential: false,
+                connectionState: .notConfigured,
+                pairingState: .idle,
+                refreshState: .idle,
+                snapshotState: .none,
+                bootstrap: nil,
+                now: generatedAt
+            ) == .disconnected
+        )
+    }
+
+    @MainActor
+    @Test
+    func partialRefreshIsLiveButCannotReplaceTheLastCompleteSavedView() async throws {
+        let original = try pairingFlowBootstrap()
+        let partial = try refreshBootstrapFixture("bootstrap-partial-error.json")
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(original), .success(partial)]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+        await environment.refreshBootstrap()
+
+        #expect(environment.latestBootstrap == partial)
+        #expect(environment.snapshotState == .live)
+        #expect(environment.trustState == .partial)
+        #expect(try await snapshotStore.load(for: credential.profile.serverID)?.bootstrap == original)
+    }
+
+    @MainActor
+    @Test
+    func foregroundReturnTriggersOneRefreshAndExplicitRetryCanRecover() async throws {
+        let original = try pairingFlowBootstrap()
+        let replacement = try refreshBootstrapFixture("bootstrap-empty.json")
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [
+                .success(original),
+                .failure(.transport(.offline)),
+                .success(replacement),
+            ]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+        environment.scenePhaseChanged(isActive: false)
+        environment.scenePhaseChanged(isActive: true)
+        await waitForBootstrapCall(2, client: apiClient)
+        for _ in 0 ..< 100 where environment.bootstrapRefreshState == .refreshing {
+            await Task.yield()
+        }
+
+        #expect(await apiClient.calls() == 2)
+        #expect(environment.latestBootstrap == original)
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+
+        await environment.retryBootstrap()
+
+        #expect(await apiClient.calls() == 3)
+        #expect(environment.latestBootstrap == replacement)
+        #expect(environment.trustState == .live)
+    }
+
+    @MainActor
+    @Test
+    func ordinarySnapshotLoadFailureDoesNotDeleteTheSavedData() async throws {
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = SnapshotLoadFailureStore()
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .failure(.transport(.offline))),
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(await snapshotStore.deletes() == 0)
+        #expect(environment.snapshotState == .corrupt)
+        #expect(environment.trustState == .noSnapshot)
+    }
+
+    @MainActor
+    @Test
+    func noSnapshotRecoveryRetryUsesTheSavedCredentialWithoutPolling() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.failure(.transport(.offline)), .success(bootstrap)]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+
+        #expect(environment.trustState == .noSnapshot)
+        #expect(environment.connectionState == .notConfigured)
+        #expect(await apiClient.calls() == 1)
+
+        await environment.retryBootstrap()
+
+        #expect(await apiClient.calls() == 2)
+        #expect(environment.latestBootstrap == bootstrap)
+        #expect(environment.trustState == .live)
+    }
+
+    @MainActor
+    @Test
+    func savedActivityUsesBoundedLocalCacheAfterRefreshFailure() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = TransientBootstrapSnapshotStore()
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            behaviors: [.success(appEnvironmentTransactionEnvelope())]
+        )
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(bootstrap), .failure(.transport(.offline))]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+        let liveEnvelope = try await environment.transactions(query: MobileTransactionQuery())
+        #expect(liveEnvelope.data.transactions.count == 1)
+        #expect(await transactionClient.calls() == 1)
+
+        await environment.refreshBootstrap()
+        #expect(environment.bootstrapRefreshState == .failed(.unavailable))
+        #expect(environment.snapshotState == .cached(generatedAt: bootstrap.meta.generatedAt))
+
+        let savedEnvelope = try await environment.transactions(
+            query: MobileTransactionQuery(query: "coffee")
+        )
+        #expect(savedEnvelope.data.transactions.map(\.id) == liveEnvelope.data.transactions.map(\.id))
+        #expect(savedEnvelope.data.page.hasMore == false)
+        #expect(savedEnvelope.meta.source == .unknown)
+        #expect(await transactionClient.calls() == 1)
+        #expect(try await snapshotStore.load(for: credential.profile.serverID)?.transactions?.count == 3)
+    }
+
+    @Test
+    func bootstrapSnapshotBoundsSavedActivityToTwoHundredRows() throws {
+        let bootstrap = try pairingFlowBootstrap()
+        guard let base = appEnvironmentTransactionEnvelope().data.transactions.first else {
+            throw AppEnvironmentFixtureError.missing("transaction")
+        }
+        let rows = (0 ..< 205).map { index in
+            MobileTransaction(
+                id: "saved-\(index)",
+                occurredOn: "2026-07-\(index + 1)",
+                displayName: base.displayName,
+                amount: base.amount,
+                direction: base.direction,
+                status: base.status,
+                category: base.category,
+                account: base.account,
+                needsReview: base.needsReview,
+                excludedFromReports: base.excludedFromReports,
+                owner: base.owner
+            )
+        }
+        let snapshot = BootstrapSnapshot(
+            bootstrap: bootstrap,
+            transactions: rows,
+            savedAt: pairingFlowNow
+        )
+        #expect(snapshot.transactions?.count == BootstrapSnapshot.savedTransactionLimit)
+    }
+
+    @MainActor
+    @Test
+    func lateSnapshotWriteCannotResurrectDataAfterFeatureRevocation() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let profileStore = PairingFlowProfileStore(credential: credential)
+        let snapshotStore = RevocationRaceSnapshotStore()
+        let transactionClient = ControlledMobileTransactionAPIClient(
+            behaviors: [.success(appEnvironmentTransactionEnvelope())],
+            detailBehaviors: [.failure(.authentication(.revoked))]
+        )
+        let environment = AppEnvironment(
+            apiClient: PairingFlowAPIClient(behavior: .success(bootstrap)),
+            transactionClient: transactionClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: profileStore,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: profileStore,
+            snapshotStore: snapshotStore,
+            clock: { pairingFlowNow }
+        )
+
+        await environment.restoreSavedConnection()
+        await snapshotStore.blockNextSaveOperation()
+        let saveTask = Task {
+            try await environment.transactions(query: MobileTransactionQuery())
+        }
+        await waitForBlockedSave(store: snapshotStore)
+
+        let revokeTask = Task {
+            try await environment.transactionDetail(
+                id: "transaction_\(String(repeating: "T", count: 22))"
+            )
+        }
+        for _ in 0 ..< 100 {
+            if environment.pairingState == .disconnecting { break }
+            await Task.yield()
+        }
+        await snapshotStore.releaseSave()
+
+        await #expect(throws: Error.self) { _ = try await saveTask.value }
+        await #expect(throws: Error.self) { _ = try await revokeTask.value }
         #expect(try await snapshotStore.load(for: credential.profile.serverID) == nil)
-        #expect(environment.pairingState == .failed(.savedConnectionUnavailable))
+        #expect(await profileStore.load() == nil)
+        #expect(environment.latestBootstrap == nil)
+        #expect(environment.trustState == .revoked)
+        #expect(await snapshotStore.deletes() >= 1)
     }
 }
