@@ -153,6 +153,9 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         } catch let error as MobileClientError {
             throw error
         } catch {
+            if let transportFailure = responseRecorder.transportFailure {
+                throw transportFailure
+            }
             if let response = responseRecorder.response,
                !(200 ..< 300).contains(response.statusCode)
             {
@@ -195,6 +198,7 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
 private final class MobileCanonicalResponseRecorder: @unchecked Sendable {
     private let lock = NSLock()
     private var latestResponse: MobileHTTPResponse?
+    private var latestTransportFailure: MobileClientError?
 
     var response: MobileHTTPResponse? {
         lock.lock()
@@ -202,9 +206,21 @@ private final class MobileCanonicalResponseRecorder: @unchecked Sendable {
         return latestResponse
     }
 
+    var transportFailure: MobileClientError? {
+        lock.lock()
+        defer { lock.unlock() }
+        return latestTransportFailure
+    }
+
     func record(_ response: MobileHTTPResponse) {
         lock.lock()
         latestResponse = response
+        lock.unlock()
+    }
+
+    func recordTransportFailure(_ error: MobileClientError) {
+        lock.lock()
+        latestTransportFailure = error
         lock.unlock()
     }
 }
@@ -237,7 +253,14 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
         for field in request.headerFields {
             urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
         }
-        let response = try await transport.send(urlRequest)
+        let response: MobileHTTPResponse
+        do {
+            response = try await transport.send(urlRequest)
+        } catch {
+            let classified = MobileClientError.classifyTransport(error)
+            responseRecorder.recordTransportFailure(classified)
+            throw classified
+        }
         responseRecorder.record(response)
         return (
             CanonicalHTTPResponse(

@@ -120,6 +120,100 @@ describe('canonical Home overview projection', () => {
     });
   });
 
+  it('serves converted non-ILS values from the Mac rate provider', async () => {
+    const harness = await createCanonicalHomeHarness({
+      clock: () => GENERATED_AT,
+      startListeners: false,
+      homeExchangeRates: async () => ({
+        rates: { ILS: 1, USD: 3.6 },
+        stale: false,
+        fetchedAt: GENERATED_AT.toISOString(),
+      }),
+    });
+    harnesses.push(harness);
+    harness.sqlite
+      .prepare(
+        `INSERT INTO transactions
+         (account_id, date, processed_date, original_amount, original_currency,
+          charged_amount, charged_currency, description, category, hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        1,
+        '2026-08-10',
+        '2026-08-10',
+        -90,
+        'USD',
+        -90,
+        'USD',
+        'Foreign fixture',
+        'Travel',
+        'foreign-route',
+      );
+
+    const response = await harness.macServer.app.inject({
+      method: 'GET',
+      url: '/api/v1/home',
+      headers: { authorization: `Bearer ${harness.macToken}` },
+    });
+    const home = homeOverviewResponseSchema.parse(JSON.parse(response.body));
+    expect(response.statusCode).toBe(200);
+    expect(home.data.spending.current.amount.value).toBe('1524.00');
+    expect(home.data.categories.map((category) => category.amount.value)).toEqual([
+      '1200.00',
+      '324.00',
+    ]);
+    expect(home.meta.completeness).toBe('complete');
+    expect(home.meta.estimated).toBe(false);
+    expect(home.meta.missingSections).toEqual([]);
+  });
+
+  it('marks unavailable non-ILS conversion as partial instead of omitting it silently', async () => {
+    const harness = await createCanonicalHomeHarness({
+      clock: () => GENERATED_AT,
+      startListeners: false,
+      homeExchangeRates: async () => ({
+        rates: { ILS: 1 },
+        stale: true,
+        fetchedAt: GENERATED_AT.toISOString(),
+      }),
+    });
+    harnesses.push(harness);
+    harness.sqlite
+      .prepare(
+        `INSERT INTO transactions
+         (account_id, date, processed_date, original_amount, original_currency,
+          charged_amount, charged_currency, description, category, hash)
+         VALUES (?, ?, ?, ?, ?, ?, ?, ?, ?, ?)`,
+      )
+      .run(
+        1,
+        '2026-08-10',
+        '2026-08-10',
+        -90,
+        'USD',
+        -90,
+        'USD',
+        'Unknown-rate fixture',
+        'Food',
+        'unknown-rate-route',
+      );
+
+    const response = await harness.macServer.app.inject({
+      method: 'GET',
+      url: '/api/v1/home',
+      headers: { authorization: `Bearer ${harness.macToken}` },
+    });
+    const home = homeOverviewResponseSchema.parse(JSON.parse(response.body));
+    expect(response.statusCode).toBe(200);
+    expect(home.meta.completeness).toBe('partial');
+    expect(home.meta.estimated).toBe(true);
+    expect(home.meta.missingSections).toEqual(
+      expect.arrayContaining(['spending', 'categories', 'cashFlow', 'budget']),
+    );
+    expect(home.data.budget).toBeNull();
+  });
+
   it('marks a missing account balance as a partial Home projection', async () => {
     const harness = await createCanonicalHomeHarness({
       clock: () => GENERATED_AT,
@@ -196,7 +290,7 @@ describe('canonical Home overview projection', () => {
     }
   });
 
-  it('excludes future, ignored, transfer, and non-ILS transactions from Home totals', () => {
+  it('converts non-ILS transaction values with the Mac-authoritative rate set', () => {
     const testDb = createTestDb();
     try {
       testDb.db
@@ -268,15 +362,21 @@ describe('canonical Home overview projection', () => {
             chargedAmount: -90,
             chargedCurrency: 'USD',
             description: 'Foreign currency expense',
+            category: 'Travel',
             hash: 'filters-foreign',
           },
         ])
         .run();
 
-      const projection = createHomeOverviewProjection(testDb.sqlite).read(GENERATED_AT);
-      expect(projection.spending.current.amount.value).toBe('50.00');
-      expect(projection.categories).toHaveLength(1);
-      expect(projection.categories[0]?.amount.value).toBe('50.00');
+      const projection = createHomeOverviewProjection(testDb.sqlite);
+      const readWithRates = projection.read as unknown as (
+        calculatedAt: Date,
+        options: { rates: Record<string, number> },
+      ) => ReturnType<typeof projection.read>;
+      const home = readWithRates(GENERATED_AT, { rates: { ILS: 1, USD: 3.6 } });
+      expect(home.spending.current.amount.value).toBe('374.00');
+      expect(home.categories).toHaveLength(2);
+      expect(home.categories.map((category) => category.amount.value)).toEqual(['324.00', '50.00']);
     } finally {
       testDb.close();
     }

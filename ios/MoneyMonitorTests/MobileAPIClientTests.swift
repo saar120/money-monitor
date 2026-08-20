@@ -416,6 +416,20 @@ struct MobileAPIClientTests {
     }
 
     @Test
+    func canonicalHomeTransportFailuresUseTheSharedTransportClassifier() async throws {
+        for (urlError, expected) in [
+            (URLError.Code.timedOut, MobileClientError.transport(.timeout)),
+            (URLError.Code.notConnectedToInternet, MobileClientError.transport(.offline)),
+        ] {
+            let transport = StubMobileHTTPTransport(failureCode: urlError)
+            let client = URLSessionMobileAPIClient(transport: transport)
+            await #expect(throws: expected) {
+                try await client.homeOverview(credential: makeMobileAPICredential())
+            }
+        }
+    }
+
+    @Test
     func errorsNeverIncludeTheBearerTokenOrRawServerMessage() async throws {
         let token = String(repeating: "S", count: 43)
         let payload = Data(

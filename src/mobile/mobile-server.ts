@@ -38,6 +38,7 @@ import { registerCanonicalRoutes } from '../api/v1/server.js';
 import type { CanonicalAuthenticator } from '../api/v1/policy.js';
 import { CanonicalFoundationStore } from '../api/v1/store.js';
 import type { ReferenceSeed } from '../api/v1/store.js';
+import type { ExchangeRateResult } from '../services/exchange-rates.js';
 
 export const MOBILE_SERVER_HOST = '127.0.0.1' as const;
 
@@ -62,6 +63,8 @@ export interface CreateMobileServerOptions {
     seed?: ReferenceSeed;
     /** Test-only fault injection; production never sets this. */
     allowUnknownOutcomeSimulation?: boolean;
+    /** Mac-owned rates for canonical Home conversion; injectable for tests. */
+    homeExchangeRates?: () => Promise<ExchangeRateResult>;
   };
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
@@ -210,6 +213,7 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
         authenticate: options.canonical.authenticate,
         logger: options.logger ?? false,
         allowUnknownOutcomeSimulation: options.canonical.allowUnknownOutcomeSimulation,
+        homeExchangeRates: options.canonical.homeExchangeRates,
       },
       clock,
     );

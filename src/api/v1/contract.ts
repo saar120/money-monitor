@@ -75,7 +75,10 @@ const financialDateSchema = z
 const financialPeriodSchema = z
   .object({ startDate: financialDateSchema, endDate: financialDateSchema })
   .strict()
-  .refine((period) => period.startDate <= period.endDate, 'Period end date cannot precede start date');
+  .refine(
+    (period) => period.startDate <= period.endDate,
+    'Period end date cannot precede start date',
+  );
 
 const homeDrillDownSchema = z
   .object({
@@ -140,9 +143,7 @@ export const homeOverviewDataSchema = z
       })
       .strict(),
     budget: homeBudgetSchema.nullable(),
-    netWorth: z
-      .object({ total: moneySchema.nullable(), liquid: moneySchema.nullable() })
-      .strict(),
+    netWorth: z.object({ total: moneySchema.nullable(), liquid: moneySchema.nullable() }).strict(),
     categories: z.array(homeCategorySchema).max(100),
     cashFlow: z.array(homeCashFlowPointSchema).max(24),
     accountFreshness: z.array(homeAccountFreshnessSchema).max(100),
@@ -158,7 +159,19 @@ export const homeOverviewResponseSchema = z
         calculationVersion: z.literal('home-overview-1'),
         completeness: completenessSchema,
         estimated: z.boolean(),
-        missingSections: z.array(z.enum(['availableMoney', 'budget', 'netWorth', 'categories', 'cashFlow', 'accountFreshness'])).max(6),
+        missingSections: z
+          .array(
+            z.enum([
+              'availableMoney',
+              'spending',
+              'budget',
+              'netWorth',
+              'categories',
+              'cashFlow',
+              'accountFreshness',
+            ]),
+          )
+          .max(7),
       })
       .strict(),
   })

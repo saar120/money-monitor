@@ -31,6 +31,7 @@ import type { CanonicalAuthenticator } from './api/v1/policy.js';
 import { CanonicalApiError, sendCanonicalError } from './api/v1/errors.js';
 import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
+import type { ExchangeRateResult } from './services/exchange-rates.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -45,6 +46,8 @@ export interface CreateServerOptions {
   /** Explicitly disable first-install canonical seeding. */
   seedCanonical?: ReferenceSeed | false;
   logger?: boolean;
+  /** Injectable Mac-owned rates for deterministic canonical Home tests. */
+  homeExchangeRates?: () => Promise<ExchangeRateResult>;
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
@@ -197,13 +200,14 @@ export async function createServer(options: CreateServerOptions = {}) {
           throw new Error('canonical credentials are invalid');
         }),
       logger: options.logger ?? false,
+      homeExchangeRates: options.homeExchangeRates,
     },
     clock,
   );
 
   // Register route modules
-	if (options.registerLegacyRoutes ?? true) {
-	  await app.register(scrapeRoutes);
+  if (options.registerLegacyRoutes ?? true) {
+    await app.register(scrapeRoutes);
     await app.register(accountsRoutes);
     await app.register(transactionsRoutes);
     await app.register(aiRoutes);
@@ -215,11 +219,11 @@ export async function createServer(options: CreateServerOptions = {}) {
     await app.register(settingsRoutes);
     await app.register(membersRoutes);
     await app.register(ownershipRoutes);
-	  await app.register(alertsRoutes);
-	  await app.register(budgetsRoutes);
-	  await app.register(oneZeroImportRoutes);
-	  await app.register(demoRoutes);
-	}
+    await app.register(alertsRoutes);
+    await app.register(budgetsRoutes);
+    await app.register(oneZeroImportRoutes);
+    await app.register(demoRoutes);
+  }
 
   // Serve dashboard static files in production
   const __dirname = fileURLToPath(new URL('.', import.meta.url));

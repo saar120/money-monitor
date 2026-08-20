@@ -11,6 +11,21 @@ type RawAccount = {
 
 type RawCategory = { category: string | null; amount: number; transaction_count: number };
 
+export interface HomeOverviewReadOptions {
+  rates?: Readonly<Record<string, number>>;
+  ratesStale?: boolean;
+}
+
+export interface HomeOverviewProjectionResult {
+  data: HomeOverviewData;
+  missingSections: Array<'spending' | 'budget' | 'categories' | 'cashFlow'>;
+  estimated: boolean;
+}
+
+type RawTransaction = { charged_amount: number; charged_currency: string };
+type TotalsResult = { income: number; expenses: number; missingCurrency: boolean };
+type CategoriesResult = { rows: RawCategory[]; missingCurrency: boolean };
+
 const DAY_MS = 86_400_000;
 
 function financialDateFor(instant: Date): string {
@@ -67,38 +82,90 @@ function period(startDate: string, endDate: string) {
   return { startDate, endDate };
 }
 
-function queryTotals(sqlite: Database.Database, startDate: string, endDate: string) {
-  const row = sqlite
+function convertedAmount(
+  amount: number,
+  currency: string,
+  rates: Readonly<Record<string, number>>,
+): number | null {
+  const normalizedCurrency = currency.trim().toUpperCase();
+  if (normalizedCurrency === 'ILS') return amount;
+  const rate = rates[normalizedCurrency];
+  return typeof rate === 'number' && Number.isFinite(rate) && rate > 0 ? amount * rate : null;
+}
+
+function queryRows(
+  sqlite: Database.Database,
+  startDate: string,
+  endDate: string,
+): RawTransaction[] {
+  return sqlite
     .prepare(
-      `SELECT
-         COALESCE(SUM(CASE WHEN charged_amount > 0 THEN charged_amount ELSE 0 END), 0) AS income,
-         COALESCE(SUM(CASE WHEN charged_amount < 0 THEN ABS(charged_amount) ELSE 0 END), 0) AS expenses
+      `SELECT charged_amount, charged_currency
        FROM transactions
-       WHERE date >= ? AND date <= ? AND ignored = 0 AND type != 'transfer'
-         AND charged_currency = 'ILS'`,
+       WHERE date >= ? AND date <= ? AND ignored = 0 AND type != 'transfer'`,
     )
-    .get(startDate, endDate) as { income: number; expenses: number };
-  return { income: row.income ?? 0, expenses: row.expenses ?? 0 };
+    .all(startDate, endDate) as RawTransaction[];
+}
+
+function queryTotals(
+  sqlite: Database.Database,
+  startDate: string,
+  endDate: string,
+  rates: Readonly<Record<string, number>>,
+): TotalsResult {
+  let income = 0;
+  let expenses = 0;
+  let missingCurrency = false;
+  for (const row of queryRows(sqlite, startDate, endDate)) {
+    const converted = convertedAmount(row.charged_amount, row.charged_currency, rates);
+    if (converted === null) {
+      missingCurrency = true;
+      continue;
+    }
+    if (converted > 0) income += converted;
+    if (converted < 0) expenses += Math.abs(converted);
+  }
+  return { income, expenses, missingCurrency };
 }
 
 function queryCategories(
   sqlite: Database.Database,
   startDate: string,
   endDate: string,
-): RawCategory[] {
-  return sqlite
+  rates: Readonly<Record<string, number>>,
+): CategoriesResult {
+  const rows = sqlite
     .prepare(
       `SELECT COALESCE(t.category, 'uncategorized') AS category,
-              COALESCE(SUM(ABS(t.charged_amount)), 0) AS amount,
-              COUNT(*) AS transaction_count
+              t.charged_amount, t.charged_currency
        FROM transactions t
        WHERE t.date >= ? AND t.date <= ? AND t.ignored = 0
-         AND t.charged_amount < 0 AND t.type != 'transfer'
-         AND t.charged_currency = 'ILS'
-       GROUP BY COALESCE(t.category, 'uncategorized')
-       ORDER BY amount DESC, category ASC`,
+         AND t.charged_amount < 0 AND t.type != 'transfer'`,
     )
-    .all(startDate, endDate) as RawCategory[];
+    .all(startDate, endDate) as Array<RawTransaction & { category: string | null }>;
+  const grouped = new Map<string, RawCategory>();
+  let missingCurrency = false;
+  for (const row of rows) {
+    const converted = convertedAmount(Math.abs(row.charged_amount), row.charged_currency, rates);
+    if (converted === null) {
+      missingCurrency = true;
+      continue;
+    }
+    const category = row.category ?? 'uncategorized';
+    const existing = grouped.get(category);
+    if (existing) {
+      existing.amount += converted;
+      existing.transaction_count += 1;
+    } else {
+      grouped.set(category, { category, amount: converted, transaction_count: 1 });
+    }
+  }
+  return {
+    rows: [...grouped.values()].sort(
+      (a, b) => b.amount - a.amount || (a.category ?? '').localeCompare(b.category ?? ''),
+    ),
+    missingCurrency,
+  };
 }
 
 function categoryLabel(sqlite: Database.Database, name: string): string {
@@ -111,7 +178,8 @@ function categoryLabel(sqlite: Database.Database, name: string): string {
 function budgetProjection(
   sqlite: Database.Database,
   financialDate: string,
-): HomeOverviewData['budget'] {
+  rates: Readonly<Record<string, number>>,
+): { value: HomeOverviewData['budget']; missingCurrency: boolean } {
   const budgets = sqlite
     .prepare(
       `SELECT name, amount, period, category_names, alert_threshold
@@ -124,7 +192,7 @@ function budgetProjection(
     category_names: string;
     alert_threshold: number;
   }>;
-  if (budgets.length !== 1) return null;
+  if (budgets.length !== 1) return { value: null, missingCurrency: false };
 
   const budget = budgets[0];
   let categories: string[] = [];
@@ -133,24 +201,31 @@ function budgetProjection(
     if (Array.isArray(parsed))
       categories = parsed.filter((name): name is string => typeof name === 'string');
   } catch {
-    return null;
+    return { value: null, missingCurrency: false };
   }
   const startDate =
     budget.period === 'yearly' ? `${financialDate.slice(0, 4)}-01-01` : monthStart(financialDate);
-  const spent =
-    categories.length === 0
-      ? 0
-      : (
-          sqlite
-            .prepare(
-              `SELECT COALESCE(SUM(ABS(charged_amount)), 0) AS spent
-           FROM transactions
-           WHERE date >= ? AND date <= ? AND ignored = 0 AND charged_amount < 0
-             AND type != 'transfer' AND charged_currency = 'ILS'
-             AND category IN (${categories.map(() => '?').join(',')})`,
-            )
-            .get(startDate, financialDate, ...categories) as { spent: number }
-        ).spent;
+  let spent = 0;
+  let missingCurrency = false;
+  if (categories.length > 0) {
+    const rows = sqlite
+      .prepare(
+        `SELECT charged_amount, charged_currency
+         FROM transactions
+         WHERE date >= ? AND date <= ? AND ignored = 0 AND charged_amount < 0
+           AND type != 'transfer' AND category IN (${categories.map(() => '?').join(',')})`,
+      )
+      .all(startDate, financialDate, ...categories) as RawTransaction[];
+    for (const row of rows) {
+      const converted = convertedAmount(Math.abs(row.charged_amount), row.charged_currency, rates);
+      if (converted === null) {
+        missingCurrency = true;
+      } else {
+        spent += converted;
+      }
+    }
+  }
+  if (missingCurrency) return { value: null, missingCurrency: true };
   const remaining = round2(budget.amount - spent);
   const ratio = budget.amount > 0 ? spent / budget.amount : 0;
   const state =
@@ -162,12 +237,15 @@ function budgetProjection(
           ? 'watch'
           : 'on_track';
   return {
-    state,
-    name: budget.name.trim() || 'Budget',
-    spent: money(spent)!,
-    limit: money(budget.amount)!,
-    remaining: money(remaining)!,
-    period: period(startDate, financialDate),
+    value: {
+      state,
+      name: budget.name.trim() || 'Budget',
+      spent: money(spent)!,
+      limit: money(budget.amount)!,
+      remaining: money(remaining)!,
+      period: period(startDate, financialDate),
+    },
+    missingCurrency: false,
   };
 }
 
@@ -237,91 +315,135 @@ function netWorth(sqlite: Database.Database): {
 }
 
 export function createHomeOverviewProjection(sqlite: Database.Database) {
-  return Object.freeze({
-    read(calculatedAt: Date): HomeOverviewData {
-      const financialDate = financialDateFor(calculatedAt);
-      const currentStart = monthStart(financialDate);
-      const elapsedDays = Number(financialDate.slice(8, 10));
-      const previousMonthStart = shiftMonths(financialDate, -1);
-      const previousMonthEnd = monthEnd(previousMonthStart);
-      const comparisonElapsedDays = Math.min(elapsedDays, Number(previousMonthEnd.slice(8, 10)));
-      const comparisonEnd = shiftDays(previousMonthStart, comparisonElapsedDays - 1);
-      const comparisonStart = monthStart(comparisonEnd);
-      const currentTotals = queryTotals(sqlite, currentStart, financialDate);
-      const comparisonTotals = queryTotals(sqlite, comparisonStart, comparisonEnd);
-      const categoryRows = queryCategories(sqlite, currentStart, financialDate);
-      const currentExpenses = categoryRows.reduce((sum, row) => sum + row.amount, 0);
-      const categories = categoryRows.map((row) => ({
-        label: categoryLabel(sqlite, row.category ?? 'uncategorized'),
-        amount: money(row.amount)!,
-        share: currentExpenses > 0 ? round2(row.amount / currentExpenses) : 0,
-        transactionCount: row.transaction_count,
-        textSummary: `${categoryLabel(sqlite, row.category ?? 'uncategorized')} accounts for ₪${round2(row.amount).toFixed(2)}, or ${currentExpenses > 0 ? ((row.amount / currentExpenses) * 100).toFixed(1) : '0.0'}% of spending.`,
-        drillDown: {
-          category: row.category ?? 'uncategorized',
-          startDate: currentStart,
-          endDate: financialDate,
-        },
-      }));
-      const cashFlow = Array.from({ length: 12 }, (_, index) => {
-        const startDate = shiftMonths(financialDate, index - 11);
-        const endDate = index === 11 ? financialDate : monthEnd(startDate);
-        const totals = queryTotals(sqlite, startDate, endDate);
-        const label = new Intl.DateTimeFormat('en-US', {
-          month: 'long',
-          year: 'numeric',
-          timeZone: 'UTC',
-        }).format(new Date(`${startDate}T00:00:00.000Z`));
-        return {
-          period: period(startDate, endDate),
-          income: money(totals.income)!,
-          expenses: money(totals.expenses)!,
-          net: money(totals.income - totals.expenses)!,
-          textSummary: `${label}: ₪${round2(totals.income).toFixed(2)} in and ₪${round2(totals.expenses).toFixed(2)} out.`,
-          drillDown: { startDate, endDate },
-        };
-      });
-      const accounts = accountFreshness(sqlite, calculatedAt);
-      const worth = netWorth(sqlite);
-      const availableRow = sqlite
-        .prepare(
-          `SELECT SUM(balance) AS total, SUM(CASE WHEN balance IS NULL THEN 1 ELSE 0 END) AS missing
+  function readProjection(
+    calculatedAt: Date,
+    options: HomeOverviewReadOptions = {},
+  ): HomeOverviewProjectionResult {
+    const rates = options.rates ?? { ILS: 1 };
+    const missingSections: HomeOverviewProjectionResult['missingSections'] = [];
+    return {
+      data: (() => {
+        const financialDate = financialDateFor(calculatedAt);
+        const currentStart = monthStart(financialDate);
+        const elapsedDays = Number(financialDate.slice(8, 10));
+        const previousMonthStart = shiftMonths(financialDate, -1);
+        const previousMonthEnd = monthEnd(previousMonthStart);
+        const comparisonElapsedDays = Math.min(elapsedDays, Number(previousMonthEnd.slice(8, 10)));
+        const comparisonEnd = shiftDays(previousMonthStart, comparisonElapsedDays - 1);
+        const comparisonStart = monthStart(comparisonEnd);
+        const currentTotals = queryTotals(sqlite, currentStart, financialDate, rates);
+        const comparisonTotals = queryTotals(sqlite, comparisonStart, comparisonEnd, rates);
+        const categoryResult = queryCategories(sqlite, currentStart, financialDate, rates);
+        const categoryRows = categoryResult.rows;
+        const currentExpenses = categoryRows.reduce((sum, row) => sum + row.amount, 0);
+        const categories = categoryRows.map((row) => ({
+          label: categoryLabel(sqlite, row.category ?? 'uncategorized'),
+          amount: money(row.amount)!,
+          share: currentExpenses > 0 ? round2(row.amount / currentExpenses) : 0,
+          transactionCount: row.transaction_count,
+          textSummary: `${categoryLabel(sqlite, row.category ?? 'uncategorized')} accounts for ₪${round2(row.amount).toFixed(2)}, or ${currentExpenses > 0 ? ((row.amount / currentExpenses) * 100).toFixed(1) : '0.0'}% of spending.`,
+          drillDown: {
+            category: row.category ?? 'uncategorized',
+            startDate: currentStart,
+            endDate: financialDate,
+          },
+        }));
+        let cashFlowMissing = false;
+        const cashFlow = Array.from({ length: 12 }, (_, index) => {
+          const startDate = shiftMonths(financialDate, index - 11);
+          const endDate = index === 11 ? financialDate : monthEnd(startDate);
+          const totals = queryTotals(sqlite, startDate, endDate, rates);
+          if (totals.missingCurrency) cashFlowMissing = true;
+          const label = new Intl.DateTimeFormat('en-US', {
+            month: 'long',
+            year: 'numeric',
+            timeZone: 'UTC',
+          }).format(new Date(`${startDate}T00:00:00.000Z`));
+          return {
+            period: period(startDate, endDate),
+            income: money(totals.income)!,
+            expenses: money(totals.expenses)!,
+            net: money(totals.income - totals.expenses)!,
+            textSummary: `${label}: ₪${round2(totals.income).toFixed(2)} in and ₪${round2(totals.expenses).toFixed(2)} out.`,
+            drillDown: { startDate, endDate },
+          };
+        });
+        const accounts = accountFreshness(sqlite, calculatedAt);
+        const worth = netWorth(sqlite);
+        const availableRow = sqlite
+          .prepare(
+            `SELECT SUM(balance) AS total, SUM(CASE WHEN balance IS NULL THEN 1 ELSE 0 END) AS missing
                   FROM accounts WHERE is_active = 1 AND account_type = 'bank'`,
-        )
-        .get() as { total: number | null; missing: number | null };
-      const rowCounts = sqlite
-        .prepare(
-          `SELECT
+          )
+          .get() as { total: number | null; missing: number | null };
+        const rowCounts = sqlite
+          .prepare(
+            `SELECT
                     (SELECT COUNT(*) FROM accounts WHERE is_active = 1) AS accounts,
                     (SELECT COUNT(*) FROM transactions WHERE ignored = 0) AS transactions,
                     (SELECT COUNT(*) FROM budgets WHERE is_active = 1) AS budgets,
                     (SELECT COUNT(*) FROM assets WHERE is_active = 1) AS assets,
                     (SELECT COUNT(*) FROM liabilities WHERE is_active = 1) AS liabilities`,
+          )
+          .get() as Record<string, number>;
+        const budgetResult = budgetProjection(sqlite, financialDate, rates);
+        if (currentTotals.missingCurrency || comparisonTotals.missingCurrency)
+          missingSections.push('spending');
+        if (categoryResult.missingCurrency) missingSections.push('categories');
+        if (cashFlowMissing) missingSections.push('cashFlow');
+        if (budgetResult.missingCurrency) missingSections.push('budget');
+        return {
+          financialDate,
+          calculatedAt: calculatedAt.toISOString(),
+          baseCurrencyCode: 'ILS',
+          availableMoney: money(availableRow.total),
+          spending: {
+            current: {
+              amount: money(currentTotals.expenses)!,
+              period: period(currentStart, financialDate),
+            },
+            comparison: {
+              amount: money(comparisonTotals.expenses)!,
+              period: period(comparisonStart, comparisonEnd),
+            },
+            change: money(currentTotals.expenses - comparisonTotals.expenses)!,
+          },
+          budget: budgetResult.value,
+          netWorth: worth.value,
+          categories,
+          cashFlow,
+          accountFreshness: accounts.values,
+          isEmpty: Object.values(rowCounts).every((count) => count === 0),
+        };
+      })(),
+      missingSections,
+      estimated: options.ratesStale ?? false,
+    };
+  }
+
+  return Object.freeze({
+    read(calculatedAt: Date, options: HomeOverviewReadOptions = {}): HomeOverviewData {
+      return readProjection(calculatedAt, options).data;
+    },
+    readWithMetadata(
+      calculatedAt: Date,
+      options: HomeOverviewReadOptions = {},
+    ): HomeOverviewProjectionResult {
+      return readProjection(calculatedAt, options);
+    },
+    requiredCurrencies(calculatedAt: Date): string[] {
+      const financialDate = financialDateFor(calculatedAt);
+      const startDate = shiftMonths(financialDate, -11);
+      return sqlite
+        .prepare(
+          `SELECT DISTINCT UPPER(TRIM(charged_currency)) AS currency
+           FROM transactions
+           WHERE date >= ? AND date <= ? AND ignored = 0 AND type != 'transfer'
+             AND UPPER(TRIM(charged_currency)) != 'ILS'`,
         )
-        .get() as Record<string, number>;
-      return {
-        financialDate,
-        calculatedAt: calculatedAt.toISOString(),
-        baseCurrencyCode: 'ILS',
-        availableMoney: money(availableRow.total),
-        spending: {
-          current: {
-            amount: money(currentTotals.expenses)!,
-            period: period(currentStart, financialDate),
-          },
-          comparison: {
-            amount: money(comparisonTotals.expenses)!,
-            period: period(comparisonStart, comparisonEnd),
-          },
-          change: money(currentTotals.expenses - comparisonTotals.expenses)!,
-        },
-        budget: budgetProjection(sqlite, financialDate),
-        netWorth: worth.value,
-        categories,
-        cashFlow,
-        accountFreshness: accounts.values,
-        isEmpty: Object.values(rowCounts).every((count) => count === 0),
-      };
+        .all(startDate, financialDate)
+        .map((row) => (row as { currency: string }).currency)
+        .filter((currency) => currency.length > 0);
     },
   });
 }

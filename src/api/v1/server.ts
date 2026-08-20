@@ -33,6 +33,7 @@ import {
   stableRequestFingerprint,
   type ReferenceSeed,
 } from './store.js';
+import { getExchangeRates, type ExchangeRateResult } from '../../services/exchange-rates.js';
 
 export const CANONICAL_SERVER_HOST = '127.0.0.1' as const;
 export type CanonicalListener = 'mac-local' | 'paired-iphone';
@@ -46,6 +47,8 @@ export interface CanonicalServerOptions {
   seed?: ReferenceSeed;
   /** Test-only fault injection. It is never enabled by the production factory. */
   allowUnknownOutcomeSimulation?: boolean;
+  /** Mac-owned conversion rates; injectable only for deterministic tests. */
+  homeExchangeRates?: () => Promise<ExchangeRateResult>;
 }
 
 export interface CanonicalServerStartOptions {
@@ -155,8 +158,17 @@ export function registerCanonicalRoutes(
     { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/home')) },
     async () => {
       const now = clock();
-      const data = homeOverview.read(now);
+      const rates =
+        homeOverview.requiredCurrencies(now).length > 0
+          ? await (options.homeExchangeRates ?? getExchangeRates)()
+          : { rates: { ILS: 1 }, stale: false };
+      const projection = homeOverview.readWithMetadata(now, {
+        rates: rates.rates,
+        ratesStale: rates.stale,
+      });
+      const data = projection.data;
       const missingSections = [
+        ...projection.missingSections,
         ...(data.availableMoney === null ? (['availableMoney'] as const) : []),
         ...(data.netWorth.total === null ? (['netWorth'] as const) : []),
         ...(data.accountFreshness.some((account) => account.status === 'unknown')
@@ -168,8 +180,8 @@ export function registerCanonicalRoutes(
         meta: createCanonicalMeta(now, {
           calculationVersion: 'home-overview-1',
           completeness: missingSections.length === 0 ? 'complete' : 'partial',
-          estimated: false,
-          missingSections,
+          estimated: projection.estimated,
+          missingSections: [...new Set(missingSections)],
         }),
       };
       const parsed = homeOverviewResponseSchema.safeParse(candidate);

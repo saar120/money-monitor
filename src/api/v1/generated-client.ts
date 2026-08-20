@@ -437,6 +437,7 @@ export type components = {
         generatedAt: string;
         missingSections: (
           | 'availableMoney'
+          | 'spending'
           | 'budget'
           | 'netWorth'
           | 'categories'
