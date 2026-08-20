@@ -2636,7 +2636,7 @@ struct AppEnvironmentTests {
 
         await #expect(throws: Error.self) { _ = try await saveTask.value }
         await #expect(throws: Error.self) { _ = try await revokeTask.value }
-        #expect(await snapshotStore.load(for: credential.profile.serverID) == nil)
+        #expect(try await snapshotStore.load(for: credential.profile.serverID) == nil)
         #expect(await profileStore.load() == nil)
         #expect(environment.latestBootstrap == nil)
         #expect(environment.trustState == .revoked)
