@@ -36,10 +36,10 @@ export function buildTransactionFilters(params: TransactionFilterParams): Transa
     conditions.push(eq(transactions.accountId, params.accountId));
   }
   if (params.startDate) {
-    conditions.push(gte(transactions.date, params.startDate));
+    conditions.push(gte(transactions.reportingDate, params.startDate));
   }
   if (params.endDate) {
-    conditions.push(lte(transactions.date, params.endDate));
+    conditions.push(lte(transactions.reportingDate, params.endDate));
   }
   if (params.expensesOnly) {
     conditions.push(lt(transactions.chargedAmount, 0));
@@ -126,7 +126,7 @@ export function listTransactions(
         ? transactions.description
         : opts.sortBy === 'processedDate'
           ? transactions.processedDate
-          : transactions.date;
+          : transactions.reportingDate;
 
   const orderFn = opts.sortOrder === 'asc' ? sql`${sortColumn} asc` : desc(sortColumn);
 
@@ -188,6 +188,16 @@ export function updateTransactionCategory(id: number, category: string | null) {
   if (!initial) return null;
   applyOwnership({ ids: [id] });
   return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
+}
+
+export function updateTransactionEffectiveDate(id: number, effectiveDate: string | null) {
+  const [updated] = db
+    .update(transactions)
+    .set({ effectiveDate })
+    .where(eq(transactions.id, id))
+    .returning()
+    .all();
+  return updated ?? null;
 }
 
 export function categorizeTransaction(input: {

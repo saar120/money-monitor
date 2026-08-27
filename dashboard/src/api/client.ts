@@ -156,6 +156,8 @@ export interface Transaction {
   accountId: number;
   identifier: number | null;
   date: string;
+  effectiveDate: string | null;
+  reportingDate: string;
   processedDate: string;
   originalAmount: number;
   originalCurrency: string;
@@ -237,6 +239,13 @@ export function updateTransactionOwner(
   return request<{ transaction: Transaction }>(`/transactions/${id}/owner`, {
     method: 'PATCH',
     body: JSON.stringify(data),
+  });
+}
+
+export function updateTransactionEffectiveDate(id: number, effectiveDate: string | null) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/effective-date`, {
+    method: 'PATCH',
+    body: JSON.stringify({ effectiveDate }),
   });
 }
 

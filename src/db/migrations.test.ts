@@ -128,13 +128,15 @@ describe('database migrations', () => {
     expect(accountColNames).toContain('balance');
     expect(accountColNames).toContain('is_active');
 
-    const txCols = sqlite.prepare("PRAGMA table_info('transactions')").all() as Array<{
+    const txCols = sqlite.prepare("PRAGMA table_xinfo('transactions')").all() as Array<{
       name: string;
     }>;
     const txColNames = txCols.map((c) => c.name);
     expect(txColNames).toContain('id');
     expect(txColNames).toContain('account_id');
     expect(txColNames).toContain('date');
+    expect(txColNames).toContain('effective_date');
+    expect(txColNames).toContain('reporting_date');
     expect(txColNames).toContain('charged_amount');
     expect(txColNames).toContain('description');
     expect(txColNames).toContain('category');

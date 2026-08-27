@@ -1,5 +1,6 @@
 import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
+import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
 import { transactions } from '../db/schema.js';
@@ -56,8 +57,9 @@ describe('One Zero import', () => {
       displayName: 'One Zero',
       memberId: member.id,
     });
-    insertTransaction(testDb.db, account.id, {
+    const existing = insertTransaction(testDb.db, account.id, {
       date: '2026-08-03',
+      effectiveDate: '2026-07-31',
       processedDate: '2026-08-04',
       chargedAmount: -150,
       originalAmount: -150,
@@ -76,6 +78,14 @@ describe('One Zero import', () => {
       linked: 1,
       duplicates: 0,
     });
+
+    const linked = testDb.db
+      .select()
+      .from(transactions)
+      .where(eq(transactions.id, existing.id))
+      .get();
+    expect(linked?.effectiveDate).toBe('2026-07-31');
+    expect(linked?.reportingDate).toBe('2026-07-31');
 
     const stored = testDb.db
       .select({ meta: transactions.meta })

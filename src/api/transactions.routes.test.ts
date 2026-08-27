@@ -28,13 +28,11 @@ vi.mock('../scraper/scraper.service.js', () => ({
 }));
 
 vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi
-    .fn()
-    .mockResolvedValue({
-      rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
-      stale: false,
-      fetchedAt: new Date().toISOString(),
-    }),
+  getExchangeRates: vi.fn().mockResolvedValue({
+    rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+    stale: false,
+    fetchedAt: new Date().toISOString(),
+  }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -192,6 +190,46 @@ describe('transactions routes', () => {
         headers: { ...authHeaders(), 'content-type': 'application/json' },
         payload: { category: 'food' },
       });
+      expect(res.statusCode).toBe(400);
+    });
+  });
+
+  // ── PATCH /api/transactions/:id/owner ──
+
+  describe('PATCH /api/transactions/:id/effective-date', () => {
+    it('sets and clears an effective date', async () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id, { date: '2026-09-01' });
+
+      const moved = await server.inject({
+        method: 'PATCH',
+        url: `/api/transactions/${tx.id}/effective-date`,
+        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        payload: { effectiveDate: '2026-08-31' },
+      });
+      expect(moved.statusCode).toBe(200);
+      expect(JSON.parse(moved.body).transaction.reportingDate).toBe('2026-08-31');
+
+      const reset = await server.inject({
+        method: 'PATCH',
+        url: `/api/transactions/${tx.id}/effective-date`,
+        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        payload: { effectiveDate: null },
+      });
+      expect(reset.statusCode).toBe(200);
+      expect(JSON.parse(reset.body).transaction.reportingDate).toBe('2026-09-01');
+    });
+
+    it('rejects invalid calendar dates', async () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id);
+      const res = await server.inject({
+        method: 'PATCH',
+        url: `/api/transactions/${tx.id}/effective-date`,
+        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        payload: { effectiveDate: '2026-02-30' },
+      });
+
       expect(res.statusCode).toBe(400);
     });
   });

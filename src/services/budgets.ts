@@ -150,8 +150,8 @@ export function getBudgetProgress(budgetId: number, monthlyView = false, referen
     .where(
       and(
         inArray(transactions.category, categoryNames),
-        gte(transactions.date, startDate),
-        lte(transactions.date, endDate),
+        gte(transactions.reportingDate, startDate),
+        lte(transactions.reportingDate, endDate),
         eq(transactions.ignored, false),
         sql`${transactions.chargedAmount} < 0`,
       ),
@@ -165,20 +165,20 @@ export function getBudgetProgress(budgetId: number, monthlyView = false, referen
   if (budget.period === 'yearly' && monthlyView) {
     monthlyBreakdown = db
       .select({
-        month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+        month: sql<string>`strftime('%Y-%m', ${transactions.reportingDate})`.as('month'),
         spent: sql<number>`SUM(ABS(${transactions.chargedAmount}))`.as('spent'),
       })
       .from(transactions)
       .where(
         and(
           inArray(transactions.category, categoryNames),
-          gte(transactions.date, startDate),
-          lte(transactions.date, endDate),
+          gte(transactions.reportingDate, startDate),
+          lte(transactions.reportingDate, endDate),
           eq(transactions.ignored, false),
           sql`${transactions.chargedAmount} < 0`,
         ),
       )
-      .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+      .groupBy(sql`strftime('%Y-%m', ${transactions.reportingDate})`)
       .orderBy(sql`month asc`)
       .all();
   }

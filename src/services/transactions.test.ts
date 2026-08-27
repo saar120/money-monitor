@@ -5,8 +5,12 @@ import { insertAccount, insertTransaction, insertCategory } from '../__tests__/h
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -18,6 +22,7 @@ const {
   resolveReview,
   setTransactionIgnored,
   updateTransactionCategory,
+  updateTransactionEffectiveDate,
   categorizeTransaction,
 } = await import('./transactions.js');
 
@@ -110,6 +115,27 @@ describe('transactions service', () => {
       expect(result.transactions[0].date).toBe('2026-02-01');
     });
 
+    it('filters and sorts by reporting date', () => {
+      const account = insertAccount(testDb.db);
+      const moved = insertTransaction(testDb.db, account.id, {
+        date: '2026-09-01',
+        processedDate: '2026-09-01',
+        effectiveDate: '2026-08-31',
+      });
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-08-15',
+        processedDate: '2026-08-15',
+      });
+
+      const result = listTransactions(
+        { startDate: '2026-08-01', endDate: '2026-08-31' },
+        { sortBy: 'date', sortOrder: 'desc' },
+      );
+
+      expect(result.transactions.map((tx) => tx.id)).toEqual([moved.id, expect.any(Number)]);
+      expect(result.transactions[0].reportingDate).toBe('2026-08-31');
+    });
+
     it('filters by category', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, { category: 'food' });
@@ -163,8 +189,18 @@ describe('transactions service', () => {
 
     it('sorts by different columns', () => {
       const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { chargedAmount: -50, description: 'B Transaction', date: '2026-01-10', processedDate: '2026-01-10' });
-      insertTransaction(testDb.db, account.id, { chargedAmount: -200, description: 'A Transaction', date: '2026-01-20', processedDate: '2026-01-20' });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -50,
+        description: 'B Transaction',
+        date: '2026-01-10',
+        processedDate: '2026-01-10',
+      });
+      insertTransaction(testDb.db, account.id, {
+        chargedAmount: -200,
+        description: 'A Transaction',
+        date: '2026-01-20',
+        processedDate: '2026-01-20',
+      });
 
       // Sort by chargedAmount desc
       const byAmount = listTransactions({}, { sortBy: 'chargedAmount', sortOrder: 'desc' });
@@ -239,7 +275,10 @@ describe('transactions service', () => {
   describe('resolveReview', () => {
     it('clears needsReview flag and sets category', () => {
       const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { needsReview: true, reviewReason: 'test' });
+      const tx = insertTransaction(testDb.db, account.id, {
+        needsReview: true,
+        reviewReason: 'test',
+      });
 
       const updated = resolveReview(tx.id, 'food');
       expect(updated).not.toBeNull();
@@ -251,6 +290,23 @@ describe('transactions service', () => {
     it('returns null for non-existent transaction', () => {
       const result = resolveReview(99999, 'food');
       expect(result).toBeNull();
+    });
+  });
+
+  // ── setTransactionIgnored ──
+
+  describe('updateTransactionEffectiveDate', () => {
+    it('sets and clears the reporting override', () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id, { date: '2026-09-01' });
+
+      const moved = updateTransactionEffectiveDate(tx.id, '2026-08-31');
+      expect(moved?.effectiveDate).toBe('2026-08-31');
+      expect(moved?.reportingDate).toBe('2026-08-31');
+
+      const reset = updateTransactionEffectiveDate(tx.id, null);
+      expect(reset?.effectiveDate).toBeNull();
+      expect(reset?.reportingDate).toBe('2026-09-01');
     });
   });
 
@@ -277,7 +333,10 @@ describe('transactions service', () => {
   describe('updateTransactionCategory', () => {
     it('updates category and clears review state', () => {
       const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { needsReview: true, reviewReason: 'test' });
+      const tx = insertTransaction(testDb.db, account.id, {
+        needsReview: true,
+        reviewReason: 'test',
+      });
 
       const updated = updateTransactionCategory(tx.id, 'transport');
       expect(updated).not.toBeNull();
@@ -301,7 +360,11 @@ describe('transactions service', () => {
     });
 
     it('sets ignored when category has ignoredFromStats=true', () => {
-      insertCategory(testDb.db, { name: 'internal-transfer', label: 'Internal', ignoredFromStats: true });
+      insertCategory(testDb.db, {
+        name: 'internal-transfer',
+        label: 'Internal',
+        ignoredFromStats: true,
+      });
       const account = insertAccount(testDb.db);
       const tx = insertTransaction(testDb.db, account.id);
 
@@ -343,7 +406,7 @@ describe('transactions service', () => {
 
       // Verify the transaction was updated with needsReview
       const listed = listTransactions({ needsReview: true });
-      const found = listed.transactions.find(t => t.id === tx.id);
+      const found = listed.transactions.find((t) => t.id === tx.id);
       expect(found).toBeDefined();
       expect(found!.needsReview).toBe(true);
       expect(found!.reviewReason).toBe('Low confidence');
@@ -360,7 +423,7 @@ describe('transactions service', () => {
       });
 
       const listed = listTransactions({ needsReview: true });
-      const found = listed.transactions.find(t => t.id === tx.id);
+      const found = listed.transactions.find((t) => t.id === tx.id);
       expect(found!.reviewReason).toBe('Low confidence categorization');
     });
 

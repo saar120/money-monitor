@@ -125,6 +125,8 @@ function baseHtml(title: string, subtitle: string, body: string): string {
 
 interface TransactionRow {
   date: string;
+  effectiveDate?: string | null;
+  reportingDate?: string;
   description: string;
   chargedAmount: number;
   category: string | null;
@@ -136,19 +138,21 @@ export function renderTransactions(
 ): string {
   const shown = rows.slice(0, MAX_ROWS);
   const tableRows = shown
-    .map(
-      (r) => `<tr>
-      <td>${formatDate(r.date)}</td>
+    .map((r) => {
+      const reportingDate = r.reportingDate ?? r.effectiveDate ?? r.date;
+      const bankDate = r.effectiveDate ? `<div class="muted">Bank ${formatDate(r.date)}</div>` : '';
+      return `<tr>
+      <td>${formatDate(reportingDate)}${bankDate}</td>
       <td dir="auto">${esc(r.description)}</td>
       <td class="right ${amountClass(r.chargedAmount)}">${formatCurrency(r.chargedAmount)}</td>
       <td><span class="badge">${esc(r.category ?? 'uncategorized')}</span></td>
-    </tr>`,
-    )
+    </tr>`;
+    })
     .join('\n');
 
   const body = `<table>
     <thead><tr>
-      <th style="width:110px">Date</th>
+      <th style="width:130px">Reporting date</th>
       <th>Description</th>
       <th class="right" style="width:110px">Amount</th>
       <th style="width:130px">Category</th>

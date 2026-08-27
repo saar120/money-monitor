@@ -41,7 +41,7 @@ export function getSpendingSummary(
   if (groupBy === 'cashflow') {
     const rows = db
       .select({
-        month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+        month: sql<string>`strftime('%Y-%m', ${transactions.reportingDate})`.as('month'),
         income:
           sql<number>`SUM(CASE WHEN ${transactions.chargedAmount} > 0 THEN ${transactions.chargedAmount} ELSE 0 END)`.as(
             'income',
@@ -53,7 +53,7 @@ export function getSpendingSummary(
       })
       .from(transactions)
       .where(where)
-      .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+      .groupBy(sql`strftime('%Y-%m', ${transactions.reportingDate})`)
       .orderBy(sql`month desc`)
       .all();
     return { groupBy: 'cashflow' as const, summary: rows };
@@ -101,13 +101,13 @@ export function getSpendingSummary(
   if (groupBy === 'month') {
     const rows = db
       .select({
-        month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+        month: sql<string>`strftime('%Y-%m', ${transactions.reportingDate})`.as('month'),
         totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
         transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
       })
       .from(transactions)
       .where(where)
-      .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+      .groupBy(sql`strftime('%Y-%m', ${transactions.reportingDate})`)
       .orderBy(sql`month desc`)
       .all();
     return { groupBy: 'month' as const, summary: rows };
@@ -174,8 +174,8 @@ export function comparePeriods(input: {
 }) {
   function queryPeriod(start: string, end: string) {
     const conditions = [
-      gte(transactions.date, start),
-      lte(transactions.date, end),
+      gte(transactions.reportingDate, start),
+      lte(transactions.reportingDate, end),
       eq(transactions.ignored, false),
     ];
     if (input.accountId != null) conditions.push(eq(transactions.accountId, input.accountId));
@@ -252,19 +252,19 @@ export function getSpendingTrends(input: {
   const months = Math.min(input.months ?? 6, 24);
   const startStr = monthsAgoStart(months);
 
-  const conditions = [gte(transactions.date, startStr), eq(transactions.ignored, false)];
+  const conditions = [gte(transactions.reportingDate, startStr), eq(transactions.ignored, false)];
   if (input.category) conditions.push(eq(transactions.category, input.category));
   if (input.accountId != null) conditions.push(eq(transactions.accountId, input.accountId));
 
   const rows = db
     .select({
-      month: sql<string>`strftime('%Y-%m', ${transactions.date})`.as('month'),
+      month: sql<string>`strftime('%Y-%m', ${transactions.reportingDate})`.as('month'),
       totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
       count: sql<number>`COUNT(*)`.as('count'),
     })
     .from(transactions)
     .where(and(...conditions))
-    .groupBy(sql`strftime('%Y-%m', ${transactions.date})`)
+    .groupBy(sql`strftime('%Y-%m', ${transactions.reportingDate})`)
     .orderBy(sql`month asc`)
     .all();
 
@@ -322,6 +322,7 @@ export function detectRecurringTransactions(input: {
   const minOccurrences = input.minOccurrences ?? 2;
   const startStr = monthsAgoStart(monthsBack);
 
+  // Recurrence predicts actual bank timing, so reporting overrides do not apply here.
   const rows = db
     .select({
       description: transactions.description,
@@ -426,8 +427,8 @@ export function getTopMerchants(input: {
   accountId?: number;
 }) {
   const conditions = [eq(transactions.ignored, false), eq(transactions.status, 'completed')];
-  if (input.startDate) conditions.push(gte(transactions.date, input.startDate));
-  if (input.endDate) conditions.push(lte(transactions.date, input.endDate));
+  if (input.startDate) conditions.push(gte(transactions.reportingDate, input.startDate));
+  if (input.endDate) conditions.push(lte(transactions.reportingDate, input.endDate));
   if (input.category) conditions.push(eq(transactions.category, input.category));
   if (input.accountId != null) conditions.push(eq(transactions.accountId, input.accountId));
 
@@ -435,7 +436,7 @@ export function getTopMerchants(input: {
     .select({
       description: transactions.description,
       chargedAmount: transactions.chargedAmount,
-      date: transactions.date,
+      date: transactions.reportingDate,
       category: transactions.category,
     })
     .from(transactions)

@@ -54,6 +54,7 @@ server.registerTool(
     description:
       'Search and filter financial transactions. Supports date ranges, categories, amount ranges, ' +
       'full-text search across description/memo, account filtering, and status filtering. ' +
+      'Date ranges use reportingDate (effectiveDate when set, otherwise the bank date). ' +
       'Returns matched transactions with total count. All amounts are in ILS.',
     inputSchema: {
       account_id: z.number().optional().describe('Filter by account ID'),
@@ -91,7 +92,7 @@ server.registerTool(
   {
     title: 'Get Spending Summary',
     description:
-      'Get aggregated spending totals grouped by category, month, or account. ' +
+      'Get aggregated spending totals by reporting date, grouped by category, month, or account. ' +
       'Ignored transactions are excluded. Useful for understanding spending patterns and breakdowns.',
     inputSchema: {
       group_by: z

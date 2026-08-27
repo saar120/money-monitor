@@ -7,6 +7,7 @@ import {
   getCategories,
   getMembers,
   updateTransactionCategory,
+  updateTransactionEffectiveDate,
   updateTransactionOwner,
   type Transaction,
   type TransactionFilters,
@@ -35,6 +36,14 @@ import {
 } from '@/components/ui/table';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from '@/components/ui/dialog';
 import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle, Receipt } from 'lucide-vue-next';
 import {
   formatCurrency,
@@ -83,6 +92,10 @@ const updatingOwnerFor = ref<number | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
+const effectiveDateTxn = ref<Transaction | null>(null);
+const effectiveDateValue = ref('');
+const effectiveDateSaving = ref(false);
+const effectiveDateError = ref('');
 
 async function fetchTransactions() {
   loading.value = true;
@@ -216,6 +229,30 @@ async function toggleIgnore() {
   }
 }
 
+function openEffectiveDateDialog() {
+  if (!contextMenu.value) return;
+  effectiveDateTxn.value = contextMenu.value.txn;
+  effectiveDateValue.value = contextMenu.value.txn.effectiveDate ?? contextMenu.value.txn.date;
+  effectiveDateError.value = '';
+  closeContextMenu();
+}
+
+async function saveEffectiveDate(effectiveDate: string | null) {
+  if (!effectiveDateTxn.value) return;
+  effectiveDateSaving.value = true;
+  effectiveDateError.value = '';
+  try {
+    await updateTransactionEffectiveDate(effectiveDateTxn.value.id, effectiveDate);
+    effectiveDateTxn.value = null;
+    await fetchTransactions();
+  } catch (err) {
+    effectiveDateError.value =
+      err instanceof Error ? err.message : 'Could not update the effective date.';
+  } finally {
+    effectiveDateSaving.value = false;
+  }
+}
+
 function handleKeydown(e: KeyboardEvent) {
   if (e.key === 'Escape') closeContextMenu();
 }
@@ -332,7 +369,7 @@ onUnmounted(() => {
               <TableRow>
                 <TableHead class="cursor-pointer select-none" @click="sort('date')">
                   <span class="flex items-center gap-1">
-                    Date
+                    Reporting date
                     <ChevronUp
                       v-if="filters.sortBy === 'date' && filters.sortOrder === 'asc'"
                       class="h-3 w-3"
@@ -400,7 +437,10 @@ onUnmounted(() => {
                 @contextmenu="openContextMenu($event, txn)"
               >
                 <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
-                  {{ formatDate(txn.date) }}
+                  <div class="text-text-primary">{{ formatDate(txn.reportingDate) }}</div>
+                  <div v-if="txn.effectiveDate" class="text-[11px] text-text-secondary">
+                    Bank {{ formatDate(txn.date) }}
+                  </div>
                 </TableCell>
                 <TableCell class="max-w-xs truncate">
                   <span class="flex items-center gap-1.5">
@@ -577,11 +617,71 @@ onUnmounted(() => {
         <button
           class="w-full px-3.5 py-2 text-[13px] text-left hover:bg-primary/10 hover:text-primary rounded-lg mx-0.5 transition-colors duration-150"
           style="width: calc(100% - 4px)"
+          @click="openEffectiveDateDialog"
+        >
+          Set effective date
+        </button>
+        <button
+          class="w-full px-3.5 py-2 text-[13px] text-left hover:bg-primary/10 hover:text-primary rounded-lg mx-0.5 transition-colors duration-150"
+          style="width: calc(100% - 4px)"
           @click="toggleIgnore"
         >
           {{ contextMenu.txn.ignored ? 'Unignore transaction' : 'Ignore transaction' }}
         </button>
       </div>
     </Teleport>
+
+    <Dialog
+      :open="effectiveDateTxn !== null"
+      @update:open="(open) => !open && (effectiveDateTxn = null)"
+    >
+      <DialogContent class="max-w-sm">
+        <form @submit.prevent="saveEffectiveDate(effectiveDateValue)">
+          <DialogHeader>
+            <DialogTitle>Set effective date</DialogTitle>
+            <DialogDescription>
+              Choose when this transaction counts in reports. Its bank date stays unchanged.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div class="py-5 space-y-2">
+            <label for="effective-date" class="block text-[12px] font-medium text-text-secondary">
+              Effective date
+            </label>
+            <Input
+              id="effective-date"
+              v-model="effectiveDateValue"
+              type="date"
+              required
+              :disabled="effectiveDateSaving"
+            />
+            <p v-if="effectiveDateTxn" class="text-[12px] text-text-secondary">
+              Bank date: {{ formatDate(effectiveDateTxn.date) }}
+            </p>
+            <p v-if="effectiveDateError" role="alert" class="text-[12px] text-destructive">
+              {{ effectiveDateError }}
+            </p>
+          </div>
+
+          <DialogFooter class="gap-2 sm:gap-0">
+            <Button
+              type="button"
+              variant="secondary"
+              :disabled="effectiveDateSaving || !effectiveDateTxn?.effectiveDate"
+              @click="saveEffectiveDate(null)"
+            >
+              Use bank date
+            </Button>
+            <Button
+              type="submit"
+              variant="filled"
+              :disabled="effectiveDateSaving || !effectiveDateValue"
+            >
+              {{ effectiveDateSaving ? 'Saving…' : 'Save' }}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
+    </Dialog>
   </div>
 </template>

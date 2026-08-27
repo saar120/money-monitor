@@ -3,6 +3,7 @@ import {
   transactionQuerySchema,
   ignoreTransactionSchema,
   updateTransactionSchema,
+  updateTransactionEffectiveDateSchema,
   updateTransactionOwnerSchema,
   resolveReviewSchema,
 } from './validation.js';
@@ -13,6 +14,7 @@ import {
   resolveReview,
   setTransactionIgnored,
   updateTransactionCategory,
+  updateTransactionEffectiveDate,
 } from '../services/transactions.js';
 import { setTransactionOwner } from '../services/ownership.js';
 
@@ -91,6 +93,19 @@ export async function transactionsRoutes(app: FastifyInstance) {
     if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
     return reply.send({ transaction: updated });
   });
+
+  app.patch<{ Params: { id: string } }>(
+    '/api/transactions/:id/effective-date',
+    async (request, reply) => {
+      const id = parseIntParam(request.params.id, 'transaction id', reply);
+      if (id === null) return;
+      const data = validateBody(updateTransactionEffectiveDateSchema, request.body, reply);
+      if (!data) return;
+      const updated = updateTransactionEffectiveDate(id, data.effectiveDate);
+      if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
+      return reply.send({ transaction: updated });
+    },
+  );
 
   app.patch<{ Params: { id: string } }>('/api/transactions/:id/owner', async (request, reply) => {
     const id = parseIntParam(request.params.id, 'transaction id', reply);

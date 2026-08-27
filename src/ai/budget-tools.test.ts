@@ -114,6 +114,27 @@ describe('getBudgetProgress', () => {
     expect(result.period.startDate).toBe('2026-03-01');
     expect(result.period.endDate).toBe('2026-03-31');
   });
+
+  it('uses the effective date for budget periods', async () => {
+    const account = insertAccount(testDb.db);
+    const budget = insertBudget({ categoryNames: JSON.stringify(['food']) });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-09-01',
+      effectiveDate: '2026-08-15',
+      chargedAmount: -150,
+      category: 'food',
+    });
+
+    const august = JSON.parse(
+      await getBudgetProgress({ budget_id: budget.id, reference_date: '2026-08-15' }),
+    );
+    const september = JSON.parse(
+      await getBudgetProgress({ budget_id: budget.id, reference_date: '2026-09-15' }),
+    );
+
+    expect(august.spent).toBe(150);
+    expect(september.spent).toBe(0);
+  });
 });
 
 describe('manageBudget', () => {

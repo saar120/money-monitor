@@ -29,7 +29,12 @@ export const transactions = sqliteTable(
       .notNull()
       .references(() => accounts.id),
     identifier: integer('identifier'),
-    date: text('date').notNull(),
+    date: text('date').notNull(), // Bank Date: immutable source date used by operational flows.
+    effectiveDate: text('effective_date'),
+    // Financial reads use this generated column so the fallback cannot drift between callers.
+    reportingDate: text('reporting_date')
+      .notNull()
+      .generatedAlwaysAs(sql`coalesce(effective_date, date)`, { mode: 'virtual' }),
     processedDate: text('processed_date').notNull(),
     originalAmount: real('original_amount').notNull(),
     originalCurrency: text('original_currency').notNull().default('ILS'),

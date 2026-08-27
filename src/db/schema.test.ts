@@ -36,6 +36,19 @@ describe('database schema', () => {
       const tx = insertTransaction(testDb.db, account.id);
       expect(tx.id).toBeGreaterThan(0);
       expect(tx.accountId).toBe(account.id);
+      expect(tx.reportingDate).toBe(tx.date);
+    });
+
+    it('derives reportingDate from an effectiveDate override', () => {
+      const account = insertAccount(testDb.db);
+      const tx = insertTransaction(testDb.db, account.id, {
+        date: '2026-09-01',
+        effectiveDate: '2026-08-31',
+      });
+
+      expect(tx.date).toBe('2026-09-01');
+      expect(tx.effectiveDate).toBe('2026-08-31');
+      expect(tx.reportingDate).toBe('2026-08-31');
     });
 
     it('accepts valid category data', () => {
