@@ -4,6 +4,18 @@ Money Monitor is a private financial workspace whose authoritative data and calc
 
 ## Language
 
+**Bank Date**:
+The date reported by the financial institution for a transaction. It remains unchanged when the transaction is assigned to a different financial period.
+_Avoid_: Original date, actual date
+
+**Effective Date**:
+An optional user-selected date that assigns a transaction to a different financial reporting period without changing its Bank Date.
+_Avoid_: Moved date, corrected date
+
+**Reporting Date**:
+The date used for financial summaries, graphs, budgets, and period-based analysis. It is the Effective Date when one exists and otherwise the Bank Date.
+_Avoid_: Transaction date
+
 **Saved View**:
 A read-only presentation of the last accepted financial snapshot when the iPhone cannot use a live Mac connection.
 _Avoid_: Offline mode, cached mode

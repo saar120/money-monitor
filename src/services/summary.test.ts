@@ -143,6 +143,29 @@ describe('summary service', () => {
       expect(jan.expense).toBe(3000);
     });
 
+    it('assigns income to the effective reporting month', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-09-01',
+        processedDate: '2026-09-01',
+        effectiveDate: '2026-08-31',
+        category: 'salary',
+        chargedAmount: 10_000,
+      });
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-09-30',
+        processedDate: '2026-09-30',
+        category: 'salary',
+        chargedAmount: 10_000,
+      });
+
+      const result = getSpendingSummary({}, 'cashflow');
+      const rows = result.summary as Array<{ month: string; income: number }>;
+
+      expect(rows.find((row) => row.month === '2026-08')?.income).toBe(10_000);
+      expect(rows.find((row) => row.month === '2026-09')?.income).toBe(10_000);
+    });
+
     it('groups by cashflow-detail with income and expenses by category', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, { category: 'salary', chargedAmount: 5000 });
@@ -296,6 +319,26 @@ describe('summary service', () => {
   // ── comparePeriods ──
 
   describe('comparePeriods', () => {
+    it('compares periods using reporting dates', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-09-01',
+        effectiveDate: '2026-08-31',
+        category: 'salary',
+        chargedAmount: 10_000,
+      });
+
+      const result = comparePeriods({
+        period1Start: '2026-08-01',
+        period1End: '2026-08-31',
+        period2Start: '2026-09-01',
+        period2End: '2026-09-30',
+      });
+
+      expect(result.summary.period1.total).toBe(10_000);
+      expect(result.summary.period2.total).toBe(0);
+    });
+
     it('calculates change amounts and percentages', () => {
       const account = insertAccount(testDb.db);
       // Period 1: Jan
@@ -413,6 +456,24 @@ describe('summary service', () => {
   // ── getTopMerchants ──
 
   describe('getTopMerchants', () => {
+    it('filters merchants using reporting dates', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, {
+        description: 'Moved Merchant',
+        chargedAmount: -100,
+        date: '2026-09-01',
+        effectiveDate: '2026-08-31',
+        status: 'completed',
+      });
+
+      const august = getTopMerchants({ startDate: '2026-08-01', endDate: '2026-08-31' });
+      const september = getTopMerchants({ startDate: '2026-09-01', endDate: '2026-09-30' });
+
+      expect(august.top_merchants).toHaveLength(1);
+      expect(august.top_merchants[0].last_transaction_date).toBe('2026-08-31');
+      expect(september.top_merchants).toHaveLength(0);
+    });
+
     it('ranks merchants by total amount (descending)', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, {

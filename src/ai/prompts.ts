@@ -44,6 +44,8 @@ function sharedRules(): string {
 - Today's date (Israel timezone) is ${todayInIsrael()}.
 - When the user asks about "this month", use the current calendar month in Israel timezone.
 - When the user asks about "last month", use the previous calendar month in Israel timezone.
+- Transaction reportingDate controls financial periods. It equals the user-set effectiveDate when present, otherwise the bank date.
+- Recurring-payment timing and latest-scrape results use the bank date; summaries, budgets, and period filters use reportingDate.
 - Dates in the database are date-only strings in Israel timezone (e.g. "2026-02-24").
 </rules>`;
 }

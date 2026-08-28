@@ -268,6 +268,7 @@ function transactionOwnershipRows(
   if (ids && ids.length > 0) conditions.push(or(...ids.map((id) => eq(transactions.id, id)))!);
   if (accountId != null) conditions.push(eq(transactions.accountId, accountId));
   if (categoryName != null) conditions.push(eq(transactions.category, categoryName));
+  // Ownership maintenance targets imported bank records, not reporting-period overrides.
   if (startDate) conditions.push(gte(transactions.date, startDate));
   if (endDate) conditions.push(lte(transactions.date, endDate));
 

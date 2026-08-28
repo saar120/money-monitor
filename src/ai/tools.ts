@@ -28,15 +28,15 @@ export function buildQueryTransactionsTool() {
   return createAgentTool({
     name: 'query_transactions',
     description:
-      'Search and filter transactions from the database. Use this to find specific transactions or answer questions about spending. Each transaction includes needsReview (true if low-confidence categorization needing user review), confidence (0-1 score), and reviewReason fields.',
+      'Search and filter transactions from the database. Date filters use reportingDate (effectiveDate when set, otherwise the bank date). Each result includes all three dates for clarity, plus review status and confidence.',
     label: 'Searching transactions',
     parameters: Type.Object({
       account_id: Type.Optional(Type.Number({ description: 'Filter by account ID' })),
       start_date: Type.Optional(
-        Type.String({ description: 'Start date (ISO string, e.g. "2026-01-01")' }),
+        Type.String({ description: 'Reporting-period start date (ISO, e.g. "2026-01-01")' }),
       ),
       end_date: Type.Optional(
-        Type.String({ description: 'End date (ISO string, e.g. "2026-01-31")' }),
+        Type.String({ description: 'Reporting-period end date (ISO, e.g. "2026-01-31")' }),
       ),
       category: Type.Optional(Type.String({ description: 'Filter by category' })),
       status: Type.Optional(
@@ -75,7 +75,7 @@ export function buildGetSpendingSummaryTool() {
   return createAgentTool({
     name: 'get_spending_summary',
     description:
-      'Get aggregated spending totals. Group by category, month, account, or expense-owner to understand spending patterns.',
+      'Get aggregated spending totals by reporting date. Group by category, month, account, or expense-owner to understand spending patterns.',
     label: 'Analyzing spending',
     parameters: Type.Object({
       group_by: Type.Optional(
@@ -584,10 +584,13 @@ export function getLatestScrapeTransactions(): string {
 
   // 3. Get new transactions from this session (with account name)
   const MAX_TRANSACTIONS = 200;
+  // Latest scrape is an operational view, so ordering stays on the bank date.
   const newTxns = db
     .select({
       id: transactions.id,
       date: transactions.date,
+      effectiveDate: transactions.effectiveDate,
+      reportingDate: transactions.reportingDate,
       chargedAmount: transactions.chargedAmount,
       description: transactions.description,
       category: transactions.category,

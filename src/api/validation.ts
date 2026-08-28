@@ -168,6 +168,10 @@ export const updateTransactionSchema = z.object({
   category: z.string().min(1).max(50).nullable(),
 });
 
+export const updateTransactionEffectiveDateSchema = z.object({
+  effectiveDate: z.iso.date().nullable(),
+});
+
 export const updateTransactionOwnerSchema = z.object({
   ownerType: ownerTypeEnum,
   ownerMemberId: z.number().int().positive().nullable().optional(),

@@ -431,6 +431,7 @@ export async function recategorize(
   startDate?: string,
   endDate?: string,
 ): Promise<{ categorized: number }> {
+  // Categorization maintenance ranges refer to the source records' bank dates.
   const conditions = [];
   if (startDate) conditions.push(gte(transactions.date, startDate));
   if (endDate) conditions.push(lte(transactions.date, endDate));
