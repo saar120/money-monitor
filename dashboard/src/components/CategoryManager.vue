@@ -371,7 +371,7 @@ async function toggleIgnored(cat: Category) {
       if (!authoritative) {
         error.value = 'Could not confirm the result. Reconnect, then reapply the toggle.';
       } else if (
-        toggleRecoveryDecision(authoritative, cat.id, intendedIgnored, unknownOutcome) === 'accepted'
+        toggleRecoveryDecision(authoritative, cat.id, intendedIgnored) === 'accepted'
       ) {
         refreshCategoryProjections();
         error.value = '';

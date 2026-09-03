@@ -132,6 +132,40 @@ describe('canonical /api/v1 black-box foundation', () => {
     expect(response.body).toMatchObject({ error: { code: 'internal_server_error' } });
   });
 
+  it('fails Mac canonical routes closed while the desktop source is swapped', async () => {
+    const sqlite = new Database(':memory:');
+    let available = true;
+    const server = await createServer({
+      sqlite,
+      registerLegacyRoutes: false,
+      startBackgroundServices: false,
+      logger: false,
+      isCanonicalAvailable: () => available,
+    });
+
+    try {
+      await server.app.ready();
+      const headers = { authorization: 'Bearer test-token' };
+      expect(
+        (await server.app.inject({ method: 'GET', url: '/api/v1/reference', headers })).statusCode,
+      ).toBe(200);
+
+      available = false;
+      const response = await server.app.inject({
+        method: 'GET',
+        url: '/api/v1/reference',
+        headers,
+      });
+      expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.body)).toMatchObject({
+        error: { code: 'internal_server_error' },
+      });
+    } finally {
+      await server.shutdown();
+      sqlite.close();
+    }
+  });
+
   it('keeps canonical auth ahead of the configured legacy API token hook', async () => {
     const sqlite = new Database(':memory:');
     const server = await createServer({

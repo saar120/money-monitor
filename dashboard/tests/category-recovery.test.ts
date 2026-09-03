@@ -13,12 +13,12 @@ describe('dashboard category mutation recovery', () => {
     expect(intendedNullableColor('#94A3B8', '#94A3B8', '#94A3B8')).toBe('#94A3B8');
   });
 
-  it('accepts an unknown toggle only when authority has the intended value', () => {
+  it('accepts a recovered toggle whenever authority has the intended value', () => {
     const authority = [{ id: 7, ignoredFromStats: true }];
     expect(toggleWasAccepted(authority, 7, true)).toBe(true);
     expect(toggleWasAccepted(authority, 7, false)).toBe(false);
-    expect(toggleRecoveryDecision(authority, 7, true, true)).toBe('accepted');
-    expect(toggleRecoveryDecision(authority, 7, true, false)).toBe('reapply');
+    expect(toggleRecoveryDecision(authority, 7, true)).toBe('accepted');
+    expect(toggleRecoveryDecision(authority, 7, false)).toBe('reapply');
   });
 
   it('clears a recovered create and rotates its spent receipt', () => {

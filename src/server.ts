@@ -49,6 +49,8 @@ export interface CreateServerOptions {
   /** Injectable Mac-owned rates for deterministic canonical Home tests. */
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
   onCategoryOwnerChanged?: (categoryName: string) => void;
+  /** Injectable source-availability seam for canonical desktop listener tests. */
+  isCanonicalAvailable?: () => boolean;
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
@@ -202,6 +204,10 @@ export async function createServer(options: CreateServerOptions = {}) {
           throw new Error('canonical credentials are invalid');
         }),
       logger: options.logger ?? false,
+      // The canonical store captures the real startup database. Fail closed if
+      // the dashboard swaps its live database binding (for example Demo Mode).
+      isAvailable:
+        options.isCanonicalAvailable ?? (ownsSqlite ? () => canonicalSqlite === sqlite : undefined),
       homeExchangeRates: options.homeExchangeRates,
       onCategoryOwnerChanged:
         options.onCategoryOwnerChanged ??
