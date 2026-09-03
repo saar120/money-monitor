@@ -31,7 +31,7 @@ import { CanonicalApiError, sendCanonicalError } from './api/v1/errors.js';
 import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
 import type { ExchangeRateResult } from './services/exchange-rates.js';
-import { applyOwnership } from './services/ownership.js';
+import { applyOwnershipWithDatabase } from './services/ownership.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -54,6 +54,7 @@ export interface CreateServerOptions {
 export async function createServer(options: CreateServerOptions = {}) {
   const ownsSqlite = options.sqlite === undefined;
   const canonicalSqlite = options.sqlite ?? sqlite;
+  const canonicalOwnershipDb = options.sqlite ? null : db;
   const clock = options.clock ?? (() => new Date());
   const app = Fastify({
     logger: options.logger ?? {
@@ -204,7 +205,10 @@ export async function createServer(options: CreateServerOptions = {}) {
       homeExchangeRates: options.homeExchangeRates,
       onCategoryOwnerChanged:
         options.onCategoryOwnerChanged ??
-        (ownsSqlite ? (categoryName: string) => applyOwnership({ categoryName }) : undefined),
+        (canonicalOwnershipDb
+          ? (categoryName: string) =>
+              applyOwnershipWithDatabase(canonicalOwnershipDb, { categoryName })
+          : undefined),
     },
     clock,
   );

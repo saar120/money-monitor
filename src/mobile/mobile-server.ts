@@ -66,6 +66,7 @@ export interface CreateMobileServerOptions {
     /** Mac-owned rates for canonical Home conversion; injectable for tests. */
     homeExchangeRates?: () => Promise<ExchangeRateResult>;
     onCategoryOwnerChanged?: (categoryName: string) => void;
+    isAvailable?: () => boolean;
   };
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
@@ -216,6 +217,7 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
         allowUnknownOutcomeSimulation: options.canonical.allowUnknownOutcomeSimulation,
         homeExchangeRates: options.canonical.homeExchangeRates,
         onCategoryOwnerChanged: options.canonical.onCategoryOwnerChanged,
+        isAvailable: options.canonical.isAvailable,
       },
       clock,
     );

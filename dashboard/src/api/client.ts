@@ -444,6 +444,7 @@ export interface CategoryMutationMeta {
 export interface CategoryOwnerMember {
   id: number;
   name: string;
+  isActive: boolean;
 }
 
 export async function getCategories() {

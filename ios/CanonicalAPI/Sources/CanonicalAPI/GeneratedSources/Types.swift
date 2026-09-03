@@ -3829,21 +3829,27 @@ public enum Components {
             public var id: Swift.Int
             /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/name`.
             public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/isActive`.
+            public var isActive: Swift.Bool
             /// Creates a new `CategoryOwnerMember`.
             ///
             /// - Parameters:
             ///   - id:
             ///   - name:
+            ///   - isActive:
             public init(
                 id: Swift.Int,
-                name: Swift.String
+                name: Swift.String,
+                isActive: Swift.Bool
             ) {
                 self.id = id
                 self.name = name
+                self.isActive = isActive
             }
             public enum CodingKeys: String, CodingKey {
                 case id
                 case name
+                case isActive
             }
             public init(from decoder: any Swift.Decoder) throws {
                 let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -3855,9 +3861,14 @@ public enum Components {
                     Swift.String.self,
                     forKey: .name
                 )
+                self.isActive = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .isActive
+                )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
                     "id",
-                    "name"
+                    "name",
+                    "isActive"
                 ])
             }
         }
@@ -4118,21 +4129,27 @@ public enum Components {
                     public var id: Swift.Int
                     /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/name`.
                     public var name: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/isActive`.
+                    public var isActive: Swift.Bool
                     /// Creates a new `OwnerMembersPayloadPayload`.
                     ///
                     /// - Parameters:
                     ///   - id:
                     ///   - name:
+                    ///   - isActive:
                     public init(
                         id: Swift.Int,
-                        name: Swift.String
+                        name: Swift.String,
+                        isActive: Swift.Bool
                     ) {
                         self.id = id
                         self.name = name
+                        self.isActive = isActive
                     }
                     public enum CodingKeys: String, CodingKey {
                         case id
                         case name
+                        case isActive
                     }
                     public init(from decoder: any Swift.Decoder) throws {
                         let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -4144,9 +4161,14 @@ public enum Components {
                             Swift.String.self,
                             forKey: .name
                         )
+                        self.isActive = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .isActive
+                        )
                         try decoder.ensureNoAdditionalProperties(knownKeys: [
                             "id",
-                            "name"
+                            "name",
+                            "isActive"
                         ])
                     }
                 }

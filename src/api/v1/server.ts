@@ -58,6 +58,8 @@ export interface CanonicalServerOptions {
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
   /** Recalculate non-manual transaction owners after a category default changes. */
   onCategoryOwnerChanged?: (categoryName: string) => void;
+  /** Fail closed while the authoritative source is temporarily unavailable. */
+  isAvailable?: () => boolean;
 }
 
 export interface CanonicalServerStartOptions {
@@ -147,6 +149,9 @@ export function registerCanonicalRoutes(
         return sendCanonicalError(reply, 'authentication_invalid', request.id);
       }
       if (!identity) return sendCanonicalError(reply, 'authentication_required', request.id);
+      if (options.isAvailable && !options.isAvailable()) {
+        throw new CanonicalApiError('internal_server_error');
+      }
       if (
         (options.listener === 'mac-local' && identity.kind !== 'mac-local') ||
         (options.listener === 'paired-iphone' && identity.kind !== 'paired-iphone')

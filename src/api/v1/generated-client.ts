@@ -269,6 +269,7 @@ export type components = {
         missingSections?: string[];
         ownerMembers: {
           id: number;
+          isActive: boolean;
           name: string;
         }[];
         receipt?: {
@@ -286,6 +287,7 @@ export type components = {
     };
     CategoryOwnerMember: {
       id: number;
+      isActive: boolean;
       name: string;
     };
     CategoryResource: {

@@ -31,6 +31,7 @@ export interface CanonicalHarnessOptions {
   startListeners?: boolean;
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
   onCategoryOwnerChanged?: (categoryName: string) => void;
+  mobileCanonicalAvailable?: () => boolean;
 }
 
 type DesktopServer = Awaited<ReturnType<typeof createServer>>;
@@ -166,6 +167,7 @@ export async function createCanonicalHarness(
       allowUnknownOutcomeSimulation: options.allowUnknownOutcomeSimulation,
       homeExchangeRates: options.homeExchangeRates,
       onCategoryOwnerChanged: options.onCategoryOwnerChanged,
+      isAvailable: options.mobileCanonicalAvailable,
     },
     clock,
     logger: false,

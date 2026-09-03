@@ -57,10 +57,21 @@ export class CanonicalCategoryStore {
     ).map(resource);
   }
 
-  ownerMembers(): Array<{ id: number; name: string }> {
+  ownerMembers(): Array<{ id: number; name: string; isActive: boolean }> {
     return this.sqlite
-      .prepare('SELECT id, name FROM members WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id')
-      .all() as Array<{ id: number; name: string }>;
+      .prepare(
+        `SELECT id, name, is_active AS isActive FROM members
+         WHERE is_active = 1 OR id IN (
+           SELECT default_owner_member_id FROM categories
+           WHERE default_owner_type = 'member' AND default_owner_member_id IS NOT NULL
+         )
+         ORDER BY is_active DESC, name COLLATE NOCASE, id`,
+      )
+      .all()
+      .map((member) => ({
+        ...(member as { id: number; name: string; isActive: number }),
+        isActive: Boolean((member as { isActive: number }).isActive),
+      }));
   }
 
   get(id: number): CategoryResource | null {
@@ -72,7 +83,10 @@ export class CanonicalCategoryStore {
 
   private validateOwner(type: CategoryCreate['defaultOwnerType'], memberId: number | null): void {
     if (type === 'member') {
-      if (!memberId || !this.sqlite.prepare('SELECT 1 FROM members WHERE id = ?').get(memberId)) {
+      if (
+        !memberId ||
+        !this.sqlite.prepare('SELECT 1 FROM members WHERE id = ? AND is_active = 1').get(memberId)
+      ) {
         throw new CanonicalApiError('validation_error');
       }
     } else if (memberId !== null) throw new CanonicalApiError('validation_error');
@@ -145,7 +159,9 @@ export class CanonicalCategoryStore {
             ? null
             : current.defaultOwnerMemberId
           : input.defaultOwnerMemberId;
-      this.validateOwner(ownerType, ownerMemberId);
+      const ownerChanged =
+        ownerType !== current.defaultOwnerType || ownerMemberId !== current.defaultOwnerMemberId;
+      if (ownerChanged) this.validateOwner(ownerType, ownerMemberId);
       const ignored = input.ignoredFromStats ?? current.ignoredFromStats;
       const changed = this.sqlite
         .prepare(
@@ -175,10 +191,7 @@ export class CanonicalCategoryStore {
           .prepare('UPDATE transactions SET ignored = ? WHERE category = ?')
           .run(ignored ? 1 : 0, current.name);
       }
-      if (
-        ownerType !== current.defaultOwnerType ||
-        ownerMemberId !== current.defaultOwnerMemberId
-      ) {
+      if (ownerChanged) {
         this.onOwnerChanged(current.name);
       }
       return this.get(input.id)!;

@@ -352,7 +352,7 @@ export const categoryResourceSchema = z
   .strict();
 
 export const categoryOwnerMemberSchema = z
-  .object({ id: entityIdSchema, name: z.string().trim().min(1).max(120) })
+  .object({ id: entityIdSchema, name: z.string().trim().min(1).max(120), isActive: z.boolean() })
   .strict();
 
 export const categoryListResponseSchema = z

@@ -38,7 +38,11 @@ import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
-import { intendedNullableColor, toggleWasAccepted } from '@/lib/category-recovery';
+import {
+  emptyCategoryCreateDraft,
+  intendedNullableColor,
+  toggleRecoveryDecision,
+} from '@/lib/category-recovery';
 
 const categories = ref<Category[]>([]);
 const members = ref<CategoryOwnerMember[]>([]);
@@ -63,7 +67,7 @@ const newOwner = ref('unassigned');
 const newIgnored = ref(false);
 const showNewForm = ref(false);
 const saving = ref(false);
-const pendingCreateKey = ref(crypto.randomUUID());
+const pendingCreateKey = ref<string>(crypto.randomUUID());
 const pendingCreatePayload = ref('');
 
 // Re-categorize state
@@ -260,15 +264,7 @@ async function addCategory() {
     categories.value.push(res.category);
     rememberCategoryVersions([res.category]);
     applyRefreshHints(res.meta);
-    newName.value = '';
-    newLabel.value = '';
-    newColor.value = DEFAULT_CATEGORY_COLOR;
-    newRules.value = '';
-    newOwner.value = 'unassigned';
-    newIgnored.value = false;
-    pendingCreateKey.value = crypto.randomUUID();
-    pendingCreatePayload.value = '';
-    showNewForm.value = false;
+    resetCreateForm();
   } catch (e: unknown) {
     if (isUnknownOutcome(e)) {
       const latest = await recoverCategories();
@@ -279,7 +275,7 @@ async function addCategory() {
       const accepted = latest.some(categoryMatchesCreate);
       if (accepted) {
         refreshCategoryProjections();
-        showNewForm.value = false;
+        resetCreateForm();
         error.value = '';
       } else {
         error.value = 'The result is unknown. Try again to reuse the same Mutation Receipt.';
@@ -290,6 +286,19 @@ async function addCategory() {
   } finally {
     saving.value = false;
   }
+}
+
+function resetCreateForm() {
+  const reset = emptyCategoryCreateDraft(crypto.randomUUID(), DEFAULT_CATEGORY_COLOR);
+  newName.value = reset.name;
+  newLabel.value = reset.label;
+  newColor.value = reset.color;
+  newRules.value = reset.rules;
+  newOwner.value = reset.owner;
+  newIgnored.value = reset.ignored;
+  pendingCreateKey.value = reset.idempotencyKey;
+  pendingCreatePayload.value = reset.attemptedPayload;
+  showNewForm.value = false;
 }
 
 function isUnknownOutcome(error: unknown): boolean {
@@ -356,14 +365,14 @@ async function toggleIgnored(cat: Category) {
     applyRefreshHints(res.meta);
     error.value = '';
   } catch (caught) {
-    if (
-      (caught instanceof APIError && caught.code === 'resource_conflict') ||
-      isUnknownOutcome(caught)
-    ) {
+    const unknownOutcome = isUnknownOutcome(caught);
+    if ((caught instanceof APIError && caught.code === 'resource_conflict') || unknownOutcome) {
       const authoritative = await recoverCategories();
       if (!authoritative) {
         error.value = 'Could not confirm the result. Reconnect, then reapply the toggle.';
-      } else if (toggleWasAccepted(authoritative, cat.id, intendedIgnored)) {
+      } else if (
+        toggleRecoveryDecision(authoritative, cat.id, intendedIgnored, unknownOutcome) === 'accepted'
+      ) {
         refreshCategoryProjections();
         error.value = '';
       } else {
@@ -419,8 +428,13 @@ onMounted(load);
           <SelectContent>
             <SelectItem value="unassigned">Account member</SelectItem>
             <SelectItem value="shared">Together</SelectItem>
-            <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-              {{ member.name }}
+            <SelectItem
+              v-for="member in members"
+              :key="member.id"
+              :value="`member:${member.id}`"
+              :disabled="!member.isActive"
+            >
+              {{ member.name }}{{ member.isActive ? '' : ' (Inactive)' }}
             </SelectItem>
           </SelectContent>
         </Select>
@@ -521,8 +535,9 @@ onMounted(load);
                           v-for="member in members"
                           :key="member.id"
                           :value="`member:${member.id}`"
+                          :disabled="!member.isActive"
                         >
-                          {{ member.name }}
+                          {{ member.name }}{{ member.isActive ? '' : ' (Inactive)' }}
                         </SelectItem>
                       </SelectContent>
                     </Select>

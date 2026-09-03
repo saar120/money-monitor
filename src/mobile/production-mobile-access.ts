@@ -33,6 +33,7 @@ import { createProductionMobileReviewCommandPorts } from './review-command-produ
 import type { MobileReviewCommandRouteDependencies } from './review-command-routes.js';
 import type { CanonicalAuthenticator } from '../api/v1/policy.js';
 import { CanonicalApiError } from '../api/v1/errors.js';
+import { applyOwnershipWithDatabase } from '../services/ownership.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -62,7 +63,6 @@ export interface ProductionMobileAccessOptions {
   deviceRegistryOptions?: Omit<MobileDeviceRegistryOptions, 'clock'>;
   pairingManagerOptions?: PairingManagerOverrides;
   resolveReview?: (transactionID: number, categoryName: string) => { needsReview: boolean } | null;
-  onCategoryOwnerChanged?: (categoryName: string) => void;
 }
 
 export interface ProductionMobileAccess {
@@ -76,6 +76,7 @@ export interface ProductionMobileAccess {
     sqlite: Database.Database;
     authenticate: CanonicalAuthenticator;
     onCategoryOwnerChanged?: (categoryName: string) => void;
+    isAvailable: () => boolean;
   };
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -230,7 +231,9 @@ export function createProductionMobileAccess(
   const canonicalDependencies = Object.freeze({
     sqlite: options.sqlite,
     authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
-    onCategoryOwnerChanged: options.onCategoryOwnerChanged,
+    onCategoryOwnerChanged: (categoryName: string) =>
+      applyOwnershipWithDatabase(options.db, { categoryName }),
+    isAvailable: options.isMobileReadAvailable ?? (() => true),
   });
 
   function createPairingManager(publicUrl: string): PairingManager {

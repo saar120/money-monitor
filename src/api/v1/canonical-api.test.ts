@@ -3,7 +3,11 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CanonicalApiClient, categoryMatchesCreateRequest } from './client.js';
+import {
+  CanonicalApiClient,
+  categoryMatchesCreateRequest,
+  type CategoryResource,
+} from './client.js';
 import { CANONICAL_OPENAPI_DOCUMENT } from './openapi.js';
 import { createCanonicalHarness, type CanonicalHarness } from './test-harness.js';
 import { createServer } from '../../server.js';
@@ -113,6 +117,19 @@ describe('canonical /api/v1 black-box foundation', () => {
     expect(invalidCredential.body).toMatchObject({
       error: { code: 'authentication_invalid' },
     });
+  });
+
+  it('fails paired canonical reads closed while the desktop source is swapped', async () => {
+    let available = true;
+    const server = await harness({ mobileCanonicalAvailable: () => available });
+    expect(await server.iPhone.listCategories()).toEqual([]);
+
+    available = false;
+    const response = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.iPhoneToken}` },
+    });
+    expect(response.status).toBe(500);
+    expect(response.body).toMatchObject({ error: { code: 'internal_server_error' } });
   });
 
   it('keeps canonical auth ahead of the configured legacy API token hook', async () => {
@@ -252,13 +269,25 @@ describe('canonical /api/v1 black-box foundation', () => {
       },
     });
 
-    const updated = await server.mac.updateCategory(created.id, {
-      expectedVersion: 1,
-      label: 'Food & Groceries',
-      color: '#00AA55',
-      defaultOwnerType: 'shared',
+    const macUpdate = await raw(server.macBaseUrl, `/api/v1/categories/${created.id}`, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${server.macToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        expectedVersion: 1,
+        label: 'Food & Groceries',
+        color: '#00AA55',
+        defaultOwnerType: 'shared',
+      }),
     });
+    const updated = (macUpdate.body as { data: CategoryResource }).data;
     expect(updated).toMatchObject({ label: 'Food & Groceries', resourceVersion: 2 });
+    expect(macUpdate.body).toMatchObject({
+      meta: { refreshHints: [{ domain: 'categories', resourceIds: [created.id] }] },
+    });
+    expect(await server.iPhone.listCategories()).toEqual([updated]);
     expect(ownerChanges).toEqual(['groceries']);
 
     // Mutation Receipts represent the original outcome, even after authority moves on.
@@ -339,6 +368,52 @@ describe('canonical /api/v1 black-box foundation', () => {
         { idempotencyKey: 'new-utilities', name: 'utilities', label: 'Utilities' },
       ),
     ).toBe(false);
+  });
+
+  it('rejects new inactive owners while preserving referenced inactive choices', async () => {
+    const server = await harness();
+    server.sqlite
+      .prepare("INSERT INTO members (name, is_active) VALUES ('Active', 1), ('Former', 0)")
+      .run();
+    server.sqlite
+      .prepare(
+        `INSERT INTO categories
+         (name, label, default_owner_type, default_owner_member_id, updated_at)
+         VALUES ('legacy', 'Legacy', 'member', 2, ?)`,
+      )
+      .run(GENERATED_AT.toISOString());
+
+    const catalog = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.iPhoneToken}` },
+    });
+    expect(catalog.body).toMatchObject({
+      meta: {
+        ownerMembers: [
+          { id: 1, name: 'Active', isActive: true },
+          { id: 2, name: 'Former', isActive: false },
+        ],
+      },
+    });
+
+    const rejected = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        idempotencyKey: 'inactive-owner',
+        name: 'new-category',
+        label: 'New category',
+        defaultOwnerType: 'member',
+        defaultOwnerMemberId: 2,
+      }),
+    });
+    expect(rejected.status).toBe(400);
+
+    await expect(
+      server.iPhone.updateCategory(1, { expectedVersion: 1, label: 'Legacy renamed' }),
+    ).resolves.toMatchObject({ defaultOwnerMemberId: 2, label: 'Legacy renamed' });
   });
 
   it('resolves an unknown command by retrying the same receipt and fetching authority', async () => {

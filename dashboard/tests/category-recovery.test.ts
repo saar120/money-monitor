@@ -1,5 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { intendedNullableColor, toggleWasAccepted } from '../src/lib/category-recovery.js';
+import {
+  emptyCategoryCreateDraft,
+  intendedNullableColor,
+  toggleRecoveryDecision,
+  toggleWasAccepted,
+} from '../src/lib/category-recovery.js';
 
 describe('dashboard category mutation recovery', () => {
   it('preserves a null color while displaying the fallback', () => {
@@ -12,5 +17,20 @@ describe('dashboard category mutation recovery', () => {
     const authority = [{ id: 7, ignoredFromStats: true }];
     expect(toggleWasAccepted(authority, 7, true)).toBe(true);
     expect(toggleWasAccepted(authority, 7, false)).toBe(false);
+    expect(toggleRecoveryDecision(authority, 7, true, true)).toBe('accepted');
+    expect(toggleRecoveryDecision(authority, 7, true, false)).toBe('reapply');
+  });
+
+  it('clears a recovered create and rotates its spent receipt', () => {
+    expect(emptyCategoryCreateDraft('fresh-receipt', '#3B82F6')).toEqual({
+      name: '',
+      label: '',
+      color: '#3B82F6',
+      rules: '',
+      owner: 'unassigned',
+      ignored: false,
+      idempotencyKey: 'fresh-receipt',
+      attemptedPayload: '',
+    });
   });
 });

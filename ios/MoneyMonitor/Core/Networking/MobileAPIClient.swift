@@ -66,6 +66,7 @@ struct CategoryMutation<Value: Sendable>: Sendable {
 struct CategoryOwnerMember: Equatable, Identifiable, Sendable {
     let id: Int
     let name: String
+    let isActive: Bool
 }
 
 struct CategoryCatalog: Sendable {
@@ -265,7 +266,7 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         return CategoryCatalog(
             categories: response.data.map(CanonicalCategory.init),
             ownerMembers: response.meta.ownerMembers.map {
-                CategoryOwnerMember(id: $0.id, name: $0.name)
+                CategoryOwnerMember(id: $0.id, name: $0.name, isActive: $0.isActive)
             }
         )
     }

@@ -200,7 +200,9 @@ private struct CategoryCreateView: View {
                 Text("Account member").tag("unassigned")
                 Text("Together").tag("shared")
                 ForEach(ownerMembers) { member in
-                    Text(member.name).tag("member:\(member.id)")
+                    Text(member.isActive ? member.name : "\(member.name) (Inactive)")
+                        .tag("member:\(member.id)")
+                        .disabled(!member.isActive)
                 }
             }
             Toggle("Ignore from statistics", isOn: $ignored)
@@ -291,7 +293,9 @@ private struct CategoryEditorView: View {
                 Text("Account member").tag("unassigned")
                 Text("Together").tag("shared")
                 ForEach(ownerMembers) { member in
-                    Text(member.name).tag("member:\(member.id)")
+                    Text(member.isActive ? member.name : "\(member.name) (Inactive)")
+                        .tag("member:\(member.id)")
+                        .disabled(!member.isActive)
                 }
             }
             Toggle("Ignore from statistics", isOn: $ignored)
@@ -370,13 +374,16 @@ private struct CategoryEditorView: View {
             error = "The category no longer exists."
             return
         }
-        if afterUnknownOutcome,
-           authoritative.label == label,
-           authoritative.color == intendedCategoryColor(original: originalColor, draft: color),
-           authoritative.rules == (rules.isEmpty ? nil : rules),
-           authoritative.ignoredFromStats == ignored,
-           categoryOwnerValue(authoritative) == owner
-        {
+        let matchesDraft = authoritative.label == label
+            && authoritative.color == intendedCategoryColor(original: originalColor, draft: color)
+            && authoritative.rules == (rules.isEmpty ? nil : rules)
+            && authoritative.ignoredFromStats == ignored
+            && categoryOwnerValue(authoritative) == owner
+        if categoryEditRecoveryDecision(
+            authorityExists: true,
+            matchesDraft: matchesDraft,
+            unknownOutcome: afterUnknownOutcome
+        ) == .accepted {
             await environment.refreshCategoryProjections()
             await saved(); dismiss()
             return
@@ -385,6 +392,21 @@ private struct CategoryEditorView: View {
         needsReapply = true
         error = "The category changed on another client. Review your draft, then reapply it."
     }
+}
+
+enum CategoryEditRecoveryDecision: Equatable {
+    case accepted
+    case reapply
+    case missing
+}
+
+func categoryEditRecoveryDecision(
+    authorityExists: Bool,
+    matchesDraft: Bool,
+    unknownOutcome: Bool
+) -> CategoryEditRecoveryDecision {
+    guard authorityExists else { return .missing }
+    return unknownOutcome && matchesDraft ? .accepted : .reapply
 }
 
 func intendedCategoryColor(original: String?, draft: String) -> String? {

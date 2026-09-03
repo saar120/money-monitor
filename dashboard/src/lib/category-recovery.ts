@@ -13,3 +13,25 @@ export function toggleWasAccepted(
 ): boolean {
   return categories.find((category) => category.id === id)?.ignoredFromStats === intended;
 }
+
+export function toggleRecoveryDecision(
+  categories: ReadonlyArray<{ id: number; ignoredFromStats: boolean }>,
+  id: number,
+  intended: boolean,
+  unknownOutcome: boolean,
+): 'accepted' | 'reapply' {
+  return unknownOutcome && toggleWasAccepted(categories, id, intended) ? 'accepted' : 'reapply';
+}
+
+export function emptyCategoryCreateDraft(idempotencyKey: string, defaultColor: string) {
+  return {
+    name: '',
+    label: '',
+    color: defaultColor,
+    rules: '',
+    owner: 'unassigned',
+    ignored: false,
+    idempotencyKey,
+    attemptedPayload: '',
+  } as const;
+}

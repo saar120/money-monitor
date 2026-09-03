@@ -182,7 +182,7 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
       }],
       "meta": {
         "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative",
-        "ownerMembers": [{ "id": 2, "name": "Saar" }]
+        "ownerMembers": [{ "id": 2, "name": "Saar", "isActive": true }]
       }
     }
     """
@@ -410,6 +410,41 @@ final class CanonicalAPITests: XCTestCase {
         XCTAssertEqual(
             intendedCategoryColor(original: "#94A3B8", draft: "#94A3B8"),
             "#94A3B8"
+        )
+    }
+
+    func testCategoryEditRecoveryRequiresExplicitReapplyForConflicts() {
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: true,
+                unknownOutcome: true
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: true,
+                unknownOutcome: false
+            ),
+            .reapply
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: false,
+                unknownOutcome: true
+            ),
+            .reapply
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: false,
+                matchesDraft: false,
+                unknownOutcome: true
+            ),
+            .missing
         )
     }
 

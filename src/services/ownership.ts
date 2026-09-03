@@ -1,6 +1,8 @@
 import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
+import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { db } from '../db/connection.js';
+import * as schema from '../db/schema.js';
 import { accounts, categories, members, ownershipRules, transactions } from '../db/schema.js';
 import type { OwnerTarget, OwnerType } from '../shared/types.js';
 
@@ -39,6 +41,8 @@ interface OwnershipResolutionContext {
   rules: (typeof ownershipRules.$inferSelect)[];
   categoryTargets: Map<string, OwnerTarget>;
 }
+
+type OwnershipDatabase = BetterSQLite3Database<typeof schema>;
 
 const OWNER_TYPES = new Set<OwnerType>(['member', 'shared', 'unassigned']);
 
@@ -183,8 +187,8 @@ function targetFromRule(rule: typeof ownershipRules.$inferSelect): OwnerTarget {
   };
 }
 
-function loadCategoryTargets(): Map<string, OwnerTarget> {
-  const rows = db
+function loadCategoryTargets(database: OwnershipDatabase): Map<string, OwnerTarget> {
+  const rows = database
     .select({
       name: categories.name,
       type: categories.defaultOwnerType,
@@ -258,6 +262,7 @@ export function setTransactionOwner(id: number, target: OwnerTarget) {
 }
 
 function transactionOwnershipRows(
+  database: OwnershipDatabase,
   ids?: number[],
   startDate?: string,
   endDate?: string,
@@ -271,7 +276,7 @@ function transactionOwnershipRows(
   if (startDate) conditions.push(gte(transactions.date, startDate));
   if (endDate) conditions.push(lte(transactions.date, endDate));
 
-  return db
+  return database
     .select({
       id: transactions.id,
       accountId: transactions.accountId,
@@ -287,7 +292,8 @@ function transactionOwnershipRows(
     .all();
 }
 
-export function applyOwnership(
+export function applyOwnershipWithDatabase(
+  database: OwnershipDatabase,
   input: {
     ids?: number[];
     accountId?: number;
@@ -298,6 +304,7 @@ export function applyOwnership(
   } = {},
 ) {
   const rows = transactionOwnershipRows(
+    database,
     input.ids,
     input.startDate,
     input.endDate,
@@ -305,14 +312,19 @@ export function applyOwnership(
     input.categoryName,
   );
   const context: OwnershipResolutionContext = {
-    rules: listOwnershipRules(),
-    categoryTargets: loadCategoryTargets(),
+    rules: database
+      .select()
+      .from(ownershipRules)
+      .orderBy(asc(ownershipRules.priority), asc(ownershipRules.id))
+      .all(),
+    categoryTargets: loadCategoryTargets(database),
   };
   let updated = 0;
   for (const row of rows) {
     if (!input.force && row.ownerSource === 'manual') continue;
     const resolved = resolveOwnership(row, context);
-    db.update(transactions)
+    database
+      .update(transactions)
       .set({
         expenseOwnerType: resolved.target.type,
         expenseOwnerMemberId: resolved.target.type === 'member' ? resolved.target.memberId : null,
@@ -325,6 +337,10 @@ export function applyOwnership(
     updated++;
   }
   return { updated };
+}
+
+export function applyOwnership(input: Parameters<typeof applyOwnershipWithDatabase>[1] = {}) {
+  return applyOwnershipWithDatabase(db, input);
 }
 
 export function ownershipConditionForRuleCandidates() {

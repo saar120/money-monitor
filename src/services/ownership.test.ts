@@ -20,7 +20,8 @@ vi.mock('../db/connection.js', () => ({
   closeAll: () => {},
 }));
 
-const { applyOwnership, createOwnershipRule, setTransactionOwner } = await import('./ownership.js');
+const { applyOwnership, applyOwnershipWithDatabase, createOwnershipRule, setTransactionOwner } =
+  await import('./ownership.js');
 const { listTransactions } = await import('./transactions.js');
 
 describe('ownership service', () => {
@@ -45,6 +46,30 @@ describe('ownership service', () => {
     }).transactions;
     expect(updated.id).toBe(tx.id);
     expect(updated.ownerSource).toBe('account');
+  });
+
+  it('can recompute against the database captured by a canonical listener', () => {
+    const listenerDb = createTestDb();
+    try {
+      insertCategory(listenerDb.db, {
+        name: 'rent',
+        label: 'Rent',
+        defaultOwnerType: 'shared',
+        defaultOwnerMemberId: null,
+      });
+      const account = insertAccount(listenerDb.db, { memberId: 1 });
+      const tx = insertTransaction(listenerDb.db, account.id, { category: 'rent' });
+
+      applyOwnershipWithDatabase(listenerDb.db, { categoryName: 'rent' });
+
+      expect(
+        listenerDb.sqlite
+          .prepare('SELECT expense_owner_type FROM transactions WHERE id = ?')
+          .get(tx.id),
+      ).toEqual({ expense_owner_type: 'shared' });
+    } finally {
+      listenerDb.close();
+    }
   });
 
   it('lets category default owner override account member', () => {
