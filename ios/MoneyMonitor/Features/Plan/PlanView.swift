@@ -123,6 +123,7 @@ struct PlanView: View {
 private struct CategoryManagerView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @State private var categories: [CanonicalCategory] = []
+    @State private var ownerMembers: [CategoryOwnerMember] = []
     @State private var error: String?
     @State private var showingCreate = false
 
@@ -131,7 +132,10 @@ private struct CategoryManagerView: View {
             if let error { Section { Text(error).foregroundStyle(.red) } }
             ForEach(categories, id: \.id) { category in
                 NavigationLink {
-                    CategoryEditorView(category: category) { await load() }
+                    CategoryEditorView(
+                        category: category,
+                        ownerMembers: ownerMembers
+                    ) { await load() }
                 } label: {
                     HStack {
                         Circle().fill(Color(hex: category.color ?? "#94A3B8")).frame(width: 14, height: 14)
@@ -149,14 +153,23 @@ private struct CategoryManagerView: View {
         .navigationTitle("Categories")
         .toolbar { Button("Add", systemImage: "plus") { showingCreate = true } }
         .sheet(isPresented: $showingCreate) {
-            NavigationStack { CategoryCreateView { showingCreate = false; await load() } }
+            NavigationStack {
+                CategoryCreateView(ownerMembers: ownerMembers) {
+                    showingCreate = false; await load()
+                }
+            }
         }
         .task { await load() }
         .refreshable { await load() }
     }
 
     private func load() async {
-        do { categories = try await environment.categories(); error = nil }
+        do {
+            let catalog = try await environment.categoryCatalog()
+            categories = catalog.categories
+            ownerMembers = catalog.ownerMembers
+            error = nil
+        }
         catch { self.error = "Reconnect to your Mac and try again." }
     }
 }
@@ -174,6 +187,7 @@ private struct CategoryCreateView: View {
     @State private var error: String?
     @State private var idempotencyKey = UUID().uuidString
     @State private var attemptedPayload = ""
+    let ownerMembers: [CategoryOwnerMember]
     let saved: () async -> Void
 
     var body: some View {
@@ -185,6 +199,9 @@ private struct CategoryCreateView: View {
             Picker("Default owner", selection: $owner) {
                 Text("Account member").tag("unassigned")
                 Text("Together").tag("shared")
+                ForEach(ownerMembers) { member in
+                    Text(member.name).tag("member:\(member.id)")
+                }
             }
             Toggle("Ignore from statistics", isOn: $ignored)
             if let error { Text(error).foregroundStyle(.red) }
@@ -209,7 +226,8 @@ private struct CategoryCreateView: View {
             _ = try await environment.createCategory(.init(
                 idempotencyKey: idempotencyKey, name: name, label: label,
                 color: color, rules: rules.isEmpty ? nil : rules,
-                defaultOwnerType: owner == "shared" ? .shared : .unassigned,
+                defaultOwnerType: owner.hasPrefix("member:") ? .member : owner == "shared" ? .shared : .unassigned,
+                defaultOwnerMemberId: selectedCategoryMemberID(owner),
                 ignoredFromStats: ignored
             ))
             await saved(); dismiss()
@@ -221,6 +239,7 @@ private struct CategoryCreateView: View {
                        && $0.rules == (rules.isEmpty ? nil : rules)
                        && categoryOwnerValue($0) == owner && $0.ignoredFromStats == ignored
                }) {
+                await environment.refreshCategoryProjections()
                 await saved(); dismiss()
             } else {
                 self.error = "Could not create this category. Try again to reuse the same receipt."
@@ -233,9 +252,11 @@ private struct CategoryEditorView: View {
     @EnvironmentObject private var environment: AppEnvironment
     @Environment(\.dismiss) private var dismiss
     let category: CanonicalCategory
+    let ownerMembers: [CategoryOwnerMember]
     let saved: () async -> Void
     @State private var label: String
     @State private var color: String
+    @State private var originalColor: String?
     @State private var rules: String
     @State private var ignored: Bool
     @State private var owner: String
@@ -245,10 +266,16 @@ private struct CategoryEditorView: View {
     @State private var confirmDelete = false
     @State private var error: String?
 
-    init(category: CanonicalCategory, saved: @escaping () async -> Void) {
+    init(
+        category: CanonicalCategory,
+        ownerMembers: [CategoryOwnerMember],
+        saved: @escaping () async -> Void
+    ) {
         self.category = category; self.saved = saved
+        self.ownerMembers = ownerMembers
         _label = State(initialValue: category.label)
         _color = State(initialValue: category.color ?? "#94A3B8")
+        _originalColor = State(initialValue: category.color)
         _rules = State(initialValue: category.rules ?? "")
         _ignored = State(initialValue: category.ignoredFromStats)
         _owner = State(initialValue: categoryOwnerValue(category))
@@ -263,10 +290,8 @@ private struct CategoryEditorView: View {
             Picker("Default owner", selection: $owner) {
                 Text("Account member").tag("unassigned")
                 Text("Together").tag("shared")
-                if category.defaultOwnerType == .member,
-                   let memberID = category.defaultOwnerMemberId
-                {
-                    Text("Member #\(memberID)").tag("member:\(memberID)")
+                ForEach(ownerMembers) { member in
+                    Text(member.name).tag("member:\(member.id)")
                 }
             }
             Toggle("Ignore from statistics", isOn: $ignored)
@@ -289,9 +314,9 @@ private struct CategoryEditorView: View {
     private func saveChanges() async {
         do {
             _ = try await environment.updateCategory(id: category.id, request: .init(
-                label: label, color: color, rules: rules.isEmpty ? nil : rules,
+                label: label, color: intendedCategoryColor(original: originalColor, draft: color), rules: rules.isEmpty ? nil : rules,
                 defaultOwnerType: owner == "shared" ? .shared : owner == "unassigned" ? .unassigned : .member,
-                defaultOwnerMemberId: owner.hasPrefix("member:") ? category.defaultOwnerMemberId : nil,
+                defaultOwnerMemberId: selectedCategoryMemberID(owner),
                 ignoredFromStats: ignored, expectedVersion: expectedVersion
             ))
             await saved(); dismiss()
@@ -323,6 +348,7 @@ private struct CategoryEditorView: View {
                 return
             }
             guard let authoritative = current.first(where: { $0.id == category.id }) else {
+                await environment.refreshCategoryProjections()
                 await saved(); dismiss()
                 return
             }
@@ -346,11 +372,12 @@ private struct CategoryEditorView: View {
         }
         if afterUnknownOutcome,
            authoritative.label == label,
-           authoritative.color == color,
+           authoritative.color == intendedCategoryColor(original: originalColor, draft: color),
            authoritative.rules == (rules.isEmpty ? nil : rules),
            authoritative.ignoredFromStats == ignored,
            categoryOwnerValue(authoritative) == owner
         {
+            await environment.refreshCategoryProjections()
             await saved(); dismiss()
             return
         }
@@ -358,6 +385,15 @@ private struct CategoryEditorView: View {
         needsReapply = true
         error = "The category changed on another client. Review your draft, then reapply it."
     }
+}
+
+func intendedCategoryColor(original: String?, draft: String) -> String? {
+    original == nil && draft == "#94A3B8" ? nil : draft
+}
+
+private func selectedCategoryMemberID(_ value: String) -> Int? {
+    guard value.hasPrefix("member:") else { return nil }
+    return Int(value.dropFirst("member:".count))
 }
 
 private func categoryOwnerValue(_ category: CanonicalCategory) -> String {

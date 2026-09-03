@@ -44,7 +44,10 @@ function resource(row: CategoryRow): CategoryResource {
 }
 
 export class CanonicalCategoryStore {
-  constructor(private readonly sqlite: Database.Database) {}
+  constructor(
+    private readonly sqlite: Database.Database,
+    private readonly onOwnerChanged: (categoryName: string) => void = () => undefined,
+  ) {}
 
   list(): CategoryResource[] {
     return (
@@ -52,6 +55,12 @@ export class CanonicalCategoryStore {
         .prepare('SELECT * FROM categories ORDER BY label COLLATE NOCASE, id')
         .all() as CategoryRow[]
     ).map(resource);
+  }
+
+  ownerMembers(): Array<{ id: number; name: string }> {
+    return this.sqlite
+      .prepare('SELECT id, name FROM members WHERE is_active = 1 ORDER BY name COLLATE NOCASE, id')
+      .all() as Array<{ id: number; name: string }>;
   }
 
   get(id: number): CategoryResource | null {
@@ -83,8 +92,8 @@ export class CanonicalCategoryStore {
       if (prior) {
         if (prior.request_fingerprint !== fingerprint)
           throw new IdempotencyKeyReusedError(idempotencyKey);
-        const stored = JSON.parse(prior.outcome_json) as CategoryResource;
-        return { category: this.get(stored.id) ?? stored, replayed: true };
+        const stored = categoryResourceSchema.parse(JSON.parse(prior.outcome_json));
+        return { category: stored, replayed: true };
       }
       let inserted;
       try {
@@ -165,6 +174,12 @@ export class CanonicalCategoryStore {
         this.sqlite
           .prepare('UPDATE transactions SET ignored = ? WHERE category = ?')
           .run(ignored ? 1 : 0, current.name);
+      }
+      if (
+        ownerType !== current.defaultOwnerType ||
+        ownerMemberId !== current.defaultOwnerMemberId
+      ) {
+        this.onOwnerChanged(current.name);
       }
       return this.get(input.id)!;
     })();

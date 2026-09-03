@@ -351,8 +351,15 @@ export const categoryResourceSchema = z
   })
   .strict();
 
+export const categoryOwnerMemberSchema = z
+  .object({ id: entityIdSchema, name: z.string().trim().min(1).max(120) })
+  .strict();
+
 export const categoryListResponseSchema = z
-  .object({ data: z.array(categoryResourceSchema).max(500), meta: canonicalMetaSchema })
+  .object({
+    data: z.array(categoryResourceSchema).max(500),
+    meta: canonicalMetaSchema.extend({ ownerMembers: z.array(categoryOwnerMemberSchema).max(100) }),
+  })
   .strict();
 
 export const categoryResponseSchema = z

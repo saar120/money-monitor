@@ -90,6 +90,21 @@ export interface CanonicalClientOptions {
   testUnknownOutcome?: boolean;
 }
 
+export function categoryMatchesCreateRequest(
+  category: CategoryResource,
+  request: CategoryCreateRequest,
+): boolean {
+  return (
+    category.name === request.name &&
+    category.label === request.label &&
+    category.color === (request.color ?? null) &&
+    category.rules === (request.rules ?? null) &&
+    category.defaultOwnerType === (request.defaultOwnerType ?? 'unassigned') &&
+    category.defaultOwnerMemberId === (request.defaultOwnerMemberId ?? null) &&
+    category.ignoredFromStats === (request.ignoredFromStats ?? false)
+  );
+}
+
 export class CanonicalApiClient {
   private readonly baseUrl: string;
   private readonly token: string;
@@ -139,7 +154,9 @@ export class CanonicalApiClient {
       return { status: 'accepted' as const, category: await this.createCategory(request) };
     } catch (error) {
       if (error instanceof CanonicalClientError && error.code !== 'unknown_outcome') throw error;
-      const category = (await this.listCategories()).find((item) => item.name === request.name);
+      const category = (await this.listCategories()).find((item) =>
+        categoryMatchesCreateRequest(item, request),
+      );
       if (!category) throw error;
       return { status: 'recovered' as const, category };
     }

@@ -441,16 +441,24 @@ export interface CategoryMutationMeta {
   receipt?: { idempotencyKey: string; replayed: boolean };
 }
 
+export interface CategoryOwnerMember {
+  id: number;
+  name: string;
+}
+
 export async function getCategories() {
-  const response = await request<{ data: Category[] }>('/v1/categories');
-  return { categories: response.data };
+  const response = await request<{
+    data: Category[];
+    meta: { ownerMembers: CategoryOwnerMember[] };
+  }>('/v1/categories');
+  return { categories: response.data, ownerMembers: response.meta.ownerMembers };
 }
 
 export function createCategory(data: {
   idempotencyKey: string;
   name: string;
   label: string;
-  color?: string;
+  color?: string | null;
   rules?: string;
   defaultOwnerType?: OwnerType;
   defaultOwnerMemberId?: number | null;
@@ -466,7 +474,7 @@ export function updateCategory(
   id: number,
   data: {
     label?: string;
-    color?: string;
+    color?: string | null;
     rules?: string | null;
     defaultOwnerType?: OwnerType;
     defaultOwnerMemberId?: number | null;

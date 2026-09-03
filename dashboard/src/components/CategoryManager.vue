@@ -2,13 +2,12 @@
 import { ref, onMounted } from 'vue';
 import {
   getCategories,
-  getMembers,
   createCategory,
   updateCategory,
   deleteCategory,
   aiRecategorize,
   type Category,
-  type Member,
+  type CategoryOwnerMember,
   type OwnerType,
   type CategoryMutationMeta,
   APIError,
@@ -39,9 +38,10 @@ import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { intendedNullableColor, toggleWasAccepted } from '@/lib/category-recovery';
 
 const categories = ref<Category[]>([]);
-const members = ref<Member[]>([]);
+const members = ref<CategoryOwnerMember[]>([]);
 const loading = ref(false);
 const error = ref('');
 
@@ -50,6 +50,7 @@ const editingId = ref<number | null>(null);
 const reapplyId = ref<number | null>(null);
 const editLabel = ref('');
 const editColor = ref('');
+const editOriginalColor = ref<string | null>(null);
 const editRules = ref('');
 const editOwner = ref('unassigned');
 
@@ -92,8 +93,7 @@ async function runRecategorize() {
 async function load() {
   loading.value = true;
   try {
-    const [, memberRes] = await Promise.all([reloadCategories(), getMembers()]);
-    members.value = memberRes.members.filter((m) => m.isActive);
+    await reloadCategories();
   } catch {
     error.value = 'Failed to load categories';
   } finally {
@@ -104,6 +104,7 @@ async function load() {
 async function reloadCategories() {
   const res = await getCategories();
   categories.value = res.categories;
+  members.value = res.ownerMembers;
   rememberCategoryVersions(res.categories);
   return res.categories;
 }
@@ -125,9 +126,18 @@ function applyRefreshHints(meta: CategoryMutationMeta) {
   }
 }
 
+function refreshCategoryProjections() {
+  window.dispatchEvent(
+    new globalThis.CustomEvent('money-monitor:refresh', {
+      detail: { domains: ['categories'] },
+    }),
+  );
+}
+
 function startEdit(cat: Category) {
   editingId.value = cat.id;
   editLabel.value = cat.label;
+  editOriginalColor.value = cat.color;
   editColor.value = cat.color ?? DEFAULT_CATEGORY_COLOR;
   editRules.value = cat.rules ?? '';
   editOwner.value =
@@ -145,7 +155,7 @@ async function saveEdit(cat: Category) {
   try {
     const res = await updateCategory(cat.id, {
       label: editLabel.value,
-      color: editColor.value,
+      color: intendedEditColor(),
       rules: editRules.value || null,
       defaultOwnerType: ownerTypeFromValue(editOwner.value),
       defaultOwnerMemberId: ownerMemberIdFromValue(editOwner.value),
@@ -172,6 +182,7 @@ async function saveEdit(cat: Category) {
         return;
       }
       if (isUnknownOutcome(caught) && categoryMatchesDraft(latest)) {
+        refreshCategoryProjections();
         editingId.value = null;
         error.value = '';
         return;
@@ -213,6 +224,7 @@ async function remove(cat: Category) {
       error.value = latest.some((value) => value.id === cat.id)
         ? 'Deletion was not accepted. Review the latest category and confirm again.'
         : '';
+      if (!latest.some((value) => value.id === cat.id)) refreshCategoryProjections();
     } else {
       error.value = 'Failed to delete';
     }
@@ -266,6 +278,7 @@ async function addCategory() {
       }
       const accepted = latest.some(categoryMatchesCreate);
       if (accepted) {
+        refreshCategoryProjections();
         showNewForm.value = false;
         error.value = '';
       } else {
@@ -288,10 +301,14 @@ function isUnknownOutcome(error: unknown): boolean {
 function categoryMatchesDraft(category: Category): boolean {
   return (
     category.label === editLabel.value &&
-    category.color === editColor.value &&
+    category.color === intendedEditColor() &&
     category.rules === (editRules.value || null) &&
     ownerValue(category) === editOwner.value
   );
+}
+
+function intendedEditColor(): string | null {
+  return intendedNullableColor(editOriginalColor.value, editColor.value, DEFAULT_CATEGORY_COLOR);
 }
 
 function categoryMatchesCreate(category: Category): boolean {
@@ -330,8 +347,9 @@ function ownerLabel(value: string): string {
 }
 
 async function toggleIgnored(cat: Category) {
+  const intendedIgnored = !cat.ignoredFromStats;
   try {
-    const res = await updateCategory(cat.id, { ignoredFromStats: !cat.ignoredFromStats });
+    const res = await updateCategory(cat.id, { ignoredFromStats: intendedIgnored });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
     rememberCategoryVersions([res.category]);
@@ -342,9 +360,15 @@ async function toggleIgnored(cat: Category) {
       (caught instanceof APIError && caught.code === 'resource_conflict') ||
       isUnknownOutcome(caught)
     ) {
-      error.value = (await recoverCategories())
-        ? 'This category changed. Review the latest value, then reapply the toggle.'
-        : 'Could not confirm the result. Reconnect, then reapply the toggle.';
+      const authoritative = await recoverCategories();
+      if (!authoritative) {
+        error.value = 'Could not confirm the result. Reconnect, then reapply the toggle.';
+      } else if (toggleWasAccepted(authoritative, cat.id, intendedIgnored)) {
+        refreshCategoryProjections();
+        error.value = '';
+      } else {
+        error.value = 'This category changed. Review the latest value, then reapply the toggle.';
+      }
     } else {
       error.value = 'Failed to update';
     }

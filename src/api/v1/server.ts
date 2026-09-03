@@ -56,6 +56,8 @@ export interface CanonicalServerOptions {
   allowUnknownOutcomeSimulation?: boolean;
   /** Mac-owned conversion rates; injectable only for deterministic tests. */
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  /** Recalculate non-manual transaction owners after a category default changes. */
+  onCategoryOwnerChanged?: (categoryName: string) => void;
 }
 
 export interface CanonicalServerStartOptions {
@@ -129,7 +131,7 @@ export function registerCanonicalRoutes(
   clock: () => Date,
 ): void {
   const homeOverview = createHomeOverviewProjection(options.sqlite);
-  const categories = new CanonicalCategoryStore(options.sqlite);
+  const categories = new CanonicalCategoryStore(options.sqlite, options.onCategoryOwnerChanged);
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1')) reply.header('Cache-Control', 'no-store');
     return payload;
@@ -165,7 +167,10 @@ export function registerCanonicalRoutes(
     '/api/v1/categories',
     { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/categories')) },
     async () => {
-      const candidate = { data: categories.list(), meta: createCanonicalMeta(clock()) };
+      const candidate = {
+        data: categories.list(),
+        meta: { ...createCanonicalMeta(clock()), ownerMembers: categories.ownerMembers() },
+      };
       const parsed = categoryListResponseSchema.safeParse(candidate);
       if (!parsed.success) throw new CanonicalApiError('internal_server_error');
       return parsed.data;

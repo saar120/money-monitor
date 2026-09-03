@@ -180,7 +180,10 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
         "rules": "Food shops", "defaultOwnerType": "shared", "defaultOwnerMemberId": null,
         "ignoredFromStats": false, "resourceVersion": 3, "updatedAt": "2026-08-09T10:00:00.123Z"
       }],
-      "meta": { "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative" }
+      "meta": {
+        "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative",
+        "ownerMembers": [{ "id": 2, "name": "Saar" }]
+      }
     }
     """
 
@@ -336,6 +339,7 @@ final class CanonicalAPITests: XCTestCase {
         let client = CanonicalAPIClient(transport: transport, token: "issued-device-token")
 
         let listed = try await client.listCategories()
+        XCTAssertEqual(listed.meta.ownerMembers.first?.name, "Saar")
         let replay = try await client.createCategory(.init(
             idempotencyKey: "category-1",
             name: "groceries",
@@ -395,6 +399,18 @@ final class CanonicalAPITests: XCTestCase {
                 .coded(code: "unknown_outcome", requestId: "category-unknown-1", status: 503)
             )
         }
+    }
+
+    func testCategoryDraftPreservesAnUnsetColorUntilTheUserChangesIt() {
+        XCTAssertNil(intendedCategoryColor(original: nil, draft: "#94A3B8"))
+        XCTAssertEqual(
+            intendedCategoryColor(original: nil, draft: "#FF0000"),
+            "#FF0000"
+        )
+        XCTAssertEqual(
+            intendedCategoryColor(original: "#94A3B8", draft: "#94A3B8"),
+            "#94A3B8"
+        )
     }
 
     func testGeneratedClientDecodesStableCodedErrors() async throws {

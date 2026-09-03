@@ -63,11 +63,22 @@ struct CategoryMutation<Value: Sendable>: Sendable {
     let refreshDomains: Set<String>
 }
 
+struct CategoryOwnerMember: Equatable, Identifiable, Sendable {
+    let id: Int
+    let name: String
+}
+
+struct CategoryCatalog: Sendable {
+    let categories: [CanonicalCategory]
+    let ownerMembers: [CategoryOwnerMember]
+}
+
 protocol MobileAPIClient: Sendable {
     func health(baseURL: URL) async throws -> HealthResponse
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
     func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope
     func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory]
+    func categoryCatalog(credential: PairedMacCredential) async throws -> CategoryCatalog
     func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
     func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
     func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String>
@@ -78,6 +89,7 @@ extension MobileAPIClient {
         throw MobileClientError.invalidRequest
     }
     func categories(credential _: PairedMacCredential) async throws -> [CanonicalCategory] { throw MobileClientError.invalidRequest }
+    func categoryCatalog(credential _: PairedMacCredential) async throws -> CategoryCatalog { throw MobileClientError.invalidRequest }
     func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
     func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
     func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String> { throw MobileClientError.invalidRequest }
@@ -246,6 +258,16 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
     func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory] {
         let response = try await canonicalClient(credential).listCategories()
         return response.data.map(CanonicalCategory.init)
+    }
+
+    func categoryCatalog(credential: PairedMacCredential) async throws -> CategoryCatalog {
+        let response = try await canonicalClient(credential).listCategories()
+        return CategoryCatalog(
+            categories: response.data.map(CanonicalCategory.init),
+            ownerMembers: response.meta.ownerMembers.map {
+                CategoryOwnerMember(id: $0.id, name: $0.name)
+            }
+        )
     }
 
     func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> {

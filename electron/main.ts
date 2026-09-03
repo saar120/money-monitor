@@ -310,6 +310,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
     const { db } = connection;
     const { getNetWorth } = await import('../dist/services/net-worth.js');
     const { resolveReview } = await import('../dist/services/transactions.js');
+    const { applyOwnership } = await import('../dist/services/ownership.js');
     const { createProductionMobileAccess } =
       await import('../dist/mobile/production-mobile-access.js');
     const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
@@ -330,6 +331,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
       },
       readNetWorthIls: async () => (await getNetWorth()).total,
       resolveReview,
+      onCategoryOwnerChanged: (categoryName: string) => applyOwnership({ categoryName }),
       // The bootstrap ports intentionally retain the real database used for
       // device credentials. While the desktop swaps to its demo database,
       // fail the entire mobile snapshot closed instead of mixing sources.

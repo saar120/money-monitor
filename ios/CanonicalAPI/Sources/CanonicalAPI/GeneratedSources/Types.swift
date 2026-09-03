@@ -3823,6 +3823,44 @@ public enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember`.
+        public struct CategoryOwnerMember: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/id`.
+            public var id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/name`.
+            public var name: Swift.String
+            /// Creates a new `CategoryOwnerMember`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            public init(
+                id: Swift.Int,
+                name: Swift.String
+            ) {
+                self.id = id
+                self.name = name
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.Int.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/CategoryListResponse`.
         public struct CategoryListResponse: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload`.
@@ -4074,6 +4112,48 @@ public enum Components {
                 }
                 /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/receipt`.
                 public var receipt: Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload`.
+                public struct OwnerMembersPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/id`.
+                    public var id: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/name`.
+                    public var name: Swift.String
+                    /// Creates a new `OwnerMembersPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - name:
+                    public init(
+                        id: Swift.Int,
+                        name: Swift.String
+                    ) {
+                        self.id = id
+                        self.name = name
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case name
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.Int.self,
+                            forKey: .id
+                        )
+                        self.name = try container.decode(
+                            Swift.String.self,
+                            forKey: .name
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "name"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/ownerMembers`.
+                public typealias OwnerMembersPayload = [Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/ownerMembers`.
+                public var ownerMembers: Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload
                 /// Creates a new `MetaPayload`.
                 ///
                 /// - Parameters:
@@ -4087,6 +4167,7 @@ public enum Components {
                 ///   - refreshHints:
                 ///   - missingSections:
                 ///   - receipt:
+                ///   - ownerMembers:
                 public init(
                     apiVersion: Components.Schemas.CategoryListResponse.MetaPayload.ApiVersionPayload,
                     generatedAt: Foundation.Date,
@@ -4097,7 +4178,8 @@ public enum Components {
                     resourceVersion: Swift.Int? = nil,
                     refreshHints: Components.Schemas.CategoryListResponse.MetaPayload.RefreshHintsPayload? = nil,
                     missingSections: [Swift.String]? = nil,
-                    receipt: Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload? = nil
+                    receipt: Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload? = nil,
+                    ownerMembers: Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload
                 ) {
                     self.apiVersion = apiVersion
                     self.generatedAt = generatedAt
@@ -4109,6 +4191,7 @@ public enum Components {
                     self.refreshHints = refreshHints
                     self.missingSections = missingSections
                     self.receipt = receipt
+                    self.ownerMembers = ownerMembers
                 }
                 public enum CodingKeys: String, CodingKey {
                     case apiVersion
@@ -4121,6 +4204,7 @@ public enum Components {
                     case refreshHints
                     case missingSections
                     case receipt
+                    case ownerMembers
                 }
                 public init(from decoder: any Swift.Decoder) throws {
                     let container = try decoder.container(keyedBy: CodingKeys.self)
@@ -4164,6 +4248,10 @@ public enum Components {
                         Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload.self,
                         forKey: .receipt
                     )
+                    self.ownerMembers = try container.decode(
+                        Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload.self,
+                        forKey: .ownerMembers
+                    )
                     try decoder.ensureNoAdditionalProperties(knownKeys: [
                         "apiVersion",
                         "generatedAt",
@@ -4174,7 +4262,8 @@ public enum Components {
                         "resourceVersion",
                         "refreshHints",
                         "missingSections",
-                        "receipt"
+                        "receipt",
+                        "ownerMembers"
                     ])
                 }
             }
@@ -7189,7 +7278,7 @@ public enum Operations {
                     self.body = body
                 }
             }
-            /// Successful response
+            /// Accepted create or receipt replay
             ///
             /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)/responses/201`.
             ///

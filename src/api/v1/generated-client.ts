@@ -267,6 +267,10 @@ export type components = {
         /** Format: date-time */
         generatedAt: string;
         missingSections?: string[];
+        ownerMembers: {
+          id: number;
+          name: string;
+        }[];
         receipt?: {
           idempotencyKey: string;
           replayed: boolean;
@@ -279,6 +283,10 @@ export type components = {
         /** @constant */
         source: 'mac-authoritative';
       };
+    };
+    CategoryOwnerMember: {
+      id: number;
+      name: string;
     };
     CategoryResource: {
       color: string | null;

@@ -1244,6 +1244,16 @@
         ],
         "additionalProperties": false
       },
+      "CategoryOwnerMember": {
+        "$schema": "https://json-schema.org/draft/2020-12/schema",
+        "type": "object",
+        "properties": {
+          "id": { "type": "integer", "exclusiveMinimum": 0, "maximum": 9007199254740991 },
+          "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+        },
+        "required": ["id", "name"],
+        "additionalProperties": false
+      },
       "CategoryListResponse": {
         "$schema": "https://json-schema.org/draft/2020-12/schema",
         "type": "object",
@@ -1344,9 +1354,22 @@
                 },
                 "required": ["idempotencyKey", "replayed"],
                 "additionalProperties": false
+              },
+              "ownerMembers": {
+                "maxItems": 100,
+                "type": "array",
+                "items": {
+                  "type": "object",
+                  "properties": {
+                    "id": { "type": "integer", "exclusiveMinimum": 0, "maximum": 9007199254740991 },
+                    "name": { "type": "string", "minLength": 1, "maxLength": 120 }
+                  },
+                  "required": ["id", "name"],
+                  "additionalProperties": false
+                }
               }
             },
-            "required": ["apiVersion", "generatedAt", "source"],
+            "required": ["apiVersion", "generatedAt", "source", "ownerMembers"],
             "additionalProperties": false
           }
         },

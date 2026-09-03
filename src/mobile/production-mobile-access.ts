@@ -62,6 +62,7 @@ export interface ProductionMobileAccessOptions {
   deviceRegistryOptions?: Omit<MobileDeviceRegistryOptions, 'clock'>;
   pairingManagerOptions?: PairingManagerOverrides;
   resolveReview?: (transactionID: number, categoryName: string) => { needsReview: boolean } | null;
+  onCategoryOwnerChanged?: (categoryName: string) => void;
 }
 
 export interface ProductionMobileAccess {
@@ -74,6 +75,7 @@ export interface ProductionMobileAccess {
   canonicalDependencies: {
     sqlite: Database.Database;
     authenticate: CanonicalAuthenticator;
+    onCategoryOwnerChanged?: (categoryName: string) => void;
   };
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -228,6 +230,7 @@ export function createProductionMobileAccess(
   const canonicalDependencies = Object.freeze({
     sqlite: options.sqlite,
     authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
+    onCategoryOwnerChanged: options.onCategoryOwnerChanged,
   });
 
   function createPairingManager(publicUrl: string): PairingManager {

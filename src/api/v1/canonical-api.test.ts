@@ -3,7 +3,7 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CanonicalApiClient } from './client.js';
+import { CanonicalApiClient, categoryMatchesCreateRequest } from './client.js';
 import { CANONICAL_OPENAPI_DOCUMENT } from './openapi.js';
 import { createCanonicalHarness, type CanonicalHarness } from './test-harness.js';
 import { createServer } from '../../server.js';
@@ -210,7 +210,11 @@ describe('canonical /api/v1 black-box foundation', () => {
   });
 
   it('shares receipt-protected category CRUD across Mac and iPhone with explicit conflicts', async () => {
-    const server = await harness();
+    const ownerChanges: string[] = [];
+    const server = await harness({ onCategoryOwnerChanged: (name) => ownerChanges.push(name) });
+    server.sqlite
+      .prepare("INSERT INTO members (name, is_active) VALUES ('Saar', 1), ('Inactive', 0)")
+      .run();
     const create = {
       idempotencyKey: 'category-groceries-1',
       name: 'groceries',
@@ -223,6 +227,10 @@ describe('canonical /api/v1 black-box foundation', () => {
     const created = await server.iPhone.createCategory(create);
     expect(created).toMatchObject({ name: 'groceries', label: 'Groceries', resourceVersion: 1 });
     expect(await server.mac.listCategories()).toEqual([created]);
+    const catalog = await raw(server.macBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.macToken}` },
+    });
+    expect(catalog.body).toMatchObject({ meta: { ownerMembers: [{ name: 'Saar' }] } });
 
     const replay = await server.iPhone.createCategory(create);
     expect(replay).toEqual(created);
@@ -248,8 +256,13 @@ describe('canonical /api/v1 black-box foundation', () => {
       expectedVersion: 1,
       label: 'Food & Groceries',
       color: '#00AA55',
+      defaultOwnerType: 'shared',
     });
     expect(updated).toMatchObject({ label: 'Food & Groceries', resourceVersion: 2 });
+    expect(ownerChanges).toEqual(['groceries']);
+
+    // Mutation Receipts represent the original outcome, even after authority moves on.
+    expect(await server.iPhone.createCategory(create)).toEqual(created);
 
     await expect(
       server.iPhone.updateCategory(created.id, {
@@ -260,6 +273,7 @@ describe('canonical /api/v1 black-box foundation', () => {
 
     expect(await server.iPhone.deleteCategory(created.id, 2)).toEqual({ deletedId: created.id });
     expect(await server.mac.listCategories()).toEqual([]);
+    expect(await server.iPhone.createCategory(create)).toEqual(created);
   });
 
   it('persists caller-scoped receipts, rejects reused keys, and returns targeted hints', async () => {
@@ -305,6 +319,26 @@ describe('canonical /api/v1 black-box foundation', () => {
     expect(replay.body).toMatchObject({
       meta: { receipt: { idempotencyKey: request.idempotencyKey, replayed: true } },
     });
+  });
+
+  it('does not recover an unknown create from an unrelated category with the same slug', () => {
+    expect(
+      categoryMatchesCreateRequest(
+        {
+          id: 1,
+          name: 'utilities',
+          label: 'Old utilities',
+          color: null,
+          rules: null,
+          defaultOwnerType: 'unassigned',
+          defaultOwnerMemberId: null,
+          ignoredFromStats: false,
+          resourceVersion: 1,
+          updatedAt: GENERATED_AT.toISOString(),
+        },
+        { idempotencyKey: 'new-utilities', name: 'utilities', label: 'Utilities' },
+      ),
+    ).toBe(false);
   });
 
   it('resolves an unknown command by retrying the same receipt and fetching authority', async () => {

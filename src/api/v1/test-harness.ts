@@ -30,6 +30,7 @@ export interface CanonicalHarnessOptions {
   /** Avoid TCP binds in sandboxed unit tests; Fastify injection remains available. */
   startListeners?: boolean;
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  onCategoryOwnerChanged?: (categoryName: string) => void;
 }
 
 type DesktopServer = Awaited<ReturnType<typeof createServer>>;
@@ -156,6 +157,7 @@ export async function createCanonicalHarness(
     logger: false,
     seedCanonical: seed,
     homeExchangeRates: options.homeExchangeRates,
+    onCategoryOwnerChanged: options.onCategoryOwnerChanged,
   } satisfies CreateServerOptions);
   const iPhoneServer = createMobileServer({
     canonical: {
@@ -163,6 +165,7 @@ export async function createCanonicalHarness(
       authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
       allowUnknownOutcomeSimulation: options.allowUnknownOutcomeSimulation,
       homeExchangeRates: options.homeExchangeRates,
+      onCategoryOwnerChanged: options.onCategoryOwnerChanged,
     },
     clock,
     logger: false,

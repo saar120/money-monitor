@@ -1057,6 +1057,13 @@ final class AppEnvironment: ObservableObject {
         return value
     }
 
+    func categoryCatalog() async throws -> CategoryCatalog {
+        let session = try await mobileReadSession()
+        let value = try await apiClient.categoryCatalog(credential: session.credential)
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        return value
+    }
+
     func createCategory(_ request: CategoryCreateRequest) async throws -> CanonicalCategory {
         let session = try await mobileReadSession()
         let mutation = try await apiClient.createCategory(request, credential: session.credential)
@@ -1084,7 +1091,7 @@ final class AppEnvironment: ObservableObject {
         await refreshCategoryProjections(refreshDomains)
     }
 
-    private func refreshCategoryProjections(_ domains: Set<String>) async {
+    func refreshCategoryProjections(_ domains: Set<String> = ["categories"]) async {
         guard domains.contains("categories") else { return }
         await refreshHomeOverview()
     }

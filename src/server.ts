@@ -31,6 +31,7 @@ import { CanonicalApiError, sendCanonicalError } from './api/v1/errors.js';
 import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
 import type { ExchangeRateResult } from './services/exchange-rates.js';
+import { applyOwnership } from './services/ownership.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -47,6 +48,7 @@ export interface CreateServerOptions {
   logger?: boolean;
   /** Injectable Mac-owned rates for deterministic canonical Home tests. */
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  onCategoryOwnerChanged?: (categoryName: string) => void;
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
@@ -200,6 +202,9 @@ export async function createServer(options: CreateServerOptions = {}) {
         }),
       logger: options.logger ?? false,
       homeExchangeRates: options.homeExchangeRates,
+      onCategoryOwnerChanged:
+        options.onCategoryOwnerChanged ??
+        (ownsSqlite ? (categoryName: string) => applyOwnership({ categoryName }) : undefined),
     },
     clock,
   );
