@@ -11,7 +11,6 @@ import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
-import { categoriesRoutes } from './api/categories.routes.js';
 import { exchangeRatesRoutes } from './api/exchange-rates.routes.js';
 import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
@@ -211,7 +210,6 @@ export async function createServer(options: CreateServerOptions = {}) {
     await app.register(accountsRoutes);
     await app.register(transactionsRoutes);
     await app.register(aiRoutes);
-    await app.register(categoriesRoutes);
     await app.register(exchangeRatesRoutes);
     await app.register(assetsRoutes);
     await app.register(liabilitiesRoutes);
