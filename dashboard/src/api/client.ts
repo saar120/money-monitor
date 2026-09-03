@@ -36,13 +36,43 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
-    const payload = error as { error?: string | { message?: string } };
-    throw new Error(
+    const payload = error as {
+      error?: string | { code?: string; message?: string };
+      meta?: { refreshHints?: RefreshHint[] };
+    };
+    throw new APIError(
+      typeof payload.error === 'string' ? undefined : payload.error?.code,
       typeof payload.error === 'string' ? payload.error : payload.error?.message || res.statusText,
+      res.status,
+      payload.meta?.refreshHints ?? [],
     );
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export interface RefreshHint {
+  domain: string;
+  resourceIds: number[];
+}
+
+export class APIError extends Error {
+  readonly code: string | undefined;
+  readonly status: number;
+  readonly refreshHints: RefreshHint[];
+
+  constructor(
+    code: string | undefined,
+    message: string,
+    status: number,
+    refreshHints: RefreshHint[],
+  ) {
+    super(message);
+    this.name = 'APIError';
+    this.code = code;
+    this.status = status;
+    this.refreshHints = refreshHints;
+  }
 }
 
 // ─── Accounts ───
@@ -406,23 +436,30 @@ export interface Category {
   updatedAt: string;
 }
 
+export interface CategoryMutationMeta {
+  refreshHints: RefreshHint[];
+  receipt?: { idempotencyKey: string; replayed: boolean };
+}
+
 export async function getCategories() {
   const response = await request<{ data: Category[] }>('/v1/categories');
   return { categories: response.data };
 }
 
 export function createCategory(data: {
+  idempotencyKey: string;
   name: string;
   label: string;
   color?: string;
   rules?: string;
   defaultOwnerType?: OwnerType;
   defaultOwnerMemberId?: number | null;
+  ignoredFromStats?: boolean;
 }) {
-  return request<{ data: Category }>('/v1/categories', {
+  return request<{ data: Category; meta: CategoryMutationMeta }>('/v1/categories', {
     method: 'POST',
-    body: JSON.stringify({ ...data, idempotencyKey: crypto.randomUUID() }),
-  }).then((response) => ({ category: response.data }));
+    body: JSON.stringify(data),
+  }).then((response) => ({ category: response.data, meta: response.meta }));
 }
 
 export function updateCategory(
@@ -436,10 +473,10 @@ export function updateCategory(
     ignoredFromStats?: boolean;
   },
 ) {
-  return request<{ data: Category }>(`/v1/categories/${id}`, {
+  return request<{ data: Category; meta: CategoryMutationMeta }>(`/v1/categories/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ ...data, expectedVersion: categoriesVersion(id) }),
-  }).then((response) => ({ category: response.data }));
+  }).then((response) => ({ category: response.data, meta: response.meta }));
 }
 
 const categoryVersions = new Map<number, number>();
@@ -453,10 +490,10 @@ export function rememberCategoryVersions(categories: Category[]): void {
 }
 
 export function deleteCategory(id: number) {
-  return request<{ data: { deletedId: number } }>(
+  return request<{ data: { deletedId: number }; meta: CategoryMutationMeta }>(
     `/v1/categories/${id}?expectedVersion=${categoriesVersion(id)}`,
     { method: 'DELETE' },
-  ).then(() => ({ deleted: true }));
+  ).then((response) => ({ deleted: true, meta: response.meta }));
 }
 
 export function updateTransactionCategory(id: number, category: string | null) {

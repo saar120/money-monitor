@@ -227,6 +227,23 @@ describe('canonical /api/v1 black-box foundation', () => {
     const replay = await server.iPhone.createCategory(create);
     expect(replay).toEqual(created);
 
+    const rawReplay = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(create),
+    });
+    expect(rawReplay.status).toBe(201);
+    expect(rawReplay.body).toMatchObject({
+      data: created,
+      meta: {
+        receipt: { idempotencyKey: create.idempotencyKey, replayed: true },
+        refreshHints: [{ domain: 'categories', resourceIds: [created.id] }],
+      },
+    });
+
     const updated = await server.mac.updateCategory(created.id, {
       expectedVersion: 1,
       label: 'Food & Groceries',
@@ -258,6 +275,36 @@ describe('canonical /api/v1 black-box foundation', () => {
     await expect(server.iPhone.requestRefresh({ ...request, resourceId: 2 })).rejects.toMatchObject(
       { code: 'idempotency_key_reused', status: 409 },
     );
+  });
+
+  it('recovers an unknown category create from authority without duplicating it', async () => {
+    const server = await harness({ allowUnknownOutcomeSimulation: true });
+    const request = {
+      idempotencyKey: 'unknown-category-1',
+      name: 'utilities',
+      label: 'Utilities',
+      defaultOwnerType: 'shared' as const,
+    };
+
+    const recovered = await server.iPhone.createCategoryWithRecovery(request);
+    expect(recovered).toMatchObject({
+      status: 'recovered',
+      category: { name: 'utilities', label: 'Utilities', defaultOwnerType: 'shared' },
+    });
+    expect(await server.mac.listCategories()).toHaveLength(1);
+
+    const replay = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+    expect(replay.status).toBe(201);
+    expect(replay.body).toMatchObject({
+      meta: { receipt: { idempotencyKey: request.idempotencyKey, replayed: true } },
+    });
   });
 
   it('resolves an unknown command by retrying the same receipt and fetching authority', async () => {
@@ -357,6 +404,12 @@ describe('canonical /api/v1 black-box foundation', () => {
         '/api/v1/diagnostics',
         '/api/v1/pairing/status',
       ]),
+    );
+    const createResponses = CANONICAL_OPENAPI_DOCUMENT.paths['/api/v1/categories']?.post as {
+      responses?: Record<string, unknown>;
+    };
+    expect(Object.keys(createResponses.responses ?? {})).toEqual(
+      expect.arrayContaining(['201', '4XX']),
     );
     expect(CANONICAL_OPENAPI_DOCUMENT.components.schemas).toEqual(
       expect.objectContaining({

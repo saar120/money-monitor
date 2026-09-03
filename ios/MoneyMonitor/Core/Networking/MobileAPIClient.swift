@@ -1,26 +1,66 @@
 import Foundation
 import CanonicalAPI
 
+enum CanonicalCategoryOwnerType: String, Equatable, Sendable {
+    case member
+    case shared
+    case unassigned
+}
+
+private protocol GeneratedCategoryValue {
+    var id: Int { get }
+    var name: String { get }
+    var label: String { get }
+    var color: String? { get }
+    var rules: String? { get }
+    var canonicalOwnerType: CanonicalCategoryOwnerType { get }
+    var defaultOwnerMemberId: Int? { get }
+    var ignoredFromStats: Bool { get }
+    var resourceVersion: Int { get }
+    var updatedAt: Date { get }
+}
+
+extension Components.Schemas.CategoryListResponse.DataPayloadPayload: GeneratedCategoryValue {
+    fileprivate var canonicalOwnerType: CanonicalCategoryOwnerType {
+        CanonicalCategoryOwnerType(rawValue: defaultOwnerType.rawValue)!
+    }
+}
+
+extension Components.Schemas.CategoryResponse.DataPayload: GeneratedCategoryValue {
+    fileprivate var canonicalOwnerType: CanonicalCategoryOwnerType {
+        CanonicalCategoryOwnerType(rawValue: defaultOwnerType.rawValue)!
+    }
+}
+
 struct CanonicalCategory: Identifiable, Equatable, Sendable {
     let id: Int
     let name: String
     let label: String
     let color: String?
     let rules: String?
+    let defaultOwnerType: CanonicalCategoryOwnerType
+    let defaultOwnerMemberId: Int?
     let ignoredFromStats: Bool
     let resourceVersion: Int
+    let updatedAt: Date
 
-    init(_ value: Components.Schemas.CategoryListResponse.DataPayloadPayload) {
-        id = value.id; name = value.name; label = value.label; color = value.color
-        rules = value.rules; ignoredFromStats = value.ignoredFromStats
+    fileprivate init(_ value: some GeneratedCategoryValue) {
+        id = value.id
+        name = value.name
+        label = value.label
+        color = value.color
+        rules = value.rules
+        defaultOwnerType = value.canonicalOwnerType
+        defaultOwnerMemberId = value.defaultOwnerMemberId
+        ignoredFromStats = value.ignoredFromStats
         resourceVersion = value.resourceVersion
+        updatedAt = value.updatedAt
     }
+}
 
-    init(_ value: Components.Schemas.CategoryResponse.DataPayload) {
-        id = value.id; name = value.name; label = value.label; color = value.color
-        rules = value.rules; ignoredFromStats = value.ignoredFromStats
-        resourceVersion = value.resourceVersion
-    }
+struct CategoryMutation<Value: Sendable>: Sendable {
+    let value: Value
+    let refreshDomains: Set<String>
 }
 
 protocol MobileAPIClient: Sendable {
@@ -28,9 +68,9 @@ protocol MobileAPIClient: Sendable {
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
     func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope
     func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory]
-    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory
-    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory
-    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String>
 }
 
 extension MobileAPIClient {
@@ -38,9 +78,9 @@ extension MobileAPIClient {
         throw MobileClientError.invalidRequest
     }
     func categories(credential _: PairedMacCredential) async throws -> [CanonicalCategory] { throw MobileClientError.invalidRequest }
-    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory { throw MobileClientError.invalidRequest }
-    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory { throw MobileClientError.invalidRequest }
-    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws { throw MobileClientError.invalidRequest }
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String> { throw MobileClientError.invalidRequest }
 }
 
 protocol MobileTransactionAPIClient: Sendable {
@@ -208,18 +248,25 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         return response.data.map(CanonicalCategory.init)
     }
 
-    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory {
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> {
         let response = try await canonicalClient(credential).createCategory(request)
-        return CanonicalCategory(response.data)
+        return CategoryMutation(
+            value: CanonicalCategory(response.data),
+            refreshDomains: Set(response.meta.refreshHints.map(\.domain))
+        )
     }
 
-    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory {
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> {
         let response = try await canonicalClient(credential).updateCategory(id: id, request: request)
-        return CanonicalCategory(response.data)
+        return CategoryMutation(
+            value: CanonicalCategory(response.data),
+            refreshDomains: Set(response.meta.refreshHints.map(\.domain))
+        )
     }
 
-    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws {
-        _ = try await canonicalClient(credential).deleteCategory(id: id, expectedVersion: expectedVersion)
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String> {
+        let response = try await canonicalClient(credential).deleteCategory(id: id, expectedVersion: expectedVersion)
+        return Set(response.meta.refreshHints.map(\.domain))
     }
 
     private func canonicalClient(_ credential: PairedMacCredential) -> CanonicalAPIClient {
@@ -296,7 +343,7 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
         baseURL _: URL,
         operationID _: String
     ) async throws -> (CanonicalHTTPResponse, CanonicalHTTPBody?) {
-        guard body == nil, let requestPath = request.path,
+        guard let requestPath = request.path,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
               let pathComponents = URLComponents(string: requestPath)
         else {
@@ -312,6 +359,16 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
         urlRequest.httpMethod = request.method.rawValue
         for field in request.headerFields {
             urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        if let body {
+            var data = Data()
+            for try await chunk in body {
+                guard data.count + chunk.count <= 1_048_576 else {
+                    throw MobileClientError.invalidRequest
+                }
+                data.append(contentsOf: chunk)
+            }
+            urlRequest.httpBody = data
         }
         let response: MobileHTTPResponse
         do {

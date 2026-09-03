@@ -47,7 +47,7 @@
         },
         "responses": {
           "201": {
-            "description": "Successful response",
+            "description": "Accepted create or receipt replay",
             "content": {
               "application/json": { "schema": { "$ref": "#/components/schemas/CategoryResponse" } }
             }

@@ -851,7 +851,7 @@ export interface operations {
           'application/json': components['schemas']['CanonicalErrorEnvelope'];
         };
       };
-      /** @description Successful response */
+      /** @description Accepted create or receipt replay */
       201: {
         headers: {
           [name: string]: unknown;

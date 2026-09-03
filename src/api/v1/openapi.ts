@@ -118,7 +118,10 @@ export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
             'application/json': { schema: { $ref: '#/components/schemas/CategoryCreateRequest' } },
           },
         },
-        responses: { '201': response('CategoryResponse'), '4XX': errorResponse() },
+        responses: {
+          '201': response('CategoryResponse', 'Accepted create or receipt replay'),
+          '4XX': errorResponse(),
+        },
       },
     },
     '/api/v1/categories/{id}': {

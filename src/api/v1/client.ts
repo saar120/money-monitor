@@ -130,7 +130,19 @@ export class CanonicalApiClient {
       ApiPaths.createCategory,
       request,
       categoryResponseSchema,
+      this.testUnknownOutcome ? { 'x-canonical-test-unknown': 'true' } : undefined,
     ).then((response) => response.data);
+  }
+
+  public async createCategoryWithRecovery(request: CategoryCreateRequest) {
+    try {
+      return { status: 'accepted' as const, category: await this.createCategory(request) };
+    } catch (error) {
+      if (error instanceof CanonicalClientError && error.code !== 'unknown_outcome') throw error;
+      const category = (await this.listCategories()).find((item) => item.name === request.name);
+      if (!category) throw error;
+      return { status: 'recovered' as const, category };
+    }
   }
 
   public updateCategory(id: number, request: CategoryUpdateRequest): Promise<CategoryResource> {

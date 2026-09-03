@@ -205,16 +205,23 @@ export function registerCanonicalRoutes(
         mapStorageError(error);
       }
       const now = clock();
+      const refreshHints = [{ domain: 'categories', resourceIds: [result!.category.id] }];
+      if (
+        options.allowUnknownOutcomeSimulation &&
+        request.headers['x-canonical-test-unknown'] === 'true'
+      ) {
+        throw new CanonicalApiError('unknown_outcome', { refreshHints });
+      }
       const candidate = {
         data: result!.category,
         meta: createCanonicalMeta(now, {
           receipt: { idempotencyKey: input.idempotencyKey, replayed: result!.replayed },
-          refreshHints: [{ domain: 'categories', resourceIds: [result!.category.id] }],
+          refreshHints,
         }),
       };
       const parsed = categoryResponseSchema.safeParse(candidate);
       if (!parsed.success) throw new CanonicalApiError('internal_server_error');
-      return reply.code(result!.replayed ? 200 : 201).send(parsed.data);
+      return reply.code(201).send(parsed.data);
     },
   );
 

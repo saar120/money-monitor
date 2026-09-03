@@ -325,6 +325,55 @@ struct MobileAPIClientTests {
     }
 
     @Test
+    func categoryCreateUsesTheProductionBodyTransportAndPreservesRefreshHints() async throws {
+        let payload = Data(
+            """
+            {
+              "data": {
+                "id": 7, "name": "groceries", "label": "Groceries", "color": "#34C759",
+                "rules": null, "defaultOwnerType": "shared", "defaultOwnerMemberId": null,
+                "ignoredFromStats": false, "resourceVersion": 1,
+                "updatedAt": "2026-08-09T10:00:00.123Z"
+              },
+              "meta": {
+                "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z",
+                "source": "mac-authoritative",
+                "refreshHints": [{ "domain": "categories", "resourceIds": [7] }],
+                "receipt": { "idempotencyKey": "category-command-123456", "replayed": false }
+              }
+            }
+            """.utf8
+        )
+        let transport = StubMobileHTTPTransport(
+            responses: [MobileHTTPResponse(data: payload, statusCode: 201)]
+        )
+        let client = URLSessionMobileAPIClient(transport: transport)
+
+        let mutation = try await client.createCategory(
+            .init(
+                idempotencyKey: "category-command-123456",
+                name: "groceries",
+                label: "Groceries",
+                color: "#34C759",
+                defaultOwnerType: .shared
+            ),
+            credential: makeMobileAPICredential()
+        )
+        let request = try #require(await transport.requests().first)
+        let body = try #require(request.body)
+        let object = try #require(JSONSerialization.jsonObject(with: body) as? [String: Any])
+
+        #expect(mutation.value.defaultOwnerType == .shared)
+        #expect(abs(mutation.value.updatedAt.timeIntervalSince1970 - 1_786_269_600.123) < 0.001)
+        #expect(mutation.refreshDomains == ["categories"])
+        #expect(request.method == "POST")
+        #expect(request.url?.path == "/money-monitor/api/v1/categories")
+        #expect(request.authorization == "Bearer \(String(repeating: "T", count: 43))")
+        #expect(object["idempotencyKey"] as? String == "category-command-123456")
+        #expect(object["defaultOwnerType"] as? String == "shared")
+    }
+
+    @Test
     func forbiddenBootstrapFixtureNeverBecomesAcceptedData() async throws {
         let transport = StubMobileHTTPTransport(
             responses: [

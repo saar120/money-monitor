@@ -1059,24 +1059,33 @@ final class AppEnvironment: ObservableObject {
 
     func createCategory(_ request: CategoryCreateRequest) async throws -> CanonicalCategory {
         let session = try await mobileReadSession()
-        let value = try await apiClient.createCategory(request, credential: session.credential)
+        let mutation = try await apiClient.createCategory(request, credential: session.credential)
         try ensureCurrentMobileReadEpoch(session.epoch)
-        await refreshHomeOverview()
-        return value
+        await refreshCategoryProjections(mutation.refreshDomains)
+        return mutation.value
     }
 
     func updateCategory(id: Int, request: CategoryUpdateRequest) async throws -> CanonicalCategory {
         let session = try await mobileReadSession()
-        let value = try await apiClient.updateCategory(id: id, request: request, credential: session.credential)
+        let mutation = try await apiClient.updateCategory(id: id, request: request, credential: session.credential)
         try ensureCurrentMobileReadEpoch(session.epoch)
-        await refreshHomeOverview()
-        return value
+        await refreshCategoryProjections(mutation.refreshDomains)
+        return mutation.value
     }
 
     func deleteCategory(id: Int, expectedVersion: Int) async throws {
         let session = try await mobileReadSession()
-        try await apiClient.deleteCategory(id: id, expectedVersion: expectedVersion, credential: session.credential)
+        let refreshDomains = try await apiClient.deleteCategory(
+            id: id,
+            expectedVersion: expectedVersion,
+            credential: session.credential
+        )
         try ensureCurrentMobileReadEpoch(session.epoch)
+        await refreshCategoryProjections(refreshDomains)
+    }
+
+    private func refreshCategoryProjections(_ domains: Set<String>) async {
+        guard domains.contains("categories") else { return }
         await refreshHomeOverview()
     }
 
