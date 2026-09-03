@@ -22,6 +22,34 @@ export interface CanonicalRouteDefinition {
 export const CANONICAL_ROUTE_DEFINITIONS: readonly CanonicalRouteDefinition[] = [
   {
     method: 'GET',
+    path: '/api/v1/categories',
+    policy: 'shared',
+    operationId: 'listCategories',
+    summary: 'List canonical categories',
+  },
+  {
+    method: 'POST',
+    path: '/api/v1/categories',
+    policy: 'shared',
+    operationId: 'createCategory',
+    summary: 'Create a canonical category',
+  },
+  {
+    method: 'PATCH',
+    path: '/api/v1/categories/:id',
+    policy: 'shared',
+    operationId: 'updateCategory',
+    summary: 'Update a canonical category',
+  },
+  {
+    method: 'DELETE',
+    path: '/api/v1/categories/:id',
+    policy: 'shared',
+    operationId: 'deleteCategory',
+    summary: 'Delete a canonical category',
+  },
+  {
+    method: 'GET',
     path: '/api/v1/home',
     policy: 'shared',
     operationId: 'getHomeOverview',

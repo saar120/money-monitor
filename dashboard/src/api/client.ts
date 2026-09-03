@@ -36,7 +36,10 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((error as { error: string }).error || res.statusText);
+    const payload = error as { error?: string | { message?: string } };
+    throw new Error(
+      typeof payload.error === 'string' ? payload.error : payload.error?.message || res.statusText,
+    );
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -399,11 +402,13 @@ export interface Category {
   defaultOwnerType: OwnerType;
   defaultOwnerMemberId: number | null;
   ignoredFromStats: boolean;
-  createdAt: string;
+  resourceVersion: number;
+  updatedAt: string;
 }
 
-export function getCategories() {
-  return request<{ categories: Category[] }>('/categories');
+export async function getCategories() {
+  const response = await request<{ data: Category[] }>('/v1/categories');
+  return { categories: response.data };
 }
 
 export function createCategory(data: {
@@ -414,10 +419,10 @@ export function createCategory(data: {
   defaultOwnerType?: OwnerType;
   defaultOwnerMemberId?: number | null;
 }) {
-  return request<{ category: Category }>('/categories', {
+  return request<{ data: Category }>('/v1/categories', {
     method: 'POST',
-    body: JSON.stringify(data),
-  });
+    body: JSON.stringify({ ...data, idempotencyKey: crypto.randomUUID() }),
+  }).then((response) => ({ category: response.data }));
 }
 
 export function updateCategory(
@@ -431,14 +436,27 @@ export function updateCategory(
     ignoredFromStats?: boolean;
   },
 ) {
-  return request<{ category: Category }>(`/categories/${id}`, {
+  return request<{ data: Category }>(`/v1/categories/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
-  });
+    body: JSON.stringify({ ...data, expectedVersion: categoriesVersion(id) }),
+  }).then((response) => ({ category: response.data }));
+}
+
+const categoryVersions = new Map<number, number>();
+function categoriesVersion(id: number): number {
+  const version = categoryVersions.get(id);
+  if (!version) throw new Error('Refresh categories before changing this item.');
+  return version;
+}
+export function rememberCategoryVersions(categories: Category[]): void {
+  for (const category of categories) categoryVersions.set(category.id, category.resourceVersion);
 }
 
 export function deleteCategory(id: number) {
-  return request<{ deleted: boolean }>(`/categories/${id}`, { method: 'DELETE' });
+  return request<{ data: { deletedId: number } }>(
+    `/v1/categories/${id}?expectedVersion=${categoriesVersion(id)}`,
+    { method: 'DELETE' },
+  ).then(() => ({ deleted: true }));
 }
 
 export function updateTransactionCategory(id: number, category: string | null) {

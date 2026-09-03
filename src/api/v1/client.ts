@@ -1,6 +1,9 @@
 import { z } from 'zod';
 import {
   canonicalErrorEnvelopeSchema,
+  categoryDeleteResponseSchema,
+  categoryListResponseSchema,
+  categoryResponseSchema,
   diagnosticsResponseSchema,
   homeOverviewResponseSchema,
   pairingStatusResponseSchema,
@@ -30,6 +33,9 @@ export type DiagnosticsResponse = components['schemas']['DiagnosticsResponse'];
 export type PairingStatusResponse = components['schemas']['PairingStatusResponse'];
 export type HomeOverviewResponse = components['schemas']['HomeOverviewResponse'];
 export type HomeOverviewData = HomeOverviewResponse['data'];
+export type CategoryResource = components['schemas']['CategoryResource'];
+export type CategoryCreateRequest = components['schemas']['CategoryCreateRequest'];
+export type CategoryUpdateRequest = components['schemas']['CategoryUpdateRequest'];
 
 type JsonContent<Value> = Value extends { content: { 'application/json': infer Content } }
   ? Content
@@ -106,6 +112,42 @@ export class CanonicalApiClient {
       `${ApiPaths.getReference}${suffix}`,
       undefined,
       referenceResponseSchema,
+    ).then((response) => response.data);
+  }
+
+  public listCategories(): Promise<CategoryResource[]> {
+    return this.request<components['schemas']['CategoryListResponse']>(
+      'GET',
+      ApiPaths.listCategories,
+      undefined,
+      categoryListResponseSchema,
+    ).then((response) => response.data);
+  }
+
+  public createCategory(request: CategoryCreateRequest): Promise<CategoryResource> {
+    return this.request<components['schemas']['CategoryResponse']>(
+      'POST',
+      ApiPaths.createCategory,
+      request,
+      categoryResponseSchema,
+    ).then((response) => response.data);
+  }
+
+  public updateCategory(id: number, request: CategoryUpdateRequest): Promise<CategoryResource> {
+    return this.request<components['schemas']['CategoryResponse']>(
+      'PATCH',
+      ApiPaths.updateCategory.replace('{id}', String(id)),
+      request,
+      categoryResponseSchema,
+    ).then((response) => response.data);
+  }
+
+  public deleteCategory(id: number, expectedVersion: number): Promise<{ deletedId: number }> {
+    return this.request<components['schemas']['CategoryDeleteResponse']>(
+      'DELETE',
+      `${ApiPaths.deleteCategory.replace('{id}', String(id))}?expectedVersion=${expectedVersion}`,
+      undefined,
+      categoryDeleteResponseSchema,
     ).then((response) => response.data);
   }
 

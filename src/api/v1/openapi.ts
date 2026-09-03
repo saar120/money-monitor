@@ -2,6 +2,13 @@ import { z } from 'zod';
 import {
   canonicalErrorEnvelopeSchema,
   canonicalMetaSchema,
+  categoryCreateRequestSchema,
+  categoryDeleteQuerySchema,
+  categoryDeleteResponseSchema,
+  categoryListResponseSchema,
+  categoryResourceSchema,
+  categoryResponseSchema,
+  categoryUpdateRequestSchema,
   diagnosticsResponseSchema,
   homeOverviewDataSchema,
   homeOverviewResponseSchema,
@@ -41,11 +48,15 @@ function normalizeNullableSchema(value: unknown): unknown {
   if (Array.isArray(anyOf) && anyOf.length === 2) {
     const nullable = anyOf.find(
       (candidate) =>
-        candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).type === 'null',
+        candidate &&
+        typeof candidate === 'object' &&
+        (candidate as Record<string, unknown>).type === 'null',
     );
     const valueSchema = anyOf.find(
       (candidate) =>
-        candidate && typeof candidate === 'object' && (candidate as Record<string, unknown>).type !== 'null',
+        candidate &&
+        typeof candidate === 'object' &&
+        (candidate as Record<string, unknown>).type !== 'null',
     );
     if (nullable && valueSchema && typeof valueSchema === 'object') {
       const schema = { ...(valueSchema as Record<string, unknown>) };
@@ -92,6 +103,54 @@ function secured(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string) {
 /** Generated from the runtime schemas rather than maintained as a second DTO. */
 export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
   const paths: CanonicalOpenApiDocument['paths'] = {
+    '/api/v1/categories': {
+      get: {
+        ...secured('GET', '/api/v1/categories'),
+        summary: 'List canonical categories',
+        responses: { '200': response('CategoryListResponse'), '4XX': errorResponse() },
+      },
+      post: {
+        ...secured('POST', '/api/v1/categories'),
+        summary: 'Create a canonical category',
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CategoryCreateRequest' } },
+          },
+        },
+        responses: { '201': response('CategoryResponse'), '4XX': errorResponse() },
+      },
+    },
+    '/api/v1/categories/{id}': {
+      patch: {
+        ...secured('PATCH', '/api/v1/categories/:id'),
+        summary: 'Update a canonical category',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+        ],
+        requestBody: {
+          required: true,
+          content: {
+            'application/json': { schema: { $ref: '#/components/schemas/CategoryUpdateRequest' } },
+          },
+        },
+        responses: { '200': response('CategoryResponse'), '4XX': errorResponse() },
+      },
+      delete: {
+        ...secured('DELETE', '/api/v1/categories/:id'),
+        summary: 'Delete a canonical category',
+        parameters: [
+          { name: 'id', in: 'path', required: true, schema: { type: 'integer', minimum: 1 } },
+          {
+            name: 'expectedVersion',
+            in: 'query',
+            required: true,
+            schema: { type: 'integer', minimum: 1 },
+          },
+        ],
+        responses: { '200': response('CategoryDeleteResponse'), '4XX': errorResponse() },
+      },
+    },
     '/api/v1/home': {
       get: {
         ...secured('GET', '/api/v1/home'),
@@ -212,6 +271,13 @@ export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
         CanonicalErrorEnvelope: jsonSchema(canonicalErrorEnvelopeSchema),
         HomeOverviewData: jsonSchema(homeOverviewDataSchema),
         HomeOverviewResponse: jsonSchema(homeOverviewResponseSchema),
+        CategoryResource: jsonSchema(categoryResourceSchema),
+        CategoryListResponse: jsonSchema(categoryListResponseSchema),
+        CategoryResponse: jsonSchema(categoryResponseSchema),
+        CategoryCreateRequest: jsonSchema(categoryCreateRequestSchema),
+        CategoryUpdateRequest: jsonSchema(categoryUpdateRequestSchema),
+        CategoryDeleteQuery: jsonSchema(categoryDeleteQuerySchema),
+        CategoryDeleteResponse: jsonSchema(categoryDeleteResponseSchema),
         ReferenceResource: jsonSchema(referenceResourceSchema),
         ReferenceResponse: jsonSchema(referenceResponseSchema),
         ReferenceReadQuery: jsonSchema(referenceReadQuerySchema),

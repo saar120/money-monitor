@@ -40,6 +40,9 @@ struct PlanView: View {
                         }
                     }
                 }
+                Section("Categories") {
+                    NavigationLink("Manage categories") { CategoryManagerView() }
+                }
                 Section("Accounts") {
                     ForEach(snapshot.accounts) { account in
                         NavigationLink {
@@ -114,6 +117,149 @@ struct PlanView: View {
         case "neverRun": "No sync has run yet"
         default: "Sync: \(state)"
         }
+    }
+}
+
+private struct CategoryManagerView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @State private var categories: [CanonicalCategory] = []
+    @State private var error: String?
+    @State private var showingCreate = false
+
+    var body: some View {
+        List {
+            if let error { Section { Text(error).foregroundStyle(.red) } }
+            ForEach(categories, id: \.id) { category in
+                NavigationLink {
+                    CategoryEditorView(category: category) { await load() }
+                } label: {
+                    HStack {
+                        Circle().fill(Color(hex: category.color ?? "#94A3B8")).frame(width: 14, height: 14)
+                        VStack(alignment: .leading) {
+                            Text(category.label)
+                            Text(category.name).font(.caption).foregroundStyle(.secondary)
+                        }
+                        Spacer()
+                        if category.ignoredFromStats { Text("Ignored").font(.caption).foregroundStyle(.secondary) }
+                    }
+                }
+            }
+        }
+        .overlay { if categories.isEmpty && error == nil { ProgressView("Loading categories…") } }
+        .navigationTitle("Categories")
+        .toolbar { Button("Add", systemImage: "plus") { showingCreate = true } }
+        .sheet(isPresented: $showingCreate) {
+            NavigationStack { CategoryCreateView { showingCreate = false; await load() } }
+        }
+        .task { await load() }
+        .refreshable { await load() }
+    }
+
+    private func load() async {
+        do { categories = try await environment.categories(); error = nil }
+        catch { self.error = "Reconnect to your Mac and try again." }
+    }
+}
+
+private struct CategoryCreateView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.dismiss) private var dismiss
+    @State private var name = ""
+    @State private var label = ""
+    @State private var color = "#3B82F6"
+    @State private var rules = ""
+    @State private var ignored = false
+    @State private var saving = false
+    @State private var error: String?
+    let saved: () async -> Void
+
+    var body: some View {
+        Form {
+            TextField("Name (slug)", text: $name).textInputAutocapitalization(.never)
+            TextField("Label", text: $label)
+            TextField("Color (#RRGGBB)", text: $color).textInputAutocapitalization(.never)
+            TextField("Categorization rules", text: $rules, axis: .vertical)
+            Toggle("Ignore from statistics", isOn: $ignored)
+            if let error { Text(error).foregroundStyle(.red) }
+        }
+        .navigationTitle("New Category")
+        .toolbar {
+            ToolbarItem(placement: .cancellationAction) { Button("Cancel") { dismiss() } }
+            ToolbarItem(placement: .confirmationAction) {
+                Button("Save") { Task { await save() } }.disabled(saving || name.isEmpty || label.isEmpty)
+            }
+        }
+    }
+
+    private func save() async {
+        saving = true; defer { saving = false }
+        do {
+            _ = try await environment.createCategory(.init(
+                idempotencyKey: UUID().uuidString, name: name, label: label,
+                color: color, rules: rules.isEmpty ? nil : rules,
+                defaultOwnerType: .unassigned, ignoredFromStats: ignored
+            ))
+            await saved(); dismiss()
+        } catch { self.error = "Could not create this category." }
+    }
+}
+
+private struct CategoryEditorView: View {
+    @EnvironmentObject private var environment: AppEnvironment
+    @Environment(\.dismiss) private var dismiss
+    let category: CanonicalCategory
+    let saved: () async -> Void
+    @State private var label: String
+    @State private var color: String
+    @State private var rules: String
+    @State private var ignored: Bool
+    @State private var confirmDelete = false
+    @State private var error: String?
+
+    init(category: CanonicalCategory, saved: @escaping () async -> Void) {
+        self.category = category; self.saved = saved
+        _label = State(initialValue: category.label)
+        _color = State(initialValue: category.color ?? "#94A3B8")
+        _rules = State(initialValue: category.rules ?? "")
+        _ignored = State(initialValue: category.ignoredFromStats)
+    }
+
+    var body: some View {
+        Form {
+            TextField("Label", text: $label)
+            TextField("Color (#RRGGBB)", text: $color).textInputAutocapitalization(.never)
+            TextField("Categorization rules", text: $rules, axis: .vertical)
+            Toggle("Ignore from statistics", isOn: $ignored)
+            if let error { Text(error).foregroundStyle(.red) }
+            Button("Delete Category", role: .destructive) { confirmDelete = true }
+        }
+        .navigationTitle(category.label)
+        .toolbar { Button("Save") { Task { await saveChanges() } } }
+        .confirmationDialog("Delete \(category.label)?", isPresented: $confirmDelete, titleVisibility: .visible) {
+            Button("Delete", role: .destructive) { Task { await remove() } }
+        } message: { Text("Transactions keep their existing label, but the category will no longer be selectable.") }
+    }
+
+    private func saveChanges() async {
+        do {
+            _ = try await environment.updateCategory(id: category.id, request: .init(
+                label: label, color: color, rules: rules.isEmpty ? nil : rules,
+                ignoredFromStats: ignored, expectedVersion: category.resourceVersion
+            ))
+            await saved(); dismiss()
+        } catch { self.error = "This category changed. Refresh and reapply your edit." }
+    }
+
+    private func remove() async {
+        do { try await environment.deleteCategory(id: category.id, expectedVersion: category.resourceVersion); await saved(); dismiss() }
+        catch { self.error = "This category changed. Refresh before deleting it." }
+    }
+}
+
+private extension Color {
+    init(hex: String) {
+        let value = UInt64(hex.trimmingCharacters(in: CharacterSet(charactersIn: "#")), radix: 16) ?? 0x94A3B8
+        self.init(.sRGB, red: Double((value >> 16) & 255) / 255, green: Double((value >> 8) & 255) / 255, blue: Double(value & 255) / 255)
     }
 }
 

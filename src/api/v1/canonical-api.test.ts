@@ -209,6 +209,42 @@ describe('canonical /api/v1 black-box foundation', () => {
     expect((conflict.body as { error: unknown }).error).not.toHaveProperty('resource');
   });
 
+  it('shares receipt-protected category CRUD across Mac and iPhone with explicit conflicts', async () => {
+    const server = await harness();
+    const create = {
+      idempotencyKey: 'category-groceries-1',
+      name: 'groceries',
+      label: 'Groceries',
+      color: '#34C759',
+      defaultOwnerType: 'unassigned' as const,
+      defaultOwnerMemberId: null,
+      ignoredFromStats: false,
+    };
+    const created = await server.iPhone.createCategory(create);
+    expect(created).toMatchObject({ name: 'groceries', label: 'Groceries', resourceVersion: 1 });
+    expect(await server.mac.listCategories()).toEqual([created]);
+
+    const replay = await server.iPhone.createCategory(create);
+    expect(replay).toEqual(created);
+
+    const updated = await server.mac.updateCategory(created.id, {
+      expectedVersion: 1,
+      label: 'Food & Groceries',
+      color: '#00AA55',
+    });
+    expect(updated).toMatchObject({ label: 'Food & Groceries', resourceVersion: 2 });
+
+    await expect(
+      server.iPhone.updateCategory(created.id, {
+        expectedVersion: 1,
+        label: 'Stale label',
+      }),
+    ).rejects.toMatchObject({ code: 'resource_conflict', status: 409 });
+
+    expect(await server.iPhone.deleteCategory(created.id, 2)).toEqual({ deletedId: created.id });
+    expect(await server.mac.listCategories()).toEqual([]);
+  });
+
   it('persists caller-scoped receipts, rejects reused keys, and returns targeted hints', async () => {
     const server = await harness();
     const request = { resourceId: 1, idempotencyKey: 'refresh-1', command: 'refresh' as const };

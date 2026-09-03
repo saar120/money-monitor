@@ -10,6 +10,7 @@ import {
   type Category,
   type Member,
   type OwnerType,
+  rememberCategoryVersions,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -87,6 +88,7 @@ async function load() {
   try {
     const [res, memberRes] = await Promise.all([getCategories(), getMembers()]);
     categories.value = res.categories;
+    rememberCategoryVersions(res.categories);
     members.value = memberRes.members.filter((m) => m.isActive);
   } catch {
     error.value = 'Failed to load categories';
@@ -121,6 +123,7 @@ async function saveEdit(cat: Category) {
     });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
+    rememberCategoryVersions([res.category]);
     editingId.value = null;
   } catch {
     error.value = 'Failed to save';
@@ -155,6 +158,7 @@ async function addCategory() {
       defaultOwnerMemberId: ownerMemberIdFromValue(newOwner.value),
     });
     categories.value.push(res.category);
+    rememberCategoryVersions([res.category]);
     newName.value = '';
     newLabel.value = '';
     newColor.value = DEFAULT_CATEGORY_COLOR;
@@ -197,6 +201,7 @@ async function toggleIgnored(cat: Category) {
     const res = await updateCategory(cat.id, { ignoredFromStats: !cat.ignoredFromStats });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
+    rememberCategoryVersions([res.category]);
   } catch {
     error.value = 'Failed to update';
   }

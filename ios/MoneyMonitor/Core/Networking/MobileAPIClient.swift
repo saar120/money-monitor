@@ -1,16 +1,46 @@
 import Foundation
 import CanonicalAPI
 
+struct CanonicalCategory: Identifiable, Equatable, Sendable {
+    let id: Int
+    let name: String
+    let label: String
+    let color: String?
+    let rules: String?
+    let ignoredFromStats: Bool
+    let resourceVersion: Int
+
+    init(_ value: Components.Schemas.CategoryListResponse.DataPayloadPayload) {
+        id = value.id; name = value.name; label = value.label; color = value.color
+        rules = value.rules; ignoredFromStats = value.ignoredFromStats
+        resourceVersion = value.resourceVersion
+    }
+
+    init(_ value: Components.Schemas.CategoryResponse.DataPayload) {
+        id = value.id; name = value.name; label = value.label; color = value.color
+        rules = value.rules; ignoredFromStats = value.ignoredFromStats
+        resourceVersion = value.resourceVersion
+    }
+}
+
 protocol MobileAPIClient: Sendable {
     func health(baseURL: URL) async throws -> HealthResponse
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
     func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope
+    func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory]
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws
 }
 
 extension MobileAPIClient {
     func homeOverview(credential _: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope {
         throw MobileClientError.invalidRequest
     }
+    func categories(credential _: PairedMacCredential) async throws -> [CanonicalCategory] { throw MobileClientError.invalidRequest }
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory { throw MobileClientError.invalidRequest }
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory { throw MobileClientError.invalidRequest }
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws { throw MobileClientError.invalidRequest }
 }
 
 protocol MobileTransactionAPIClient: Sendable {
@@ -171,6 +201,36 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
             }
             throw MobileClientError.invalidPayload
         }
+    }
+
+    func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory] {
+        let response = try await canonicalClient(credential).listCategories()
+        return response.data.map(CanonicalCategory.init)
+    }
+
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory {
+        let response = try await canonicalClient(credential).createCategory(request)
+        return CanonicalCategory(response.data)
+    }
+
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CanonicalCategory {
+        let response = try await canonicalClient(credential).updateCategory(id: id, request: request)
+        return CanonicalCategory(response.data)
+    }
+
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws {
+        _ = try await canonicalClient(credential).deleteCategory(id: id, expectedVersion: expectedVersion)
+    }
+
+    private func canonicalClient(_ credential: PairedMacCredential) -> CanonicalAPIClient {
+        CanonicalAPIClient(
+            transport: MobileCanonicalTransportAdapter(
+                transport: transport,
+                baseURL: credential.profile.baseURL,
+                responseRecorder: MobileCanonicalResponseRecorder()
+            ),
+            token: credential.token
+        )
     }
 
     private func send(_ request: URLRequest, endpoint: APIEndpoint) async throws

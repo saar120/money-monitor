@@ -328,6 +328,65 @@ export const referenceCommandResponseSchema = z
   })
   .strict();
 
+export const categoryResourceSchema = z
+  .object({
+    id: entityIdSchema,
+    name: z
+      .string()
+      .trim()
+      .min(1)
+      .max(80)
+      .regex(/^[a-z0-9]+(?:-[a-z0-9]+)*$/),
+    label: z.string().trim().min(1).max(80),
+    color: z
+      .string()
+      .regex(/^#[0-9a-fA-F]{6}$/)
+      .nullable(),
+    rules: z.string().trim().max(2000).nullable(),
+    defaultOwnerType: z.enum(['member', 'shared', 'unassigned']),
+    defaultOwnerMemberId: entityIdSchema.nullable(),
+    ignoredFromStats: z.boolean(),
+    resourceVersion: resourceVersionSchema,
+    updatedAt: z.string().datetime({ offset: true }),
+  })
+  .strict();
+
+export const categoryListResponseSchema = z
+  .object({ data: z.array(categoryResourceSchema).max(500), meta: canonicalMetaSchema })
+  .strict();
+
+export const categoryResponseSchema = z
+  .object({
+    data: categoryResourceSchema,
+    meta: canonicalMetaSchema.extend({ refreshHints: z.array(refreshHintSchema).min(1) }),
+  })
+  .strict();
+
+export const categoryCreateRequestSchema = z
+  .object({
+    idempotencyKey: z.string().trim().min(1).max(128),
+    name: categoryResourceSchema.shape.name,
+    label: categoryResourceSchema.shape.label,
+    color: categoryResourceSchema.shape.color.optional(),
+    rules: categoryResourceSchema.shape.rules.optional(),
+    defaultOwnerType: categoryResourceSchema.shape.defaultOwnerType.optional(),
+    defaultOwnerMemberId: categoryResourceSchema.shape.defaultOwnerMemberId.optional(),
+    ignoredFromStats: z.boolean().optional(),
+  })
+  .strict();
+
+export const categoryUpdateRequestSchema = categoryCreateRequestSchema
+  .omit({ idempotencyKey: true, name: true })
+  .partial()
+  .extend({ expectedVersion: resourceVersionSchema })
+  .strict()
+  .refine((value) => Object.keys(value).some((key) => key !== 'expectedVersion'), {
+    message: 'At least one editable field is required',
+  });
+
+export const categoryDeleteQuerySchema = referenceDeleteQuerySchema;
+export const categoryDeleteResponseSchema = referenceDeleteResponseSchema;
+
 export const diagnosticsResponseSchema = z
   .object({
     data: z
@@ -358,6 +417,7 @@ export type CanonicalMeta = z.infer<typeof canonicalMetaSchema>;
 export type CanonicalErrorEnvelope = z.infer<typeof canonicalErrorEnvelopeSchema>;
 export type ReferenceUpdateRequest = z.infer<typeof referenceUpdateRequestSchema>;
 export type ReferenceCommandRequest = z.infer<typeof referenceCommandRequestSchema>;
+export type CategoryResource = z.infer<typeof categoryResourceSchema>;
 export type ReferenceCommandResponse = z.infer<typeof referenceCommandResponseSchema>;
 
 export function successEnvelopeSchema<T extends z.ZodType>(data: T) {

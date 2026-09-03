@@ -19,6 +19,12 @@ public typealias ReferenceCommandResponse = Components.Schemas.ReferenceCommandR
 public typealias DiagnosticsResponse = Components.Schemas.DiagnosticsResponse
 public typealias PairingStatusResponse = Components.Schemas.PairingStatusResponse
 public typealias HomeOverviewResponse = Components.Schemas.HomeOverviewResponse
+public typealias CategoryResource = Components.Schemas.CategoryResource
+public typealias CategoryListResponse = Components.Schemas.CategoryListResponse
+public typealias CategoryResponse = Components.Schemas.CategoryResponse
+public typealias CategoryCreateRequest = Components.Schemas.CategoryCreateRequest
+public typealias CategoryUpdateRequest = Components.Schemas.CategoryUpdateRequest
+public typealias CategoryDeleteResponse = Components.Schemas.CategoryDeleteResponse
 
 public typealias ReferenceResourceAmount = Components.Schemas.ReferenceResource.AmountPayload
 public typealias ReferenceResponseData = Components.Schemas.ReferenceResponse.DataPayload
@@ -108,6 +114,52 @@ public struct CanonicalAPIClient: Sendable {
         switch output {
         case let .ok(response):
             return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func listCategories() async throws -> CategoryListResponse {
+        let output = try await client.listCategories()
+        switch output {
+        case let .ok(response): return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func createCategory(_ request: CategoryCreateRequest) async throws -> CategoryResponse {
+        let output = try await client.createCategory(body: .json(request))
+        switch output {
+        case let .created(response): return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func updateCategory(id: Int, request: CategoryUpdateRequest) async throws -> CategoryResponse {
+        let output = try await client.updateCategory(path: .init(id: id), body: .json(request))
+        switch output {
+        case let .ok(response): return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func deleteCategory(id: Int, expectedVersion: Int) async throws -> CategoryDeleteResponse {
+        let output = try await client.deleteCategory(
+            path: .init(id: id), query: .init(expectedVersion: expectedVersion)
+        )
+        switch output {
+        case let .ok(response): return try response.body.json
         case let .clientError(statusCode, response):
             throw try codedError(statusCode: statusCode, body: response.body.json)
         case let .undocumented(statusCode, payload):

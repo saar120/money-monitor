@@ -125,9 +125,11 @@ describe('database migrations', () => {
     sqlite.exec('DROP TABLE canonical_seed_state');
     sqlite
       .prepare(
-        'DELETE FROM __drizzle_migrations WHERE created_at = (SELECT MAX(created_at) FROM __drizzle_migrations)',
+        'DELETE FROM __drizzle_migrations WHERE created_at IN (1784394000001, 1788417646653)',
       )
       .run();
+    sqlite.exec('ALTER TABLE categories DROP COLUMN updated_at');
+    sqlite.exec('ALTER TABLE categories DROP COLUMN resource_version');
     sqlite
       .prepare(
         `INSERT INTO canonical_reference_resources
