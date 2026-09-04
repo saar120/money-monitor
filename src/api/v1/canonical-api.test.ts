@@ -3,7 +3,11 @@ import Database from 'better-sqlite3';
 import { mkdtempSync, rmSync } from 'node:fs';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
-import { CanonicalApiClient } from './client.js';
+import {
+  CanonicalApiClient,
+  categoryMatchesCreateRequest,
+  type CategoryResource,
+} from './client.js';
 import { CANONICAL_OPENAPI_DOCUMENT } from './openapi.js';
 import { createCanonicalHarness, type CanonicalHarness } from './test-harness.js';
 import { createServer } from '../../server.js';
@@ -115,6 +119,53 @@ describe('canonical /api/v1 black-box foundation', () => {
     });
   });
 
+  it('fails paired canonical reads closed while the desktop source is swapped', async () => {
+    let available = true;
+    const server = await harness({ mobileCanonicalAvailable: () => available });
+    expect(await server.iPhone.listCategories()).toEqual([]);
+
+    available = false;
+    const response = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.iPhoneToken}` },
+    });
+    expect(response.status).toBe(500);
+    expect(response.body).toMatchObject({ error: { code: 'internal_server_error' } });
+  });
+
+  it('fails Mac canonical routes closed while the desktop source is swapped', async () => {
+    const sqlite = new Database(':memory:');
+    let available = true;
+    const server = await createServer({
+      sqlite,
+      registerLegacyRoutes: false,
+      startBackgroundServices: false,
+      logger: false,
+      isCanonicalAvailable: () => available,
+    });
+
+    try {
+      await server.app.ready();
+      const headers = { authorization: 'Bearer test-token' };
+      expect(
+        (await server.app.inject({ method: 'GET', url: '/api/v1/reference', headers })).statusCode,
+      ).toBe(200);
+
+      available = false;
+      const response = await server.app.inject({
+        method: 'GET',
+        url: '/api/v1/reference',
+        headers,
+      });
+      expect(response.statusCode).toBe(500);
+      expect(JSON.parse(response.body)).toMatchObject({
+        error: { code: 'internal_server_error' },
+      });
+    } finally {
+      await server.shutdown();
+      sqlite.close();
+    }
+  });
+
   it('keeps canonical auth ahead of the configured legacy API token hook', async () => {
     const sqlite = new Database(':memory:');
     const server = await createServer({
@@ -209,6 +260,85 @@ describe('canonical /api/v1 black-box foundation', () => {
     expect((conflict.body as { error: unknown }).error).not.toHaveProperty('resource');
   });
 
+  it('shares receipt-protected category CRUD across Mac and iPhone with explicit conflicts', async () => {
+    const ownerChanges: string[] = [];
+    const server = await harness({ onCategoryOwnerChanged: (name) => ownerChanges.push(name) });
+    server.sqlite
+      .prepare("INSERT INTO members (name, is_active) VALUES ('Saar', 1), ('Inactive', 0)")
+      .run();
+    const create = {
+      idempotencyKey: 'category-groceries-1',
+      name: 'groceries',
+      label: 'Groceries',
+      color: '#34C759',
+      defaultOwnerType: 'unassigned' as const,
+      defaultOwnerMemberId: null,
+      ignoredFromStats: false,
+    };
+    const created = await server.iPhone.createCategory(create);
+    expect(created).toMatchObject({ name: 'groceries', label: 'Groceries', resourceVersion: 1 });
+    expect(await server.mac.listCategories()).toEqual([created]);
+    const catalog = await raw(server.macBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.macToken}` },
+    });
+    expect(catalog.body).toMatchObject({ meta: { ownerMembers: [{ name: 'Saar' }] } });
+
+    const replay = await server.iPhone.createCategory(create);
+    expect(replay).toEqual(created);
+
+    const rawReplay = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(create),
+    });
+    expect(rawReplay.status).toBe(201);
+    expect(rawReplay.body).toMatchObject({
+      data: created,
+      meta: {
+        receipt: { idempotencyKey: create.idempotencyKey, replayed: true },
+        refreshHints: [{ domain: 'categories', resourceIds: [created.id] }],
+      },
+    });
+
+    const macUpdate = await raw(server.macBaseUrl, `/api/v1/categories/${created.id}`, {
+      method: 'PATCH',
+      headers: {
+        authorization: `Bearer ${server.macToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        expectedVersion: 1,
+        label: 'Food & Groceries',
+        color: '#00AA55',
+        defaultOwnerType: 'shared',
+      }),
+    });
+    const updated = (macUpdate.body as { data: CategoryResource }).data;
+    expect(updated).toMatchObject({ label: 'Food & Groceries', resourceVersion: 2 });
+    expect(macUpdate.body).toMatchObject({
+      meta: { refreshHints: [{ domain: 'categories', resourceIds: [created.id] }] },
+    });
+    expect(await server.iPhone.listCategories()).toEqual([updated]);
+    expect(ownerChanges).toEqual(['groceries']);
+
+    // Mutation Receipts represent the original outcome, even after authority moves on.
+    expect(await server.iPhone.createCategory(create)).toEqual(created);
+
+    await expect(
+      server.iPhone.updateCategory(created.id, {
+        expectedVersion: 1,
+        label: 'Stale label',
+      }),
+    ).rejects.toMatchObject({ code: 'resource_conflict', status: 409 });
+
+    expect(await server.iPhone.deleteCategory(created.id, 2)).toEqual({ deletedId: created.id });
+    expect(await server.mac.listCategories()).toEqual([]);
+    expect(await server.iPhone.createCategory(create)).toEqual(created);
+  });
+
   it('persists caller-scoped receipts, rejects reused keys, and returns targeted hints', async () => {
     const server = await harness();
     const request = { resourceId: 1, idempotencyKey: 'refresh-1', command: 'refresh' as const };
@@ -222,6 +352,102 @@ describe('canonical /api/v1 black-box foundation', () => {
     await expect(server.iPhone.requestRefresh({ ...request, resourceId: 2 })).rejects.toMatchObject(
       { code: 'idempotency_key_reused', status: 409 },
     );
+  });
+
+  it('recovers an unknown category create from authority without duplicating it', async () => {
+    const server = await harness({ allowUnknownOutcomeSimulation: true });
+    const request = {
+      idempotencyKey: 'unknown-category-1',
+      name: 'utilities',
+      label: 'Utilities',
+      defaultOwnerType: 'shared' as const,
+    };
+
+    const recovered = await server.iPhone.createCategoryWithRecovery(request);
+    expect(recovered).toMatchObject({
+      status: 'recovered',
+      category: { name: 'utilities', label: 'Utilities', defaultOwnerType: 'shared' },
+    });
+    expect(await server.mac.listCategories()).toHaveLength(1);
+
+    const replay = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify(request),
+    });
+    expect(replay.status).toBe(201);
+    expect(replay.body).toMatchObject({
+      meta: { receipt: { idempotencyKey: request.idempotencyKey, replayed: true } },
+    });
+  });
+
+  it('does not recover an unknown create from an unrelated category with the same slug', () => {
+    expect(
+      categoryMatchesCreateRequest(
+        {
+          id: 1,
+          name: 'utilities',
+          label: 'Old utilities',
+          color: null,
+          rules: null,
+          defaultOwnerType: 'unassigned',
+          defaultOwnerMemberId: null,
+          ignoredFromStats: false,
+          resourceVersion: 1,
+          updatedAt: GENERATED_AT.toISOString(),
+        },
+        { idempotencyKey: 'new-utilities', name: 'utilities', label: 'Utilities' },
+      ),
+    ).toBe(false);
+  });
+
+  it('rejects new inactive owners while preserving referenced inactive choices', async () => {
+    const server = await harness();
+    server.sqlite
+      .prepare("INSERT INTO members (name, is_active) VALUES ('Active', 1), ('Former', 0)")
+      .run();
+    server.sqlite
+      .prepare(
+        `INSERT INTO categories
+         (name, label, default_owner_type, default_owner_member_id, updated_at)
+         VALUES ('legacy', 'Legacy', 'member', 2, ?)`,
+      )
+      .run(GENERATED_AT.toISOString());
+
+    const catalog = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      headers: { authorization: `Bearer ${server.iPhoneToken}` },
+    });
+    expect(catalog.body).toMatchObject({
+      meta: {
+        ownerMembers: [
+          { id: 1, name: 'Active', isActive: true },
+          { id: 2, name: 'Former', isActive: false },
+        ],
+      },
+    });
+
+    const rejected = await raw(server.iPhoneBaseUrl, '/api/v1/categories', {
+      method: 'POST',
+      headers: {
+        authorization: `Bearer ${server.iPhoneToken}`,
+        'content-type': 'application/json',
+      },
+      body: JSON.stringify({
+        idempotencyKey: 'inactive-owner',
+        name: 'new-category',
+        label: 'New category',
+        defaultOwnerType: 'member',
+        defaultOwnerMemberId: 2,
+      }),
+    });
+    expect(rejected.status).toBe(400);
+
+    await expect(
+      server.iPhone.updateCategory(1, { expectedVersion: 1, label: 'Legacy renamed' }),
+    ).resolves.toMatchObject({ defaultOwnerMemberId: 2, label: 'Legacy renamed' });
   });
 
   it('resolves an unknown command by retrying the same receipt and fetching authority', async () => {
@@ -321,6 +547,12 @@ describe('canonical /api/v1 black-box foundation', () => {
         '/api/v1/diagnostics',
         '/api/v1/pairing/status',
       ]),
+    );
+    const createResponses = CANONICAL_OPENAPI_DOCUMENT.paths['/api/v1/categories']?.post as {
+      responses?: Record<string, unknown>;
+    };
+    expect(Object.keys(createResponses.responses ?? {})).toEqual(
+      expect.arrayContaining(['201', '4XX']),
     );
     expect(CANONICAL_OPENAPI_DOCUMENT.components.schemas).toEqual(
       expect.objectContaining({

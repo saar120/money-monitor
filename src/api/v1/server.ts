@@ -3,6 +3,12 @@ import type Database from 'better-sqlite3';
 import {
   CANONICAL_API_VERSION,
   CANONICAL_ERROR_DEFINITIONS,
+  categoryCreateRequestSchema,
+  categoryDeleteQuerySchema,
+  categoryDeleteResponseSchema,
+  categoryListResponseSchema,
+  categoryResponseSchema,
+  categoryUpdateRequestSchema,
   canonicalErrorEnvelopeSchema,
   createCanonicalMeta,
   diagnosticsResponseSchema,
@@ -33,6 +39,7 @@ import {
   stableRequestFingerprint,
   type ReferenceSeed,
 } from './store.js';
+import { CanonicalCategoryStore } from './category-store.js';
 import { getExchangeRates, type ExchangeRateResult } from '../../services/exchange-rates.js';
 
 export const CANONICAL_SERVER_HOST = '127.0.0.1' as const;
@@ -49,6 +56,10 @@ export interface CanonicalServerOptions {
   allowUnknownOutcomeSimulation?: boolean;
   /** Mac-owned conversion rates; injectable only for deterministic tests. */
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  /** Recalculate non-manual transaction owners after a category default changes. */
+  onCategoryOwnerChanged?: (categoryName: string) => void;
+  /** Fail closed while the authoritative source is temporarily unavailable. */
+  isAvailable?: () => boolean;
 }
 
 export interface CanonicalServerStartOptions {
@@ -122,6 +133,7 @@ export function registerCanonicalRoutes(
   clock: () => Date,
 ): void {
   const homeOverview = createHomeOverviewProjection(options.sqlite);
+  const categories = new CanonicalCategoryStore(options.sqlite, options.onCategoryOwnerChanged);
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1')) reply.header('Cache-Control', 'no-store');
     return payload;
@@ -137,6 +149,9 @@ export function registerCanonicalRoutes(
         return sendCanonicalError(reply, 'authentication_invalid', request.id);
       }
       if (!identity) return sendCanonicalError(reply, 'authentication_required', request.id);
+      if (options.isAvailable && !options.isAvailable()) {
+        throw new CanonicalApiError('internal_server_error');
+      }
       if (
         (options.listener === 'mac-local' && identity.kind !== 'mac-local') ||
         (options.listener === 'paired-iphone' && identity.kind !== 'paired-iphone')
@@ -152,6 +167,121 @@ export function registerCanonicalRoutes(
       }
       request.canonicalIdentity = identity;
     };
+
+  app.get(
+    '/api/v1/categories',
+    { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/categories')) },
+    async () => {
+      const candidate = {
+        data: categories.list(),
+        meta: { ...createCanonicalMeta(clock()), ownerMembers: categories.ownerMembers() },
+      };
+      const parsed = categoryListResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
+
+  app.post(
+    '/api/v1/categories',
+    { onRequest: authorize(canonicalRoutePolicy('POST', '/api/v1/categories')) },
+    async (request, reply) => {
+      const body = (request.body ?? {}) as Record<string, unknown>;
+      const headerKey = request.headers['idempotency-key'];
+      const input = parseOrThrow(categoryCreateRequestSchema, {
+        ...body,
+        ...(body.idempotencyKey === undefined && typeof headerKey === 'string'
+          ? { idempotencyKey: headerKey }
+          : {}),
+      });
+      const identity = request.canonicalIdentity!;
+      let result;
+      try {
+        result = categories.create(
+          clientId(identity),
+          input.idempotencyKey,
+          {
+            name: input.name,
+            label: input.label,
+            color: input.color ?? null,
+            rules: input.rules ?? null,
+            defaultOwnerType: input.defaultOwnerType ?? 'unassigned',
+            defaultOwnerMemberId: input.defaultOwnerMemberId ?? null,
+            ignoredFromStats: input.ignoredFromStats ?? false,
+          },
+          clock().toISOString(),
+        );
+      } catch (error) {
+        mapStorageError(error);
+      }
+      const now = clock();
+      const refreshHints = [{ domain: 'categories', resourceIds: [result!.category.id] }];
+      if (
+        options.allowUnknownOutcomeSimulation &&
+        request.headers['x-canonical-test-unknown'] === 'true'
+      ) {
+        throw new CanonicalApiError('unknown_outcome', { refreshHints });
+      }
+      const candidate = {
+        data: result!.category,
+        meta: createCanonicalMeta(now, {
+          receipt: { idempotencyKey: input.idempotencyKey, replayed: result!.replayed },
+          refreshHints,
+        }),
+      };
+      const parsed = categoryResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return reply.code(201).send(parsed.data);
+    },
+  );
+
+  app.patch(
+    '/api/v1/categories/:id',
+    { onRequest: authorize(canonicalRoutePolicy('PATCH', '/api/v1/categories/:id')) },
+    async (request) => {
+      const id = parseId((request.params as { id: unknown }).id);
+      const input = parseOrThrow(categoryUpdateRequestSchema, request.body);
+      let category;
+      try {
+        category = categories.update({ id, ...input }, clock().toISOString());
+      } catch (error) {
+        mapStorageError(error);
+      }
+      const candidate = {
+        data: category!,
+        meta: createCanonicalMeta(clock(), {
+          resourceVersion: category!.resourceVersion,
+          refreshHints: [{ domain: 'categories', resourceIds: [id] }],
+        }),
+      };
+      const parsed = categoryResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
+
+  app.delete(
+    '/api/v1/categories/:id',
+    { onRequest: authorize(canonicalRoutePolicy('DELETE', '/api/v1/categories/:id')) },
+    async (request) => {
+      const id = parseId((request.params as { id: unknown }).id);
+      const query = parseOrThrow(categoryDeleteQuerySchema, request.query);
+      try {
+        categories.delete(id, query.expectedVersion);
+      } catch (error) {
+        mapStorageError(error);
+      }
+      const candidate = {
+        data: { deletedId: id },
+        meta: createCanonicalMeta(clock(), {
+          refreshHints: [{ domain: 'categories', resourceIds: [id] }],
+        }),
+      };
+      const parsed = categoryDeleteResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
 
   app.get(
     '/api/v1/home',

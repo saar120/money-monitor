@@ -30,6 +30,8 @@ export interface CanonicalHarnessOptions {
   /** Avoid TCP binds in sandboxed unit tests; Fastify injection remains available. */
   startListeners?: boolean;
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  onCategoryOwnerChanged?: (categoryName: string) => void;
+  mobileCanonicalAvailable?: () => boolean;
 }
 
 type DesktopServer = Awaited<ReturnType<typeof createServer>>;
@@ -56,6 +58,25 @@ function ensureMobileCredentialSchema(sqlite: Database.Database): void {
   // database singleton. This is the one legacy table needed to issue a real
   // paired credential; production creates it through the migration set.
   sqlite.exec(`
+    CREATE TABLE IF NOT EXISTS members (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL,
+      is_active INTEGER NOT NULL DEFAULT 1,
+      created_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS categories (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      name TEXT NOT NULL UNIQUE,
+      label TEXT NOT NULL,
+      color TEXT,
+      rules TEXT,
+      default_owner_type TEXT NOT NULL DEFAULT 'unassigned',
+      default_owner_member_id INTEGER REFERENCES members(id) ON DELETE SET NULL,
+      ignored_from_stats INTEGER NOT NULL DEFAULT 0,
+      created_at TEXT NOT NULL DEFAULT (datetime('now')),
+      resource_version INTEGER NOT NULL DEFAULT 1,
+      updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
     CREATE TABLE IF NOT EXISTS mobile_devices (
       id TEXT PRIMARY KEY NOT NULL,
       name TEXT NOT NULL,
@@ -137,6 +158,7 @@ export async function createCanonicalHarness(
     logger: false,
     seedCanonical: seed,
     homeExchangeRates: options.homeExchangeRates,
+    onCategoryOwnerChanged: options.onCategoryOwnerChanged,
   } satisfies CreateServerOptions);
   const iPhoneServer = createMobileServer({
     canonical: {
@@ -144,6 +166,8 @@ export async function createCanonicalHarness(
       authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
       allowUnknownOutcomeSimulation: options.allowUnknownOutcomeSimulation,
       homeExchangeRates: options.homeExchangeRates,
+      onCategoryOwnerChanged: options.onCategoryOwnerChanged,
+      isAvailable: options.mobileCanonicalAvailable,
     },
     clock,
     logger: false,

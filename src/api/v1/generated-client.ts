@@ -5,6 +5,42 @@
 
 /* eslint-disable @typescript-eslint/no-duplicate-enum-values */
 export type paths = {
+  '/api/v1/categories': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** List canonical categories */
+    get: operations['listCategories'];
+    put?: never;
+    /** Create a canonical category */
+    post: operations['createCategory'];
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/categories/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    get?: never;
+    put?: never;
+    post?: never;
+    /** Delete a canonical category */
+    delete: operations['deleteCategory'];
+    options?: never;
+    head?: never;
+    /** Update a canonical category */
+    patch: operations['updateCategory'];
+    trace?: never;
+  };
   '/api/v1/diagnostics': {
     parameters: {
       query?: never;
@@ -164,6 +200,157 @@ export type components = {
       resourceVersion?: number;
       /** @constant */
       source: 'mac-authoritative';
+    };
+    CategoryCreateRequest: {
+      color?: string | null;
+      defaultOwnerMemberId?: number | null;
+      /** @enum {string} */
+      defaultOwnerType?: 'member' | 'shared' | 'unassigned';
+      idempotencyKey: string;
+      ignoredFromStats?: boolean;
+      label: string;
+      name: string;
+      rules?: string | null;
+    };
+    CategoryDeleteQuery: {
+      expectedVersion: number;
+    };
+    CategoryDeleteResponse: {
+      data: {
+        deletedId: number;
+      };
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        calculationVersion?: string;
+        /** @enum {string} */
+        completeness?: 'complete' | 'partial';
+        estimated?: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections?: string[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    CategoryListResponse: {
+      data: {
+        color: string | null;
+        defaultOwnerMemberId: number | null;
+        /** @enum {string} */
+        defaultOwnerType: 'member' | 'shared' | 'unassigned';
+        id: number;
+        ignoredFromStats: boolean;
+        label: string;
+        name: string;
+        resourceVersion: number;
+        rules: string | null;
+        /** Format: date-time */
+        updatedAt: string;
+      }[];
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        calculationVersion?: string;
+        /** @enum {string} */
+        completeness?: 'complete' | 'partial';
+        estimated?: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections?: string[];
+        ownerMembers: {
+          id: number;
+          isActive: boolean;
+          name: string;
+        }[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints?: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    CategoryOwnerMember: {
+      id: number;
+      isActive: boolean;
+      name: string;
+    };
+    CategoryResource: {
+      color: string | null;
+      defaultOwnerMemberId: number | null;
+      /** @enum {string} */
+      defaultOwnerType: 'member' | 'shared' | 'unassigned';
+      id: number;
+      ignoredFromStats: boolean;
+      label: string;
+      name: string;
+      resourceVersion: number;
+      rules: string | null;
+      /** Format: date-time */
+      updatedAt: string;
+    };
+    CategoryResponse: {
+      data: {
+        color: string | null;
+        defaultOwnerMemberId: number | null;
+        /** @enum {string} */
+        defaultOwnerType: 'member' | 'shared' | 'unassigned';
+        id: number;
+        ignoredFromStats: boolean;
+        label: string;
+        name: string;
+        resourceVersion: number;
+        rules: string | null;
+        /** Format: date-time */
+        updatedAt: string;
+      };
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        calculationVersion?: string;
+        /** @enum {string} */
+        completeness?: 'complete' | 'partial';
+        estimated?: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections?: string[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    CategoryUpdateRequest: {
+      color?: string | null;
+      defaultOwnerMemberId?: number | null;
+      /** @enum {string} */
+      defaultOwnerType?: 'member' | 'shared' | 'unassigned';
+      expectedVersion: number;
+      ignoredFromStats?: boolean;
+      label?: string;
+      rules?: string | null;
     };
     DiagnosticsResponse: {
       data: {
@@ -623,6 +810,136 @@ export type components = {
 };
 export type $defs = Record<string, never>;
 export interface operations {
+  listCategories: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryListResponse'];
+        };
+      };
+    };
+  };
+  createCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CategoryCreateRequest'];
+      };
+    };
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Accepted create or receipt replay */
+      201: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+    };
+  };
+  deleteCategory: {
+    parameters: {
+      query: {
+        expectedVersion: number;
+      };
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryDeleteResponse'];
+        };
+      };
+    };
+  };
+  updateCategory: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: number;
+      };
+      cookie?: never;
+    };
+    requestBody: {
+      content: {
+        'application/json': components['schemas']['CategoryUpdateRequest'];
+      };
+    };
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CategoryResponse'];
+        };
+      };
+    };
+  };
   getDiagnostics: {
     parameters: {
       query?: never;
@@ -844,6 +1161,10 @@ export interface operations {
   };
 }
 export enum ApiPaths {
+  listCategories = '/api/v1/categories',
+  createCategory = '/api/v1/categories',
+  updateCategory = '/api/v1/categories/{id}',
+  deleteCategory = '/api/v1/categories/{id}',
   getHomeOverview = '/api/v1/home',
   getReference = '/api/v1/reference',
   updateReference = '/api/v1/reference/{id}',

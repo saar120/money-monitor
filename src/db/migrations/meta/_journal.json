@@ -176,6 +176,13 @@
       "when": 1784394000001,
       "tag": "0024_canonical_foundation",
       "breakpoints": true
+    },
+    {
+      "idx": 25,
+      "version": "6",
+      "when": 1788417646653,
+      "tag": "0025_pink_rafael_vega",
+      "breakpoints": true
     }
   ]
 }

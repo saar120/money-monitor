@@ -1050,6 +1050,52 @@ final class AppEnvironment: ObservableObject {
         }
     }
 
+    func categories() async throws -> [CanonicalCategory] {
+        let session = try await mobileReadSession()
+        let value = try await apiClient.categories(credential: session.credential)
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        return value
+    }
+
+    func categoryCatalog() async throws -> CategoryCatalog {
+        let session = try await mobileReadSession()
+        let value = try await apiClient.categoryCatalog(credential: session.credential)
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        return value
+    }
+
+    func createCategory(_ request: CategoryCreateRequest) async throws -> CanonicalCategory {
+        let session = try await mobileReadSession()
+        let mutation = try await apiClient.createCategory(request, credential: session.credential)
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        await refreshCategoryProjections(mutation.refreshDomains)
+        return mutation.value
+    }
+
+    func updateCategory(id: Int, request: CategoryUpdateRequest) async throws -> CanonicalCategory {
+        let session = try await mobileReadSession()
+        let mutation = try await apiClient.updateCategory(id: id, request: request, credential: session.credential)
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        await refreshCategoryProjections(mutation.refreshDomains)
+        return mutation.value
+    }
+
+    func deleteCategory(id: Int, expectedVersion: Int) async throws {
+        let session = try await mobileReadSession()
+        let refreshDomains = try await apiClient.deleteCategory(
+            id: id,
+            expectedVersion: expectedVersion,
+            credential: session.credential
+        )
+        try ensureCurrentMobileReadEpoch(session.epoch)
+        await refreshCategoryProjections(refreshDomains)
+    }
+
+    func refreshCategoryProjections(_ domains: Set<String> = ["categories"]) async {
+        guard domains.contains("categories") else { return }
+        await refreshHomeOverview()
+    }
+
     func netWorthHistory(range: MobileNetWorthHistoryRange) async throws -> MobileNetWorthHistory {
         let session = try await mobileReadSession()
         do {

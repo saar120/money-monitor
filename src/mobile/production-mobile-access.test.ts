@@ -169,6 +169,7 @@ describe('production mobile access composition', () => {
     });
 
     await expect(access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).resolves.toBeDefined();
+    expect(access.canonicalDependencies.isAvailable()).toBe(true);
     const context = { generatedAt: NOW.toISOString(), financialDate: '2026-07-15' };
     const query = { limit: 30, includeExcluded: false };
     expect(access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toBeDefined();
@@ -177,6 +178,7 @@ describe('production mobile access composition', () => {
       access.transactionDependencies.detail(missingTransactionId, context, AUTHENTICATED_DEVICE),
     ).toBeNull();
     available = false;
+    expect(access.canonicalDependencies.isAvailable()).toBe(false);
     expect(() => access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).toThrow('unavailable');
     expect(() => access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toThrow(
       'unavailable',

@@ -10,6 +10,13 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
     }
 
     private(set) var requests: [Request] = []
+    private let categoryCreateStatus: Int
+    private let categoryUpdateStatus: Int
+
+    init(categoryCreateStatus: Int = 201, categoryUpdateStatus: Int = 200) {
+        self.categoryCreateStatus = categoryCreateStatus
+        self.categoryUpdateStatus = categoryUpdateStatus
+    }
 
     func send(
         _ request: CanonicalHTTPRequest,
@@ -39,6 +46,18 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
             response = (200, Data(pairingJSON.utf8))
         } else if path == "/api/v1/home" && method == "GET" {
             response = (200, Data(homeJSON.utf8))
+        } else if path == "/api/v1/categories" && method == "GET" {
+            response = (200, Data(categoryListJSON.utf8))
+        } else if path == "/api/v1/categories" && method == "POST" {
+            response = categoryCreateStatus == 503
+                ? (503, Data(categoryUnknownJSON.utf8))
+                : (categoryCreateStatus, Data(categoryJSON.utf8))
+        } else if path == "/api/v1/categories/7" && method == "PATCH" {
+            response = categoryUpdateStatus == 409
+                ? (409, Data(categoryConflictJSON.utf8))
+                : (200, Data(categoryJSON.utf8))
+        } else if path == "/api/v1/categories/7?expectedVersion=3" && method == "DELETE" {
+            response = (200, Data(categoryDeleteJSON.utf8))
         } else {
             response = (404, Data(errorJSON.utf8))
         }
@@ -135,6 +154,65 @@ final class CanonicalTransportStub: CanonicalTransport, @unchecked Sendable {
       "meta": {
         "apiVersion": "1", "generatedAt": "2026-08-20T10:00:00.000Z", "source": "mac-authoritative",
         "calculationVersion": "home-overview-1", "completeness": "complete", "estimated": false, "missingSections": []
+      }
+    }
+    """
+
+    private let categoryJSON = """
+    {
+      "data": {
+        "id": 7, "name": "groceries", "label": "Groceries", "color": "#34C759",
+        "rules": "Food shops", "defaultOwnerType": "shared", "defaultOwnerMemberId": null,
+        "ignoredFromStats": false, "resourceVersion": 3, "updatedAt": "2026-08-09T10:00:00.123Z"
+      },
+      "meta": {
+        "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative",
+        "refreshHints": [{ "domain": "categories", "resourceIds": [7] }],
+        "receipt": { "idempotencyKey": "category-1", "replayed": true }
+      }
+    }
+    """
+
+    private let categoryListJSON = """
+    {
+      "data": [{
+        "id": 7, "name": "groceries", "label": "Groceries", "color": "#34C759",
+        "rules": "Food shops", "defaultOwnerType": "shared", "defaultOwnerMemberId": null,
+        "ignoredFromStats": false, "resourceVersion": 3, "updatedAt": "2026-08-09T10:00:00.123Z"
+      }],
+      "meta": {
+        "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative",
+        "ownerMembers": [{ "id": 2, "name": "Saar", "isActive": true }]
+      }
+    }
+    """
+
+    private let categoryDeleteJSON = """
+    {
+      "data": { "deletedId": 7 },
+      "meta": {
+        "apiVersion": "1", "generatedAt": "2026-08-09T10:00:00.123Z", "source": "mac-authoritative",
+        "refreshHints": [{ "domain": "categories", "resourceIds": [7] }]
+      }
+    }
+    """
+
+    private let categoryConflictJSON = """
+    {
+      "error": {
+        "code": "resource_conflict", "message": "The resource changed after it was read.",
+        "resourceId": 7, "expectedVersion": 2, "currentVersion": 3
+      },
+      "meta": { "apiVersion": "1", "requestId": "category-conflict-1" }
+    }
+    """
+
+    private let categoryUnknownJSON = """
+    {
+      "error": { "code": "unknown_outcome", "message": "The command outcome could not be confirmed." },
+      "meta": {
+        "apiVersion": "1", "requestId": "category-unknown-1",
+        "refreshHints": [{ "domain": "categories", "resourceIds": [7] }]
       }
     }
     """
@@ -254,6 +332,120 @@ final class CanonicalAPITests: XCTestCase {
         XCTAssertEqual(home.data.availableMoney?.value, "8200.00")
         XCTAssertEqual(home.data.spending.current.amount.currencyCode, "ILS")
         XCTAssertEqual(transport.requests.last?.path, "/api/v1/home")
+    }
+
+    func testGeneratedCategoryReplayPreservesTheSharedResourceAndMutationMetadata() async throws {
+        let transport = CanonicalTransportStub(categoryCreateStatus: 201)
+        let client = CanonicalAPIClient(transport: transport, token: "issued-device-token")
+
+        let listed = try await client.listCategories()
+        XCTAssertEqual(listed.meta.ownerMembers.first?.name, "Saar")
+        let replay = try await client.createCategory(.init(
+            idempotencyKey: "category-1",
+            name: "groceries",
+            label: "Groceries",
+            defaultOwnerType: .shared
+        ))
+
+        XCTAssertEqual(listed.data.first?.id, replay.data.id)
+        XCTAssertEqual(listed.data.first?.label, replay.data.label)
+        XCTAssertEqual(listed.data.first?.resourceVersion, replay.data.resourceVersion)
+        XCTAssertEqual(replay.data.defaultOwnerType, .shared)
+        XCTAssertNil(replay.data.defaultOwnerMemberId)
+        XCTAssertEqual(replay.data.updatedAt.timeIntervalSince1970, 1786269600.123, accuracy: 0.001)
+        XCTAssertEqual(replay.meta.receipt?.idempotencyKey, "category-1")
+        XCTAssertEqual(replay.meta.receipt?.replayed, true)
+        XCTAssertEqual(replay.meta.refreshHints.first?.domain, "categories")
+        _ = try await client.updateCategory(id: 7, request: .init(label: "Food", expectedVersion: 3))
+        let deleted = try await client.deleteCategory(id: 7, expectedVersion: 3)
+        XCTAssertEqual(deleted.data.deletedId, 7)
+        XCTAssertEqual(deleted.meta.refreshHints.first?.domain, "categories")
+        XCTAssertEqual(transport.requests.map(\.method), ["GET", "POST", "PATCH", "DELETE"])
+    }
+
+    func testGeneratedCategoryClientSurfacesMutationConflictForExplicitReapply() async throws {
+        let transport = CanonicalTransportStub(categoryUpdateStatus: 409)
+        let client = CanonicalAPIClient(transport: transport)
+
+        do {
+            _ = try await client.updateCategory(
+                id: 7,
+                request: .init(label: "My retained draft", expectedVersion: 2)
+            )
+            XCTFail("Expected a Mutation Conflict")
+        } catch let error as CanonicalAPIError {
+            XCTAssertEqual(
+                error,
+                .coded(code: "resource_conflict", requestId: "category-conflict-1", status: 409)
+            )
+        }
+    }
+
+    func testGeneratedCategoryClientSurfacesUnknownOutcomeForAuthoritativeRecovery() async throws {
+        let client = CanonicalAPIClient(
+            transport: CanonicalTransportStub(categoryCreateStatus: 503)
+        )
+
+        do {
+            _ = try await client.createCategory(.init(
+                idempotencyKey: "category-unknown-1",
+                name: "groceries",
+                label: "Groceries"
+            ))
+            XCTFail("Expected an unknown outcome")
+        } catch let error as CanonicalAPIError {
+            XCTAssertEqual(
+                error,
+                .coded(code: "unknown_outcome", requestId: "category-unknown-1", status: 503)
+            )
+        }
+    }
+
+    func testCategoryDraftPreservesAnUnsetColorUntilTheUserChangesIt() {
+        XCTAssertNil(intendedCategoryColor(original: nil, draft: "#94A3B8"))
+        XCTAssertEqual(
+            intendedCategoryColor(original: nil, draft: "#FF0000"),
+            "#FF0000"
+        )
+        XCTAssertEqual(
+            intendedCategoryColor(original: "#94A3B8", draft: "#94A3B8"),
+            "#94A3B8"
+        )
+    }
+
+    func testCategoryEditRecoveryRequiresExplicitReapplyForConflicts() {
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: true,
+                unknownOutcome: true
+            ),
+            .accepted
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: true,
+                unknownOutcome: false
+            ),
+            .reapply
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: true,
+                matchesDraft: false,
+                unknownOutcome: true
+            ),
+            .reapply
+        )
+        XCTAssertEqual(
+            categoryEditRecoveryDecision(
+                authorityExists: false,
+                matchesDraft: false,
+                unknownOutcome: true
+            ),
+            .missing
+        )
     }
 
     func testGeneratedClientDecodesStableCodedErrors() async throws {

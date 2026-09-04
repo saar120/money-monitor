@@ -11,6 +11,26 @@ public import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// List canonical categories
+    ///
+    /// - Remark: HTTP `GET /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/get(listCategories)`.
+    func listCategories(_ input: Operations.ListCategories.Input) async throws -> Operations.ListCategories.Output
+    /// Create a canonical category
+    ///
+    /// - Remark: HTTP `POST /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)`.
+    func createCategory(_ input: Operations.CreateCategory.Input) async throws -> Operations.CreateCategory.Output
+    /// Update a canonical category
+    ///
+    /// - Remark: HTTP `PATCH /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/patch(updateCategory)`.
+    func updateCategory(_ input: Operations.UpdateCategory.Input) async throws -> Operations.UpdateCategory.Output
+    /// Delete a canonical category
+    ///
+    /// - Remark: HTTP `DELETE /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/delete(deleteCategory)`.
+    func deleteCategory(_ input: Operations.DeleteCategory.Input) async throws -> Operations.DeleteCategory.Output
     /// Read the Mac-calculated Home overview projection
     ///
     /// - Remark: HTTP `GET /api/v1/home`.
@@ -50,6 +70,56 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// List canonical categories
+    ///
+    /// - Remark: HTTP `GET /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/get(listCategories)`.
+    public func listCategories(headers: Operations.ListCategories.Input.Headers = .init()) async throws -> Operations.ListCategories.Output {
+        try await listCategories(Operations.ListCategories.Input(headers: headers))
+    }
+    /// Create a canonical category
+    ///
+    /// - Remark: HTTP `POST /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)`.
+    public func createCategory(
+        headers: Operations.CreateCategory.Input.Headers = .init(),
+        body: Operations.CreateCategory.Input.Body
+    ) async throws -> Operations.CreateCategory.Output {
+        try await createCategory(Operations.CreateCategory.Input(
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Update a canonical category
+    ///
+    /// - Remark: HTTP `PATCH /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/patch(updateCategory)`.
+    public func updateCategory(
+        path: Operations.UpdateCategory.Input.Path,
+        headers: Operations.UpdateCategory.Input.Headers = .init(),
+        body: Operations.UpdateCategory.Input.Body
+    ) async throws -> Operations.UpdateCategory.Output {
+        try await updateCategory(Operations.UpdateCategory.Input(
+            path: path,
+            headers: headers,
+            body: body
+        ))
+    }
+    /// Delete a canonical category
+    ///
+    /// - Remark: HTTP `DELETE /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/delete(deleteCategory)`.
+    public func deleteCategory(
+        path: Operations.DeleteCategory.Input.Path,
+        query: Operations.DeleteCategory.Input.Query,
+        headers: Operations.DeleteCategory.Input.Headers = .init()
+    ) async throws -> Operations.DeleteCategory.Output {
+        try await deleteCategory(Operations.DeleteCategory.Input(
+            path: path,
+            query: query,
+            headers: headers
+        ))
+    }
     /// Read the Mac-calculated Home overview projection
     ///
     /// - Remark: HTTP `GET /api/v1/home`.
@@ -3432,6 +3502,7 @@ public enum Components {
                 /// - Remark: Generated from `#/components/schemas/HomeOverviewResponse/meta/MissingSectionsPayload`.
                 @frozen public enum MissingSectionsPayloadPayload: String, Codable, Hashable, Sendable, CaseIterable {
                     case availableMoney = "availableMoney"
+                    case spending = "spending"
                     case budget = "budget"
                     case netWorth = "netWorth"
                     case categories = "categories"
@@ -3612,6 +3683,1539 @@ public enum Components {
                 )
                 self.meta = try container.decode(
                     Components.Schemas.HomeOverviewResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryResource`.
+        public struct CategoryResource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/id`.
+            public var id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/color`.
+            public var color: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/rules`.
+            public var rules: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/defaultOwnerType`.
+            @frozen public enum DefaultOwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case member = "member"
+                case shared = "shared"
+                case unassigned = "unassigned"
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/defaultOwnerType`.
+            public var defaultOwnerType: Components.Schemas.CategoryResource.DefaultOwnerTypePayload
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/defaultOwnerMemberId`.
+            public var defaultOwnerMemberId: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/ignoredFromStats`.
+            public var ignoredFromStats: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/resourceVersion`.
+            public var resourceVersion: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CategoryResource/updatedAt`.
+            public var updatedAt: Foundation.Date
+            /// Creates a new `CategoryResource`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - label:
+            ///   - color:
+            ///   - rules:
+            ///   - defaultOwnerType:
+            ///   - defaultOwnerMemberId:
+            ///   - ignoredFromStats:
+            ///   - resourceVersion:
+            ///   - updatedAt:
+            public init(
+                id: Swift.Int,
+                name: Swift.String,
+                label: Swift.String,
+                color: Swift.String? = nil,
+                rules: Swift.String? = nil,
+                defaultOwnerType: Components.Schemas.CategoryResource.DefaultOwnerTypePayload,
+                defaultOwnerMemberId: Swift.Int? = nil,
+                ignoredFromStats: Swift.Bool,
+                resourceVersion: Swift.Int,
+                updatedAt: Foundation.Date
+            ) {
+                self.id = id
+                self.name = name
+                self.label = label
+                self.color = color
+                self.rules = rules
+                self.defaultOwnerType = defaultOwnerType
+                self.defaultOwnerMemberId = defaultOwnerMemberId
+                self.ignoredFromStats = ignoredFromStats
+                self.resourceVersion = resourceVersion
+                self.updatedAt = updatedAt
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case label
+                case color
+                case rules
+                case defaultOwnerType
+                case defaultOwnerMemberId
+                case ignoredFromStats
+                case resourceVersion
+                case updatedAt
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.Int.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.label = try container.decode(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.color = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .color
+                )
+                self.rules = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .rules
+                )
+                self.defaultOwnerType = try container.decode(
+                    Components.Schemas.CategoryResource.DefaultOwnerTypePayload.self,
+                    forKey: .defaultOwnerType
+                )
+                self.defaultOwnerMemberId = try container.decodeIfPresent(
+                    Swift.Int.self,
+                    forKey: .defaultOwnerMemberId
+                )
+                self.ignoredFromStats = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .ignoredFromStats
+                )
+                self.resourceVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .resourceVersion
+                )
+                self.updatedAt = try container.decode(
+                    Foundation.Date.self,
+                    forKey: .updatedAt
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "label",
+                    "color",
+                    "rules",
+                    "defaultOwnerType",
+                    "defaultOwnerMemberId",
+                    "ignoredFromStats",
+                    "resourceVersion",
+                    "updatedAt"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember`.
+        public struct CategoryOwnerMember: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/id`.
+            public var id: Swift.Int
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryOwnerMember/isActive`.
+            public var isActive: Swift.Bool
+            /// Creates a new `CategoryOwnerMember`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - name:
+            ///   - isActive:
+            public init(
+                id: Swift.Int,
+                name: Swift.String,
+                isActive: Swift.Bool
+            ) {
+                self.id = id
+                self.name = name
+                self.isActive = isActive
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case name
+                case isActive
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.Int.self,
+                    forKey: .id
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.isActive = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .isActive
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "name",
+                    "isActive"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryListResponse`.
+        public struct CategoryListResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload`.
+            public struct DataPayloadPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/id`.
+                public var id: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/label`.
+                public var label: Swift.String
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/color`.
+                public var color: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/rules`.
+                public var rules: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/defaultOwnerType`.
+                @frozen public enum DefaultOwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case member = "member"
+                    case shared = "shared"
+                    case unassigned = "unassigned"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/defaultOwnerType`.
+                public var defaultOwnerType: Components.Schemas.CategoryListResponse.DataPayloadPayload.DefaultOwnerTypePayload
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/defaultOwnerMemberId`.
+                public var defaultOwnerMemberId: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/ignoredFromStats`.
+                public var ignoredFromStats: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/resourceVersion`.
+                public var resourceVersion: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/DataPayload/updatedAt`.
+                public var updatedAt: Foundation.Date
+                /// Creates a new `DataPayloadPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - label:
+                ///   - color:
+                ///   - rules:
+                ///   - defaultOwnerType:
+                ///   - defaultOwnerMemberId:
+                ///   - ignoredFromStats:
+                ///   - resourceVersion:
+                ///   - updatedAt:
+                public init(
+                    id: Swift.Int,
+                    name: Swift.String,
+                    label: Swift.String,
+                    color: Swift.String? = nil,
+                    rules: Swift.String? = nil,
+                    defaultOwnerType: Components.Schemas.CategoryListResponse.DataPayloadPayload.DefaultOwnerTypePayload,
+                    defaultOwnerMemberId: Swift.Int? = nil,
+                    ignoredFromStats: Swift.Bool,
+                    resourceVersion: Swift.Int,
+                    updatedAt: Foundation.Date
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.label = label
+                    self.color = color
+                    self.rules = rules
+                    self.defaultOwnerType = defaultOwnerType
+                    self.defaultOwnerMemberId = defaultOwnerMemberId
+                    self.ignoredFromStats = ignoredFromStats
+                    self.resourceVersion = resourceVersion
+                    self.updatedAt = updatedAt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case label
+                    case color
+                    case rules
+                    case defaultOwnerType
+                    case defaultOwnerMemberId
+                    case ignoredFromStats
+                    case resourceVersion
+                    case updatedAt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Swift.Int.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.label = try container.decode(
+                        Swift.String.self,
+                        forKey: .label
+                    )
+                    self.color = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .color
+                    )
+                    self.rules = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .rules
+                    )
+                    self.defaultOwnerType = try container.decode(
+                        Components.Schemas.CategoryListResponse.DataPayloadPayload.DefaultOwnerTypePayload.self,
+                        forKey: .defaultOwnerType
+                    )
+                    self.defaultOwnerMemberId = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .defaultOwnerMemberId
+                    )
+                    self.ignoredFromStats = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .ignoredFromStats
+                    )
+                    self.resourceVersion = try container.decode(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.updatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .updatedAt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "label",
+                        "color",
+                        "rules",
+                        "defaultOwnerType",
+                        "defaultOwnerMemberId",
+                        "ignoredFromStats",
+                        "resourceVersion",
+                        "updatedAt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryListResponse/data`.
+            public typealias DataPayload = [Components.Schemas.CategoryListResponse.DataPayloadPayload]
+            /// - Remark: Generated from `#/components/schemas/CategoryListResponse/data`.
+            public var data: Components.Schemas.CategoryListResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.CategoryListResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/source`.
+                public var source: Components.Schemas.CategoryListResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/calculationVersion`.
+                public var calculationVersion: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/completeness`.
+                public var completeness: Components.Schemas.CategoryListResponse.MetaPayload.CompletenessPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/estimated`.
+                public var estimated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.CategoryListResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.CategoryListResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/receipt`.
+                public var receipt: Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload`.
+                public struct OwnerMembersPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/id`.
+                    public var id: Swift.Int
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/name`.
+                    public var name: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/OwnerMembersPayload/isActive`.
+                    public var isActive: Swift.Bool
+                    /// Creates a new `OwnerMembersPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - name:
+                    ///   - isActive:
+                    public init(
+                        id: Swift.Int,
+                        name: Swift.String,
+                        isActive: Swift.Bool
+                    ) {
+                        self.id = id
+                        self.name = name
+                        self.isActive = isActive
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case name
+                        case isActive
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.Int.self,
+                            forKey: .id
+                        )
+                        self.name = try container.decode(
+                            Swift.String.self,
+                            forKey: .name
+                        )
+                        self.isActive = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .isActive
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "name",
+                            "isActive"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/ownerMembers`.
+                public typealias OwnerMembersPayload = [Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta/ownerMembers`.
+                public var ownerMembers: Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                ///   - ownerMembers:
+                public init(
+                    apiVersion: Components.Schemas.CategoryListResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.CategoryListResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Swift.String? = nil,
+                    completeness: Components.Schemas.CategoryListResponse.MetaPayload.CompletenessPayload? = nil,
+                    estimated: Swift.Bool? = nil,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.CategoryListResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
+                    receipt: Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload? = nil,
+                    ownerMembers: Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                    self.ownerMembers = ownerMembers
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                    case ownerMembers
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.CategoryListResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.CategoryListResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decodeIfPresent(
+                        Components.Schemas.CategoryListResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decodeIfPresent(
+                        Components.Schemas.CategoryListResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.CategoryListResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    self.ownerMembers = try container.decode(
+                        Components.Schemas.CategoryListResponse.MetaPayload.OwnerMembersPayload.self,
+                        forKey: .ownerMembers
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt",
+                        "ownerMembers"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryListResponse/meta`.
+            public var meta: Components.Schemas.CategoryListResponse.MetaPayload
+            /// Creates a new `CategoryListResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.CategoryListResponse.DataPayload,
+                meta: Components.Schemas.CategoryListResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.CategoryListResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.CategoryListResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryResponse`.
+        public struct CategoryResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryResponse/data`.
+            public struct DataPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/id`.
+                public var id: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/label`.
+                public var label: Swift.String
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/color`.
+                public var color: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/rules`.
+                public var rules: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/defaultOwnerType`.
+                @frozen public enum DefaultOwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case member = "member"
+                    case shared = "shared"
+                    case unassigned = "unassigned"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/defaultOwnerType`.
+                public var defaultOwnerType: Components.Schemas.CategoryResponse.DataPayload.DefaultOwnerTypePayload
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/defaultOwnerMemberId`.
+                public var defaultOwnerMemberId: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/ignoredFromStats`.
+                public var ignoredFromStats: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/resourceVersion`.
+                public var resourceVersion: Swift.Int
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/data/updatedAt`.
+                public var updatedAt: Foundation.Date
+                /// Creates a new `DataPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - label:
+                ///   - color:
+                ///   - rules:
+                ///   - defaultOwnerType:
+                ///   - defaultOwnerMemberId:
+                ///   - ignoredFromStats:
+                ///   - resourceVersion:
+                ///   - updatedAt:
+                public init(
+                    id: Swift.Int,
+                    name: Swift.String,
+                    label: Swift.String,
+                    color: Swift.String? = nil,
+                    rules: Swift.String? = nil,
+                    defaultOwnerType: Components.Schemas.CategoryResponse.DataPayload.DefaultOwnerTypePayload,
+                    defaultOwnerMemberId: Swift.Int? = nil,
+                    ignoredFromStats: Swift.Bool,
+                    resourceVersion: Swift.Int,
+                    updatedAt: Foundation.Date
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.label = label
+                    self.color = color
+                    self.rules = rules
+                    self.defaultOwnerType = defaultOwnerType
+                    self.defaultOwnerMemberId = defaultOwnerMemberId
+                    self.ignoredFromStats = ignoredFromStats
+                    self.resourceVersion = resourceVersion
+                    self.updatedAt = updatedAt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case label
+                    case color
+                    case rules
+                    case defaultOwnerType
+                    case defaultOwnerMemberId
+                    case ignoredFromStats
+                    case resourceVersion
+                    case updatedAt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Swift.Int.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.label = try container.decode(
+                        Swift.String.self,
+                        forKey: .label
+                    )
+                    self.color = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .color
+                    )
+                    self.rules = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .rules
+                    )
+                    self.defaultOwnerType = try container.decode(
+                        Components.Schemas.CategoryResponse.DataPayload.DefaultOwnerTypePayload.self,
+                        forKey: .defaultOwnerType
+                    )
+                    self.defaultOwnerMemberId = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .defaultOwnerMemberId
+                    )
+                    self.ignoredFromStats = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .ignoredFromStats
+                    )
+                    self.resourceVersion = try container.decode(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.updatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .updatedAt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "label",
+                        "color",
+                        "rules",
+                        "defaultOwnerType",
+                        "defaultOwnerMemberId",
+                        "ignoredFromStats",
+                        "resourceVersion",
+                        "updatedAt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryResponse/data`.
+            public var data: Components.Schemas.CategoryResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.CategoryResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/source`.
+                public var source: Components.Schemas.CategoryResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/calculationVersion`.
+                public var calculationVersion: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/completeness`.
+                public var completeness: Components.Schemas.CategoryResponse.MetaPayload.CompletenessPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/estimated`.
+                public var estimated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.CategoryResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.CategoryResponse.MetaPayload.RefreshHintsPayload
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta/receipt`.
+                public var receipt: Components.Schemas.CategoryResponse.MetaPayload.ReceiptPayload?
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                public init(
+                    apiVersion: Components.Schemas.CategoryResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.CategoryResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Swift.String? = nil,
+                    completeness: Components.Schemas.CategoryResponse.MetaPayload.CompletenessPayload? = nil,
+                    estimated: Swift.Bool? = nil,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.CategoryResponse.MetaPayload.RefreshHintsPayload,
+                    missingSections: [Swift.String]? = nil,
+                    receipt: Components.Schemas.CategoryResponse.MetaPayload.ReceiptPayload? = nil
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.CategoryResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.CategoryResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decodeIfPresent(
+                        Components.Schemas.CategoryResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decode(
+                        Components.Schemas.CategoryResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.CategoryResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryResponse/meta`.
+            public var meta: Components.Schemas.CategoryResponse.MetaPayload
+            /// Creates a new `CategoryResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.CategoryResponse.DataPayload,
+                meta: Components.Schemas.CategoryResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.CategoryResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.CategoryResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest`.
+        public struct CategoryCreateRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/idempotencyKey`.
+            public var idempotencyKey: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/name`.
+            public var name: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/label`.
+            public var label: Swift.String
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/color`.
+            public var color: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/rules`.
+            public var rules: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/defaultOwnerType`.
+            @frozen public enum DefaultOwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case member = "member"
+                case shared = "shared"
+                case unassigned = "unassigned"
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/defaultOwnerType`.
+            public var defaultOwnerType: Components.Schemas.CategoryCreateRequest.DefaultOwnerTypePayload?
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/defaultOwnerMemberId`.
+            public var defaultOwnerMemberId: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/CategoryCreateRequest/ignoredFromStats`.
+            public var ignoredFromStats: Swift.Bool?
+            /// Creates a new `CategoryCreateRequest`.
+            ///
+            /// - Parameters:
+            ///   - idempotencyKey:
+            ///   - name:
+            ///   - label:
+            ///   - color:
+            ///   - rules:
+            ///   - defaultOwnerType:
+            ///   - defaultOwnerMemberId:
+            ///   - ignoredFromStats:
+            public init(
+                idempotencyKey: Swift.String,
+                name: Swift.String,
+                label: Swift.String,
+                color: Swift.String? = nil,
+                rules: Swift.String? = nil,
+                defaultOwnerType: Components.Schemas.CategoryCreateRequest.DefaultOwnerTypePayload? = nil,
+                defaultOwnerMemberId: Swift.Int? = nil,
+                ignoredFromStats: Swift.Bool? = nil
+            ) {
+                self.idempotencyKey = idempotencyKey
+                self.name = name
+                self.label = label
+                self.color = color
+                self.rules = rules
+                self.defaultOwnerType = defaultOwnerType
+                self.defaultOwnerMemberId = defaultOwnerMemberId
+                self.ignoredFromStats = ignoredFromStats
+            }
+            public enum CodingKeys: String, CodingKey {
+                case idempotencyKey
+                case name
+                case label
+                case color
+                case rules
+                case defaultOwnerType
+                case defaultOwnerMemberId
+                case ignoredFromStats
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.idempotencyKey = try container.decode(
+                    Swift.String.self,
+                    forKey: .idempotencyKey
+                )
+                self.name = try container.decode(
+                    Swift.String.self,
+                    forKey: .name
+                )
+                self.label = try container.decode(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.color = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .color
+                )
+                self.rules = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .rules
+                )
+                self.defaultOwnerType = try container.decodeIfPresent(
+                    Components.Schemas.CategoryCreateRequest.DefaultOwnerTypePayload.self,
+                    forKey: .defaultOwnerType
+                )
+                self.defaultOwnerMemberId = try container.decodeIfPresent(
+                    Swift.Int.self,
+                    forKey: .defaultOwnerMemberId
+                )
+                self.ignoredFromStats = try container.decodeIfPresent(
+                    Swift.Bool.self,
+                    forKey: .ignoredFromStats
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "idempotencyKey",
+                    "name",
+                    "label",
+                    "color",
+                    "rules",
+                    "defaultOwnerType",
+                    "defaultOwnerMemberId",
+                    "ignoredFromStats"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest`.
+        public struct CategoryUpdateRequest: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/label`.
+            public var label: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/color`.
+            public var color: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/rules`.
+            public var rules: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/defaultOwnerType`.
+            @frozen public enum DefaultOwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case member = "member"
+                case shared = "shared"
+                case unassigned = "unassigned"
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/defaultOwnerType`.
+            public var defaultOwnerType: Components.Schemas.CategoryUpdateRequest.DefaultOwnerTypePayload?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/defaultOwnerMemberId`.
+            public var defaultOwnerMemberId: Swift.Int?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/ignoredFromStats`.
+            public var ignoredFromStats: Swift.Bool?
+            /// - Remark: Generated from `#/components/schemas/CategoryUpdateRequest/expectedVersion`.
+            public var expectedVersion: Swift.Int
+            /// Creates a new `CategoryUpdateRequest`.
+            ///
+            /// - Parameters:
+            ///   - label:
+            ///   - color:
+            ///   - rules:
+            ///   - defaultOwnerType:
+            ///   - defaultOwnerMemberId:
+            ///   - ignoredFromStats:
+            ///   - expectedVersion:
+            public init(
+                label: Swift.String? = nil,
+                color: Swift.String? = nil,
+                rules: Swift.String? = nil,
+                defaultOwnerType: Components.Schemas.CategoryUpdateRequest.DefaultOwnerTypePayload? = nil,
+                defaultOwnerMemberId: Swift.Int? = nil,
+                ignoredFromStats: Swift.Bool? = nil,
+                expectedVersion: Swift.Int
+            ) {
+                self.label = label
+                self.color = color
+                self.rules = rules
+                self.defaultOwnerType = defaultOwnerType
+                self.defaultOwnerMemberId = defaultOwnerMemberId
+                self.ignoredFromStats = ignoredFromStats
+                self.expectedVersion = expectedVersion
+            }
+            public enum CodingKeys: String, CodingKey {
+                case label
+                case color
+                case rules
+                case defaultOwnerType
+                case defaultOwnerMemberId
+                case ignoredFromStats
+                case expectedVersion
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.label = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .label
+                )
+                self.color = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .color
+                )
+                self.rules = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .rules
+                )
+                self.defaultOwnerType = try container.decodeIfPresent(
+                    Components.Schemas.CategoryUpdateRequest.DefaultOwnerTypePayload.self,
+                    forKey: .defaultOwnerType
+                )
+                self.defaultOwnerMemberId = try container.decodeIfPresent(
+                    Swift.Int.self,
+                    forKey: .defaultOwnerMemberId
+                )
+                self.ignoredFromStats = try container.decodeIfPresent(
+                    Swift.Bool.self,
+                    forKey: .ignoredFromStats
+                )
+                self.expectedVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .expectedVersion
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "label",
+                    "color",
+                    "rules",
+                    "defaultOwnerType",
+                    "defaultOwnerMemberId",
+                    "ignoredFromStats",
+                    "expectedVersion"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryDeleteQuery`.
+        public struct CategoryDeleteQuery: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryDeleteQuery/expectedVersion`.
+            public var expectedVersion: Swift.Int
+            /// Creates a new `CategoryDeleteQuery`.
+            ///
+            /// - Parameters:
+            ///   - expectedVersion:
+            public init(expectedVersion: Swift.Int) {
+                self.expectedVersion = expectedVersion
+            }
+            public enum CodingKeys: String, CodingKey {
+                case expectedVersion
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.expectedVersion = try container.decode(
+                    Swift.Int.self,
+                    forKey: .expectedVersion
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "expectedVersion"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse`.
+        public struct CategoryDeleteResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/data`.
+            public struct DataPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/data/deletedId`.
+                public var deletedId: Swift.Int
+                /// Creates a new `DataPayload`.
+                ///
+                /// - Parameters:
+                ///   - deletedId:
+                public init(deletedId: Swift.Int) {
+                    self.deletedId = deletedId
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case deletedId
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.deletedId = try container.decode(
+                        Swift.Int.self,
+                        forKey: .deletedId
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "deletedId"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/data`.
+            public var data: Components.Schemas.CategoryDeleteResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.CategoryDeleteResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/source`.
+                public var source: Components.Schemas.CategoryDeleteResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/calculationVersion`.
+                public var calculationVersion: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/completeness`.
+                public var completeness: Components.Schemas.CategoryDeleteResponse.MetaPayload.CompletenessPayload?
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/estimated`.
+                public var estimated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.CategoryDeleteResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.CategoryDeleteResponse.MetaPayload.RefreshHintsPayload
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta/receipt`.
+                public var receipt: Components.Schemas.CategoryDeleteResponse.MetaPayload.ReceiptPayload?
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                public init(
+                    apiVersion: Components.Schemas.CategoryDeleteResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.CategoryDeleteResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Swift.String? = nil,
+                    completeness: Components.Schemas.CategoryDeleteResponse.MetaPayload.CompletenessPayload? = nil,
+                    estimated: Swift.Bool? = nil,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.CategoryDeleteResponse.MetaPayload.RefreshHintsPayload,
+                    missingSections: [Swift.String]? = nil,
+                    receipt: Components.Schemas.CategoryDeleteResponse.MetaPayload.ReceiptPayload? = nil
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.CategoryDeleteResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.CategoryDeleteResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decodeIfPresent(
+                        Components.Schemas.CategoryDeleteResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decode(
+                        Components.Schemas.CategoryDeleteResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.CategoryDeleteResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/CategoryDeleteResponse/meta`.
+            public var meta: Components.Schemas.CategoryDeleteResponse.MetaPayload
+            /// Creates a new `CategoryDeleteResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.CategoryDeleteResponse.DataPayload,
+                meta: Components.Schemas.CategoryDeleteResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.CategoryDeleteResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.CategoryDeleteResponse.MetaPayload.self,
                     forKey: .meta
                 )
                 try decoder.ensureNoAdditionalProperties(knownKeys: [
@@ -5468,6 +7072,722 @@ public enum Components {
 
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 public enum Operations {
+    /// List canonical categories
+    ///
+    /// - Remark: HTTP `GET /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/get(listCategories)`.
+    public enum ListCategories {
+        public static let id: Swift.String = "listCategories"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/categories/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListCategories.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListCategories.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListCategories.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            public init(headers: Operations.ListCategories.Input.Headers = .init()) {
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CategoryListResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CategoryListResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListCategories.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListCategories.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/get(listCategories)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListCategories.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListCategories.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/GET/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/GET/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListCategories.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListCategories.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/get(listCategories)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.ListCategories.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.ListCategories.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Create a canonical category
+    ///
+    /// - Remark: HTTP `POST /api/v1/categories`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)`.
+    public enum CreateCategory {
+        public static let id: Swift.String = "createCategory"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/categories/POST/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateCategory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.CreateCategory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.CreateCategory.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/categories/POST/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/POST/requestBody/content/application\/json`.
+                case json(Components.Schemas.CategoryCreateRequest)
+            }
+            public var body: Operations.CreateCategory.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - headers:
+            ///   - body:
+            public init(
+                headers: Operations.CreateCategory.Input.Headers = .init(),
+                body: Operations.CreateCategory.Input.Body
+            ) {
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Created: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/POST/responses/201/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/POST/responses/201/content/application\/json`.
+                    case json(Components.Schemas.CategoryResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CategoryResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateCategory.Output.Created.Body
+                /// Creates a new `Created`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateCategory.Output.Created.Body) {
+                    self.body = body
+                }
+            }
+            /// Accepted create or receipt replay
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)/responses/201`.
+            ///
+            /// HTTP response code: `201 created`.
+            case created(Operations.CreateCategory.Output.Created)
+            /// The associated value of the enum case if `self` is `.created`.
+            ///
+            /// - Throws: An error if `self` is not `.created`.
+            /// - SeeAlso: `.created`.
+            public var created: Operations.CreateCategory.Output.Created {
+                get throws {
+                    switch self {
+                    case let .created(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "created",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/POST/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/POST/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.CreateCategory.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.CreateCategory.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/post(createCategory)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.CreateCategory.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.CreateCategory.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Update a canonical category
+    ///
+    /// - Remark: HTTP `PATCH /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/patch(updateCategory)`.
+    public enum UpdateCategory {
+        public static let id: Swift.String = "updateCategory"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/path/id`.
+                public var id: Swift.Int
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                public init(id: Swift.Int) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.UpdateCategory.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateCategory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.UpdateCategory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.UpdateCategory.Input.Headers
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/requestBody`.
+            @frozen public enum Body: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/requestBody/content/application\/json`.
+                case json(Components.Schemas.CategoryUpdateRequest)
+            }
+            public var body: Operations.UpdateCategory.Input.Body
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            ///   - body:
+            public init(
+                path: Operations.UpdateCategory.Input.Path,
+                headers: Operations.UpdateCategory.Input.Headers = .init(),
+                body: Operations.UpdateCategory.Input.Body
+            ) {
+                self.path = path
+                self.headers = headers
+                self.body = body
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CategoryResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CategoryResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.UpdateCategory.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.UpdateCategory.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/{id}/patch(updateCategory)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.UpdateCategory.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.UpdateCategory.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/{id}/PATCH/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.UpdateCategory.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.UpdateCategory.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/{id}/patch(updateCategory)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.UpdateCategory.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.UpdateCategory.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Delete a canonical category
+    ///
+    /// - Remark: HTTP `DELETE /api/v1/categories/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/categories/{id}/delete(deleteCategory)`.
+    public enum DeleteCategory {
+        public static let id: Swift.String = "deleteCategory"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/path/id`.
+                public var id: Swift.Int
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                public init(id: Swift.Int) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.DeleteCategory.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/query/expectedVersion`.
+                public var expectedVersion: Swift.Int
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - expectedVersion:
+                public init(expectedVersion: Swift.Int) {
+                    self.expectedVersion = expectedVersion
+                }
+            }
+            public var query: Operations.DeleteCategory.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteCategory.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.DeleteCategory.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.DeleteCategory.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - query:
+            ///   - headers:
+            public init(
+                path: Operations.DeleteCategory.Input.Path,
+                query: Operations.DeleteCategory.Input.Query,
+                headers: Operations.DeleteCategory.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/responses/200/content/application\/json`.
+                    case json(Components.Schemas.CategoryDeleteResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CategoryDeleteResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteCategory.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteCategory.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/{id}/delete(deleteCategory)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.DeleteCategory.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.DeleteCategory.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/categories/{id}/DELETE/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.DeleteCategory.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.DeleteCategory.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/categories/{id}/delete(deleteCategory)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.DeleteCategory.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.DeleteCategory.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// Read the Mac-calculated Home overview projection
     ///
     /// - Remark: HTTP `GET /api/v1/home`.

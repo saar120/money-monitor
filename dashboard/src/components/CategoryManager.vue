@@ -2,14 +2,16 @@
 import { ref, onMounted } from 'vue';
 import {
   getCategories,
-  getMembers,
   createCategory,
   updateCategory,
   deleteCategory,
   aiRecategorize,
   type Category,
-  type Member,
+  type CategoryOwnerMember,
   type OwnerType,
+  type CategoryMutationMeta,
+  APIError,
+  rememberCategoryVersions,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -36,16 +38,23 @@ import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import {
+  emptyCategoryCreateDraft,
+  intendedNullableColor,
+  toggleRecoveryDecision,
+} from '@/lib/category-recovery';
 
 const categories = ref<Category[]>([]);
-const members = ref<Member[]>([]);
+const members = ref<CategoryOwnerMember[]>([]);
 const loading = ref(false);
 const error = ref('');
 
 // Editing state
 const editingId = ref<number | null>(null);
+const reapplyId = ref<number | null>(null);
 const editLabel = ref('');
 const editColor = ref('');
+const editOriginalColor = ref<string | null>(null);
 const editRules = ref('');
 const editOwner = ref('unassigned');
 
@@ -55,8 +64,11 @@ const newLabel = ref('');
 const newColor = ref(DEFAULT_CATEGORY_COLOR);
 const newRules = ref('');
 const newOwner = ref('unassigned');
+const newIgnored = ref(false);
 const showNewForm = ref(false);
 const saving = ref(false);
+const pendingCreateKey = ref<string>(crypto.randomUUID());
+const pendingCreatePayload = ref('');
 
 // Re-categorize state
 const recatStartDate = ref('');
@@ -85,9 +97,7 @@ async function runRecategorize() {
 async function load() {
   loading.value = true;
   try {
-    const [res, memberRes] = await Promise.all([getCategories(), getMembers()]);
-    categories.value = res.categories;
-    members.value = memberRes.members.filter((m) => m.isActive);
+    await reloadCategories();
   } catch {
     error.value = 'Failed to load categories';
   } finally {
@@ -95,9 +105,43 @@ async function load() {
   }
 }
 
+async function reloadCategories() {
+  const res = await getCategories();
+  categories.value = res.categories;
+  members.value = res.ownerMembers;
+  rememberCategoryVersions(res.categories);
+  return res.categories;
+}
+
+async function recoverCategories() {
+  try {
+    return await reloadCategories();
+  } catch {
+    return null;
+  }
+}
+
+function applyRefreshHints(meta: CategoryMutationMeta) {
+  const domains = meta.refreshHints.map((hint) => hint.domain);
+  if (domains.includes('categories')) {
+    window.dispatchEvent(
+      new globalThis.CustomEvent('money-monitor:refresh', { detail: { domains } }),
+    );
+  }
+}
+
+function refreshCategoryProjections() {
+  window.dispatchEvent(
+    new globalThis.CustomEvent('money-monitor:refresh', {
+      detail: { domains: ['categories'] },
+    }),
+  );
+}
+
 function startEdit(cat: Category) {
   editingId.value = cat.id;
   editLabel.value = cat.label;
+  editOriginalColor.value = cat.color;
   editColor.value = cat.color ?? DEFAULT_CATEGORY_COLOR;
   editRules.value = cat.rules ?? '';
   editOwner.value =
@@ -108,22 +152,51 @@ function startEdit(cat: Category) {
 
 function cancelEdit() {
   editingId.value = null;
+  reapplyId.value = null;
 }
 
 async function saveEdit(cat: Category) {
   try {
     const res = await updateCategory(cat.id, {
       label: editLabel.value,
-      color: editColor.value,
+      color: intendedEditColor(),
       rules: editRules.value || null,
       defaultOwnerType: ownerTypeFromValue(editOwner.value),
       defaultOwnerMemberId: ownerMemberIdFromValue(editOwner.value),
     });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
+    rememberCategoryVersions([res.category]);
+    applyRefreshHints(res.meta);
     editingId.value = null;
-  } catch {
-    error.value = 'Failed to save';
+    reapplyId.value = null;
+    error.value = '';
+  } catch (caught) {
+    const code = caught instanceof APIError ? caught.code : undefined;
+    if (code === 'resource_conflict' || isUnknownOutcome(caught)) {
+      const authoritative = await recoverCategories();
+      if (!authoritative) {
+        error.value = 'Could not confirm the result. Reconnect, then reapply your draft.';
+        return;
+      }
+      const latest = authoritative.find((value) => value.id === cat.id);
+      if (!latest) {
+        error.value = 'This category no longer exists.';
+        editingId.value = null;
+        return;
+      }
+      if (isUnknownOutcome(caught) && categoryMatchesDraft(latest)) {
+        refreshCategoryProjections();
+        editingId.value = null;
+        error.value = '';
+        return;
+      }
+      editingId.value = cat.id;
+      reapplyId.value = cat.id;
+      error.value = 'This category changed on another client. Review your draft, then reapply it.';
+    } else {
+      error.value = 'Failed to save';
+    }
   }
 }
 
@@ -135,37 +208,127 @@ async function remove(cat: Category) {
   )
     return;
   try {
-    await deleteCategory(cat.id);
+    const res = await deleteCategory(cat.id);
     categories.value = categories.value.filter((c) => c.id !== cat.id);
-  } catch {
-    error.value = 'Failed to delete';
+    applyRefreshHints(res.meta);
+    error.value = '';
+  } catch (caught) {
+    if (caught instanceof APIError && caught.code === 'resource_conflict') {
+      if (!(await recoverCategories())) {
+        error.value = 'Could not confirm deletion. Reconnect before trying again.';
+        return;
+      }
+      error.value = 'This category changed. Review it and confirm deletion again.';
+    } else if (isUnknownOutcome(caught)) {
+      const latest = await recoverCategories();
+      if (!latest) {
+        error.value = 'Could not confirm deletion. Reconnect before trying again.';
+        return;
+      }
+      error.value = latest.some((value) => value.id === cat.id)
+        ? 'Deletion was not accepted. Review the latest category and confirm again.'
+        : '';
+      if (!latest.some((value) => value.id === cat.id)) refreshCategoryProjections();
+    } else {
+      error.value = 'Failed to delete';
+    }
   }
 }
 
 async function addCategory() {
   if (!newName.value || !newLabel.value) return;
   saving.value = true;
+  const payload = JSON.stringify({
+    name: newName.value,
+    label: newLabel.value,
+    color: newColor.value,
+    rules: newRules.value,
+    owner: newOwner.value,
+    ignored: newIgnored.value,
+  });
+  if (pendingCreatePayload.value !== payload) {
+    pendingCreateKey.value = crypto.randomUUID();
+    pendingCreatePayload.value = payload;
+  }
   try {
     const res = await createCategory({
+      idempotencyKey: pendingCreateKey.value,
       name: newName.value,
       label: newLabel.value,
       color: newColor.value,
       rules: newRules.value || undefined,
       defaultOwnerType: ownerTypeFromValue(newOwner.value),
       defaultOwnerMemberId: ownerMemberIdFromValue(newOwner.value),
+      ignoredFromStats: newIgnored.value,
     });
     categories.value.push(res.category);
-    newName.value = '';
-    newLabel.value = '';
-    newColor.value = DEFAULT_CATEGORY_COLOR;
-    newRules.value = '';
-    newOwner.value = 'unassigned';
-    showNewForm.value = false;
+    rememberCategoryVersions([res.category]);
+    applyRefreshHints(res.meta);
+    resetCreateForm();
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to create';
+    if (isUnknownOutcome(e)) {
+      const latest = await recoverCategories();
+      if (!latest) {
+        error.value = 'Could not confirm the result. Reconnect, then retry the same receipt.';
+        return;
+      }
+      const accepted = latest.some(categoryMatchesCreate);
+      if (accepted) {
+        refreshCategoryProjections();
+        resetCreateForm();
+        error.value = '';
+      } else {
+        error.value = 'The result is unknown. Try again to reuse the same Mutation Receipt.';
+      }
+    } else {
+      error.value = e instanceof Error ? e.message : 'Failed to create';
+    }
   } finally {
     saving.value = false;
   }
+}
+
+function resetCreateForm() {
+  const reset = emptyCategoryCreateDraft(crypto.randomUUID(), DEFAULT_CATEGORY_COLOR);
+  newName.value = reset.name;
+  newLabel.value = reset.label;
+  newColor.value = reset.color;
+  newRules.value = reset.rules;
+  newOwner.value = reset.owner;
+  newIgnored.value = reset.ignored;
+  pendingCreateKey.value = reset.idempotencyKey;
+  pendingCreatePayload.value = reset.attemptedPayload;
+  showNewForm.value = false;
+}
+
+function isUnknownOutcome(error: unknown): boolean {
+  return (
+    error instanceof TypeError || (error instanceof APIError && error.code === 'unknown_outcome')
+  );
+}
+
+function categoryMatchesDraft(category: Category): boolean {
+  return (
+    category.label === editLabel.value &&
+    category.color === intendedEditColor() &&
+    category.rules === (editRules.value || null) &&
+    ownerValue(category) === editOwner.value
+  );
+}
+
+function intendedEditColor(): string | null {
+  return intendedNullableColor(editOriginalColor.value, editColor.value, DEFAULT_CATEGORY_COLOR);
+}
+
+function categoryMatchesCreate(category: Category): boolean {
+  return (
+    category.name === newName.value &&
+    category.label === newLabel.value &&
+    category.color === newColor.value &&
+    category.rules === (newRules.value || null) &&
+    ownerValue(category) === newOwner.value &&
+    category.ignoredFromStats === newIgnored.value
+  );
 }
 
 function ownerTypeFromValue(value: string): OwnerType {
@@ -193,12 +356,31 @@ function ownerLabel(value: string): string {
 }
 
 async function toggleIgnored(cat: Category) {
+  const intendedIgnored = !cat.ignoredFromStats;
   try {
-    const res = await updateCategory(cat.id, { ignoredFromStats: !cat.ignoredFromStats });
+    const res = await updateCategory(cat.id, { ignoredFromStats: intendedIgnored });
     const idx = categories.value.findIndex((c) => c.id === cat.id);
     if (idx !== -1) categories.value[idx] = res.category;
-  } catch {
-    error.value = 'Failed to update';
+    rememberCategoryVersions([res.category]);
+    applyRefreshHints(res.meta);
+    error.value = '';
+  } catch (caught) {
+    const unknownOutcome = isUnknownOutcome(caught);
+    if ((caught instanceof APIError && caught.code === 'resource_conflict') || unknownOutcome) {
+      const authoritative = await recoverCategories();
+      if (!authoritative) {
+        error.value = 'Could not confirm the result. Reconnect, then reapply the toggle.';
+      } else if (
+        toggleRecoveryDecision(authoritative, cat.id, intendedIgnored) === 'accepted'
+      ) {
+        refreshCategoryProjections();
+        error.value = '';
+      } else {
+        error.value = 'This category changed. Review the latest value, then reapply the toggle.';
+      }
+    } else {
+      error.value = 'Failed to update';
+    }
   }
 }
 
@@ -246,11 +428,19 @@ onMounted(load);
           <SelectContent>
             <SelectItem value="unassigned">Account member</SelectItem>
             <SelectItem value="shared">Together</SelectItem>
-            <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-              {{ member.name }}
+            <SelectItem
+              v-for="member in members"
+              :key="member.id"
+              :value="`member:${member.id}`"
+              :disabled="!member.isActive"
+            >
+              {{ member.name }}{{ member.isActive ? '' : ' (Inactive)' }}
             </SelectItem>
           </SelectContent>
         </Select>
+      </SettingsRow>
+      <SettingsRow label="Ignore from statistics">
+        <Switch :model-value="newIgnored" @update:model-value="newIgnored = $event" />
       </SettingsRow>
       <SettingsRow>
         <div class="flex items-center gap-2 ml-auto">
@@ -310,8 +500,17 @@ onMounted(load);
                         type="color"
                         class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer"
                       />
-                      <button class="text-success hover:text-success/80" @click="saveEdit(cat)">
+                      <button
+                        class="text-success hover:text-success/80"
+                        :aria-label="
+                          reapplyId === cat.id
+                            ? 'Reapply category changes'
+                            : 'Save category changes'
+                        "
+                        @click="saveEdit(cat)"
+                      >
                         <Check class="h-4 w-4" />
+                        <span v-if="reapplyId === cat.id" class="ml-1 text-xs">Reapply</span>
                       </button>
                       <button
                         class="text-text-secondary hover:text-text-primary"
@@ -336,8 +535,9 @@ onMounted(load);
                           v-for="member in members"
                           :key="member.id"
                           :value="`member:${member.id}`"
+                          :disabled="!member.isActive"
                         >
-                          {{ member.name }}
+                          {{ member.name }}{{ member.isActive ? '' : ' (Inactive)' }}
                         </SelectItem>
                       </SelectContent>
                     </Select>

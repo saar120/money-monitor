@@ -128,6 +128,8 @@ export const categories = sqliteTable('categories', {
     onDelete: 'set null',
   }),
   ignoredFromStats: integer('ignored_from_stats', { mode: 'boolean' }).notNull().default(false),
+  resourceVersion: integer('resource_version').notNull().default(1),
+  updatedAt: text('updated_at').notNull().default('1970-01-01T00:00:00.000Z'),
   createdAt: text('created_at')
     .notNull()
     .default(sql`(datetime('now'))`),
@@ -324,13 +326,17 @@ export const mobileCommandReceipts = sqliteTable(
   'mobile_command_receipts',
   {
     idempotencyKey: text('idempotency_key').primaryKey(),
-    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    deviceId: text('device_id')
+      .notNull()
+      .references(() => mobileDevices.id),
     commandType: text('command_type').notNull(),
     targetReference: text('target_reference').notNull(),
     requestFingerprint: text('request_fingerprint').notNull(),
     outcome: text('outcome').notNull(),
     resultNeedsReview: integer('result_needs_review', { mode: 'boolean' }).notNull(),
-    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
   },
   (table) => [index('idx_mobile_command_receipts_device').on(table.deviceId)],
 );
@@ -340,12 +346,16 @@ export const mobileCommandAuditEvents = sqliteTable(
   'mobile_command_audit_events',
   {
     id: integer('id').primaryKey({ autoIncrement: true }),
-    deviceId: text('device_id').notNull().references(() => mobileDevices.id),
+    deviceId: text('device_id')
+      .notNull()
+      .references(() => mobileDevices.id),
     commandType: text('command_type').notNull(),
     targetReference: text('target_reference').notNull(),
     requestId: text('request_id').notNull(),
     outcome: text('outcome').notNull(),
-    createdAt: text('created_at').notNull().default(sql`(datetime('now'))`),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
   },
   (table) => [index('idx_mobile_command_audit_events_device').on(table.deviceId)],
 );

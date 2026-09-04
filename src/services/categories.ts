@@ -146,7 +146,7 @@ export function createCategory(data: {
 
   const [created] = db
     .insert(categories)
-    .values({ ...data, ...ownerValidation.owner })
+    .values({ ...data, ...ownerValidation.owner, updatedAt: new Date().toISOString() })
     .returning()
     .all();
   return { ok: true as const, category: created };
@@ -171,7 +171,12 @@ export function updateCategory(
 
   const [updated] = db
     .update(categories)
-    .set({ ...data, ...ownerValidation.owner })
+    .set({
+      ...data,
+      ...ownerValidation.owner,
+      resourceVersion: existing.resourceVersion + 1,
+      updatedAt: new Date().toISOString(),
+    })
     .where(eq(categories.id, id))
     .returning()
     .all();

@@ -1413,6 +1413,39 @@ struct AppEnvironmentTests {
 
     @MainActor
     @Test
+    func categoryRecoveryRefreshesHomeOnlyForCategoryHints() async throws {
+        let bootstrap = try pairingFlowBootstrap()
+        let credential = try pairingFlowCredential()
+        let store = PairingFlowProfileStore(credential: credential)
+        let apiClient = ControlledBootstrapAPIClient(
+            behaviors: [.success(bootstrap), .success(bootstrap)],
+            homeBehaviors: [
+                .success(try acceptedHomeOverviewFixture()),
+                .success(try alternateHomeOverviewFixture()),
+            ]
+        )
+        let environment = AppEnvironment(
+            apiClient: apiClient,
+            pairingClient: PairingFlowClient(
+                credential: credential,
+                profileStore: store,
+                expiresAt: pairingFlowNow.addingTimeInterval(60)
+            ),
+            profileStore: store,
+            clock: { pairingFlowNow }
+        )
+        await environment.restoreSavedConnection()
+
+        await environment.refreshCategoryProjections([])
+        #expect(await apiClient.homeCalls() == 1)
+
+        await environment.refreshCategoryProjections(["categories"])
+        #expect(await apiClient.homeCalls() == 2)
+        #expect(environment.latestHomeOverview == (try alternateHomeOverviewFixture()))
+    }
+
+    @MainActor
+    @Test
     func failedHomeDuringBootstrapRefreshPreservesTheLastCoherentSnapshot() async throws {
         let original = try pairingFlowBootstrap()
         let replacement = try refreshBootstrapFixture("bootstrap-empty.json")

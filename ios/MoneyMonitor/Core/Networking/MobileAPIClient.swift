@@ -1,16 +1,99 @@
 import Foundation
 import CanonicalAPI
 
+enum CanonicalCategoryOwnerType: String, Equatable, Sendable {
+    case member
+    case shared
+    case unassigned
+}
+
+private protocol GeneratedCategoryValue {
+    var id: Int { get }
+    var name: String { get }
+    var label: String { get }
+    var color: String? { get }
+    var rules: String? { get }
+    var canonicalOwnerType: CanonicalCategoryOwnerType { get }
+    var defaultOwnerMemberId: Int? { get }
+    var ignoredFromStats: Bool { get }
+    var resourceVersion: Int { get }
+    var updatedAt: Date { get }
+}
+
+extension Components.Schemas.CategoryListResponse.DataPayloadPayload: GeneratedCategoryValue {
+    fileprivate var canonicalOwnerType: CanonicalCategoryOwnerType {
+        CanonicalCategoryOwnerType(rawValue: defaultOwnerType.rawValue)!
+    }
+}
+
+extension Components.Schemas.CategoryResponse.DataPayload: GeneratedCategoryValue {
+    fileprivate var canonicalOwnerType: CanonicalCategoryOwnerType {
+        CanonicalCategoryOwnerType(rawValue: defaultOwnerType.rawValue)!
+    }
+}
+
+struct CanonicalCategory: Identifiable, Equatable, Sendable {
+    let id: Int
+    let name: String
+    let label: String
+    let color: String?
+    let rules: String?
+    let defaultOwnerType: CanonicalCategoryOwnerType
+    let defaultOwnerMemberId: Int?
+    let ignoredFromStats: Bool
+    let resourceVersion: Int
+    let updatedAt: Date
+
+    fileprivate init(_ value: some GeneratedCategoryValue) {
+        id = value.id
+        name = value.name
+        label = value.label
+        color = value.color
+        rules = value.rules
+        defaultOwnerType = value.canonicalOwnerType
+        defaultOwnerMemberId = value.defaultOwnerMemberId
+        ignoredFromStats = value.ignoredFromStats
+        resourceVersion = value.resourceVersion
+        updatedAt = value.updatedAt
+    }
+}
+
+struct CategoryMutation<Value: Sendable>: Sendable {
+    let value: Value
+    let refreshDomains: Set<String>
+}
+
+struct CategoryOwnerMember: Equatable, Identifiable, Sendable {
+    let id: Int
+    let name: String
+    let isActive: Bool
+}
+
+struct CategoryCatalog: Sendable {
+    let categories: [CanonicalCategory]
+    let ownerMembers: [CategoryOwnerMember]
+}
+
 protocol MobileAPIClient: Sendable {
     func health(baseURL: URL) async throws -> HealthResponse
     func bootstrap(credential: PairedMacCredential) async throws -> BootstrapSuccessEnvelope
     func homeOverview(credential: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope
+    func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory]
+    func categoryCatalog(credential: PairedMacCredential) async throws -> CategoryCatalog
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory>
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String>
 }
 
 extension MobileAPIClient {
     func homeOverview(credential _: PairedMacCredential) async throws -> CanonicalHomeOverviewEnvelope {
         throw MobileClientError.invalidRequest
     }
+    func categories(credential _: PairedMacCredential) async throws -> [CanonicalCategory] { throw MobileClientError.invalidRequest }
+    func categoryCatalog(credential _: PairedMacCredential) async throws -> CategoryCatalog { throw MobileClientError.invalidRequest }
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> { throw MobileClientError.invalidRequest }
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String> { throw MobileClientError.invalidRequest }
 }
 
 protocol MobileTransactionAPIClient: Sendable {
@@ -173,6 +256,53 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         }
     }
 
+    func categories(credential: PairedMacCredential) async throws -> [CanonicalCategory] {
+        let response = try await canonicalClient(credential).listCategories()
+        return response.data.map(CanonicalCategory.init)
+    }
+
+    func categoryCatalog(credential: PairedMacCredential) async throws -> CategoryCatalog {
+        let response = try await canonicalClient(credential).listCategories()
+        return CategoryCatalog(
+            categories: response.data.map(CanonicalCategory.init),
+            ownerMembers: response.meta.ownerMembers.map {
+                CategoryOwnerMember(id: $0.id, name: $0.name, isActive: $0.isActive)
+            }
+        )
+    }
+
+    func createCategory(_ request: CategoryCreateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> {
+        let response = try await canonicalClient(credential).createCategory(request)
+        return CategoryMutation(
+            value: CanonicalCategory(response.data),
+            refreshDomains: Set(response.meta.refreshHints.map(\.domain))
+        )
+    }
+
+    func updateCategory(id: Int, request: CategoryUpdateRequest, credential: PairedMacCredential) async throws -> CategoryMutation<CanonicalCategory> {
+        let response = try await canonicalClient(credential).updateCategory(id: id, request: request)
+        return CategoryMutation(
+            value: CanonicalCategory(response.data),
+            refreshDomains: Set(response.meta.refreshHints.map(\.domain))
+        )
+    }
+
+    func deleteCategory(id: Int, expectedVersion: Int, credential: PairedMacCredential) async throws -> Set<String> {
+        let response = try await canonicalClient(credential).deleteCategory(id: id, expectedVersion: expectedVersion)
+        return Set(response.meta.refreshHints.map(\.domain))
+    }
+
+    private func canonicalClient(_ credential: PairedMacCredential) -> CanonicalAPIClient {
+        CanonicalAPIClient(
+            transport: MobileCanonicalTransportAdapter(
+                transport: transport,
+                baseURL: credential.profile.baseURL,
+                responseRecorder: MobileCanonicalResponseRecorder()
+            ),
+            token: credential.token
+        )
+    }
+
     private func send(_ request: URLRequest, endpoint: APIEndpoint) async throws
         -> MobileHTTPResponse
     {
@@ -236,7 +366,7 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
         baseURL _: URL,
         operationID _: String
     ) async throws -> (CanonicalHTTPResponse, CanonicalHTTPBody?) {
-        guard body == nil, let requestPath = request.path,
+        guard let requestPath = request.path,
               var components = URLComponents(url: baseURL, resolvingAgainstBaseURL: false),
               let pathComponents = URLComponents(string: requestPath)
         else {
@@ -252,6 +382,16 @@ private struct MobileCanonicalTransportAdapter: CanonicalTransport, @unchecked S
         urlRequest.httpMethod = request.method.rawValue
         for field in request.headerFields {
             urlRequest.setValue(field.value, forHTTPHeaderField: field.name.rawName)
+        }
+        if let body {
+            var data = Data()
+            for try await chunk in body {
+                guard data.count + chunk.count <= 1_048_576 else {
+                    throw MobileClientError.invalidRequest
+                }
+                data.append(contentsOf: chunk)
+            }
+            urlRequest.httpBody = data
         }
         let response: MobileHTTPResponse
         do {

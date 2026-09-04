@@ -36,10 +36,43 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((error as { error: string }).error || res.statusText);
+    const payload = error as {
+      error?: string | { code?: string; message?: string };
+      meta?: { refreshHints?: RefreshHint[] };
+    };
+    throw new APIError(
+      typeof payload.error === 'string' ? undefined : payload.error?.code,
+      typeof payload.error === 'string' ? payload.error : payload.error?.message || res.statusText,
+      res.status,
+      payload.meta?.refreshHints ?? [],
+    );
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
+}
+
+export interface RefreshHint {
+  domain: string;
+  resourceIds: number[];
+}
+
+export class APIError extends Error {
+  readonly code: string | undefined;
+  readonly status: number;
+  readonly refreshHints: RefreshHint[];
+
+  constructor(
+    code: string | undefined,
+    message: string,
+    status: number,
+    refreshHints: RefreshHint[],
+  ) {
+    super(message);
+    this.name = 'APIError';
+    this.code = code;
+    this.status = status;
+    this.refreshHints = refreshHints;
+  }
 }
 
 // ─── Accounts ───
@@ -399,46 +432,77 @@ export interface Category {
   defaultOwnerType: OwnerType;
   defaultOwnerMemberId: number | null;
   ignoredFromStats: boolean;
-  createdAt: string;
+  resourceVersion: number;
+  updatedAt: string;
 }
 
-export function getCategories() {
-  return request<{ categories: Category[] }>('/categories');
+export interface CategoryMutationMeta {
+  refreshHints: RefreshHint[];
+  receipt?: { idempotencyKey: string; replayed: boolean };
+}
+
+export interface CategoryOwnerMember {
+  id: number;
+  name: string;
+  isActive: boolean;
+}
+
+export async function getCategories() {
+  const response = await request<{
+    data: Category[];
+    meta: { ownerMembers: CategoryOwnerMember[] };
+  }>('/v1/categories');
+  return { categories: response.data, ownerMembers: response.meta.ownerMembers };
 }
 
 export function createCategory(data: {
+  idempotencyKey: string;
   name: string;
   label: string;
-  color?: string;
+  color?: string | null;
   rules?: string;
   defaultOwnerType?: OwnerType;
   defaultOwnerMemberId?: number | null;
+  ignoredFromStats?: boolean;
 }) {
-  return request<{ category: Category }>('/categories', {
+  return request<{ data: Category; meta: CategoryMutationMeta }>('/v1/categories', {
     method: 'POST',
     body: JSON.stringify(data),
-  });
+  }).then((response) => ({ category: response.data, meta: response.meta }));
 }
 
 export function updateCategory(
   id: number,
   data: {
     label?: string;
-    color?: string;
+    color?: string | null;
     rules?: string | null;
     defaultOwnerType?: OwnerType;
     defaultOwnerMemberId?: number | null;
     ignoredFromStats?: boolean;
   },
 ) {
-  return request<{ category: Category }>(`/categories/${id}`, {
+  return request<{ data: Category; meta: CategoryMutationMeta }>(`/v1/categories/${id}`, {
     method: 'PATCH',
-    body: JSON.stringify(data),
-  });
+    body: JSON.stringify({ ...data, expectedVersion: categoriesVersion(id) }),
+  }).then((response) => ({ category: response.data, meta: response.meta }));
+}
+
+const categoryVersions = new Map<number, number>();
+function categoriesVersion(id: number): number {
+  const version = categoryVersions.get(id);
+  if (!version) throw new Error('Refresh categories before changing this item.');
+  return version;
+}
+export function rememberCategoryVersions(categories: Category[]): void {
+  for (const category of categories) categoryVersions.set(category.id, category.resourceVersion);
 }
 
 export function deleteCategory(id: number) {
-  return request<{ deleted: boolean }>(`/categories/${id}`, { method: 'DELETE' });
+  return request<{ data: { deletedId: number }; meta: CategoryMutationMeta }>(
+    `/v1/categories/${id}?expectedVersion=${categoriesVersion(id)}`,
+    { method: 'DELETE' },
+  ).then((response) => ({ deleted: true, meta: response.meta }));
 }
 
 export function updateTransactionCategory(id: number, category: string | null) {

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted } from 'vue';
+import { computed, onBeforeUnmount, onMounted } from 'vue';
 import { useRouter } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -43,7 +43,16 @@ function openDrillDown(drillDown: { startDate: string; endDate: string; category
   });
 }
 
-onMounted(refresh);
+function handleTargetedRefresh(event: Event) {
+  const domains = (event as globalThis.CustomEvent<{ domains?: string[] }>).detail?.domains ?? [];
+  if (domains.includes('categories')) refresh();
+}
+
+onMounted(() => {
+  refresh();
+  window.addEventListener('money-monitor:refresh', handleTargetedRefresh);
+});
+onBeforeUnmount(() => window.removeEventListener('money-monitor:refresh', handleTargetedRefresh));
 
 const data = computed<HomeOverview | null>(() => overview.data.value?.data ?? null);
 const categoryOption = computed(() => {

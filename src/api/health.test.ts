@@ -65,7 +65,7 @@ describe('health & auth routes', () => {
     it('returns 401 for authenticated routes without token', async () => {
       const res = await server.inject({
         method: 'GET',
-        url: '/api/categories',
+        url: '/api/settings',
       });
       expect(res.statusCode).toBe(401);
       const body = JSON.parse(res.body);
@@ -75,7 +75,7 @@ describe('health & auth routes', () => {
     it('accepts valid Bearer token', async () => {
       const res = await server.inject({
         method: 'GET',
-        url: '/api/categories',
+        url: '/api/settings',
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
@@ -84,7 +84,7 @@ describe('health & auth routes', () => {
     it('rejects invalid Bearer token', async () => {
       const res = await server.inject({
         method: 'GET',
-        url: '/api/categories',
+        url: '/api/settings',
         headers: { authorization: 'Bearer wrong-token' },
       });
       expect(res.statusCode).toBe(401);
@@ -93,7 +93,7 @@ describe('health & auth routes', () => {
     it('rejects request without Bearer prefix', async () => {
       const res = await server.inject({
         method: 'GET',
-        url: '/api/categories',
+        url: '/api/settings',
         headers: { authorization: 'test-token' },
       });
       expect(res.statusCode).toBe(401);

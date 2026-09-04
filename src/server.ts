@@ -11,7 +11,6 @@ import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
 import { aiRoutes } from './api/ai.routes.js';
-import { categoriesRoutes } from './api/categories.routes.js';
 import { exchangeRatesRoutes } from './api/exchange-rates.routes.js';
 import { assetsRoutes } from './api/assets.routes.js';
 import { liabilitiesRoutes } from './api/liabilities.routes.js';
@@ -32,6 +31,7 @@ import { CanonicalApiError, sendCanonicalError } from './api/v1/errors.js';
 import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
 import type { ExchangeRateResult } from './services/exchange-rates.js';
+import { applyOwnershipWithDatabase } from './services/ownership.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -48,11 +48,15 @@ export interface CreateServerOptions {
   logger?: boolean;
   /** Injectable Mac-owned rates for deterministic canonical Home tests. */
   homeExchangeRates?: () => Promise<ExchangeRateResult>;
+  onCategoryOwnerChanged?: (categoryName: string) => void;
+  /** Injectable source-availability seam for canonical desktop listener tests. */
+  isCanonicalAvailable?: () => boolean;
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
   const ownsSqlite = options.sqlite === undefined;
   const canonicalSqlite = options.sqlite ?? sqlite;
+  const canonicalOwnershipDb = options.sqlite ? null : db;
   const clock = options.clock ?? (() => new Date());
   const app = Fastify({
     logger: options.logger ?? {
@@ -200,7 +204,17 @@ export async function createServer(options: CreateServerOptions = {}) {
           throw new Error('canonical credentials are invalid');
         }),
       logger: options.logger ?? false,
+      // The canonical store captures the real startup database. Fail closed if
+      // the dashboard swaps its live database binding (for example Demo Mode).
+      isAvailable:
+        options.isCanonicalAvailable ?? (ownsSqlite ? () => canonicalSqlite === sqlite : undefined),
       homeExchangeRates: options.homeExchangeRates,
+      onCategoryOwnerChanged:
+        options.onCategoryOwnerChanged ??
+        (canonicalOwnershipDb
+          ? (categoryName: string) =>
+              applyOwnershipWithDatabase(canonicalOwnershipDb, { categoryName })
+          : undefined),
     },
     clock,
   );
@@ -211,7 +225,6 @@ export async function createServer(options: CreateServerOptions = {}) {
     await app.register(accountsRoutes);
     await app.register(transactionsRoutes);
     await app.register(aiRoutes);
-    await app.register(categoriesRoutes);
     await app.register(exchangeRatesRoutes);
     await app.register(assetsRoutes);
     await app.register(liabilitiesRoutes);
