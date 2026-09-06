@@ -18,10 +18,6 @@ import {
   type MobilePairingRouteDependencies,
 } from './pairing-routes.js';
 import {
-  registerMobileTransactionRoutes,
-  type MobileTransactionRouteDependencies,
-} from './transaction-routes.js';
-import {
   registerMobilePlanningRoutes,
   type MobilePlanningRouteDependencies,
 } from './planning-routes.js';
@@ -67,10 +63,11 @@ export interface CreateMobileServerOptions {
     homeExchangeRates?: () => Promise<ExchangeRateResult>;
     onCategoryOwnerChanged?: (categoryName: string) => void;
     isAvailable?: () => boolean;
+    transactionPublicIdKey?: string;
+    serverIdentity: { id: string; protocolVersion: 1 };
   };
   bootstrap?: MobileBootstrapRouteDependencies;
   pairing?: MobilePairingRouteDependencies;
-  transactions?: MobileTransactionRouteDependencies;
   planning?: MobilePlanningRouteDependencies;
   netWorthHistory?: MobileNetWorthHistoryRouteDependencies;
   reviewCommands?: MobileReviewCommandRouteDependencies;
@@ -187,10 +184,6 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
     );
   }
 
-  if (options.transactions) {
-    registerMobileTransactionRoutes(app, options.transactions, clock);
-  }
-
   if (options.planning) {
     registerMobilePlanningRoutes(app, options.planning, clock);
   }
@@ -218,6 +211,8 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
         homeExchangeRates: options.canonical.homeExchangeRates,
         onCategoryOwnerChanged: options.canonical.onCategoryOwnerChanged,
         isAvailable: options.canonical.isAvailable,
+        transactionPublicIdKey: options.canonical.transactionPublicIdKey,
+        serverIdentity: options.canonical.serverIdentity,
       },
       clock,
     );

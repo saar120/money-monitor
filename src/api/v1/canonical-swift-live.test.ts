@@ -40,13 +40,22 @@ describe('generated Swift client over a live canonical listener', () => {
   const liveTest = swiftCompilerAvailable && runLiveSwiftIntegration ? it : it.skip;
 
   liveTest(
-    'authenticates, preserves the mounted prefix, and decodes a real response',
+    'authenticates, preserves the mounted prefix, and decodes real reference and transaction responses',
     async () => {
       const harness = await createCanonicalHarness({ clock: () => GENERATED_AT });
       harnesses.push(harness);
-      let receivedPath = '';
+      harness.sqlite.exec(`
+        INSERT INTO accounts
+          (id, company_id, display_name, account_number, account_type, credentials_ref)
+        VALUES (1, 'bank', 'Daily bank', '1234', 'bank', 'secret-ref');
+        INSERT INTO transactions
+          (id, account_id, date, processed_date, original_amount, charged_amount, description, hash)
+        VALUES (1, 1, '2026-08-08', '2026-08-08', -42.5, -42.5, 'Coffee House', 'swift-live-1');
+      `);
+      const receivedPaths: string[] = [];
       const proxy = createHttpServer(async (request, response) => {
-        receivedPath = request.url ?? '';
+        const receivedPath = request.url ?? '';
+        receivedPaths.push(receivedPath);
         if (!receivedPath.startsWith('/money-monitor/')) {
           response.statusCode = 404;
           response.end();
@@ -76,8 +85,11 @@ describe('generated Swift client over a live canonical listener', () => {
           harness.macToken,
         ]);
 
-        expect(receivedPath).toBe('/money-monitor/api/v1/reference?id=1');
-        expect(stdout.trim()).toBe('1|123.45|ILS');
+        expect(receivedPaths).toEqual([
+          '/money-monitor/api/v1/reference?id=1',
+          '/money-monitor/api/v1/transactions',
+        ]);
+        expect(stdout.trim()).toBe('1|123.45|ILS|1|Coffee House|false');
       } finally {
         if (proxy.listening) await close(proxy);
       }

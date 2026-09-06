@@ -14,7 +14,10 @@ enum MobilePayloadSecurityValidationError: Error, Equatable {
 
 /// Shared raw-payload boundary used before Codable can discard unknown fields.
 struct MobilePayloadSecurityValidator {
-    func validate(_ data: Data) throws {
+    func validate(
+        _ data: Data,
+        allowedFractionalKeys: Set<String> = []
+    ) throws {
         let root: Any
         do {
             root = try JSONSerialization.jsonObject(with: data)
@@ -24,26 +27,39 @@ struct MobilePayloadSecurityValidator {
         guard root is [String: Any] else {
             throw MobilePayloadSecurityValidationError.invalidJSON
         }
-        guard !containsRedactionViolation(root) else {
+        guard !containsRedactionViolation(root, allowedFractionalKeys: allowedFractionalKeys) else {
             throw MobilePayloadSecurityValidationError.redactionViolation
         }
     }
 
-    private func containsRedactionViolation(_ value: Any) -> Bool {
+    private func containsRedactionViolation(
+        _ value: Any,
+        key: String? = nil,
+        allowedFractionalKeys: Set<String>
+    ) -> Bool {
         if let string = value as? String {
             return containsForbiddenString(string)
         }
         if let number = value as? NSNumber {
             if CFGetTypeID(number) == CFBooleanGetTypeID() { return false }
             let doubleValue = number.doubleValue
-            return !doubleValue.isFinite || doubleValue.rounded(.towardZero) != doubleValue
+            return !doubleValue.isFinite
+                || (!allowedFractionalKeys.contains(key ?? "")
+                    && doubleValue.rounded(.towardZero) != doubleValue)
         }
         if let array = value as? [Any] {
-            return array.contains(where: containsRedactionViolation)
+            return array.contains {
+                containsRedactionViolation($0, allowedFractionalKeys: allowedFractionalKeys)
+            }
         }
         if let dictionary = value as? [String: Any] {
             return dictionary.contains { key, child in
-                isForbiddenKey(key) || containsRedactionViolation(child)
+                isForbiddenKey(key)
+                    || containsRedactionViolation(
+                        child,
+                        key: key,
+                        allowedFractionalKeys: allowedFractionalKeys
+                    )
             }
         }
         return false
@@ -363,7 +379,7 @@ struct MobileTransactionPayloadDecoder: Sendable {
     }
 
     private func isValidCursor(_ value: String) -> Bool {
-        value.count <= 512 && matches(#"^cursor_v1_[A-Za-z0-9_-]+$"#, in: value)
+        value.count <= 512 && matches(#"^cursor_v2_[A-Za-z0-9_-]+$"#, in: value)
     }
 
     private func isValidIdentifierMask(_ value: String) -> Bool {
@@ -393,6 +409,252 @@ struct MobileTransactionPayloadDecoder: Sendable {
     }
 
     private func matches(_ pattern: String, in value: String) -> Bool {
+        value.range(of: pattern, options: .regularExpression) != nil
+    }
+}
+
+/// Guards the generated canonical client at the trust boundary. The generated
+/// decoder owns wire shape; this validator retains the contract refinements
+/// that OpenAPI's Swift types cannot express (IDs, masks, dates, money, and
+/// owner invariants) before values can reach presentation or Saved View.
+struct CanonicalTransactionPayloadValidator: Sendable {
+    func validateList(_ data: Data, transactions: [MobileTransaction]) throws {
+        try validateSecurity(data)
+        let root = try object(try json(data), keys: ["data", "meta"])
+        let payload = try object(root["data"], keys: ["financialDate", "transactions", "page"])
+        guard
+            let financialDate = payload["financialDate"] as? String,
+            isValidFinancialDate(financialDate),
+            let rawTransactions = payload["transactions"] as? [Any],
+            rawTransactions.count == transactions.count,
+            rawTransactions.count <= 50,
+            Set(transactions.map(\.id)).count == transactions.count
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        for (raw, transaction) in zip(rawTransactions, transactions) {
+            try validateTransaction(raw, projected: transaction, maximumDate: financialDate)
+        }
+        let page = try object(payload["page"], keys: ["hasMore", "nextCursor", "total"])
+        guard
+            let hasMore = page["hasMore"] as? Bool,
+            let total = integer(page["total"]), total >= 0,
+            page["nextCursor"] is NSNull || page["nextCursor"] is String,
+            hasMore == (page["nextCursor"] is String),
+            (page["nextCursor"] as? String).map(isValidCursor) ?? true
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        try validateMetadata(root["meta"], requiresCompleteness: true)
+    }
+
+    func validateDetail(_ data: Data, transaction: MobileTransaction) throws {
+        try validateSecurity(data)
+        let root = try object(try json(data), keys: ["data", "meta"])
+        try validateTransaction(root["data"], projected: transaction, maximumDate: nil)
+        try validateMetadata(root["meta"], requiresCompleteness: false)
+    }
+
+    private func validateTransaction(
+        _ value: Any?,
+        projected transaction: MobileTransaction,
+        maximumDate: String?
+    ) throws {
+        let raw = try object(value, keys: [
+            "id", "occurredOn", "processedOn", "displayName", "amount", "direction",
+            "status", "category", "account", "owner", "needsReview", "reviewReason",
+            "confidence", "excludedFromReports",
+        ])
+        guard
+            isValidPublicID(transaction.id, kind: "transaction"),
+            raw["id"] as? String == transaction.id,
+            isValidFinancialDate(transaction.occurredOn),
+            maximumDate.map({ transaction.occurredOn <= $0 }) ?? true,
+            isDisplayText(transaction.displayName, maximum: 160),
+            isValidMoney(transaction.amount),
+            raw["needsReview"] is Bool,
+            raw["excludedFromReports"] is Bool
+        else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+
+        if let processedOn = raw["processedOn"] as? String {
+            guard
+                isValidFinancialDate(processedOn),
+                maximumDate.map({ processedOn <= $0 }) ?? true
+            else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+        } else if !(raw["processedOn"] is NSNull) {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+
+        _ = try object(raw["amount"], keys: ["value", "currencyCode"])
+        if let category = transaction.category {
+            let rawCategory = try object(raw["category"], keys: ["id", "name", "label"])
+            guard
+                isValidPublicID(category.id, kind: "category"),
+                isDisplayText(category.label, maximum: 80),
+                let name = rawCategory["name"] as? String,
+                isDisplayText(name, maximum: 80)
+            else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+        } else if !(raw["category"] is NSNull) {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+
+        let rawAccount = try object(
+            raw["account"],
+            keys: ["id", "displayName", "identifierMask", "type"]
+        )
+        guard
+            isValidPublicID(transaction.account.id, kind: "account"),
+            isDisplayText(transaction.account.displayName, maximum: 80),
+            matches(#"^(?:••••|\*{4}) [A-Za-z0-9]{2,4}$"#, transaction.account.identifierMask),
+            ["bank", "credit_card"].contains(rawAccount["type"] as? String)
+        else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+
+        let rawOwner = try object(raw["owner"], keys: ["id", "kind", "displayName"])
+        guard let owner = transaction.owner else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        switch owner.kind {
+        case .member:
+            guard
+                let id = owner.id,
+                isValidPublicID(id, kind: "member"),
+                let displayName = owner.displayName,
+                isDisplayText(displayName, maximum: 80),
+                rawOwner["id"] as? String == id
+            else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+        case .shared, .unassigned, .unknown:
+            guard owner.id == nil, owner.displayName == nil,
+                  rawOwner["id"] is NSNull, rawOwner["displayName"] is NSNull
+            else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+        }
+
+        if let reason = raw["reviewReason"] as? String {
+            guard isDisplayText(reason, maximum: 240) else {
+                throw MobileTransactionPayloadDecoderError.invalidEnvelope
+            }
+        } else if !(raw["reviewReason"] is NSNull) {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        if let confidence = number(raw["confidence"]) {
+            guard (0 ... 1).contains(confidence) else {
+                throw MobileTransactionPayloadDecoderError.invalidEnvelope
+            }
+        } else if !(raw["confidence"] is NSNull) {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+    }
+
+    private func validateMetadata(_ value: Any?, requiresCompleteness: Bool) throws {
+        let allowed: Set<String> = [
+            "apiVersion", "generatedAt", "source", "calculationVersion", "completeness",
+            "estimated", "resourceVersion", "refreshHints", "missingSections", "receipt", "server",
+        ]
+        guard let meta = value as? [String: Any], Set(meta.keys).isSubset(of: allowed) else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        let server = try object(meta["server"], keys: ["id", "protocolVersion"])
+        guard
+            meta["apiVersion"] as? String == "1",
+            meta["source"] as? String == "mac-authoritative",
+            let generatedAt = meta["generatedAt"] as? String,
+            isExactInstant(generatedAt),
+            (!requiresCompleteness || meta["completeness"] as? String == "complete"),
+            let serverID = server["id"] as? String,
+            UUID(uuidString: serverID) != nil,
+            integer(server["protocolVersion"]) == 1
+        else { throw MobileTransactionPayloadDecoderError.invalidEnvelope }
+    }
+
+    private func validateSecurity(_ data: Data) throws {
+        do {
+            try MobilePayloadSecurityValidator().validate(
+                data,
+                allowedFractionalKeys: ["confidence"]
+            )
+        } catch MobilePayloadSecurityValidationError.invalidJSON {
+            throw MobileTransactionPayloadDecoderError.invalidJSON
+        } catch {
+            throw MobileTransactionPayloadDecoderError.redactionViolation
+        }
+    }
+
+    private func json(_ data: Data) throws -> Any {
+        do { return try JSONSerialization.jsonObject(with: data) }
+        catch { throw MobileTransactionPayloadDecoderError.invalidJSON }
+    }
+
+    private func object(_ value: Any?, keys: Set<String>) throws -> [String: Any] {
+        guard let value = value as? [String: Any], Set(value.keys) == keys else {
+            throw MobileTransactionPayloadDecoderError.invalidEnvelope
+        }
+        return value
+    }
+
+    private func integer(_ value: Any?) -> Int? {
+        guard let value = value as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
+              value.doubleValue.rounded() == value.doubleValue
+        else { return nil }
+        return value.intValue
+    }
+
+    private func number(_ value: Any?) -> Double? {
+        guard let value = value as? NSNumber, CFGetTypeID(value) != CFBooleanGetTypeID(),
+              value.doubleValue.isFinite
+        else { return nil }
+        return value.doubleValue
+    }
+
+    private func isValidMoney(_ money: BootstrapMoney) -> Bool {
+        matches(#"^-?(?:0|[1-9]\d*)(?:\.\d{1,4})?$"#, money.value)
+            && Decimal(string: money.value, locale: Locale(identifier: "en_US_POSIX")) != nil
+            && matches(#"^[A-Z]{3}$"#, money.currencyCode)
+            && Locale.commonISOCurrencyCodes.contains(money.currencyCode)
+    }
+
+    private func isValidPublicID(_ value: String, kind: String) -> Bool {
+        matches("^\(kind)_[A-Za-z0-9_-]{22}$", value)
+    }
+
+    private func isValidCursor(_ value: String) -> Bool {
+        value.count <= 512 && matches(#"^cursor_v2_[A-Za-z0-9_-]+$"#, value)
+    }
+
+    private func isDisplayText(_ value: String, maximum: Int) -> Bool {
+        value == value.trimmingCharacters(in: .whitespacesAndNewlines)
+            && !value.isEmpty
+            && value.count <= maximum
+    }
+
+    private func isValidFinancialDate(_ value: String) -> Bool {
+        guard matches(#"^\d{4}-\d{2}-\d{2}$"#, value) else { return false }
+        let parts = value.split(separator: "-").compactMap { Int(String($0)) }
+        guard parts.count == 3 else { return false }
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = TimeZone(secondsFromGMT: 0)!
+        guard let date = calendar.date(
+            from: DateComponents(year: parts[0], month: parts[1], day: parts[2])
+        ) else { return false }
+        let roundTrip = calendar.dateComponents([.year, .month, .day], from: date)
+        guard roundTrip.year == parts[0], roundTrip.month == parts[1] else { return false }
+        return roundTrip.day == parts[2]
+    }
+
+    private func isExactInstant(_ value: String) -> Bool {
+        guard matches(#"^\d{4}-\d{2}-\d{2}T\d{2}:\d{2}:\d{2}(?:\.\d{3})?Z$"#, value) else {
+            return false
+        }
+        let formatter = ISO8601DateFormatter()
+        formatter.timeZone = TimeZone(secondsFromGMT: 0)
+        formatter.formatOptions = value.contains(".")
+            ? [.withInternetDateTime, .withFractionalSeconds]
+            : [.withInternetDateTime]
+        guard let date = formatter.date(from: value) else { return false }
+        return formatter.string(from: date) == value
+    }
+
+    private func matches(_ pattern: String, _ value: String) -> Bool {
         value.range(of: pattern, options: .regularExpression) != nil
     }
 }

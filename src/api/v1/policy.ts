@@ -22,6 +22,20 @@ export interface CanonicalRouteDefinition {
 export const CANONICAL_ROUTE_DEFINITIONS: readonly CanonicalRouteDefinition[] = [
   {
     method: 'GET',
+    path: '/api/v1/transactions',
+    policy: 'shared',
+    operationId: 'listTransactions',
+    summary: 'Browse and search canonical transactions',
+  },
+  {
+    method: 'GET',
+    path: '/api/v1/transactions/:id',
+    policy: 'shared',
+    operationId: 'getTransaction',
+    summary: 'Read one canonical transaction',
+  },
+  {
+    method: 'GET',
     path: '/api/v1/categories',
     policy: 'shared',
     operationId: 'listCategories',

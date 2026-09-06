@@ -34,9 +34,9 @@ enum APIEndpoint: Equatable {
         case .homeOverview:
             "api/v1/home"
         case .transactions:
-            "api/mobile/v1/transactions"
+            "api/v1/transactions"
         case let .transactionDetail(id):
-            "api/mobile/v1/transactions/\(id)"
+            "api/v1/transactions/\(id)"
         case .planning:
             "api/mobile/v1/planning"
         case .netWorthHistory:

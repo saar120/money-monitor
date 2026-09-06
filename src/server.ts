@@ -32,6 +32,7 @@ import { CanonicalFoundationStore } from './api/v1/store.js';
 import type { ReferenceSeed } from './api/v1/store.js';
 import type { ExchangeRateResult } from './services/exchange-rates.js';
 import { applyOwnershipWithDatabase } from './services/ownership.js';
+import { MOBILE_PROTOCOL_VERSION } from './mobile/contract.js';
 
 export interface CreateServerOptions {
   /** Injected only for deterministic canonical listener tests. */
@@ -51,6 +52,10 @@ export interface CreateServerOptions {
   onCategoryOwnerChanged?: (categoryName: string) => void;
   /** Injectable source-availability seam for canonical desktop listener tests. */
   isCanonicalAvailable?: () => boolean;
+  /** Stable opaque-ID key; production reads the persisted mobile identity key. */
+  transactionPublicIdKey?: string;
+  /** Stable responder identity; production uses the persisted Mac identity. */
+  serverIdentity?: { id: string; protocolVersion: 1 };
 }
 
 export async function createServer(options: CreateServerOptions = {}) {
@@ -215,6 +220,11 @@ export async function createServer(options: CreateServerOptions = {}) {
           ? (categoryName: string) =>
               applyOwnershipWithDatabase(canonicalOwnershipDb, { categoryName })
           : undefined),
+      transactionPublicIdKey: options.transactionPublicIdKey ?? config.MOBILE_PUBLIC_ID_KEY,
+      serverIdentity: options.serverIdentity ?? {
+        id: config.MOBILE_SERVER_ID,
+        protocolVersion: MOBILE_PROTOCOL_VERSION,
+      },
     },
     clock,
   );

@@ -18,6 +18,8 @@ import type { ExchangeRateResult } from '../../services/exchange-rates.js';
 export const CANONICAL_TEST_MAC_TOKEN = 'mac-test-token';
 export const CANONICAL_TEST_IPHONE_TOKEN = 'I'.repeat(43);
 export const CANONICAL_TEST_DEVICE_ID = 'iphone-device-1';
+export const CANONICAL_TEST_PUBLIC_ID_KEY = 'canonical-test-public-id-key-32-characters';
+export const CANONICAL_TEST_SERVER_ID = '11111111-1111-4111-8111-111111111111';
 
 export interface CanonicalHarnessOptions {
   /** A caller-owned connection enables deterministic restart tests. */
@@ -76,6 +78,34 @@ function ensureMobileCredentialSchema(sqlite: Database.Database): void {
       created_at TEXT NOT NULL DEFAULT (datetime('now')),
       resource_version INTEGER NOT NULL DEFAULT 1,
       updated_at TEXT NOT NULL DEFAULT (datetime('now'))
+    );
+    CREATE TABLE IF NOT EXISTS accounts (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      company_id TEXT NOT NULL,
+      display_name TEXT NOT NULL,
+      account_number TEXT,
+      account_type TEXT NOT NULL DEFAULT 'bank',
+      credentials_ref TEXT NOT NULL
+    );
+    CREATE TABLE IF NOT EXISTS transactions (
+      id INTEGER PRIMARY KEY AUTOINCREMENT,
+      account_id INTEGER NOT NULL REFERENCES accounts(id),
+      date TEXT NOT NULL,
+      processed_date TEXT NOT NULL,
+      original_amount REAL NOT NULL,
+      original_currency TEXT NOT NULL DEFAULT 'ILS',
+      charged_amount REAL NOT NULL,
+      charged_currency TEXT NOT NULL DEFAULT 'ILS',
+      description TEXT NOT NULL,
+      status TEXT NOT NULL DEFAULT 'completed',
+      category TEXT,
+      expense_owner_type TEXT NOT NULL DEFAULT 'unassigned',
+      expense_owner_member_id INTEGER REFERENCES members(id),
+      ignored INTEGER NOT NULL DEFAULT 0,
+      needs_review INTEGER NOT NULL DEFAULT 0,
+      review_reason TEXT,
+      confidence REAL,
+      hash TEXT NOT NULL UNIQUE
     );
     CREATE TABLE IF NOT EXISTS mobile_devices (
       id TEXT PRIMARY KEY NOT NULL,
@@ -159,6 +189,8 @@ export async function createCanonicalHarness(
     seedCanonical: seed,
     homeExchangeRates: options.homeExchangeRates,
     onCategoryOwnerChanged: options.onCategoryOwnerChanged,
+    transactionPublicIdKey: CANONICAL_TEST_PUBLIC_ID_KEY,
+    serverIdentity: { id: CANONICAL_TEST_SERVER_ID, protocolVersion: 1 },
   } satisfies CreateServerOptions);
   const iPhoneServer = createMobileServer({
     canonical: {
@@ -168,6 +200,8 @@ export async function createCanonicalHarness(
       homeExchangeRates: options.homeExchangeRates,
       onCategoryOwnerChanged: options.onCategoryOwnerChanged,
       isAvailable: options.mobileCanonicalAvailable,
+      transactionPublicIdKey: CANONICAL_TEST_PUBLIC_ID_KEY,
+      serverIdentity: { id: CANONICAL_TEST_SERVER_ID, protocolVersion: 1 },
     },
     clock,
     logger: false,

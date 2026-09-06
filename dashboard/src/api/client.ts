@@ -1,4 +1,7 @@
+import type { components, operations, paths } from '../../../src/api/v1/generated-client';
+
 const BASE_URL = '/api';
+const TRANSACTIONS_PATH = '/api/v1/transactions' satisfies keyof paths;
 
 const API_TOKEN_KEY = 'money_monitor_api_token';
 
@@ -81,6 +84,7 @@ export type OwnerType = 'member' | 'shared' | 'unassigned';
 
 export interface Member {
   id: number;
+  publicId: string;
   name: string;
   isActive: boolean;
   createdAt: string;
@@ -88,6 +92,7 @@ export interface Member {
 
 export interface Account {
   id: number;
+  publicId: string;
   memberId: number | null;
   companyId: string;
   displayName: string;
@@ -185,33 +190,24 @@ export function commitOneZeroImport(accountId: number, file: File) {
 // ─── Transactions ───
 
 export interface Transaction {
-  id: number;
-  accountId: number;
-  identifier: number | null;
+  id: string;
+  accountId: string;
+  accountDisplayName: string;
   date: string;
   processedDate: string;
-  originalAmount: number;
-  originalCurrency: string;
   chargedAmount: number;
   chargedCurrency: string;
   description: string;
-  memo: string | null;
-  type: string;
   status: string;
-  installmentNumber: number | null;
-  installmentTotal: number | null;
   category: string | null;
   expenseOwnerType: OwnerType;
   expenseOwnerMemberId: number | null;
-  ownerSource: string;
-  ownerConfidence: number | null;
-  ownerReviewReason: string | null;
+  ownerMemberPublicId: string | null;
+  ownerDisplayName: string | null;
   ignored: boolean;
   needsReview: boolean;
   reviewReason: string | null;
   confidence: number | null;
-  hash: string;
-  createdAt: string;
 }
 
 export interface Pagination {
@@ -221,57 +217,151 @@ export interface Pagination {
   hasMore: boolean;
 }
 
+type TransactionQuery = NonNullable<operations['listTransactions']['parameters']['query']>;
+
 export interface TransactionFilters {
-  accountId?: number;
+  accountId?: string;
   accountType?: 'bank' | 'credit_card';
   startDate?: string;
   endDate?: string;
   category?: string;
-  status?: string;
+  status?: TransactionQuery['status'] | 'completed';
   needsReview?: boolean;
+  includeExcluded?: boolean;
   minAmount?: number;
   maxAmount?: number;
   search?: string;
   ownerType?: OwnerType | 'all';
-  ownerMemberId?: number;
+  ownerMemberId?: string;
   offset?: number;
   limit?: number;
-  sortBy?: string;
+  sortBy?: TransactionQuery['sortBy'] | 'chargedAmount';
   sortOrder?: 'asc' | 'desc';
 }
 
-export function getTransactions(filters: TransactionFilters = {}) {
+export function getTransactions(
+  filters: TransactionFilters = {},
+): Promise<{ transactions: Transaction[]; pagination: Pagination }> {
+  type WireResponse = components['schemas']['TransactionListResponse'];
+  const offset = filters.offset ?? 0;
+  const limit = filters.limit ?? 50;
+  const key = JSON.stringify({ ...filters, offset: undefined });
+  let cursors = transactionCursorCache.get(key);
+  if (!cursors || offset === 0) {
+    cursors = new Map([[0, null]]);
+    transactionCursorCache.set(key, cursors);
+  }
   const params = new URLSearchParams();
-  Object.entries(filters).forEach(([key, value]) => {
-    if (value !== undefined && value !== '') params.set(key, String(value));
+  const canonicalFilters: TransactionQuery = {
+    accountId: filters.accountId,
+    accountType: filters.accountType,
+    category: filters.category,
+    direction: undefined,
+    endDate: filters.endDate,
+    includeExcluded: filters.includeExcluded,
+    limit,
+    maxAmount: filters.maxAmount,
+    minAmount: filters.minAmount,
+    needsReview: filters.needsReview,
+    ownerMemberId: filters.ownerMemberId,
+    ownerType: filters.ownerType === 'all' ? undefined : filters.ownerType,
+    q: filters.search,
+    cursor: cursors.get(offset) ?? undefined,
+    startDate: filters.startDate,
+    sortBy: filters.sortBy === 'chargedAmount' ? 'amount' : filters.sortBy,
+    status:
+      filters.status === 'completed'
+        ? 'posted'
+        : filters.status === 'pending'
+          ? 'pending'
+          : filters.status,
+  };
+  Object.entries(canonicalFilters).forEach(([name, value]) => {
+    if (value !== undefined && value !== '' && value !== 'all') params.set(name, String(value));
   });
-  return request<{ transactions: Transaction[]; pagination: Pagination }>(
-    `/transactions?${params}`,
-  );
+  const path = TRANSACTIONS_PATH.slice(BASE_URL.length);
+  return request<WireResponse>(`${path}?${params}`)
+    .then((response) => {
+      if (response.data.page.nextCursor) {
+        cursors!.set(offset + limit, response.data.page.nextCursor);
+      }
+      const transactions = response.data.transactions.map((transaction): Transaction => {
+        const magnitude = Number(transaction.amount.value);
+        return {
+          id: transaction.id,
+          accountId: transaction.account.id,
+          accountDisplayName: transaction.account.displayName,
+          date: transaction.occurredOn,
+          processedDate: transaction.processedOn ?? transaction.occurredOn,
+          chargedAmount: transaction.direction === 'debit' ? -magnitude : magnitude,
+          chargedCurrency: transaction.amount.currencyCode,
+          description: transaction.displayName,
+          status: transaction.status === 'posted' ? 'completed' : transaction.status,
+          category: transaction.category?.name ?? null,
+          expenseOwnerType:
+            transaction.owner.kind === 'unknown' ? 'unassigned' : transaction.owner.kind,
+          expenseOwnerMemberId: null,
+          ownerMemberPublicId: transaction.owner.id,
+          ownerDisplayName: transaction.owner.displayName,
+          ignored: transaction.excludedFromReports,
+          needsReview: transaction.needsReview,
+          reviewReason: transaction.reviewReason,
+          confidence: transaction.confidence,
+        };
+      });
+      return {
+        transactions,
+        pagination: {
+          total: response.data.page.total,
+          offset,
+          limit,
+          hasMore: response.data.page.hasMore,
+        },
+      };
+    })
+    .catch((error: unknown) => {
+      if (
+        offset > 0 &&
+        canonicalFilters.cursor &&
+        error instanceof APIError &&
+        error.code === 'validation_error'
+      ) {
+        transactionCursorCache.delete(key);
+        return getTransactions({ ...filters, offset: 0 });
+      }
+      throw error;
+    });
 }
 
-export function ignoreTransaction(id: number, ignored: boolean) {
+const transactionCursorCache = new Map<string, Map<number, string | null>>();
+
+function invalidateTransactionCursors<T>(response: T): T {
+  transactionCursorCache.clear();
+  return response;
+}
+
+export function ignoreTransaction(id: string, ignored: boolean) {
   return request<{ transaction: Transaction }>(`/transactions/${id}/ignore`, {
     method: 'PATCH',
     body: JSON.stringify({ ignored }),
-  });
+  }).then(invalidateTransactionCursors);
 }
 
-export function resolveTransaction(id: number, category: string) {
+export function resolveTransaction(id: string, category: string) {
   return request<{ transaction: Transaction }>(`/transactions/${id}/resolve`, {
     method: 'PATCH',
     body: JSON.stringify({ category }),
-  });
+  }).then(invalidateTransactionCursors);
 }
 
 export function updateTransactionOwner(
-  id: number,
+  id: string,
   data: { ownerType: OwnerType; ownerMemberId?: number | null },
 ) {
   return request<{ transaction: Transaction }>(`/transactions/${id}/owner`, {
     method: 'PATCH',
     body: JSON.stringify(data),
-  });
+  }).then(invalidateTransactionCursors);
 }
 
 export function getNeedsReviewCount() {
@@ -505,11 +595,11 @@ export function deleteCategory(id: number) {
   ).then((response) => ({ deleted: true, meta: response.meta }));
 }
 
-export function updateTransactionCategory(id: number, category: string | null) {
+export function updateTransactionCategory(id: string, category: string | null) {
   return request<{ transaction: Transaction }>(`/transactions/${id}`, {
     method: 'PATCH',
     body: JSON.stringify({ category }),
-  });
+  }).then(invalidateTransactionCursors);
 }
 
 // ─── Members & Ownership ───

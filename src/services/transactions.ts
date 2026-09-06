@@ -6,6 +6,7 @@ import { searchTransactionIds } from '../db/queries.js';
 import { isCategoryIgnored } from './categories.js';
 import { applyOwnership, ownerFilterConditions } from './ownership.js';
 import type { OwnerType } from '../shared/types.js';
+import { createMobilePublicIdProjector, isMobilePublicId } from '../mobile/mobile-public-id.js';
 
 // ── Filter builder (moved from helpers.ts) ──
 
@@ -152,6 +153,18 @@ export function getNeedsReviewCount(): number {
     .where(eq(transactions.needsReview, true))
     .all();
   return total;
+}
+
+export function resolveTransactionIdentifier(value: string, publicIdKey?: string): number | null {
+  if (!publicIdKey || !isMobilePublicId(value, 'transaction')) return null;
+  const project = createMobilePublicIdProjector(publicIdKey);
+  return (
+    db
+      .select({ id: transactions.id })
+      .from(transactions)
+      .all()
+      .find((row) => project('transaction', row.id) === value)?.id ?? null
+  );
 }
 
 // ── Writes ──

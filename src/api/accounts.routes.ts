@@ -11,10 +11,14 @@ import type { CompanyId } from '../shared/types.js';
 import { MANUAL_LOGIN_COMPANIES } from '../scraper/scraper.service.js';
 import { getDefaultMemberId } from '../services/members.js';
 import { applyOwnership } from '../services/ownership.js';
+import { config } from '../config.js';
+import { createMobilePublicIdProjector } from '../mobile/mobile-public-id.js';
+
+const publicId = createMobilePublicIdProjector(config.MOBILE_PUBLIC_ID_KEY);
 
 function stripCredentialsRef(account: Record<string, unknown>) {
   const { credentialsRef, ...safe } = account;
-  return safe;
+  return { ...safe, publicId: publicId('account', account.id as number) };
 }
 
 export async function accountsRoutes(app: FastifyInstance) {

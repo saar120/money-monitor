@@ -338,6 +338,8 @@ final class AppEnvironment: ObservableObject {
     private let deviceAuthenticator: any DeviceAuthenticationClient
     private let clock: @Sendable () -> Date
     private let sleep: @Sendable (TimeInterval) async throws -> Void
+    private let restoresSavedConnectionOnLaunch: Bool
+    private let trustStateOverride: GlobalTrustState?
     private var activeOperationID: UUID?
     private var activeRefreshOperationID: UUID?
     private var featureRevocationCleanupInProgress = false
@@ -350,7 +352,8 @@ final class AppEnvironment: ObservableObject {
     /// the published primitives so a controlled clock can move a Saved View
     /// across the 24-hour boundary without timer polling.
     var trustState: GlobalTrustState {
-        GlobalTrustStateProjection.project(
+        if let trustStateOverride { return trustStateOverride }
+        return GlobalTrustStateProjection.project(
             hasSavedCredential: hasSavedCredential,
             connectionState: connectionState,
             pairingState: pairingState,
@@ -380,6 +383,8 @@ final class AppEnvironment: ObservableObject {
         sleep = { seconds in
             try await Task.sleep(for: .seconds(seconds))
         }
+        restoresSavedConnectionOnLaunch = true
+        trustStateOverride = nil
     }
 
     init(apiClient: any MobileAPIClient) {
@@ -401,6 +406,8 @@ final class AppEnvironment: ObservableObject {
         sleep = { seconds in
             try await Task.sleep(for: .seconds(seconds))
         }
+        restoresSavedConnectionOnLaunch = true
+        trustStateOverride = nil
     }
 
     init(
@@ -437,7 +444,56 @@ final class AppEnvironment: ObservableObject {
         self.deviceAuthenticator = deviceAuthenticator
         self.clock = clock
         self.sleep = sleep
+        restoresSavedConnectionOnLaunch = true
+        trustStateOverride = nil
     }
+
+    var shouldRestoreSavedConnectionOnLaunch: Bool {
+        restoresSavedConnectionOnLaunch
+    }
+
+#if DEBUG
+    init(uiTestActivityScenario saved: Bool, runID: String) {
+        let now = Date(timeIntervalSince1970: 1_788_508_800)
+        let credential = UITestActivityFixtures.credential
+        let store = UITestPairedProfileStore(credential: credential)
+        let client = UITestActivityFixtures.client()
+        let supportDirectory = FileManager.default.urls(
+            for: .applicationSupportDirectory,
+            in: .userDomainMask
+        )[0]
+            .appendingPathComponent("MoneyMonitorUITests", isDirectory: true)
+            .appendingPathComponent(runID, isDirectory: true)
+
+        apiClient = UITestMobileAPIClient()
+        transactionClient = client
+        planningClient = UnavailableMobilePlanningAPIClient()
+        netWorthHistoryClient = UnavailableMobileNetWorthHistoryAPIClient()
+        reviewCommandClient = UnavailableMobileReviewCommandAPIClient()
+        pairingClient = URLSessionMobilePairingClient(profileStore: store)
+        profileStore = store
+        snapshotStore = EncryptedBootstrapSnapshotStore(
+            secureItems: SystemKeychainClient(),
+            bundleIdentifier: "com.example.MoneyMonitor.ui-test.\(runID)",
+            applicationSupportDirectory: supportDirectory
+        )
+        deviceAuthenticator = UITestDeviceAuthenticationClient()
+        clock = { now }
+        sleep = { seconds in try await Task.sleep(for: .seconds(seconds)) }
+        restoresSavedConnectionOnLaunch = saved
+        trustStateOverride = saved ? nil : .live
+
+        if !saved {
+            connectionState = .connected(lastCheckedAt: now)
+            pairingState = .idle
+            serverURL = credential.profile.baseURL
+            latestBootstrap = UITestActivityFixtures.bootstrap
+            snapshotState = .none
+            hasSavedCredential = true
+            pairedMacName = credential.profile.deviceName
+        }
+    }
+#endif
 
     func connect(to rawAddress: String) async {
         guard !isRefreshRevocationCleanupInProgress else { return }
@@ -859,8 +915,10 @@ final class AppEnvironment: ObservableObject {
             )
             try ensureCurrentMobileReadEpoch(session.epoch)
             if let bootstrap = latestBootstrap {
-                let savedTransactions = Self.boundedSavedTransactions(
-                    envelope.data.transactions + latestSavedTransactions
+                let savedTransactions = Self.mergedSavedTransactions(
+                    envelope.data.transactions,
+                    with: latestSavedTransactions,
+                    appending: query.cursor != nil
                 )
                 try await persistSnapshotIfCacheable(
                     bootstrap: bootstrap,
@@ -872,7 +930,10 @@ final class AppEnvironment: ObservableObject {
                 latestSavedTransactions = savedTransactions
             } else {
                 try ensureCurrentMobileReadEpoch(session.epoch)
-                mergeSavedTransactions(envelope.data.transactions)
+                mergeSavedTransactions(
+                    envelope.data.transactions,
+                    appending: query.cursor != nil
+                )
             }
             return envelope
         } catch {
@@ -891,13 +952,7 @@ final class AppEnvironment: ObservableObject {
         let filtered = latestSavedTransactions.filter { transaction in
             guard desired.includeExcluded || !transaction.excludedFromReports else { return false }
             if let search = desired.query {
-                let haystack: [String] = [
-                    transaction.displayName,
-                    transaction.category?.label,
-                    transaction.account.displayName,
-                    transaction.account.identifierMask,
-                ].compactMap { $0 }
-                guard haystack.contains(where: { Self.matches($0, search: search) }) else { return false }
+                guard Self.matches(transaction.displayName, search: search) else { return false }
             }
             if let startDate = desired.startDate, transaction.occurredOn < startDate { return false }
             if let endDate = desired.endDate, transaction.occurredOn > endDate { return false }
@@ -931,27 +986,44 @@ final class AppEnvironment: ObservableObject {
     }
 
     private static func matches(_ value: String, search: String) -> Bool {
-        value.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            .localizedCaseInsensitiveContains(
-                search.folding(options: [.caseInsensitive, .diacriticInsensitive], locale: .current)
-            )
+        value.range(
+            of: search,
+            options: [.caseInsensitive, .literal],
+            locale: Locale(identifier: "en_US_POSIX")
+        ) != nil
     }
 
-    private func mergeSavedTransactions(_ incoming: [MobileTransaction]) {
-        latestSavedTransactions = Self.boundedSavedTransactions(
-            incoming + latestSavedTransactions
+    private func mergeSavedTransactions(
+        _ incoming: [MobileTransaction],
+        appending: Bool
+    ) {
+        latestSavedTransactions = Self.mergedSavedTransactions(
+            incoming,
+            with: latestSavedTransactions,
+            appending: appending
         )
     }
 
-    private static func boundedSavedTransactions(_ transactions: [MobileTransaction]) -> [MobileTransaction] {
+    static func mergedSavedTransactions(
+        _ incoming: [MobileTransaction],
+        with existing: [MobileTransaction],
+        appending: Bool
+    ) -> [MobileTransaction] {
+        boundedSavedTransactions(appending ? existing + incoming : incoming + existing)
+    }
+
+    static func boundedSavedTransactions(_ transactions: [MobileTransaction]) -> [MobileTransaction] {
         var seen = Set<String>()
-        let unique = transactions.filter { seen.insert($0.id).inserted }
+        let unique = transactions.enumerated().filter { seen.insert($0.element.id).inserted }
         return Array(
             unique
                 .sorted {
-                    if $0.occurredOn == $1.occurredOn { return $0.id > $1.id }
-                    return $0.occurredOn > $1.occurredOn
+                    if $0.element.occurredOn == $1.element.occurredOn {
+                        return $0.offset < $1.offset
+                    }
+                    return $0.element.occurredOn > $1.element.occurredOn
                 }
+                .map(\.element)
                 .prefix(BootstrapSnapshot.savedTransactionLimit)
         )
     }

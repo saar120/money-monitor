@@ -11,6 +11,16 @@ public import struct Foundation.Date
 #endif
 /// A type that performs HTTP operations defined by the OpenAPI document.
 public protocol APIProtocol: Sendable {
+    /// Browse and search canonical transactions
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/get(listTransactions)`.
+    func listTransactions(_ input: Operations.ListTransactions.Input) async throws -> Operations.ListTransactions.Output
+    /// Read one canonical transaction
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/{id}/get(getTransaction)`.
+    func getTransaction(_ input: Operations.GetTransaction.Input) async throws -> Operations.GetTransaction.Output
     /// List canonical categories
     ///
     /// - Remark: HTTP `GET /api/v1/categories`.
@@ -70,6 +80,32 @@ public protocol APIProtocol: Sendable {
 
 /// Convenience overloads for operation inputs.
 extension APIProtocol {
+    /// Browse and search canonical transactions
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/get(listTransactions)`.
+    public func listTransactions(
+        query: Operations.ListTransactions.Input.Query = .init(),
+        headers: Operations.ListTransactions.Input.Headers = .init()
+    ) async throws -> Operations.ListTransactions.Output {
+        try await listTransactions(Operations.ListTransactions.Input(
+            query: query,
+            headers: headers
+        ))
+    }
+    /// Read one canonical transaction
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/{id}/get(getTransaction)`.
+    public func getTransaction(
+        path: Operations.GetTransaction.Input.Path,
+        headers: Operations.GetTransaction.Input.Headers = .init()
+    ) async throws -> Operations.GetTransaction.Output {
+        try await getTransaction(Operations.GetTransaction.Input(
+            path: path,
+            headers: headers
+        ))
+    }
     /// List canonical categories
     ///
     /// - Remark: HTTP `GET /api/v1/categories`.
@@ -5224,6 +5260,1884 @@ public enum Components {
                 ])
             }
         }
+        /// - Remark: Generated from `#/components/schemas/TransactionResource`.
+        public struct TransactionResource: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/id`.
+            public var id: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/occurredOn`.
+            public var occurredOn: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/processedOn`.
+            public var processedOn: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/displayName`.
+            public var displayName: Swift.String
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/amount`.
+            public struct AmountPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/amount/value`.
+                public var value: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/amount/currencyCode`.
+                public var currencyCode: Swift.String
+                /// Creates a new `AmountPayload`.
+                ///
+                /// - Parameters:
+                ///   - value:
+                ///   - currencyCode:
+                public init(
+                    value: Swift.String,
+                    currencyCode: Swift.String
+                ) {
+                    self.value = value
+                    self.currencyCode = currencyCode
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case value
+                    case currencyCode
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.value = try container.decode(
+                        Swift.String.self,
+                        forKey: .value
+                    )
+                    self.currencyCode = try container.decode(
+                        Swift.String.self,
+                        forKey: .currencyCode
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "value",
+                        "currencyCode"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/amount`.
+            public var amount: Components.Schemas.TransactionResource.AmountPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/direction`.
+            @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case debit = "debit"
+                case credit = "credit"
+                case unknown = "unknown"
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/direction`.
+            public var direction: Components.Schemas.TransactionResource.DirectionPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/status`.
+            @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                case posted = "posted"
+                case pending = "pending"
+                case unknown = "unknown"
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/status`.
+            public var status: Components.Schemas.TransactionResource.StatusPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/category`.
+            public struct CategoryPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/category/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/category/name`.
+                public var name: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/category/label`.
+                public var label: Swift.String
+                /// Creates a new `CategoryPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - name:
+                ///   - label:
+                public init(
+                    id: Swift.String,
+                    name: Swift.String,
+                    label: Swift.String
+                ) {
+                    self.id = id
+                    self.name = name
+                    self.label = label
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case name
+                    case label
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Swift.String.self,
+                        forKey: .id
+                    )
+                    self.name = try container.decode(
+                        Swift.String.self,
+                        forKey: .name
+                    )
+                    self.label = try container.decode(
+                        Swift.String.self,
+                        forKey: .label
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "name",
+                        "label"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/category`.
+            public var category: Components.Schemas.TransactionResource.CategoryPayload?
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/account`.
+            public struct AccountPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/account/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/account/displayName`.
+                public var displayName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/account/identifierMask`.
+                public var identifierMask: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/account/type`.
+                @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case bank = "bank"
+                    case creditCard = "credit_card"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/account/type`.
+                public var _type: Components.Schemas.TransactionResource.AccountPayload._TypePayload
+                /// Creates a new `AccountPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - displayName:
+                ///   - identifierMask:
+                ///   - _type:
+                public init(
+                    id: Swift.String,
+                    displayName: Swift.String,
+                    identifierMask: Swift.String,
+                    _type: Components.Schemas.TransactionResource.AccountPayload._TypePayload
+                ) {
+                    self.id = id
+                    self.displayName = displayName
+                    self.identifierMask = identifierMask
+                    self._type = _type
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case displayName
+                    case identifierMask
+                    case _type = "type"
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Swift.String.self,
+                        forKey: .id
+                    )
+                    self.displayName = try container.decode(
+                        Swift.String.self,
+                        forKey: .displayName
+                    )
+                    self.identifierMask = try container.decode(
+                        Swift.String.self,
+                        forKey: .identifierMask
+                    )
+                    self._type = try container.decode(
+                        Components.Schemas.TransactionResource.AccountPayload._TypePayload.self,
+                        forKey: ._type
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "displayName",
+                        "identifierMask",
+                        "type"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/account`.
+            public var account: Components.Schemas.TransactionResource.AccountPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/owner`.
+            public struct OwnerPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/owner/id`.
+                public var id: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/owner/kind`.
+                @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case member = "member"
+                    case shared = "shared"
+                    case unassigned = "unassigned"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/owner/kind`.
+                public var kind: Components.Schemas.TransactionResource.OwnerPayload.KindPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionResource/owner/displayName`.
+                public var displayName: Swift.String?
+                /// Creates a new `OwnerPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - kind:
+                ///   - displayName:
+                public init(
+                    id: Swift.String? = nil,
+                    kind: Components.Schemas.TransactionResource.OwnerPayload.KindPayload,
+                    displayName: Swift.String? = nil
+                ) {
+                    self.id = id
+                    self.kind = kind
+                    self.displayName = displayName
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case kind
+                    case displayName
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .id
+                    )
+                    self.kind = try container.decode(
+                        Components.Schemas.TransactionResource.OwnerPayload.KindPayload.self,
+                        forKey: .kind
+                    )
+                    self.displayName = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .displayName
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "kind",
+                        "displayName"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/owner`.
+            public var owner: Components.Schemas.TransactionResource.OwnerPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/needsReview`.
+            public var needsReview: Swift.Bool
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/reviewReason`.
+            public var reviewReason: Swift.String?
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/confidence`.
+            public var confidence: Swift.Double?
+            /// - Remark: Generated from `#/components/schemas/TransactionResource/excludedFromReports`.
+            public var excludedFromReports: Swift.Bool
+            /// Creates a new `TransactionResource`.
+            ///
+            /// - Parameters:
+            ///   - id:
+            ///   - occurredOn:
+            ///   - processedOn:
+            ///   - displayName:
+            ///   - amount:
+            ///   - direction:
+            ///   - status:
+            ///   - category:
+            ///   - account:
+            ///   - owner:
+            ///   - needsReview:
+            ///   - reviewReason:
+            ///   - confidence:
+            ///   - excludedFromReports:
+            public init(
+                id: Swift.String,
+                occurredOn: Swift.String,
+                processedOn: Swift.String? = nil,
+                displayName: Swift.String,
+                amount: Components.Schemas.TransactionResource.AmountPayload,
+                direction: Components.Schemas.TransactionResource.DirectionPayload,
+                status: Components.Schemas.TransactionResource.StatusPayload,
+                category: Components.Schemas.TransactionResource.CategoryPayload? = nil,
+                account: Components.Schemas.TransactionResource.AccountPayload,
+                owner: Components.Schemas.TransactionResource.OwnerPayload,
+                needsReview: Swift.Bool,
+                reviewReason: Swift.String? = nil,
+                confidence: Swift.Double? = nil,
+                excludedFromReports: Swift.Bool
+            ) {
+                self.id = id
+                self.occurredOn = occurredOn
+                self.processedOn = processedOn
+                self.displayName = displayName
+                self.amount = amount
+                self.direction = direction
+                self.status = status
+                self.category = category
+                self.account = account
+                self.owner = owner
+                self.needsReview = needsReview
+                self.reviewReason = reviewReason
+                self.confidence = confidence
+                self.excludedFromReports = excludedFromReports
+            }
+            public enum CodingKeys: String, CodingKey {
+                case id
+                case occurredOn
+                case processedOn
+                case displayName
+                case amount
+                case direction
+                case status
+                case category
+                case account
+                case owner
+                case needsReview
+                case reviewReason
+                case confidence
+                case excludedFromReports
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.id = try container.decode(
+                    Swift.String.self,
+                    forKey: .id
+                )
+                self.occurredOn = try container.decode(
+                    Swift.String.self,
+                    forKey: .occurredOn
+                )
+                self.processedOn = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .processedOn
+                )
+                self.displayName = try container.decode(
+                    Swift.String.self,
+                    forKey: .displayName
+                )
+                self.amount = try container.decode(
+                    Components.Schemas.TransactionResource.AmountPayload.self,
+                    forKey: .amount
+                )
+                self.direction = try container.decode(
+                    Components.Schemas.TransactionResource.DirectionPayload.self,
+                    forKey: .direction
+                )
+                self.status = try container.decode(
+                    Components.Schemas.TransactionResource.StatusPayload.self,
+                    forKey: .status
+                )
+                self.category = try container.decodeIfPresent(
+                    Components.Schemas.TransactionResource.CategoryPayload.self,
+                    forKey: .category
+                )
+                self.account = try container.decode(
+                    Components.Schemas.TransactionResource.AccountPayload.self,
+                    forKey: .account
+                )
+                self.owner = try container.decode(
+                    Components.Schemas.TransactionResource.OwnerPayload.self,
+                    forKey: .owner
+                )
+                self.needsReview = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .needsReview
+                )
+                self.reviewReason = try container.decodeIfPresent(
+                    Swift.String.self,
+                    forKey: .reviewReason
+                )
+                self.confidence = try container.decodeIfPresent(
+                    Swift.Double.self,
+                    forKey: .confidence
+                )
+                self.excludedFromReports = try container.decode(
+                    Swift.Bool.self,
+                    forKey: .excludedFromReports
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "id",
+                    "occurredOn",
+                    "processedOn",
+                    "displayName",
+                    "amount",
+                    "direction",
+                    "status",
+                    "category",
+                    "account",
+                    "owner",
+                    "needsReview",
+                    "reviewReason",
+                    "confidence",
+                    "excludedFromReports"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TransactionListResponse`.
+        public struct TransactionListResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data`.
+            public struct DataPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/financialDate`.
+                public var financialDate: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload`.
+                public struct TransactionsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/id`.
+                    public var id: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/occurredOn`.
+                    public var occurredOn: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/processedOn`.
+                    public var processedOn: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/displayName`.
+                    public var displayName: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/amount`.
+                    public struct AmountPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/amount/value`.
+                        public var value: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/amount/currencyCode`.
+                        public var currencyCode: Swift.String
+                        /// Creates a new `AmountPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - value:
+                        ///   - currencyCode:
+                        public init(
+                            value: Swift.String,
+                            currencyCode: Swift.String
+                        ) {
+                            self.value = value
+                            self.currencyCode = currencyCode
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case value
+                            case currencyCode
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.value = try container.decode(
+                                Swift.String.self,
+                                forKey: .value
+                            )
+                            self.currencyCode = try container.decode(
+                                Swift.String.self,
+                                forKey: .currencyCode
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "value",
+                                "currencyCode"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/amount`.
+                    public var amount: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AmountPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/direction`.
+                    @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case debit = "debit"
+                        case credit = "credit"
+                        case unknown = "unknown"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/direction`.
+                    public var direction: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.DirectionPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/status`.
+                    @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case posted = "posted"
+                        case pending = "pending"
+                        case unknown = "unknown"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/status`.
+                    public var status: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.StatusPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/category`.
+                    public struct CategoryPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/category/id`.
+                        public var id: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/category/name`.
+                        public var name: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/category/label`.
+                        public var label: Swift.String
+                        /// Creates a new `CategoryPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - id:
+                        ///   - name:
+                        ///   - label:
+                        public init(
+                            id: Swift.String,
+                            name: Swift.String,
+                            label: Swift.String
+                        ) {
+                            self.id = id
+                            self.name = name
+                            self.label = label
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case id
+                            case name
+                            case label
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.id = try container.decode(
+                                Swift.String.self,
+                                forKey: .id
+                            )
+                            self.name = try container.decode(
+                                Swift.String.self,
+                                forKey: .name
+                            )
+                            self.label = try container.decode(
+                                Swift.String.self,
+                                forKey: .label
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "id",
+                                "name",
+                                "label"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/category`.
+                    public var category: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.CategoryPayload?
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account`.
+                    public struct AccountPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account/id`.
+                        public var id: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account/displayName`.
+                        public var displayName: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account/identifierMask`.
+                        public var identifierMask: Swift.String
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account/type`.
+                        @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                            case bank = "bank"
+                            case creditCard = "credit_card"
+                        }
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account/type`.
+                        public var _type: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload._TypePayload
+                        /// Creates a new `AccountPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - id:
+                        ///   - displayName:
+                        ///   - identifierMask:
+                        ///   - _type:
+                        public init(
+                            id: Swift.String,
+                            displayName: Swift.String,
+                            identifierMask: Swift.String,
+                            _type: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload._TypePayload
+                        ) {
+                            self.id = id
+                            self.displayName = displayName
+                            self.identifierMask = identifierMask
+                            self._type = _type
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case id
+                            case displayName
+                            case identifierMask
+                            case _type = "type"
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.id = try container.decode(
+                                Swift.String.self,
+                                forKey: .id
+                            )
+                            self.displayName = try container.decode(
+                                Swift.String.self,
+                                forKey: .displayName
+                            )
+                            self.identifierMask = try container.decode(
+                                Swift.String.self,
+                                forKey: .identifierMask
+                            )
+                            self._type = try container.decode(
+                                Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload._TypePayload.self,
+                                forKey: ._type
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "id",
+                                "displayName",
+                                "identifierMask",
+                                "type"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/account`.
+                    public var account: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner`.
+                    public struct OwnerPayload: Codable, Hashable, Sendable {
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner/id`.
+                        public var id: Swift.String?
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner/kind`.
+                        @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                            case member = "member"
+                            case shared = "shared"
+                            case unassigned = "unassigned"
+                            case unknown = "unknown"
+                        }
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner/kind`.
+                        public var kind: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload.KindPayload
+                        /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner/displayName`.
+                        public var displayName: Swift.String?
+                        /// Creates a new `OwnerPayload`.
+                        ///
+                        /// - Parameters:
+                        ///   - id:
+                        ///   - kind:
+                        ///   - displayName:
+                        public init(
+                            id: Swift.String? = nil,
+                            kind: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload.KindPayload,
+                            displayName: Swift.String? = nil
+                        ) {
+                            self.id = id
+                            self.kind = kind
+                            self.displayName = displayName
+                        }
+                        public enum CodingKeys: String, CodingKey {
+                            case id
+                            case kind
+                            case displayName
+                        }
+                        public init(from decoder: any Swift.Decoder) throws {
+                            let container = try decoder.container(keyedBy: CodingKeys.self)
+                            self.id = try container.decodeIfPresent(
+                                Swift.String.self,
+                                forKey: .id
+                            )
+                            self.kind = try container.decode(
+                                Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload.KindPayload.self,
+                                forKey: .kind
+                            )
+                            self.displayName = try container.decodeIfPresent(
+                                Swift.String.self,
+                                forKey: .displayName
+                            )
+                            try decoder.ensureNoAdditionalProperties(knownKeys: [
+                                "id",
+                                "kind",
+                                "displayName"
+                            ])
+                        }
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/owner`.
+                    public var owner: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/needsReview`.
+                    public var needsReview: Swift.Bool
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/reviewReason`.
+                    public var reviewReason: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/confidence`.
+                    public var confidence: Swift.Double?
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/TransactionsPayload/excludedFromReports`.
+                    public var excludedFromReports: Swift.Bool
+                    /// Creates a new `TransactionsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - occurredOn:
+                    ///   - processedOn:
+                    ///   - displayName:
+                    ///   - amount:
+                    ///   - direction:
+                    ///   - status:
+                    ///   - category:
+                    ///   - account:
+                    ///   - owner:
+                    ///   - needsReview:
+                    ///   - reviewReason:
+                    ///   - confidence:
+                    ///   - excludedFromReports:
+                    public init(
+                        id: Swift.String,
+                        occurredOn: Swift.String,
+                        processedOn: Swift.String? = nil,
+                        displayName: Swift.String,
+                        amount: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AmountPayload,
+                        direction: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.DirectionPayload,
+                        status: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.StatusPayload,
+                        category: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.CategoryPayload? = nil,
+                        account: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload,
+                        owner: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload,
+                        needsReview: Swift.Bool,
+                        reviewReason: Swift.String? = nil,
+                        confidence: Swift.Double? = nil,
+                        excludedFromReports: Swift.Bool
+                    ) {
+                        self.id = id
+                        self.occurredOn = occurredOn
+                        self.processedOn = processedOn
+                        self.displayName = displayName
+                        self.amount = amount
+                        self.direction = direction
+                        self.status = status
+                        self.category = category
+                        self.account = account
+                        self.owner = owner
+                        self.needsReview = needsReview
+                        self.reviewReason = reviewReason
+                        self.confidence = confidence
+                        self.excludedFromReports = excludedFromReports
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case occurredOn
+                        case processedOn
+                        case displayName
+                        case amount
+                        case direction
+                        case status
+                        case category
+                        case account
+                        case owner
+                        case needsReview
+                        case reviewReason
+                        case confidence
+                        case excludedFromReports
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.occurredOn = try container.decode(
+                            Swift.String.self,
+                            forKey: .occurredOn
+                        )
+                        self.processedOn = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .processedOn
+                        )
+                        self.displayName = try container.decode(
+                            Swift.String.self,
+                            forKey: .displayName
+                        )
+                        self.amount = try container.decode(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AmountPayload.self,
+                            forKey: .amount
+                        )
+                        self.direction = try container.decode(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.DirectionPayload.self,
+                            forKey: .direction
+                        )
+                        self.status = try container.decode(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.StatusPayload.self,
+                            forKey: .status
+                        )
+                        self.category = try container.decodeIfPresent(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.CategoryPayload.self,
+                            forKey: .category
+                        )
+                        self.account = try container.decode(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.AccountPayload.self,
+                            forKey: .account
+                        )
+                        self.owner = try container.decode(
+                            Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload.OwnerPayload.self,
+                            forKey: .owner
+                        )
+                        self.needsReview = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .needsReview
+                        )
+                        self.reviewReason = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .reviewReason
+                        )
+                        self.confidence = try container.decodeIfPresent(
+                            Swift.Double.self,
+                            forKey: .confidence
+                        )
+                        self.excludedFromReports = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .excludedFromReports
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "occurredOn",
+                            "processedOn",
+                            "displayName",
+                            "amount",
+                            "direction",
+                            "status",
+                            "category",
+                            "account",
+                            "owner",
+                            "needsReview",
+                            "reviewReason",
+                            "confidence",
+                            "excludedFromReports"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/transactions`.
+                public typealias TransactionsPayload = [Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/transactions`.
+                public var transactions: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/page`.
+                public struct PagePayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/page/hasMore`.
+                    public var hasMore: Swift.Bool
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/page/nextCursor`.
+                    public var nextCursor: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/page/total`.
+                    public var total: Swift.Int
+                    /// Creates a new `PagePayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - hasMore:
+                    ///   - nextCursor:
+                    ///   - total:
+                    public init(
+                        hasMore: Swift.Bool,
+                        nextCursor: Swift.String? = nil,
+                        total: Swift.Int
+                    ) {
+                        self.hasMore = hasMore
+                        self.nextCursor = nextCursor
+                        self.total = total
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case hasMore
+                        case nextCursor
+                        case total
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.hasMore = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .hasMore
+                        )
+                        self.nextCursor = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .nextCursor
+                        )
+                        self.total = try container.decode(
+                            Swift.Int.self,
+                            forKey: .total
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "hasMore",
+                            "nextCursor",
+                            "total"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data/page`.
+                public var page: Components.Schemas.TransactionListResponse.DataPayload.PagePayload
+                /// Creates a new `DataPayload`.
+                ///
+                /// - Parameters:
+                ///   - financialDate:
+                ///   - transactions:
+                ///   - page:
+                public init(
+                    financialDate: Swift.String,
+                    transactions: Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayload,
+                    page: Components.Schemas.TransactionListResponse.DataPayload.PagePayload
+                ) {
+                    self.financialDate = financialDate
+                    self.transactions = transactions
+                    self.page = page
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case financialDate
+                    case transactions
+                    case page
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.financialDate = try container.decode(
+                        Swift.String.self,
+                        forKey: .financialDate
+                    )
+                    self.transactions = try container.decode(
+                        Components.Schemas.TransactionListResponse.DataPayload.TransactionsPayload.self,
+                        forKey: .transactions
+                    )
+                    self.page = try container.decode(
+                        Components.Schemas.TransactionListResponse.DataPayload.PagePayload.self,
+                        forKey: .page
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "financialDate",
+                        "transactions",
+                        "page"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionListResponse/data`.
+            public var data: Components.Schemas.TransactionListResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.TransactionListResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/source`.
+                public var source: Components.Schemas.TransactionListResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/calculationVersion`.
+                public var calculationVersion: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/completeness`.
+                public var completeness: Components.Schemas.TransactionListResponse.MetaPayload.CompletenessPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/estimated`.
+                public var estimated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.TransactionListResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.TransactionListResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/receipt`.
+                public var receipt: Components.Schemas.TransactionListResponse.MetaPayload.ReceiptPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/server`.
+                public struct ServerPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/server/id`.
+                    public var id: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/server/protocolVersion`.
+                    public var protocolVersion: Swift.Double
+                    /// Creates a new `ServerPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - protocolVersion:
+                    public init(
+                        id: Swift.String,
+                        protocolVersion: Swift.Double
+                    ) {
+                        self.id = id
+                        self.protocolVersion = protocolVersion
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case protocolVersion
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.protocolVersion = try container.decode(
+                            Swift.Double.self,
+                            forKey: .protocolVersion
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "protocolVersion"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta/server`.
+                public var server: Components.Schemas.TransactionListResponse.MetaPayload.ServerPayload
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                ///   - server:
+                public init(
+                    apiVersion: Components.Schemas.TransactionListResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.TransactionListResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Swift.String? = nil,
+                    completeness: Components.Schemas.TransactionListResponse.MetaPayload.CompletenessPayload,
+                    estimated: Swift.Bool? = nil,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.TransactionListResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
+                    receipt: Components.Schemas.TransactionListResponse.MetaPayload.ReceiptPayload? = nil,
+                    server: Components.Schemas.TransactionListResponse.MetaPayload.ServerPayload
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                    self.server = server
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                    case server
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.TransactionListResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.TransactionListResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decode(
+                        Components.Schemas.TransactionListResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decodeIfPresent(
+                        Components.Schemas.TransactionListResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.TransactionListResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    self.server = try container.decode(
+                        Components.Schemas.TransactionListResponse.MetaPayload.ServerPayload.self,
+                        forKey: .server
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt",
+                        "server"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionListResponse/meta`.
+            public var meta: Components.Schemas.TransactionListResponse.MetaPayload
+            /// Creates a new `TransactionListResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.TransactionListResponse.DataPayload,
+                meta: Components.Schemas.TransactionListResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.TransactionListResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.TransactionListResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
+                    "meta"
+                ])
+            }
+        }
+        /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse`.
+        public struct TransactionDetailResponse: Codable, Hashable, Sendable {
+            /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data`.
+            public struct DataPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/id`.
+                public var id: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/occurredOn`.
+                public var occurredOn: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/processedOn`.
+                public var processedOn: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/displayName`.
+                public var displayName: Swift.String
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/amount`.
+                public struct AmountPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/amount/value`.
+                    public var value: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/amount/currencyCode`.
+                    public var currencyCode: Swift.String
+                    /// Creates a new `AmountPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - value:
+                    ///   - currencyCode:
+                    public init(
+                        value: Swift.String,
+                        currencyCode: Swift.String
+                    ) {
+                        self.value = value
+                        self.currencyCode = currencyCode
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case value
+                        case currencyCode
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.value = try container.decode(
+                            Swift.String.self,
+                            forKey: .value
+                        )
+                        self.currencyCode = try container.decode(
+                            Swift.String.self,
+                            forKey: .currencyCode
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "value",
+                            "currencyCode"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/amount`.
+                public var amount: Components.Schemas.TransactionDetailResponse.DataPayload.AmountPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/direction`.
+                @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case debit = "debit"
+                    case credit = "credit"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/direction`.
+                public var direction: Components.Schemas.TransactionDetailResponse.DataPayload.DirectionPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/status`.
+                @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case posted = "posted"
+                    case pending = "pending"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/status`.
+                public var status: Components.Schemas.TransactionDetailResponse.DataPayload.StatusPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/category`.
+                public struct CategoryPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/category/id`.
+                    public var id: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/category/name`.
+                    public var name: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/category/label`.
+                    public var label: Swift.String
+                    /// Creates a new `CategoryPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - name:
+                    ///   - label:
+                    public init(
+                        id: Swift.String,
+                        name: Swift.String,
+                        label: Swift.String
+                    ) {
+                        self.id = id
+                        self.name = name
+                        self.label = label
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case name
+                        case label
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.name = try container.decode(
+                            Swift.String.self,
+                            forKey: .name
+                        )
+                        self.label = try container.decode(
+                            Swift.String.self,
+                            forKey: .label
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "name",
+                            "label"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/category`.
+                public var category: Components.Schemas.TransactionDetailResponse.DataPayload.CategoryPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account`.
+                public struct AccountPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account/id`.
+                    public var id: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account/displayName`.
+                    public var displayName: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account/identifierMask`.
+                    public var identifierMask: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account/type`.
+                    @frozen public enum _TypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case bank = "bank"
+                        case creditCard = "credit_card"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account/type`.
+                    public var _type: Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload._TypePayload
+                    /// Creates a new `AccountPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - displayName:
+                    ///   - identifierMask:
+                    ///   - _type:
+                    public init(
+                        id: Swift.String,
+                        displayName: Swift.String,
+                        identifierMask: Swift.String,
+                        _type: Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload._TypePayload
+                    ) {
+                        self.id = id
+                        self.displayName = displayName
+                        self.identifierMask = identifierMask
+                        self._type = _type
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case displayName
+                        case identifierMask
+                        case _type = "type"
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.displayName = try container.decode(
+                            Swift.String.self,
+                            forKey: .displayName
+                        )
+                        self.identifierMask = try container.decode(
+                            Swift.String.self,
+                            forKey: .identifierMask
+                        )
+                        self._type = try container.decode(
+                            Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload._TypePayload.self,
+                            forKey: ._type
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "displayName",
+                            "identifierMask",
+                            "type"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/account`.
+                public var account: Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner`.
+                public struct OwnerPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner/id`.
+                    public var id: Swift.String?
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner/kind`.
+                    @frozen public enum KindPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                        case member = "member"
+                        case shared = "shared"
+                        case unassigned = "unassigned"
+                        case unknown = "unknown"
+                    }
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner/kind`.
+                    public var kind: Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload.KindPayload
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner/displayName`.
+                    public var displayName: Swift.String?
+                    /// Creates a new `OwnerPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - kind:
+                    ///   - displayName:
+                    public init(
+                        id: Swift.String? = nil,
+                        kind: Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload.KindPayload,
+                        displayName: Swift.String? = nil
+                    ) {
+                        self.id = id
+                        self.kind = kind
+                        self.displayName = displayName
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case kind
+                        case displayName
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.kind = try container.decode(
+                            Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload.KindPayload.self,
+                            forKey: .kind
+                        )
+                        self.displayName = try container.decodeIfPresent(
+                            Swift.String.self,
+                            forKey: .displayName
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "kind",
+                            "displayName"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/owner`.
+                public var owner: Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/needsReview`.
+                public var needsReview: Swift.Bool
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/reviewReason`.
+                public var reviewReason: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/confidence`.
+                public var confidence: Swift.Double?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data/excludedFromReports`.
+                public var excludedFromReports: Swift.Bool
+                /// Creates a new `DataPayload`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                ///   - occurredOn:
+                ///   - processedOn:
+                ///   - displayName:
+                ///   - amount:
+                ///   - direction:
+                ///   - status:
+                ///   - category:
+                ///   - account:
+                ///   - owner:
+                ///   - needsReview:
+                ///   - reviewReason:
+                ///   - confidence:
+                ///   - excludedFromReports:
+                public init(
+                    id: Swift.String,
+                    occurredOn: Swift.String,
+                    processedOn: Swift.String? = nil,
+                    displayName: Swift.String,
+                    amount: Components.Schemas.TransactionDetailResponse.DataPayload.AmountPayload,
+                    direction: Components.Schemas.TransactionDetailResponse.DataPayload.DirectionPayload,
+                    status: Components.Schemas.TransactionDetailResponse.DataPayload.StatusPayload,
+                    category: Components.Schemas.TransactionDetailResponse.DataPayload.CategoryPayload? = nil,
+                    account: Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload,
+                    owner: Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload,
+                    needsReview: Swift.Bool,
+                    reviewReason: Swift.String? = nil,
+                    confidence: Swift.Double? = nil,
+                    excludedFromReports: Swift.Bool
+                ) {
+                    self.id = id
+                    self.occurredOn = occurredOn
+                    self.processedOn = processedOn
+                    self.displayName = displayName
+                    self.amount = amount
+                    self.direction = direction
+                    self.status = status
+                    self.category = category
+                    self.account = account
+                    self.owner = owner
+                    self.needsReview = needsReview
+                    self.reviewReason = reviewReason
+                    self.confidence = confidence
+                    self.excludedFromReports = excludedFromReports
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case id
+                    case occurredOn
+                    case processedOn
+                    case displayName
+                    case amount
+                    case direction
+                    case status
+                    case category
+                    case account
+                    case owner
+                    case needsReview
+                    case reviewReason
+                    case confidence
+                    case excludedFromReports
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.id = try container.decode(
+                        Swift.String.self,
+                        forKey: .id
+                    )
+                    self.occurredOn = try container.decode(
+                        Swift.String.self,
+                        forKey: .occurredOn
+                    )
+                    self.processedOn = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .processedOn
+                    )
+                    self.displayName = try container.decode(
+                        Swift.String.self,
+                        forKey: .displayName
+                    )
+                    self.amount = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.AmountPayload.self,
+                        forKey: .amount
+                    )
+                    self.direction = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.DirectionPayload.self,
+                        forKey: .direction
+                    )
+                    self.status = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.StatusPayload.self,
+                        forKey: .status
+                    )
+                    self.category = try container.decodeIfPresent(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.CategoryPayload.self,
+                        forKey: .category
+                    )
+                    self.account = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.AccountPayload.self,
+                        forKey: .account
+                    )
+                    self.owner = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.DataPayload.OwnerPayload.self,
+                        forKey: .owner
+                    )
+                    self.needsReview = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .needsReview
+                    )
+                    self.reviewReason = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .reviewReason
+                    )
+                    self.confidence = try container.decodeIfPresent(
+                        Swift.Double.self,
+                        forKey: .confidence
+                    )
+                    self.excludedFromReports = try container.decode(
+                        Swift.Bool.self,
+                        forKey: .excludedFromReports
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "id",
+                        "occurredOn",
+                        "processedOn",
+                        "displayName",
+                        "amount",
+                        "direction",
+                        "status",
+                        "category",
+                        "account",
+                        "owner",
+                        "needsReview",
+                        "reviewReason",
+                        "confidence",
+                        "excludedFromReports"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/data`.
+            public var data: Components.Schemas.TransactionDetailResponse.DataPayload
+            /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta`.
+            public struct MetaPayload: Codable, Hashable, Sendable {
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/apiVersion`.
+                @frozen public enum ApiVersionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case _1 = "1"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/apiVersion`.
+                public var apiVersion: Components.Schemas.TransactionDetailResponse.MetaPayload.ApiVersionPayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/generatedAt`.
+                public var generatedAt: Foundation.Date
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/source`.
+                @frozen public enum SourcePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case macAuthoritative = "mac-authoritative"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/source`.
+                public var source: Components.Schemas.TransactionDetailResponse.MetaPayload.SourcePayload
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/calculationVersion`.
+                public var calculationVersion: Swift.String?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/completeness`.
+                @frozen public enum CompletenessPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case complete = "complete"
+                    case partial = "partial"
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/completeness`.
+                public var completeness: Components.Schemas.TransactionDetailResponse.MetaPayload.CompletenessPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/estimated`.
+                public var estimated: Swift.Bool?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/resourceVersion`.
+                public var resourceVersion: Swift.Int?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/RefreshHintsPayload`.
+                public struct RefreshHintsPayloadPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/RefreshHintsPayload/domain`.
+                    public var domain: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/RefreshHintsPayload/resourceIds`.
+                    public var resourceIds: [Swift.Int]
+                    /// Creates a new `RefreshHintsPayloadPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - domain:
+                    ///   - resourceIds:
+                    public init(
+                        domain: Swift.String,
+                        resourceIds: [Swift.Int]
+                    ) {
+                        self.domain = domain
+                        self.resourceIds = resourceIds
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case domain
+                        case resourceIds
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.domain = try container.decode(
+                            Swift.String.self,
+                            forKey: .domain
+                        )
+                        self.resourceIds = try container.decode(
+                            [Swift.Int].self,
+                            forKey: .resourceIds
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "domain",
+                            "resourceIds"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/refreshHints`.
+                public typealias RefreshHintsPayload = [Components.Schemas.TransactionDetailResponse.MetaPayload.RefreshHintsPayloadPayload]
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/refreshHints`.
+                public var refreshHints: Components.Schemas.TransactionDetailResponse.MetaPayload.RefreshHintsPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/missingSections`.
+                public var missingSections: [Swift.String]?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/receipt`.
+                public struct ReceiptPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/receipt/idempotencyKey`.
+                    public var idempotencyKey: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/receipt/replayed`.
+                    public var replayed: Swift.Bool
+                    /// Creates a new `ReceiptPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - idempotencyKey:
+                    ///   - replayed:
+                    public init(
+                        idempotencyKey: Swift.String,
+                        replayed: Swift.Bool
+                    ) {
+                        self.idempotencyKey = idempotencyKey
+                        self.replayed = replayed
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case idempotencyKey
+                        case replayed
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.idempotencyKey = try container.decode(
+                            Swift.String.self,
+                            forKey: .idempotencyKey
+                        )
+                        self.replayed = try container.decode(
+                            Swift.Bool.self,
+                            forKey: .replayed
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "idempotencyKey",
+                            "replayed"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/receipt`.
+                public var receipt: Components.Schemas.TransactionDetailResponse.MetaPayload.ReceiptPayload?
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/server`.
+                public struct ServerPayload: Codable, Hashable, Sendable {
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/server/id`.
+                    public var id: Swift.String
+                    /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/server/protocolVersion`.
+                    public var protocolVersion: Swift.Double
+                    /// Creates a new `ServerPayload`.
+                    ///
+                    /// - Parameters:
+                    ///   - id:
+                    ///   - protocolVersion:
+                    public init(
+                        id: Swift.String,
+                        protocolVersion: Swift.Double
+                    ) {
+                        self.id = id
+                        self.protocolVersion = protocolVersion
+                    }
+                    public enum CodingKeys: String, CodingKey {
+                        case id
+                        case protocolVersion
+                    }
+                    public init(from decoder: any Swift.Decoder) throws {
+                        let container = try decoder.container(keyedBy: CodingKeys.self)
+                        self.id = try container.decode(
+                            Swift.String.self,
+                            forKey: .id
+                        )
+                        self.protocolVersion = try container.decode(
+                            Swift.Double.self,
+                            forKey: .protocolVersion
+                        )
+                        try decoder.ensureNoAdditionalProperties(knownKeys: [
+                            "id",
+                            "protocolVersion"
+                        ])
+                    }
+                }
+                /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta/server`.
+                public var server: Components.Schemas.TransactionDetailResponse.MetaPayload.ServerPayload
+                /// Creates a new `MetaPayload`.
+                ///
+                /// - Parameters:
+                ///   - apiVersion:
+                ///   - generatedAt:
+                ///   - source:
+                ///   - calculationVersion:
+                ///   - completeness:
+                ///   - estimated:
+                ///   - resourceVersion:
+                ///   - refreshHints:
+                ///   - missingSections:
+                ///   - receipt:
+                ///   - server:
+                public init(
+                    apiVersion: Components.Schemas.TransactionDetailResponse.MetaPayload.ApiVersionPayload,
+                    generatedAt: Foundation.Date,
+                    source: Components.Schemas.TransactionDetailResponse.MetaPayload.SourcePayload,
+                    calculationVersion: Swift.String? = nil,
+                    completeness: Components.Schemas.TransactionDetailResponse.MetaPayload.CompletenessPayload? = nil,
+                    estimated: Swift.Bool? = nil,
+                    resourceVersion: Swift.Int? = nil,
+                    refreshHints: Components.Schemas.TransactionDetailResponse.MetaPayload.RefreshHintsPayload? = nil,
+                    missingSections: [Swift.String]? = nil,
+                    receipt: Components.Schemas.TransactionDetailResponse.MetaPayload.ReceiptPayload? = nil,
+                    server: Components.Schemas.TransactionDetailResponse.MetaPayload.ServerPayload
+                ) {
+                    self.apiVersion = apiVersion
+                    self.generatedAt = generatedAt
+                    self.source = source
+                    self.calculationVersion = calculationVersion
+                    self.completeness = completeness
+                    self.estimated = estimated
+                    self.resourceVersion = resourceVersion
+                    self.refreshHints = refreshHints
+                    self.missingSections = missingSections
+                    self.receipt = receipt
+                    self.server = server
+                }
+                public enum CodingKeys: String, CodingKey {
+                    case apiVersion
+                    case generatedAt
+                    case source
+                    case calculationVersion
+                    case completeness
+                    case estimated
+                    case resourceVersion
+                    case refreshHints
+                    case missingSections
+                    case receipt
+                    case server
+                }
+                public init(from decoder: any Swift.Decoder) throws {
+                    let container = try decoder.container(keyedBy: CodingKeys.self)
+                    self.apiVersion = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.ApiVersionPayload.self,
+                        forKey: .apiVersion
+                    )
+                    self.generatedAt = try container.decode(
+                        Foundation.Date.self,
+                        forKey: .generatedAt
+                    )
+                    self.source = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.SourcePayload.self,
+                        forKey: .source
+                    )
+                    self.calculationVersion = try container.decodeIfPresent(
+                        Swift.String.self,
+                        forKey: .calculationVersion
+                    )
+                    self.completeness = try container.decodeIfPresent(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.CompletenessPayload.self,
+                        forKey: .completeness
+                    )
+                    self.estimated = try container.decodeIfPresent(
+                        Swift.Bool.self,
+                        forKey: .estimated
+                    )
+                    self.resourceVersion = try container.decodeIfPresent(
+                        Swift.Int.self,
+                        forKey: .resourceVersion
+                    )
+                    self.refreshHints = try container.decodeIfPresent(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.RefreshHintsPayload.self,
+                        forKey: .refreshHints
+                    )
+                    self.missingSections = try container.decodeIfPresent(
+                        [Swift.String].self,
+                        forKey: .missingSections
+                    )
+                    self.receipt = try container.decodeIfPresent(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.ReceiptPayload.self,
+                        forKey: .receipt
+                    )
+                    self.server = try container.decode(
+                        Components.Schemas.TransactionDetailResponse.MetaPayload.ServerPayload.self,
+                        forKey: .server
+                    )
+                    try decoder.ensureNoAdditionalProperties(knownKeys: [
+                        "apiVersion",
+                        "generatedAt",
+                        "source",
+                        "calculationVersion",
+                        "completeness",
+                        "estimated",
+                        "resourceVersion",
+                        "refreshHints",
+                        "missingSections",
+                        "receipt",
+                        "server"
+                    ])
+                }
+            }
+            /// - Remark: Generated from `#/components/schemas/TransactionDetailResponse/meta`.
+            public var meta: Components.Schemas.TransactionDetailResponse.MetaPayload
+            /// Creates a new `TransactionDetailResponse`.
+            ///
+            /// - Parameters:
+            ///   - data:
+            ///   - meta:
+            public init(
+                data: Components.Schemas.TransactionDetailResponse.DataPayload,
+                meta: Components.Schemas.TransactionDetailResponse.MetaPayload
+            ) {
+                self.data = data
+                self.meta = meta
+            }
+            public enum CodingKeys: String, CodingKey {
+                case data
+                case meta
+            }
+            public init(from decoder: any Swift.Decoder) throws {
+                let container = try decoder.container(keyedBy: CodingKeys.self)
+                self.data = try container.decode(
+                    Components.Schemas.TransactionDetailResponse.DataPayload.self,
+                    forKey: .data
+                )
+                self.meta = try container.decode(
+                    Components.Schemas.TransactionDetailResponse.MetaPayload.self,
+                    forKey: .meta
+                )
+                try decoder.ensureNoAdditionalProperties(knownKeys: [
+                    "data",
+                    "meta"
+                ])
+            }
+        }
         /// - Remark: Generated from `#/components/schemas/ReferenceResource`.
         public struct ReferenceResource: Codable, Hashable, Sendable {
             /// - Remark: Generated from `#/components/schemas/ReferenceResource/id`.
@@ -7072,6 +8986,486 @@ public enum Components {
 
 /// API operations, with input and output types, generated from `#/paths` in the OpenAPI document.
 public enum Operations {
+    /// Browse and search canonical transactions
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/get(listTransactions)`.
+    public enum ListTransactions {
+        public static let id: Swift.String = "listTransactions"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query`.
+            public struct Query: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/q`.
+                public var q: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/cursor`.
+                public var cursor: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/limit`.
+                public var limit: Swift.Int?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/startDate`.
+                public var startDate: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/endDate`.
+                public var endDate: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/direction`.
+                @frozen public enum DirectionPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case debit = "debit"
+                    case credit = "credit"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/direction`.
+                public var direction: Operations.ListTransactions.Input.Query.DirectionPayload?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/status`.
+                @frozen public enum StatusPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case posted = "posted"
+                    case pending = "pending"
+                    case unknown = "unknown"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/status`.
+                public var status: Operations.ListTransactions.Input.Query.StatusPayload?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/needsReview`.
+                public var needsReview: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/includeExcluded`.
+                public var includeExcluded: Swift.Bool?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/accountId`.
+                public var accountId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/accountType`.
+                @frozen public enum AccountTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case bank = "bank"
+                    case creditCard = "credit_card"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/accountType`.
+                public var accountType: Operations.ListTransactions.Input.Query.AccountTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/category`.
+                public var category: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/ownerType`.
+                @frozen public enum OwnerTypePayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case member = "member"
+                    case shared = "shared"
+                    case unassigned = "unassigned"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/ownerType`.
+                public var ownerType: Operations.ListTransactions.Input.Query.OwnerTypePayload?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/ownerMemberId`.
+                public var ownerMemberId: Swift.String?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/minAmount`.
+                public var minAmount: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/maxAmount`.
+                public var maxAmount: Swift.Double?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/sortBy`.
+                @frozen public enum SortByPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case date = "date"
+                    case processedDate = "processedDate"
+                    case amount = "amount"
+                    case description = "description"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/sortBy`.
+                public var sortBy: Operations.ListTransactions.Input.Query.SortByPayload?
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/sortOrder`.
+                @frozen public enum SortOrderPayload: String, Codable, Hashable, Sendable, CaseIterable {
+                    case asc = "asc"
+                    case desc = "desc"
+                }
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/query/sortOrder`.
+                public var sortOrder: Operations.ListTransactions.Input.Query.SortOrderPayload?
+                /// Creates a new `Query`.
+                ///
+                /// - Parameters:
+                ///   - q:
+                ///   - cursor:
+                ///   - limit:
+                ///   - startDate:
+                ///   - endDate:
+                ///   - direction:
+                ///   - status:
+                ///   - needsReview:
+                ///   - includeExcluded:
+                ///   - accountId:
+                ///   - accountType:
+                ///   - category:
+                ///   - ownerType:
+                ///   - ownerMemberId:
+                ///   - minAmount:
+                ///   - maxAmount:
+                ///   - sortBy:
+                ///   - sortOrder:
+                public init(
+                    q: Swift.String? = nil,
+                    cursor: Swift.String? = nil,
+                    limit: Swift.Int? = nil,
+                    startDate: Swift.String? = nil,
+                    endDate: Swift.String? = nil,
+                    direction: Operations.ListTransactions.Input.Query.DirectionPayload? = nil,
+                    status: Operations.ListTransactions.Input.Query.StatusPayload? = nil,
+                    needsReview: Swift.Bool? = nil,
+                    includeExcluded: Swift.Bool? = nil,
+                    accountId: Swift.String? = nil,
+                    accountType: Operations.ListTransactions.Input.Query.AccountTypePayload? = nil,
+                    category: Swift.String? = nil,
+                    ownerType: Operations.ListTransactions.Input.Query.OwnerTypePayload? = nil,
+                    ownerMemberId: Swift.String? = nil,
+                    minAmount: Swift.Double? = nil,
+                    maxAmount: Swift.Double? = nil,
+                    sortBy: Operations.ListTransactions.Input.Query.SortByPayload? = nil,
+                    sortOrder: Operations.ListTransactions.Input.Query.SortOrderPayload? = nil
+                ) {
+                    self.q = q
+                    self.cursor = cursor
+                    self.limit = limit
+                    self.startDate = startDate
+                    self.endDate = endDate
+                    self.direction = direction
+                    self.status = status
+                    self.needsReview = needsReview
+                    self.includeExcluded = includeExcluded
+                    self.accountId = accountId
+                    self.accountType = accountType
+                    self.category = category
+                    self.ownerType = ownerType
+                    self.ownerMemberId = ownerMemberId
+                    self.minAmount = minAmount
+                    self.maxAmount = maxAmount
+                    self.sortBy = sortBy
+                    self.sortOrder = sortOrder
+                }
+            }
+            public var query: Operations.ListTransactions.Input.Query
+            /// - Remark: Generated from `#/paths/api/v1/transactions/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTransactions.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.ListTransactions.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.ListTransactions.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - query:
+            ///   - headers:
+            public init(
+                query: Operations.ListTransactions.Input.Query = .init(),
+                headers: Operations.ListTransactions.Input.Headers = .init()
+            ) {
+                self.query = query
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/transactions/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TransactionListResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.TransactionListResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListTransactions.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListTransactions.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/transactions/get(listTransactions)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.ListTransactions.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.ListTransactions.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/GET/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/transactions/GET/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.ListTransactions.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.ListTransactions.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/transactions/get(listTransactions)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.ListTransactions.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.ListTransactions.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
+    /// Read one canonical transaction
+    ///
+    /// - Remark: HTTP `GET /api/v1/transactions/{id}`.
+    /// - Remark: Generated from `#/paths//api/v1/transactions/{id}/get(getTransaction)`.
+    public enum GetTransaction {
+        public static let id: Swift.String = "getTransaction"
+        public struct Input: Sendable, Hashable {
+            /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/path`.
+            public struct Path: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/path/id`.
+                public var id: Swift.String
+                /// Creates a new `Path`.
+                ///
+                /// - Parameters:
+                ///   - id:
+                public init(id: Swift.String) {
+                    self.id = id
+                }
+            }
+            public var path: Operations.GetTransaction.Input.Path
+            /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/header`.
+            public struct Headers: Sendable, Hashable {
+                public var accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTransaction.AcceptableContentType>]
+                /// Creates a new `Headers`.
+                ///
+                /// - Parameters:
+                ///   - accept:
+                public init(accept: [OpenAPIRuntime.AcceptHeaderContentType<Operations.GetTransaction.AcceptableContentType>] = .defaultValues()) {
+                    self.accept = accept
+                }
+            }
+            public var headers: Operations.GetTransaction.Input.Headers
+            /// Creates a new `Input`.
+            ///
+            /// - Parameters:
+            ///   - path:
+            ///   - headers:
+            public init(
+                path: Operations.GetTransaction.Input.Path,
+                headers: Operations.GetTransaction.Input.Headers = .init()
+            ) {
+                self.path = path
+                self.headers = headers
+            }
+        }
+        @frozen public enum Output: Sendable, Hashable {
+            public struct Ok: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/responses/200/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/responses/200/content/application\/json`.
+                    case json(Components.Schemas.TransactionDetailResponse)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.TransactionDetailResponse {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetTransaction.Output.Ok.Body
+                /// Creates a new `Ok`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetTransaction.Output.Ok.Body) {
+                    self.body = body
+                }
+            }
+            /// Successful response
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/transactions/{id}/get(getTransaction)/responses/200`.
+            ///
+            /// HTTP response code: `200 ok`.
+            case ok(Operations.GetTransaction.Output.Ok)
+            /// The associated value of the enum case if `self` is `.ok`.
+            ///
+            /// - Throws: An error if `self` is not `.ok`.
+            /// - SeeAlso: `.ok`.
+            public var ok: Operations.GetTransaction.Output.Ok {
+                get throws {
+                    switch self {
+                    case let .ok(response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "ok",
+                            response: self
+                        )
+                    }
+                }
+            }
+            public struct ClientError: Sendable, Hashable {
+                /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/responses/4XX/content`.
+                @frozen public enum Body: Sendable, Hashable {
+                    /// - Remark: Generated from `#/paths/api/v1/transactions/{id}/GET/responses/4XX/content/application\/json`.
+                    case json(Components.Schemas.CanonicalErrorEnvelope)
+                    /// The associated value of the enum case if `self` is `.json`.
+                    ///
+                    /// - Throws: An error if `self` is not `.json`.
+                    /// - SeeAlso: `.json`.
+                    public var json: Components.Schemas.CanonicalErrorEnvelope {
+                        get throws {
+                            switch self {
+                            case let .json(body):
+                                return body
+                            }
+                        }
+                    }
+                }
+                /// Received HTTP response body
+                public var body: Operations.GetTransaction.Output.ClientError.Body
+                /// Creates a new `ClientError`.
+                ///
+                /// - Parameters:
+                ///   - body: Received HTTP response body
+                public init(body: Operations.GetTransaction.Output.ClientError.Body) {
+                    self.body = body
+                }
+            }
+            /// Stable coded error
+            ///
+            /// - Remark: Generated from `#/paths//api/v1/transactions/{id}/get(getTransaction)/responses/4XX`.
+            ///
+            /// HTTP response code: `400...499 clientError`.
+            case clientError(statusCode: Swift.Int, Operations.GetTransaction.Output.ClientError)
+            /// The associated value of the enum case if `self` is `.clientError`.
+            ///
+            /// - Throws: An error if `self` is not `.clientError`.
+            /// - SeeAlso: `.clientError`.
+            public var clientError: Operations.GetTransaction.Output.ClientError {
+                get throws {
+                    switch self {
+                    case let .clientError(_, response):
+                        return response
+                    default:
+                        try throwUnexpectedResponseStatus(
+                            expectedStatus: "clientError",
+                            response: self
+                        )
+                    }
+                }
+            }
+            /// Undocumented response.
+            ///
+            /// A response with a code that is not documented in the OpenAPI document.
+            case undocumented(statusCode: Swift.Int, OpenAPIRuntime.UndocumentedPayload)
+        }
+        @frozen public enum AcceptableContentType: AcceptableProtocol {
+            case json
+            case other(Swift.String)
+            public init?(rawValue: Swift.String) {
+                switch rawValue.lowercased() {
+                case "application/json":
+                    self = .json
+                default:
+                    self = .other(rawValue)
+                }
+            }
+            public var rawValue: Swift.String {
+                switch self {
+                case let .other(string):
+                    return string
+                case .json:
+                    return "application/json"
+                }
+            }
+            public static var allCases: [Self] {
+                [
+                    .json
+                ]
+            }
+        }
+    }
     /// List canonical categories
     ///
     /// - Remark: HTTP `GET /api/v1/categories`.

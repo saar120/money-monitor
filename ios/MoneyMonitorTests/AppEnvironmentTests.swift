@@ -2754,6 +2754,12 @@ struct AppEnvironmentTests {
         #expect(savedEnvelope.data.page.hasMore == false)
         #expect(savedEnvelope.meta.source == .unknown)
         #expect(await transactionClient.calls() == 1)
+        for query in ["Dining", "Main Card", "4242"] {
+            let nonMerchantMatch = try await environment.transactions(
+                query: MobileTransactionQuery(query: query)
+            )
+            #expect(nonMerchantMatch.data.transactions.isEmpty)
+        }
         #expect(try await snapshotStore.load(for: credential.profile.serverID)?.transactions?.count == 3)
     }
 
@@ -2784,6 +2790,41 @@ struct AppEnvironmentTests {
             savedAt: pairingFlowNow
         )
         #expect(snapshot.transactions?.count == BootstrapSnapshot.savedTransactionLimit)
+    }
+
+    @MainActor
+    @Test
+    func savedActivityPreservesCanonicalOrderForSameDayAppendPages() throws {
+        guard let base = appEnvironmentTransactionEnvelope().data.transactions.first else {
+            throw AppEnvironmentFixtureError.missing("transaction")
+        }
+        func transaction(id: String) -> MobileTransaction {
+            MobileTransaction(
+                id: id,
+                occurredOn: base.occurredOn,
+                displayName: base.displayName,
+                amount: base.amount,
+                direction: base.direction,
+                status: base.status,
+                category: base.category,
+                account: base.account,
+                needsReview: base.needsReview,
+                excludedFromReports: base.excludedFromReports,
+                owner: base.owner
+            )
+        }
+
+        let firstPage = [transaction(id: "transaction_A"), transaction(id: "transaction_Z")]
+        let secondPage = [transaction(id: "transaction_Y"), transaction(id: "transaction_B")]
+        let saved = AppEnvironment.mergedSavedTransactions(
+            secondPage,
+            with: firstPage,
+            appending: true
+        )
+
+        #expect(saved.map(\.id) == [
+            "transaction_A", "transaction_Z", "transaction_Y", "transaction_B",
+        ])
     }
 
     @MainActor

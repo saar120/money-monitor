@@ -25,6 +25,7 @@ describe('mobile access defaults', () => {
 
   it('treats the mobile public-ID key as an encrypted secret', () => {
     expect(SECRET_KEYS.has('MOBILE_PUBLIC_ID_KEY')).toBe(true);
+    expect(config.MOBILE_PUBLIC_ID_KEY.length).toBeGreaterThanOrEqual(32);
   });
 });
 
