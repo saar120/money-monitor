@@ -25,6 +25,10 @@ public typealias CategoryResponse = Components.Schemas.CategoryResponse
 public typealias CategoryCreateRequest = Components.Schemas.CategoryCreateRequest
 public typealias CategoryUpdateRequest = Components.Schemas.CategoryUpdateRequest
 public typealias CategoryDeleteResponse = Components.Schemas.CategoryDeleteResponse
+public typealias TransactionResource = Components.Schemas.TransactionResource
+public typealias TransactionListResponse = Components.Schemas.TransactionListResponse
+public typealias TransactionDetailResponse = Components.Schemas.TransactionDetailResponse
+public typealias CanonicalTransactionQuery = Operations.ListTransactions.Input.Query
 
 public typealias ReferenceResourceAmount = Components.Schemas.ReferenceResource.AmountPayload
 public typealias ReferenceResponseData = Components.Schemas.ReferenceResponse.DataPayload
@@ -123,6 +127,30 @@ public struct CanonicalAPIClient: Sendable {
 
     public func listCategories() async throws -> CategoryListResponse {
         let output = try await client.listCategories()
+        switch output {
+        case let .ok(response): return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func listTransactions(
+        query: CanonicalTransactionQuery = .init()
+    ) async throws -> TransactionListResponse {
+        let output = try await client.listTransactions(.init(query: query))
+        switch output {
+        case let .ok(response): return try response.body.json
+        case let .clientError(statusCode, response):
+            throw try codedError(statusCode: statusCode, body: response.body.json)
+        case let .undocumented(statusCode, payload):
+            throw await undocumentedError(statusCode: statusCode, payload: payload)
+        }
+    }
+
+    public func getTransaction(id: String) async throws -> TransactionDetailResponse {
+        let output = try await client.getTransaction(path: .init(id: id))
         switch output {
         case let .ok(response): return try response.body.json
         case let .clientError(statusCode, response):

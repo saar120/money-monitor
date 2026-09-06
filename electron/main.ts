@@ -352,7 +352,6 @@ async function startMobileAccessIfEnabled(): Promise<void> {
             canonical: production.canonicalDependencies,
             bootstrap: production.bootstrapDependencies,
             pairing: production.pairingDependencies,
-            transactions: production.transactionDependencies,
             planning: production.planningDependencies,
             netWorthHistory: production.netWorthHistoryDependencies,
             reviewCommands: production.reviewCommandDependencies,

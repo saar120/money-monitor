@@ -51,8 +51,13 @@ const generatedAst = await openapiTS(serializedDocument, {
   makePathsEnum: true,
   silent: true,
 });
+const generatedSource = astToString(generatedAst).replace(
+  /export enum ApiPaths \{([\s\S]*?)\n\}/,
+  (_match, entries: string) =>
+    `export const ApiPaths = {${entries.replace(/^(\s+)(\w+) = /gm, '$1$2: ')}\n} as const;`,
+);
 const generatedTypescript = await prettier.format(
-  `${COMMENT_HEADER}/* eslint-disable @typescript-eslint/no-duplicate-enum-values */\n${astToString(generatedAst)}`,
+  `${COMMENT_HEADER}/* eslint-disable @typescript-eslint/no-duplicate-enum-values */\n${generatedSource}`,
   {
     ...prettierConfig,
     filepath: typescriptPath,

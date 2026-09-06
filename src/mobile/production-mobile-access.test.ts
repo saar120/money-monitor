@@ -14,7 +14,6 @@ import {
   type ProductionMobileAccess,
 } from './production-mobile-access.js';
 import { createMobileServer } from './mobile-server.js';
-import { createMobilePublicIdProjector } from './mobile-public-id.js';
 
 const NOW = new Date('2026-07-15T10:00:00.000Z');
 const SERVER_ID = '11111111-1111-4111-8111-aaaaaaaaaaaa';
@@ -127,25 +126,9 @@ describe('production mobile access composition', () => {
       },
     });
     expect(access.bootstrapDependencies.authenticator).toBe(access.deviceRegistry);
-    expect(access.transactionDependencies.authenticator).toBe(access.deviceRegistry);
-    expect(access.transactionDependencies.server).toEqual({
-      id: SERVER_ID,
-      protocolVersion: MOBILE_PROTOCOL_VERSION,
-    });
-    expect(
-      await access.transactionDependencies.list(
-        { limit: 30, includeExcluded: false },
-        { generatedAt: NOW.toISOString(), financialDate: '2026-07-15' },
-        AUTHENTICATED_DEVICE,
-      ),
-    ).toEqual({
-      financialDate: '2026-07-15',
-      transactions: [],
-      page: { hasMore: false, nextCursor: null },
-    });
   });
 
-  it('fails bootstrap, transaction list, and detail closed when the desktop source is unavailable', async () => {
+  it('fails canonical and bootstrap reads closed when the desktop source is unavailable', async () => {
     const database = createTestDb();
     databases.push(database);
     let available = true;
@@ -170,22 +153,9 @@ describe('production mobile access composition', () => {
 
     await expect(access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).resolves.toBeDefined();
     expect(access.canonicalDependencies.isAvailable()).toBe(true);
-    const context = { generatedAt: NOW.toISOString(), financialDate: '2026-07-15' };
-    const query = { limit: 30, includeExcluded: false };
-    expect(access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toBeDefined();
-    const missingTransactionId = createMobilePublicIdProjector(PUBLIC_ID_KEY)('transaction', 999);
-    expect(
-      access.transactionDependencies.detail(missingTransactionId, context, AUTHENTICATED_DEVICE),
-    ).toBeNull();
     available = false;
     expect(access.canonicalDependencies.isAvailable()).toBe(false);
     expect(() => access.bootstrapDependencies.provide(AUTHENTICATED_DEVICE)).toThrow('unavailable');
-    expect(() => access.transactionDependencies.list(query, context, AUTHENTICATED_DEVICE)).toThrow(
-      'unavailable',
-    );
-    expect(() =>
-      access.transactionDependencies.detail(missingTransactionId, context, AUTHENTICATED_DEVICE),
-    ).toThrow('unavailable');
     expect(netWorthReads).toBe(1);
   });
 

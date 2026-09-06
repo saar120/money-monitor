@@ -59,7 +59,7 @@ struct ActivityView: View {
         guard environment.snapshotState.isSavedView, !environment.trustState.isLive else {
             return nil
         }
-        return "Saved View · showing up to 200 recent transactions. History may be incomplete."
+        return "Saved results · showing up to 200 recent transactions. Older history requires Live."
     }
 
     private func loadNextPage() async {
@@ -390,13 +390,21 @@ struct TransactionListResults: View {
     @ViewBuilder
     private var acceptedContent: some View {
         if model.transactions.isEmpty {
-            ContentUnavailableView {
-                Label(emptyTitle, systemImage: "list.bullet.rectangle")
-            } description: {
-                Text(emptyDescription)
-            } actions: {
-                Button("Refresh") {
-                    Task { await reload() }
+            VStack(spacing: MoneyMonitorTheme.Spacing.medium) {
+                if let savedViewNotice {
+                    Label(savedViewNotice, systemImage: "lock.doc.fill")
+                        .font(.footnote)
+                        .foregroundStyle(MoneyMonitorTheme.warning)
+                        .accessibilityIdentifier("saved-view-activity-notice")
+                }
+                ContentUnavailableView {
+                    Label(emptyTitle, systemImage: "list.bullet.rectangle")
+                } description: {
+                    Text(emptyDescription)
+                } actions: {
+                    Button("Refresh") {
+                        Task { await reload() }
+                    }
                 }
             }
         } else {
@@ -433,8 +441,12 @@ struct TransactionListResults: View {
                                     }
                                 }
                             }
+                            .accessibilityIdentifier("transaction-row-\(transaction.id)")
                             .onAppear {
-                                guard transaction.id == model.transactions.last?.id else { return }
+                                guard
+                                    transaction.id == model.transactions.last?.id,
+                                    model.appendState == .idle
+                                else { return }
                                 Task { await loadNextPage() }
                             }
                         }

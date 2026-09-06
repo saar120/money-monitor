@@ -42,7 +42,7 @@ const loading = ref(false);
 const categories = ref<Category[]>([]);
 const categoryMap = computed(() => buildCategoryMap(categories.value));
 const { reviewCount } = useReviewCount();
-const resolvingId = ref<number | null>(null);
+const resolvingId = ref<string | null>(null);
 const offset = ref(0);
 const limit = 50;
 

@@ -686,12 +686,12 @@ struct TransactionPresentationTests {
             transactionPresentationEnvelope(
                 transactions: [first],
                 hasMore: true,
-                nextCursor: "cursor_v1_page-2"
+                nextCursor: "cursor_v2_page-2"
             )
         }
 
         await model.append { requestedQuery in
-            #expect(requestedQuery.cursor == "cursor_v1_page-2")
+            #expect(requestedQuery.cursor == "cursor_v2_page-2")
             return transactionPresentationEnvelope(transactions: [first, second])
         }
 
@@ -710,7 +710,7 @@ struct TransactionPresentationTests {
             transactionPresentationEnvelope(
                 transactions: [transaction],
                 hasMore: true,
-                nextCursor: "cursor_v1_repeat"
+                nextCursor: "cursor_v2_repeat"
             )
         }
 
@@ -718,13 +718,13 @@ struct TransactionPresentationTests {
             transactionPresentationEnvelope(
                 transactions: [transaction],
                 hasMore: true,
-                nextCursor: "cursor_v1_repeat"
+                nextCursor: "cursor_v2_repeat"
             )
         }
 
         #expect(model.transactions == [transaction])
         #expect(model.hasMore)
-        #expect(model.nextCursor == "cursor_v1_repeat")
+        #expect(model.nextCursor == "cursor_v2_repeat")
         #expect(model.appendState == .failed("More transactions could not be loaded safely."))
     }
 

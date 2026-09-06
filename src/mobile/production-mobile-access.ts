@@ -23,8 +23,6 @@ import {
   type MobilePairingSessionManagerOptions,
 } from './pairing-session.js';
 import type { MobileBootstrapRouteDependencies } from './mobile-server.js';
-import { createProductionMobileTransactionPorts } from './transaction-production-ports.js';
-import type { MobileTransactionRouteDependencies } from './transaction-routes.js';
 import { createProductionMobilePlanningPorts } from './planning-production-ports.js';
 import type { MobilePlanningRouteDependencies } from './planning-routes.js';
 import { createProductionMobileNetWorthHistoryPorts } from './net-worth-history-production-ports.js';
@@ -67,7 +65,6 @@ export interface ProductionMobileAccessOptions {
 
 export interface ProductionMobileAccess {
   bootstrapDependencies: MobileBootstrapRouteDependencies;
-  transactionDependencies: MobileTransactionRouteDependencies;
   planningDependencies: MobilePlanningRouteDependencies;
   netWorthHistoryDependencies: MobileNetWorthHistoryRouteDependencies;
   reviewCommandDependencies?: MobileReviewCommandRouteDependencies;
@@ -77,6 +74,7 @@ export interface ProductionMobileAccess {
     authenticate: CanonicalAuthenticator;
     onCategoryOwnerChanged?: (categoryName: string) => void;
     isAvailable: () => boolean;
+    serverIdentity: { id: string; protocolVersion: 1 };
   };
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -128,10 +126,6 @@ export function createProductionMobileAccess(
     publicIdKey: options.publicIdKey,
     readNetWorthIls: options.readNetWorthIls,
   });
-  const transactionPorts = createProductionMobileTransactionPorts({
-    db: options.db,
-    publicIdKey: options.publicIdKey,
-  });
   const planningPorts = createProductionMobilePlanningPorts({
     db: options.db,
     publicIdKey: options.publicIdKey,
@@ -139,11 +133,11 @@ export function createProductionMobileAccess(
   const netWorthHistoryPorts = createProductionMobileNetWorthHistoryPorts({ db: options.db });
   const reviewCommandPorts = options.resolveReview
     ? createProductionMobileReviewCommandPorts({
-      db: options.db,
-      publicIdKey: options.publicIdKey,
-      clock,
-      resolveReview: options.resolveReview,
-    })
+        db: options.db,
+        publicIdKey: options.publicIdKey,
+        clock,
+        resolveReview: options.resolveReview,
+      })
     : undefined;
   const provideBootstrap = createMobileBootstrapAdapter({
     ports,
@@ -167,19 +161,6 @@ export function createProductionMobileAccess(
       return provideBootstrap();
     },
   });
-  const transactionDependencies: MobileTransactionRouteDependencies = {
-    authenticator: deviceRegistry,
-    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
-    list: (query, context) => {
-      assertMobileReadAvailable();
-      return transactionPorts.list(query, context);
-    },
-    detail: (publicId, context) => {
-      assertMobileReadAvailable();
-      return transactionPorts.detail(publicId, context);
-    },
-  };
-  Object.freeze(transactionDependencies);
   const planningDependencies: MobilePlanningRouteDependencies = Object.freeze({
     authenticator: deviceRegistry,
     server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
@@ -201,11 +182,11 @@ export function createProductionMobileAccess(
   });
   const reviewCommandDependencies = reviewCommandPorts
     ? Object.freeze({
-      authenticator: deviceRegistry,
-      server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
-      resolve: reviewCommandPorts.resolve,
-      skip: reviewCommandPorts.skip,
-    } satisfies MobileReviewCommandRouteDependencies)
+        authenticator: deviceRegistry,
+        server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+        resolve: reviewCommandPorts.resolve,
+        skip: reviewCommandPorts.skip,
+      } satisfies MobileReviewCommandRouteDependencies)
     : undefined;
 
   let activeManager: PairingManager | null = null;
@@ -231,6 +212,8 @@ export function createProductionMobileAccess(
   const canonicalDependencies = Object.freeze({
     sqlite: options.sqlite,
     authenticate: createCanonicalMobileAuthenticator(deviceRegistry),
+    transactionPublicIdKey: options.publicIdKey,
+    serverIdentity: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
     onCategoryOwnerChanged: (categoryName: string) =>
       applyOwnershipWithDatabase(options.db, { categoryName }),
     isAvailable: options.isMobileReadAvailable ?? (() => true),
@@ -279,7 +262,6 @@ export function createProductionMobileAccess(
 
   return {
     bootstrapDependencies,
-    transactionDependencies,
     planningDependencies,
     netWorthHistoryDependencies,
     reviewCommandDependencies,

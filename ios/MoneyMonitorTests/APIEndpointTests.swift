@@ -24,11 +24,11 @@ struct APIEndpointTests {
             (.bootstrap, "/money-monitor/api/mobile/v1/bootstrap"),
             (
                 .transactions(MobileTransactionQuery()),
-                "/money-monitor/api/mobile/v1/transactions"
+                "/money-monitor/api/v1/transactions"
             ),
             (
                 .transactionDetail(id: "transaction_\(String(repeating: "T", count: 22))"),
-                "/money-monitor/api/mobile/v1/transactions/transaction_\(String(repeating: "T", count: 22))"
+                "/money-monitor/api/v1/transactions/transaction_\(String(repeating: "T", count: 22))"
             ),
             (.reviewResolve, "/money-monitor/api/mobile/v1/reviews/resolve"),
             (.reviewSkip, "/money-monitor/api/mobile/v1/reviews/skip"),
@@ -125,7 +125,7 @@ struct APIEndpointTests {
     func transactionQueryUsesExactWireNamesAndOmitsFalseFlags() throws {
         let query = MobileTransactionQuery(
             query: "  קפה & tea  ",
-            cursor: "cursor_v1_abc-DEF_123",
+            cursor: "cursor_v2_abc-DEF_123",
             limit: 25,
             startDate: "2026-07-01",
             endDate: "2026-07-16",
@@ -147,7 +147,7 @@ struct APIEndpointTests {
         )
 
         #expect(values["q"] == "קפה & tea")
-        #expect(values["cursor"] == "cursor_v1_abc-DEF_123")
+        #expect(values["cursor"] == "cursor_v2_abc-DEF_123")
         #expect(values["limit"] == "25")
         #expect(values["startDate"] == "2026-07-01")
         #expect(values["endDate"] == "2026-07-16")

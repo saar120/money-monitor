@@ -144,6 +144,40 @@ export type paths = {
     patch?: never;
     trace?: never;
   };
+  '/api/v1/transactions': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Browse and search canonical transactions */
+    get: operations['listTransactions'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
+  '/api/v1/transactions/{id}': {
+    parameters: {
+      query?: never;
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    /** Read one canonical transaction */
+    get: operations['getTransaction'];
+    put?: never;
+    post?: never;
+    delete?: never;
+    options?: never;
+    head?: never;
+    patch?: never;
+    trace?: never;
+  };
 };
 export type webhooks = Record<string, never>;
 export type components = {
@@ -801,6 +835,182 @@ export type components = {
       expectedVersion: number;
       title?: string;
     };
+    TransactionDetailResponse: {
+      data: {
+        account: {
+          displayName: string;
+          id: string;
+          identifierMask: string;
+          /** @enum {string} */
+          type: 'bank' | 'credit_card';
+        };
+        amount: {
+          currencyCode: string;
+          value: string;
+        };
+        category: {
+          id: string;
+          label: string;
+          name: string;
+        } | null;
+        confidence: number | null;
+        /** @enum {string} */
+        direction: 'debit' | 'credit' | 'unknown';
+        displayName: string;
+        excludedFromReports: boolean;
+        id: string;
+        needsReview: boolean;
+        occurredOn: string;
+        owner: {
+          displayName: string | null;
+          id: string | null;
+          /** @enum {string} */
+          kind: 'member' | 'shared' | 'unassigned' | 'unknown';
+        };
+        processedOn: string | null;
+        reviewReason: string | null;
+        /** @enum {string} */
+        status: 'posted' | 'pending' | 'unknown';
+      };
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        calculationVersion?: string;
+        /** @enum {string} */
+        completeness?: 'complete' | 'partial';
+        estimated?: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections?: string[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints?: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        server: {
+          /** Format: uuid */
+          id: string;
+          /** @constant */
+          protocolVersion: 1;
+        };
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    TransactionListResponse: {
+      data: {
+        financialDate: string;
+        page: {
+          hasMore: boolean;
+          nextCursor: string | null;
+          total: number;
+        };
+        transactions: {
+          account: {
+            displayName: string;
+            id: string;
+            identifierMask: string;
+            /** @enum {string} */
+            type: 'bank' | 'credit_card';
+          };
+          amount: {
+            currencyCode: string;
+            value: string;
+          };
+          category: {
+            id: string;
+            label: string;
+            name: string;
+          } | null;
+          confidence: number | null;
+          /** @enum {string} */
+          direction: 'debit' | 'credit' | 'unknown';
+          displayName: string;
+          excludedFromReports: boolean;
+          id: string;
+          needsReview: boolean;
+          occurredOn: string;
+          owner: {
+            displayName: string | null;
+            id: string | null;
+            /** @enum {string} */
+            kind: 'member' | 'shared' | 'unassigned' | 'unknown';
+          };
+          processedOn: string | null;
+          reviewReason: string | null;
+          /** @enum {string} */
+          status: 'posted' | 'pending' | 'unknown';
+        }[];
+      };
+      meta: {
+        /** @constant */
+        apiVersion: '1';
+        calculationVersion?: string;
+        /** @enum {string} */
+        completeness: 'complete' | 'partial';
+        estimated?: boolean;
+        /** Format: date-time */
+        generatedAt: string;
+        missingSections?: string[];
+        receipt?: {
+          idempotencyKey: string;
+          replayed: boolean;
+        };
+        refreshHints?: {
+          domain: string;
+          resourceIds: number[];
+        }[];
+        resourceVersion?: number;
+        server: {
+          /** Format: uuid */
+          id: string;
+          /** @constant */
+          protocolVersion: 1;
+        };
+        /** @constant */
+        source: 'mac-authoritative';
+      };
+    };
+    TransactionResource: {
+      account: {
+        displayName: string;
+        id: string;
+        identifierMask: string;
+        /** @enum {string} */
+        type: 'bank' | 'credit_card';
+      };
+      amount: {
+        currencyCode: string;
+        value: string;
+      };
+      category: {
+        id: string;
+        label: string;
+        name: string;
+      } | null;
+      confidence: number | null;
+      /** @enum {string} */
+      direction: 'debit' | 'credit' | 'unknown';
+      displayName: string;
+      excludedFromReports: boolean;
+      id: string;
+      needsReview: boolean;
+      occurredOn: string;
+      owner: {
+        displayName: string | null;
+        id: string | null;
+        /** @enum {string} */
+        kind: 'member' | 'shared' | 'unassigned' | 'unknown';
+      };
+      processedOn: string | null;
+      reviewReason: string | null;
+      /** @enum {string} */
+      status: 'posted' | 'pending' | 'unknown';
+    };
   };
   responses: never;
   parameters: never;
@@ -1159,17 +1369,98 @@ export interface operations {
       };
     };
   };
+  listTransactions: {
+    parameters: {
+      query?: {
+        accountId?: string;
+        accountType?: 'bank' | 'credit_card';
+        category?: string;
+        cursor?: string;
+        direction?: 'debit' | 'credit' | 'unknown';
+        endDate?: string;
+        includeExcluded?: boolean;
+        limit?: number;
+        maxAmount?: number;
+        minAmount?: number;
+        needsReview?: boolean;
+        ownerMemberId?: string;
+        ownerType?: 'member' | 'shared' | 'unassigned';
+        q?: string;
+        sortBy?: 'date' | 'processedDate' | 'amount' | 'description';
+        sortOrder?: 'asc' | 'desc';
+        startDate?: string;
+        status?: 'posted' | 'pending' | 'unknown';
+      };
+      header?: never;
+      path?: never;
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransactionListResponse'];
+        };
+      };
+    };
+  };
+  getTransaction: {
+    parameters: {
+      query?: never;
+      header?: never;
+      path: {
+        id: string;
+      };
+      cookie?: never;
+    };
+    requestBody?: never;
+    responses: {
+      /** @description Stable coded error */
+      '4XX': {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['CanonicalErrorEnvelope'];
+        };
+      };
+      /** @description Successful response */
+      200: {
+        headers: {
+          [name: string]: unknown;
+        };
+        content: {
+          'application/json': components['schemas']['TransactionDetailResponse'];
+        };
+      };
+    };
+  };
 }
-export enum ApiPaths {
-  listCategories = '/api/v1/categories',
-  createCategory = '/api/v1/categories',
-  updateCategory = '/api/v1/categories/{id}',
-  deleteCategory = '/api/v1/categories/{id}',
-  getHomeOverview = '/api/v1/home',
-  getReference = '/api/v1/reference',
-  updateReference = '/api/v1/reference/{id}',
-  deleteReference = '/api/v1/reference/{id}',
-  requestReferenceRefresh = '/api/v1/reference/commands/refresh',
-  getDiagnostics = '/api/v1/diagnostics',
-  getPairingStatus = '/api/v1/pairing/status',
-}
+export const ApiPaths = {
+  listTransactions: '/api/v1/transactions',
+  getTransaction: '/api/v1/transactions/{id}',
+  listCategories: '/api/v1/categories',
+  createCategory: '/api/v1/categories',
+  updateCategory: '/api/v1/categories/{id}',
+  deleteCategory: '/api/v1/categories/{id}',
+  getHomeOverview: '/api/v1/home',
+  getReference: '/api/v1/reference',
+  updateReference: '/api/v1/reference/{id}',
+  deleteReference: '/api/v1/reference/{id}',
+  requestReferenceRefresh: '/api/v1/reference/commands/refresh',
+  getDiagnostics: '/api/v1/diagnostics',
+  getPairingStatus: '/api/v1/pairing/status',
+} as const;

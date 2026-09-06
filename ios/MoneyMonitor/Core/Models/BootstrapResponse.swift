@@ -129,6 +129,7 @@ enum MobileErrorCode: String, ForwardCompatibleStringEnum, Equatable, Sendable {
     case upgradeRequired = "upgrade_required"
     case routeNotFound = "route_not_found"
     case transactionNotFound = "transaction_not_found"
+    case resourceNotFound = "resource_not_found"
     case payloadTooLarge = "payload_too_large"
     case rateLimited = "rate_limited"
     case pairingInvalid = "pairing_invalid"
@@ -585,8 +586,15 @@ struct MobileTransaction: Codable, Equatable, Identifiable, Sendable {
 }
 
 struct MobileTransactionOwner: Codable, Equatable, Sendable {
+    let id: String?
     let kind: MobileTransactionOwnerKind
     let displayName: String?
+
+    init(id: String? = nil, kind: MobileTransactionOwnerKind, displayName: String?) {
+        self.id = id
+        self.kind = kind
+        self.displayName = displayName
+    }
 }
 
 // MARK: - Phase 3 planning snapshot

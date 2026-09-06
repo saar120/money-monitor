@@ -292,12 +292,15 @@ struct URLSessionMobileAPIClient: MobileAPIClient, Sendable {
         return Set(response.meta.refreshHints.map(\.domain))
     }
 
-    private func canonicalClient(_ credential: PairedMacCredential) -> CanonicalAPIClient {
+    private func canonicalClient(
+        _ credential: PairedMacCredential,
+        responseRecorder: MobileCanonicalResponseRecorder = MobileCanonicalResponseRecorder()
+    ) -> CanonicalAPIClient {
         CanonicalAPIClient(
             transport: MobileCanonicalTransportAdapter(
                 transport: transport,
                 baseURL: credential.profile.baseURL,
-                responseRecorder: MobileCanonicalResponseRecorder()
+                responseRecorder: responseRecorder
             ),
             token: credential.token
         )
@@ -418,17 +421,67 @@ extension URLSessionMobileAPIClient: MobileTransactionAPIClient {
         credential: PairedMacCredential
     ) async throws -> MobileTransactionListEnvelope {
         guard Self.isValid(query) else { throw MobileClientError.invalidRequest }
-        let endpoint = APIEndpoint.transactions(query)
-        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
-        let response = try await send(request, endpoint: endpoint)
-        let envelope: MobileTransactionListEnvelope
+        let generated: TransactionListResponse
+        let responseRecorder = MobileCanonicalResponseRecorder()
         do {
-            envelope = try MobileTransactionPayloadDecoder().decodeList(from: response.data)
+            generated = try await canonicalClient(
+                credential,
+                responseRecorder: responseRecorder
+            ).listTransactions(
+                query: .init(
+                    q: query.query,
+                    cursor: query.cursor,
+                    limit: query.limit,
+                    startDate: query.startDate,
+                    endDate: query.endDate,
+                    direction: query.direction.map { .init(rawValue: $0.rawValue)! },
+                    status: query.status.map { .init(rawValue: $0.rawValue)! },
+                    needsReview: query.needsReview ? true : nil,
+                    includeExcluded: query.includeExcluded,
+                    accountId: query.accountID
+                )
+            )
+        } catch let error as MobileClientError {
+            throw error
+        } catch {
+            throw canonicalTransactionError(
+                responseRecorder,
+                endpoint: .transactions(query)
+            )
+        }
+        let transactions: [MobileTransaction]
+        do {
+            transactions = try JSONDecoder().decode(
+                [MobileTransaction].self,
+                from: JSONEncoder().encode(generated.data.transactions)
+            )
+            guard let response = responseRecorder.response else {
+                throw MobileClientError.invalidPayload
+            }
+            try CanonicalTransactionPayloadValidator().validateList(
+                response.data,
+                transactions: transactions
+            )
         } catch {
             throw MobileClientError.invalidPayload
         }
-        try validateIdentity(envelope.meta, credential: credential)
-        return envelope
+        let metadata = try canonicalTransactionMetadata(
+            generatedAt: generated.meta.generatedAt,
+            serverID: generated.meta.server.id,
+            protocolVersion: generated.meta.server.protocolVersion
+        )
+        try validateIdentity(metadata, credential: credential)
+        return MobileTransactionListEnvelope(
+            data: .init(
+                financialDate: generated.data.financialDate,
+                transactions: transactions,
+                page: .init(
+                    hasMore: generated.data.page.hasMore,
+                    nextCursor: generated.data.page.nextCursor
+                )
+            ),
+            meta: metadata
+        )
     }
 
     func transactionDetail(
@@ -438,20 +491,91 @@ extension URLSessionMobileAPIClient: MobileTransactionAPIClient {
         guard Self.isValidPublicID(id, kind: "transaction") else {
             throw MobileClientError.invalidRequest
         }
-        let endpoint = APIEndpoint.transactionDetail(id: id)
-        let request = try makeProtectedRequest(endpoint: endpoint, credential: credential)
-        let response = try await send(request, endpoint: endpoint)
-        let envelope: MobileTransactionDetailEnvelope
+        let generated: TransactionDetailResponse
+        let responseRecorder = MobileCanonicalResponseRecorder()
         do {
-            envelope = try MobileTransactionPayloadDecoder().decodeDetail(from: response.data)
+            generated = try await canonicalClient(
+                credential,
+                responseRecorder: responseRecorder
+            ).getTransaction(id: id)
+        } catch let error as MobileClientError {
+            throw error
+        } catch {
+            throw canonicalTransactionError(
+                responseRecorder,
+                endpoint: .transactionDetail(id: id)
+            )
+        }
+        let transaction: MobileTransaction
+        do {
+            transaction = try JSONDecoder().decode(
+                MobileTransaction.self,
+                from: JSONEncoder().encode(generated.data)
+            )
+            guard let response = responseRecorder.response else {
+                throw MobileClientError.invalidPayload
+            }
+            try CanonicalTransactionPayloadValidator().validateDetail(
+                response.data,
+                transaction: transaction
+            )
         } catch {
             throw MobileClientError.invalidPayload
         }
-        try validateIdentity(envelope.meta, credential: credential)
-        guard envelope.data.transaction.id == id else {
+        guard transaction.id == id else { throw MobileClientError.invalidPayload }
+        let metadata = try canonicalTransactionMetadata(
+            generatedAt: generated.meta.generatedAt,
+            serverID: generated.meta.server.id,
+            protocolVersion: generated.meta.server.protocolVersion
+        )
+        try validateIdentity(metadata, credential: credential)
+        return MobileTransactionDetailEnvelope(
+            data: .init(transaction: transaction),
+            meta: metadata
+        )
+    }
+
+    private func canonicalTransactionMetadata(
+        generatedAt: Date,
+        serverID: String,
+        protocolVersion: Double
+    ) throws -> MobileTransactionMetadata {
+        guard
+            let id = UUID(uuidString: serverID),
+            protocolVersion == 1,
+            protocolVersion.rounded() == protocolVersion
+        else {
             throw MobileClientError.invalidPayload
         }
-        return envelope
+        return .init(
+            apiVersion: MobileTransactionMetadata.supportedAPIVersion,
+            generatedAt: generatedAt,
+            source: .live,
+            server: .init(
+                id: id,
+                protocolVersion: Int(protocolVersion)
+            )
+        )
+    }
+
+    private func canonicalTransactionError(
+        _ recorder: MobileCanonicalResponseRecorder,
+        endpoint: APIEndpoint
+    ) -> MobileClientError {
+        if let transportFailure = recorder.transportFailure {
+            return transportFailure
+        }
+        if let response = recorder.response,
+           !(200 ..< 300).contains(response.statusCode)
+        {
+            return MobileClientError.classifyHTTP(
+                statusCode: response.statusCode,
+                data: response.data,
+                endpoint: endpoint,
+                decoder: payloadDecoder
+            )
+        }
+        return .invalidPayload
     }
 
     private func makeProtectedRequest(
@@ -491,7 +615,7 @@ extension URLSessionMobileAPIClient: MobileTransactionAPIClient {
             && (canonicalQuery?.utf16.count ?? 0) <= 100
             && (query.cursor?.count ?? 0) <= 512
             && (query.cursor?.range(
-                of: #"^cursor_v1_[A-Za-z0-9_-]+$"#,
+                of: #"^cursor_v2_[A-Za-z0-9_-]+$"#,
                 options: .regularExpression
             ) != nil || query.cursor == nil)
             && query.direction != .unknown

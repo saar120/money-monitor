@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { isMobilePublicId } from '../../mobile/mobile-public-id.js';
 
 /**
  * The versioned wire contract is deliberately small at this stage.  Zod
@@ -64,7 +65,7 @@ export const canonicalMetaSchema = z
   })
   .strict();
 
-const financialDateSchema = z
+export const financialDateSchema = z
   .string()
   .regex(/^\d{4}-\d{2}-\d{2}$/, 'Dates must use YYYY-MM-DD')
   .refine((value) => {
@@ -393,6 +394,173 @@ export const categoryUpdateRequestSchema = categoryCreateRequestSchema
 
 export const categoryDeleteQuerySchema = referenceDeleteQuerySchema;
 export const categoryDeleteResponseSchema = referenceDeleteResponseSchema;
+
+const publicEntityIdSchema = (kind: 'transaction' | 'account' | 'category' | 'member') =>
+  z.string().refine((value) => isMobilePublicId(value, kind), `Expected a ${kind} public ID`);
+
+export const canonicalServerIdentitySchema = z
+  .object({
+    id: z.string().uuid(),
+    protocolVersion: z.literal(1),
+  })
+  .strict();
+
+const transactionDirectionSchema = z.enum(['debit', 'credit', 'unknown']);
+const transactionStatusSchema = z.enum(['posted', 'pending', 'unknown']);
+const transactionOwnerSchema = z
+  .object({
+    id: publicEntityIdSchema('member').nullable(),
+    kind: z.enum(['member', 'shared', 'unassigned', 'unknown']),
+    displayName: z.string().trim().min(1).max(80).nullable(),
+  })
+  .strict()
+  .superRefine((owner, context) => {
+    if (
+      (owner.kind === 'member') !== (owner.displayName !== null) ||
+      (owner.kind === 'member') !== (owner.id !== null)
+    ) {
+      context.addIssue({
+        code: 'custom',
+        path: ['id'],
+        message: 'Only a member owner has an ID and display name',
+      });
+    }
+  });
+
+export const transactionResourceSchema = z
+  .object({
+    id: publicEntityIdSchema('transaction'),
+    occurredOn: financialDateSchema,
+    processedOn: financialDateSchema.nullable(),
+    displayName: z.string().trim().min(1).max(160),
+    amount: moneySchema,
+    direction: transactionDirectionSchema,
+    status: transactionStatusSchema,
+    category: z
+      .object({
+        id: publicEntityIdSchema('category'),
+        name: categoryResourceSchema.shape.name,
+        label: categoryResourceSchema.shape.label,
+      })
+      .strict()
+      .nullable(),
+    account: z
+      .object({
+        id: publicEntityIdSchema('account'),
+        displayName: z.string().trim().min(1).max(80),
+        identifierMask: z.string().regex(/^(?:••••|\*{4}) [A-Za-z0-9]{2,4}$/),
+        type: z.enum(['bank', 'credit_card']),
+      })
+      .strict(),
+    owner: transactionOwnerSchema,
+    needsReview: z.boolean(),
+    reviewReason: z.string().trim().min(1).max(240).nullable(),
+    confidence: z.number().finite().min(0).max(1).nullable(),
+    excludedFromReports: z.boolean(),
+  })
+  .strict();
+
+const queryBooleanSchema = z.union([
+  z.boolean(),
+  z.enum(['true', 'false']).transform((value) => value === 'true'),
+]);
+const queryNumberSchema = z.union([
+  z.number(),
+  z
+    .string()
+    .regex(/^-?\d+(?:\.\d+)?$/)
+    .transform(Number),
+]);
+const queryIntegerSchema = z.union([z.number(), z.string().regex(/^\d+$/).transform(Number)]);
+
+export const transactionListQuerySchema = z
+  .object({
+    q: z
+      .string()
+      .transform((value) => value.normalize('NFKC').trim().replace(/\s+/gu, ' '))
+      .pipe(z.string().min(1).max(100))
+      .optional(),
+    cursor: z.string().min(1).max(512).optional(),
+    limit: queryIntegerSchema.pipe(z.number().int().min(1).max(50)).default(30),
+    startDate: financialDateSchema.optional(),
+    endDate: financialDateSchema.optional(),
+    direction: transactionDirectionSchema.optional(),
+    status: transactionStatusSchema.optional(),
+    needsReview: queryBooleanSchema.optional(),
+    includeExcluded: queryBooleanSchema.default(false),
+    accountId: publicEntityIdSchema('account').optional(),
+    accountType: z.enum(['bank', 'credit_card']).optional(),
+    category: categoryResourceSchema.shape.name.optional(),
+    ownerType: z.enum(['member', 'shared', 'unassigned']).optional(),
+    ownerMemberId: publicEntityIdSchema('member').optional(),
+    minAmount: queryNumberSchema.pipe(z.number().finite().nonnegative()).optional(),
+    maxAmount: queryNumberSchema.pipe(z.number().finite().nonnegative()).optional(),
+    sortBy: z.enum(['date', 'processedDate', 'amount', 'description']).default('date'),
+    sortOrder: z.enum(['asc', 'desc']).default('desc'),
+  })
+  .strict()
+  .superRefine((query, context) => {
+    if (query.startDate && query.endDate && query.startDate > query.endDate) {
+      context.addIssue({ code: 'custom', path: ['endDate'], message: 'Invalid date range' });
+    }
+    if (
+      query.minAmount !== undefined &&
+      query.maxAmount !== undefined &&
+      query.minAmount > query.maxAmount
+    ) {
+      context.addIssue({ code: 'custom', path: ['maxAmount'], message: 'Invalid amount range' });
+    }
+    if ((query.ownerType === 'member') !== (query.ownerMemberId !== undefined)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['ownerMemberId'],
+        message: 'Member owner requires an ID',
+      });
+    }
+  });
+
+const transactionPageSchema = z
+  .object({
+    hasMore: z.boolean(),
+    nextCursor: z.string().min(1).max(512).nullable(),
+    total: z.number().int().nonnegative(),
+  })
+  .strict()
+  .superRefine((page, context) => {
+    if (page.hasMore !== (page.nextCursor !== null)) {
+      context.addIssue({
+        code: 'custom',
+        path: ['nextCursor'],
+        message: 'Cursor does not match page state',
+      });
+    }
+  });
+
+export const transactionListResponseSchema = z
+  .object({
+    data: z
+      .object({
+        financialDate: financialDateSchema,
+        transactions: z.array(transactionResourceSchema).max(50),
+        page: transactionPageSchema,
+      })
+      .strict(),
+    meta: canonicalMetaSchema
+      .extend({ completeness: completenessSchema, server: canonicalServerIdentitySchema })
+      .strict(),
+  })
+  .strict();
+
+export const transactionDetailResponseSchema = z
+  .object({
+    data: transactionResourceSchema,
+    meta: canonicalMetaSchema.extend({ server: canonicalServerIdentitySchema }).strict(),
+  })
+  .strict();
+
+export type TransactionListQuery = z.infer<typeof transactionListQuerySchema>;
+export type TransactionResource = z.infer<typeof transactionResourceSchema>;
+export type TransactionListResponse = z.infer<typeof transactionListResponseSchema>;
 
 export const diagnosticsResponseSchema = z
   .object({

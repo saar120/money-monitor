@@ -10,6 +10,8 @@ import {
   referenceCommandResponseSchema,
   referenceDeleteResponseSchema,
   referenceResponseSchema,
+  transactionDetailResponseSchema,
+  transactionListResponseSchema,
 } from './contract.js';
 import { ApiPaths, type components, type operations } from './generated-client.js';
 
@@ -36,6 +38,11 @@ export type HomeOverviewData = HomeOverviewResponse['data'];
 export type CategoryResource = components['schemas']['CategoryResource'];
 export type CategoryCreateRequest = components['schemas']['CategoryCreateRequest'];
 export type CategoryUpdateRequest = components['schemas']['CategoryUpdateRequest'];
+export type TransactionResource = components['schemas']['TransactionResource'];
+export type TransactionListResponse = components['schemas']['TransactionListResponse'];
+export type TransactionListQuery = NonNullable<
+  operations['listTransactions']['parameters']['query']
+>;
 
 type JsonContent<Value> = Value extends { content: { 'application/json': infer Content } }
   ? Content
@@ -136,6 +143,29 @@ export class CanonicalApiClient {
       ApiPaths.listCategories,
       undefined,
       categoryListResponseSchema,
+    ).then((response) => response.data);
+  }
+
+  public listTransactions(query: TransactionListQuery = {}) {
+    const parameters = new URLSearchParams();
+    for (const [name, value] of Object.entries(query)) {
+      if (value !== undefined) parameters.set(name, String(value));
+    }
+    const suffix = parameters.size ? `?${parameters}` : '';
+    return this.request<TransactionListResponse>(
+      'GET',
+      `${ApiPaths.listTransactions}${suffix}`,
+      undefined,
+      transactionListResponseSchema,
+    );
+  }
+
+  public getTransaction(id: string): Promise<TransactionResource> {
+    return this.request<components['schemas']['TransactionDetailResponse']>(
+      'GET',
+      ApiPaths.getTransaction.replace('{id}', encodeURIComponent(id)),
+      undefined,
+      transactionDetailResponseSchema,
     ).then((response) => response.data);
   }
 
