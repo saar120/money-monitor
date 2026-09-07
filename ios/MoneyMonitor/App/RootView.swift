@@ -29,7 +29,9 @@ struct RootView: View {
             }
         }
         .task {
-            await environment.restoreSavedConnection()
+            if environment.shouldRestoreSavedConnectionOnLaunch {
+                await environment.restoreSavedConnection()
+            }
         }
         .onChange(of: scenePhase) { _, newPhase in
             environment.scenePhaseChanged(isActive: newPhase == .active)
@@ -182,6 +184,7 @@ private struct MainTabView: View {
                     TransactionSearchView(query: $searchText)
                 }
                 .searchable(text: $searchText, prompt: "Search transactions")
+                .globalTrustStatusInset()
             }
         }
     }

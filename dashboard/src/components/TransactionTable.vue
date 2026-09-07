@@ -51,12 +51,6 @@ const allAccounts = ref<Account[]>([]);
 const members = ref<Member[]>([]);
 const accountTypeFilter = ref<string>('all');
 
-const accountMap = computed(() => {
-  const map = new Map<number, string>();
-  for (const acc of allAccounts.value) map.set(acc.id, acc.displayName);
-  return map;
-});
-
 const filteredAccounts = computed(() => {
   if (accountTypeFilter.value === 'all') return allAccounts.value;
   return allAccounts.value.filter((a) => a.accountType === accountTypeFilter.value);
@@ -77,9 +71,9 @@ const selectedOwner = ref('all');
 
 const availableCategories = ref<Category[]>([]);
 const categoryMap = computed(() => buildCategoryMap(availableCategories.value));
-const updatingCategoryFor = ref<number | null>(null);
-const editingCategoryFor = ref<number | null>(null);
-const updatingOwnerFor = ref<number | null>(null);
+const updatingCategoryFor = ref<string | null>(null);
+const editingCategoryFor = ref<string | null>(null);
+const updatingOwnerFor = ref<string | null>(null);
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
@@ -90,7 +84,7 @@ async function fetchTransactions() {
     const params: TransactionFilters = {
       ...filters.value,
       search: search.value || undefined,
-      accountId: selectedAccount.value !== 'all' ? Number(selectedAccount.value) : undefined,
+      accountId: selectedAccount.value !== 'all' ? selectedAccount.value : undefined,
       accountType:
         accountTypeFilter.value !== 'all'
           ? (accountTypeFilter.value as 'bank' | 'credit_card')
@@ -104,7 +98,7 @@ async function fetchTransactions() {
           ? (selectedOwner.value as OwnerType)
           : undefined,
       ownerMemberId: selectedOwner.value.startsWith('member:')
-        ? Number(selectedOwner.value.slice('member:'.length))
+        ? selectedOwner.value.slice('member:'.length)
         : undefined,
     };
     const result = await getTransactions(params);
@@ -117,7 +111,7 @@ async function fetchTransactions() {
   }
 }
 
-function sort(column: string) {
+function sort(column: NonNullable<TransactionFilters['sortBy']>) {
   if (filters.value.sortBy === column) {
     filters.value.sortOrder = filters.value.sortOrder === 'asc' ? 'desc' : 'asc';
   } else {
@@ -162,9 +156,9 @@ function closeContextMenu() {
 async function updateCategory(txn: Transaction, newCategory: string | null) {
   updatingCategoryFor.value = txn.id;
   try {
-    const result = await updateTransactionCategory(txn.id, newCategory);
+    await updateTransactionCategory(txn.id, newCategory);
     const idx = transactions.value.findIndex((t) => t.id === txn.id);
-    if (idx !== -1) transactions.value[idx] = result.transaction;
+    if (idx !== -1) transactions.value[idx] = { ...txn, category: newCategory };
   } catch (err) {
     console.error('Failed to update category:', err);
   } finally {
@@ -175,12 +169,12 @@ async function updateCategory(txn: Transaction, newCategory: string | null) {
 function ownerLabel(txn: Transaction): string {
   if (txn.expenseOwnerType === 'shared') return 'Together';
   if (txn.expenseOwnerType === 'unassigned') return 'Unassigned';
-  return members.value.find((m) => m.id === txn.expenseOwnerMemberId)?.name ?? 'Unknown member';
+  return txn.ownerDisplayName ?? 'Unknown member';
 }
 
 function ownerSelectValue(txn: Transaction): string {
-  if (txn.expenseOwnerType === 'member' && txn.expenseOwnerMemberId != null) {
-    return `member:${txn.expenseOwnerMemberId}`;
+  if (txn.expenseOwnerType === 'member' && txn.ownerMemberPublicId) {
+    return `member:${txn.ownerMemberPublicId}`;
   }
   return txn.expenseOwnerType;
 }
@@ -189,12 +183,23 @@ async function updateOwner(txn: Transaction, value: string) {
   updatingOwnerFor.value = txn.id;
   try {
     const ownerType: OwnerType = value.startsWith('member:') ? 'member' : (value as OwnerType);
-    const ownerMemberId = value.startsWith('member:')
-      ? Number(value.slice('member:'.length))
+    const ownerMemberPublicId = value.startsWith('member:') ? value.slice('member:'.length) : null;
+    const ownerMember = ownerMemberPublicId
+      ? members.value.find((member) => member.publicId === ownerMemberPublicId)
       : null;
-    const result = await updateTransactionOwner(txn.id, { ownerType, ownerMemberId });
+    const ownerMemberId = ownerMember?.id ?? null;
+    if (ownerType === 'member' && !ownerMember) throw new Error('Member not found');
+    await updateTransactionOwner(txn.id, { ownerType, ownerMemberId });
     const idx = transactions.value.findIndex((t) => t.id === txn.id);
-    if (idx !== -1) transactions.value[idx] = result.transaction;
+    if (idx !== -1) {
+      transactions.value[idx] = {
+        ...txn,
+        expenseOwnerType: ownerType,
+        expenseOwnerMemberId: ownerMemberId,
+        ownerMemberPublicId,
+        ownerDisplayName: ownerMember?.name ?? null,
+      };
+    }
   } catch (err) {
     console.error('Failed to update owner:', err);
   } finally {
@@ -207,10 +212,10 @@ async function toggleIgnore() {
   const { txn } = contextMenu.value;
   closeContextMenu();
   try {
-    const result = await ignoreTransaction(txn.id, !txn.ignored);
+    await ignoreTransaction(txn.id, !txn.ignored);
     // Update in-place so the row reacts immediately without a full refetch
     const idx = transactions.value.findIndex((t) => t.id === txn.id);
-    if (idx !== -1) transactions.value[idx] = result.transaction;
+    if (idx !== -1) transactions.value[idx] = { ...txn, ignored: !txn.ignored };
   } catch (err) {
     console.error('Failed to update transaction:', err);
   }
@@ -277,7 +282,7 @@ onUnmounted(() => {
           </SelectTrigger>
           <SelectContent>
             <SelectItem value="all">All Accounts</SelectItem>
-            <SelectItem v-for="acc in filteredAccounts" :key="acc.id" :value="String(acc.id)">
+            <SelectItem v-for="acc in filteredAccounts" :key="acc.id" :value="acc.publicId">
               {{ acc.displayName }}
             </SelectItem>
           </SelectContent>
@@ -302,7 +307,11 @@ onUnmounted(() => {
           <SelectContent>
             <SelectItem value="all">All owners</SelectItem>
             <SelectItem value="shared">Together</SelectItem>
-            <SelectItem v-for="member in members" :key="member.id" :value="`member:${member.id}`">
+            <SelectItem
+              v-for="member in members"
+              :key="member.publicId"
+              :value="`member:${member.publicId}`"
+            >
               {{ member.name }}
             </SelectItem>
             <SelectItem value="unassigned">Unassigned</SelectItem>
@@ -505,7 +514,7 @@ onUnmounted(() => {
                       <SelectItem
                         v-for="member in members"
                         :key="member.id"
-                        :value="`member:${member.id}`"
+                        :value="`member:${member.publicId}`"
                       >
                         {{ member.name }}
                       </SelectItem>
@@ -525,7 +534,7 @@ onUnmounted(() => {
                   </Badge>
                 </TableCell>
                 <TableCell class="text-[13px] text-text-secondary">{{
-                  accountMap.get(txn.accountId) ?? txn.accountId
+                  txn.accountDisplayName
                 }}</TableCell>
               </TableRow>
             </TableBody>

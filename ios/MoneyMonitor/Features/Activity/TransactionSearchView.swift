@@ -91,7 +91,7 @@ struct TransactionSearchView: View {
         guard environment.snapshotState.isSavedView, !environment.trustState.isLive else {
             return nil
         }
-        return "Saved View · showing up to 200 recent transactions. History may be incomplete."
+        return "Saved results · showing up to 200 recent transactions. Older history requires Live."
     }
 
     private func loadNextPage() async {

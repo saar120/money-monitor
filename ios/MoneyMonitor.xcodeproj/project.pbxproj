@@ -19,6 +19,7 @@
 		33D069B46618622CE650C256 /* PlanView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 94F7F996B9B0D3043E9A11BD /* PlanView.swift */; };
 		A4C0321E4E1D4DF998C3F5A2 /* MobileReviewCommand.swift in Sources */ = {isa = PBXBuildFile; fileRef = A4C0321D4E1D4DF998C3F5A2 /* MobileReviewCommand.swift */; };
 		3989980C05FACC69DC14DFCF /* KeychainPairedProfileStoreTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */; };
+		568522616D49785CCE204571 /* UITestActivityScenario.swift in Sources */ = {isa = PBXBuildFile; fileRef = B691E4BF2A5CD20E60DD16AD /* UITestActivityScenario.swift */; };
 		5731F351E26D9C300AAC3211 /* ConnectMacView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 17B14234E69D03441C0E0E38 /* ConnectMacView.swift */; };
 		5A69573C603680807107967D /* BootstrapRefreshState.swift in Sources */ = {isa = PBXBuildFile; fileRef = E4B41200C4ECCF717C2F83FF /* BootstrapRefreshState.swift */; };
 		5ABA35F8510FE4979480B507 /* AppTab.swift in Sources */ = {isa = PBXBuildFile; fileRef = ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */; };
@@ -117,6 +118,7 @@
 		A839D76D2788A1EE7EB038F6 /* TransactionSearchView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = TransactionSearchView.swift; sourceTree = "<group>"; };
 		ACC9CC2BAB6C1BFC639A7FCC /* AppTab.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppTab.swift; sourceTree = "<group>"; };
 		B323DAD803194452F179885B /* MoneyMonitorUITests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = MoneyMonitorUITests.swift; sourceTree = "<group>"; };
+		B691E4BF2A5CD20E60DD16AD /* UITestActivityScenario.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = UITestActivityScenario.swift; sourceTree = "<group>"; };
 		B9CB96AD59DF4C9B7678C39F /* CanonicalAPIExports.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CanonicalAPIExports.swift; sourceTree = "<group>"; };
 		BEA45BA9CCB5A0E57D8BB2C1 /* PairedMacCredential.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PairedMacCredential.swift; sourceTree = "<group>"; };
 		BEABBCF204BEDB4922ACA24D /* KeychainPairedProfileStoreTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = KeychainPairedProfileStoreTests.swift; sourceTree = "<group>"; };
@@ -290,6 +292,7 @@
 				72CF36E41799C020DF46F035 /* MoneyMonitorApp.swift */,
 				11FF430F6C71FBBABFA6555C /* RootView.swift */,
 				F525F78D7315F9746F074E03 /* ScenePrivacyProtection.swift */,
+				B691E4BF2A5CD20E60DD16AD /* UITestActivityScenario.swift */,
 			);
 			path = App;
 			sourceTree = "<group>";
@@ -581,6 +584,7 @@
 				B8F0FB039710052AC70AF833 /* ScenePrivacyProtection.swift in Sources */,
 				0AC074756EE1AD6AB75C5732 /* SecureItemClient.swift in Sources */,
 				CFA05DEE75526E4E19FCA543 /* TransactionSearchView.swift in Sources */,
+				568522616D49785CCE204571 /* UITestActivityScenario.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};

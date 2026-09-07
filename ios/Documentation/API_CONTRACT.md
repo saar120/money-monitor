@@ -21,20 +21,20 @@ The Swift client decodes this response through the Money Monitor-owned Tailscale
 
 ## Existing desktop API inventory
 
-| Mobile area | Existing endpoint(s)                                | Important caveat                                                                                                                                  |
-| ----------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
-| Accounts    | `GET /api/accounts`                                 | Credentials reference is removed, but the response remains database-shaped and includes account configuration fields and unmasked account number. |
-| Activity    | `GET /api/transactions`                             | Rich filtering and pagination exist; rows contain internal fields that should not become Swift DTOs.                                              |
-| Review      | `GET /api/transactions/needs-review/count`          | Count only; review mutations use full desktop authorization.                                                                                      |
-| Home overview | `GET /api/v1/home`                              | Mac-calculated spending, budget, net worth, category and cash-flow projection with drill-down periods.                                             |
-| Budgets     | `GET /api/budgets`, `GET /api/budgets/progress`     | List and progress shapes use different envelopes.                                                                                                 |
-| Net worth   | `GET /api/net-worth`, `GET /api/net-worth/history`  | Useful service seam; needs normalized money and date types.                                                                                       |
-| Assets      | `GET /api/assets`, `GET /api/assets/:id`, snapshots | Lists are bare arrays rather than a common envelope.                                                                                              |
-| Liabilities | `GET /api/liabilities`                              | Bare array with calculated fields.                                                                                                                |
-| Categories  | `GET /api/categories`                               | Read shape is simple; edits are not in initial mobile scope.                                                                                      |
-| Alerts      | `GET /api/alerts/settings`                          | Settings exist, but there is no alert feed/history endpoint.                                                                                      |
-| Advisor     | session routes and `POST /api/ai/chat` SSE          | Current Advisor tools can mutate data; a read-only allowlist or confirmation policy is required.                                                  |
-| Sync        | scrape routes and logs                              | These are operational desktop commands, not a mobile-safe sync contract.                                                                          |
+| Mobile area   | Existing endpoint(s)                                | Important caveat                                                                                                                                  |
+| ------------- | --------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------------------------------------- |
+| Accounts      | `GET /api/accounts`                                 | Credentials reference is removed, but the response remains database-shaped and includes account configuration fields and unmasked account number. |
+| Activity      | `GET /api/v1/transactions`                          | Shared Mac/iPhone allow-listed contract with normalized search, filters, sorting, and opaque cursor pagination.                                   |
+| Review        | `GET /api/transactions/needs-review/count`          | Count only; review mutations use full desktop authorization.                                                                                      |
+| Home overview | `GET /api/v1/home`                                  | Mac-calculated spending, budget, net worth, category and cash-flow projection with drill-down periods.                                            |
+| Budgets       | `GET /api/budgets`, `GET /api/budgets/progress`     | List and progress shapes use different envelopes.                                                                                                 |
+| Net worth     | `GET /api/net-worth`, `GET /api/net-worth/history`  | Useful service seam; needs normalized money and date types.                                                                                       |
+| Assets        | `GET /api/assets`, `GET /api/assets/:id`, snapshots | Lists are bare arrays rather than a common envelope.                                                                                              |
+| Liabilities   | `GET /api/liabilities`                              | Bare array with calculated fields.                                                                                                                |
+| Categories    | `GET /api/categories`                               | Read shape is simple; edits are not in initial mobile scope.                                                                                      |
+| Alerts        | `GET /api/alerts/settings`                          | Settings exist, but there is no alert feed/history endpoint.                                                                                      |
+| Advisor       | session routes and `POST /api/ai/chat` SSE          | Current Advisor tools can mutate data; a read-only allowlist or confirmation policy is required.                                                  |
+| Sync          | scrape routes and logs                              | These are operational desktop commands, not a mobile-safe sync contract.                                                                          |
 
 All protected desktop routes currently share one bearer token. That token can authorize account deletion, settings changes, scraping, and other administrative operations, so it must never be provisioned to the iPhone.
 

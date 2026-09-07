@@ -21,6 +21,9 @@ import {
   referenceReadQuerySchema,
   referenceResponseSchema,
   referenceUpdateRequestSchema,
+  transactionDetailResponseSchema,
+  transactionListQuerySchema,
+  transactionListResponseSchema,
   type ReferenceResource,
 } from './contract.js';
 import { createHomeOverviewProjection } from './home-overview.js';
@@ -41,6 +44,9 @@ import {
 } from './store.js';
 import { CanonicalCategoryStore } from './category-store.js';
 import { getExchangeRates, type ExchangeRateResult } from '../../services/exchange-rates.js';
+import { financialDateInIsrael } from '../../mobile/bootstrap-production-ports.js';
+import { isMobilePublicId } from '../../mobile/mobile-public-id.js';
+import { CanonicalTransactionStore, InvalidTransactionCursorError } from './transaction-store.js';
 
 export const CANONICAL_SERVER_HOST = '127.0.0.1' as const;
 export type CanonicalListener = 'mac-local' | 'paired-iphone';
@@ -60,6 +66,10 @@ export interface CanonicalServerOptions {
   onCategoryOwnerChanged?: (categoryName: string) => void;
   /** Fail closed while the authoritative source is temporarily unavailable. */
   isAvailable?: () => boolean;
+  /** Stable key used to project opaque transaction/account/category identifiers. */
+  transactionPublicIdKey?: string;
+  /** Stable identity included in every transaction response and checked by paired clients. */
+  serverIdentity: { id: string; protocolVersion: 1 };
 }
 
 export interface CanonicalServerStartOptions {
@@ -134,6 +144,9 @@ export function registerCanonicalRoutes(
 ): void {
   const homeOverview = createHomeOverviewProjection(options.sqlite);
   const categories = new CanonicalCategoryStore(options.sqlite, options.onCategoryOwnerChanged);
+  const transactions = options.transactionPublicIdKey
+    ? new CanonicalTransactionStore(options.sqlite, options.transactionPublicIdKey)
+    : null;
   app.addHook('onSend', async (request, reply, payload) => {
     if (request.url.startsWith('/api/v1')) reply.header('Cache-Control', 'no-store');
     return payload;
@@ -167,6 +180,53 @@ export function registerCanonicalRoutes(
       }
       request.canonicalIdentity = identity;
     };
+
+  app.get(
+    '/api/v1/transactions',
+    { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/transactions')) },
+    async (request) => {
+      if (!transactions) throw new CanonicalApiError('internal_server_error');
+      const query = parseOrThrow(transactionListQuerySchema, request.query);
+      let data;
+      try {
+        data = transactions.list(query, financialDateInIsrael(clock()));
+      } catch (error) {
+        if (error instanceof InvalidTransactionCursorError) {
+          throw new CanonicalApiError('validation_error');
+        }
+        throw error;
+      }
+      const candidate = {
+        data,
+        meta: {
+          ...createCanonicalMeta(clock(), { completeness: 'complete' }),
+          server: options.serverIdentity,
+        },
+      };
+      const parsed = transactionListResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
+
+  app.get(
+    '/api/v1/transactions/:id',
+    { onRequest: authorize(canonicalRoutePolicy('GET', '/api/v1/transactions/:id')) },
+    async (request) => {
+      if (!transactions) throw new CanonicalApiError('internal_server_error');
+      const id = (request.params as { id: string }).id;
+      if (!isMobilePublicId(id, 'transaction')) throw new CanonicalApiError('validation_error');
+      const transaction = transactions.detail(id, financialDateInIsrael(clock()));
+      if (!transaction) throw new CanonicalApiError('resource_not_found');
+      const candidate = {
+        data: transaction,
+        meta: { ...createCanonicalMeta(clock()), server: options.serverIdentity },
+      };
+      const parsed = transactionDetailResponseSchema.safeParse(candidate);
+      if (!parsed.success) throw new CanonicalApiError('internal_server_error');
+      return parsed.data;
+    },
+  );
 
   app.get(
     '/api/v1/categories',

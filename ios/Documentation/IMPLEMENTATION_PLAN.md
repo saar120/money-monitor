@@ -55,11 +55,11 @@ Screens: Home, Activity, Search, Transaction detail, Filters.
 - Accepted live bootstrap-driven Home with summary, cash flow, budget pulse, review count, calculation time, and recent activity.
 - Memory-only financial DTOs; no snapshot, URL cache, `UserDefaults`, search-recents, query, filter, cursor, or detail persistence.
 - Opaque app-switcher cover before any real amount renders.
-- Phase 2B adds authenticated `GET /api/mobile/v1/transactions` and `GET /api/mobile/v1/transactions/:id`, where the detail ID is opaque and every response is an allow-listed mobile DTO.
+- Activity and Search use the shared authenticated `GET /api/v1/transactions` and `GET /api/v1/transactions/:id` contract on both Mac and iPhone listeners; detail IDs and cursors are opaque.
 - Bounded opaque keyset-cursor pages (30 by default, 50 maximum), chronological Activity, deduplication, and inline append retry without desktop offsets.
 - Exactly 300 ms Search debounce with cancellation and no production query diagnostics.
 - Supported Phase 2B filters are direction, status, date range, opaque account ID, review state, and excluded state.
-- Full Phase 2 adds explicit Transfer exclusion plus category/owner/transfer filters; search recents and alternate sorts are out of scope.
+- The canonical contract includes category, owner, account, amount, direction, status, date, review, excluded-state filters, and deterministic sort modes; search recents remain out of scope.
 - Pull to refresh with validated in-memory replacement is accepted; cached/offline replacement follows Phase 1.
 - Locale-aware ILS values and mixed Hebrew/English merchant content.
 - Loading, empty, partial, retry, offline, and decode-failure states.
@@ -73,6 +73,8 @@ Accepted on 2026-07-16 after the signed Mac/iPhone path passed live-data, refres
 **Automated gate passed 2026-07-16:** the authenticated GET-only backend exposes exact allowlisted list/detail contracts with HMAC IDs, encrypted filter/snapshot-bound keyset cursors, redaction, and no adjacent routes. The full backend passed 49 files/555 tests plus main/Electron typechecks, lint, and Prettier. Native iOS now provides memory-only Activity, Search, supported filters, and read-only detail with exact 300 ms debounce; NFKC and shared ECMAScript whitespace/UTF-16 vectors; pagination/dedupe/retry; strict nested/nullables/enums/UTC decoding; detail ID/server identity binding; Keychain credential use; epoch-guarded revocation/re-pair races; sheet privacy cover; calendar-only dates; and no persistence, mutation, or edit controls. The iPhone 17 Pro iOS 26.5 simulator passed 140 tests/165 parameterized executions with zero failures, the generic simulator production build passed, independent security and UI reviews found no issues, and the source scan found no financial/query/filter/cursor/detail persistence or logging path. Shared canonical fixtures are `transaction-list-live.json`, `transaction-detail-live.json`, and `transaction-search-normalization.json`.
 
 **Physical gate passed 2026-07-16:** the owner completed the combined Activity, filters/Search, detail/back, interruption/retry/retention, privacy-cover, and force-quit/refetch journey. Phase 2B is accepted.
+
+**SAA-22 Saved Activity gate passed 2026-09-06:** Mac and iPhone now share the generated `/api/v1/transactions` list/detail contract and stable server identity. The latest accepted complete snapshot atomically retains at most 200 transactions for explicitly labeled Saved browse, filters, and Search; older history requires Live. Cursor/filter snapshot mutation, generated Swift URLSession, Saved repository/state, and a seeded simulator browse → append failure/retry → Search/empty → Saved relaunch journey pass without browser testing.
 
 ## [Phase 3 — Planning, wealth, and connected data](../Specification/PHASE_3_PLANNING_AND_ACCOUNTS.md)
 

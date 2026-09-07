@@ -14,7 +14,12 @@ enum CanonicalAPILiveRunner {
         do {
             let client = CanonicalAPIClient(baseURL: baseURL, token: CommandLine.arguments[2])
             let reference = try await client.getReference()
-            print("\(reference.data.id)|\(reference.data.amount.value)|\(reference.data.amount.currencyCode)")
+            let transactions = try await client.listTransactions()
+            let firstName = transactions.data.transactions.first?.displayName ?? "none"
+            print(
+                "\(reference.data.id)|\(reference.data.amount.value)|\(reference.data.amount.currencyCode)"
+                    + "|\(transactions.data.transactions.count)|\(firstName)|\(transactions.data.page.hasMore)"
+            )
         } catch {
             FileHandle.standardError.write(Data("\(error)\n".utf8))
             Foundation.exit(1)

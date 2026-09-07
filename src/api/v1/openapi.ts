@@ -23,6 +23,9 @@ import {
   referenceResponseSchema,
   referenceResourceSchema,
   referenceUpdateRequestSchema,
+  transactionDetailResponseSchema,
+  transactionListResponseSchema,
+  transactionResourceSchema,
 } from './contract.js';
 import { CANONICAL_ROUTE_DEFINITIONS } from './policy.js';
 
@@ -104,6 +107,81 @@ function secured(method: 'GET' | 'POST' | 'PATCH' | 'DELETE', path: string) {
 /** Generated from the runtime schemas rather than maintained as a second DTO. */
 export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
   const paths: CanonicalOpenApiDocument['paths'] = {
+    '/api/v1/transactions': {
+      get: {
+        ...secured('GET', '/api/v1/transactions'),
+        summary: 'Browse and search canonical transactions',
+        parameters: [
+          { name: 'q', in: 'query', schema: { type: 'string', maxLength: 100 } },
+          { name: 'cursor', in: 'query', schema: { type: 'string', maxLength: 512 } },
+          {
+            name: 'limit',
+            in: 'query',
+            schema: { type: 'integer', minimum: 1, maximum: 50, default: 30 },
+          },
+          { name: 'startDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          { name: 'endDate', in: 'query', schema: { type: 'string', format: 'date' } },
+          {
+            name: 'direction',
+            in: 'query',
+            schema: { type: 'string', enum: ['debit', 'credit', 'unknown'] },
+          },
+          {
+            name: 'status',
+            in: 'query',
+            schema: { type: 'string', enum: ['posted', 'pending', 'unknown'] },
+          },
+          { name: 'needsReview', in: 'query', schema: { type: 'boolean' } },
+          { name: 'includeExcluded', in: 'query', schema: { type: 'boolean', default: false } },
+          {
+            name: 'accountId',
+            in: 'query',
+            schema: { type: 'string', pattern: '^account_[A-Za-z0-9_-]{22}$' },
+          },
+          {
+            name: 'accountType',
+            in: 'query',
+            schema: { type: 'string', enum: ['bank', 'credit_card'] },
+          },
+          { name: 'category', in: 'query', schema: { type: 'string' } },
+          {
+            name: 'ownerType',
+            in: 'query',
+            schema: { type: 'string', enum: ['member', 'shared', 'unassigned'] },
+          },
+          {
+            name: 'ownerMemberId',
+            in: 'query',
+            schema: { type: 'string', pattern: '^member_[A-Za-z0-9_-]{22}$' },
+          },
+          { name: 'minAmount', in: 'query', schema: { type: 'number', minimum: 0 } },
+          { name: 'maxAmount', in: 'query', schema: { type: 'number', minimum: 0 } },
+          {
+            name: 'sortBy',
+            in: 'query',
+            schema: {
+              type: 'string',
+              enum: ['date', 'processedDate', 'amount', 'description'],
+              default: 'date',
+            },
+          },
+          {
+            name: 'sortOrder',
+            in: 'query',
+            schema: { type: 'string', enum: ['asc', 'desc'], default: 'desc' },
+          },
+        ],
+        responses: { '200': response('TransactionListResponse'), '4XX': errorResponse() },
+      },
+    },
+    '/api/v1/transactions/{id}': {
+      get: {
+        ...secured('GET', '/api/v1/transactions/:id'),
+        summary: 'Read one canonical transaction',
+        parameters: [{ name: 'id', in: 'path', required: true, schema: { type: 'string' } }],
+        responses: { '200': response('TransactionDetailResponse'), '4XX': errorResponse() },
+      },
+    },
     '/api/v1/categories': {
       get: {
         ...secured('GET', '/api/v1/categories'),
@@ -283,6 +361,9 @@ export function createCanonicalOpenApiDocument(): CanonicalOpenApiDocument {
         CategoryUpdateRequest: jsonSchema(categoryUpdateRequestSchema),
         CategoryDeleteQuery: jsonSchema(categoryDeleteQuerySchema),
         CategoryDeleteResponse: jsonSchema(categoryDeleteResponseSchema),
+        TransactionResource: jsonSchema(transactionResourceSchema),
+        TransactionListResponse: jsonSchema(transactionListResponseSchema),
+        TransactionDetailResponse: jsonSchema(transactionDetailResponseSchema),
         ReferenceResource: jsonSchema(referenceResourceSchema),
         ReferenceResponse: jsonSchema(referenceResponseSchema),
         ReferenceReadQuery: jsonSchema(referenceReadQuerySchema),

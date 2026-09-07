@@ -29,6 +29,7 @@ vi.mock('../config.js', () => ({
     MOBILE_ACCESS_ENABLED: false,
     MOBILE_ACCESS_HTTPS_PORT: 8443,
     MOBILE_SERVER_ID: '00000000-0000-4000-8000-000000000001',
+    MOBILE_PUBLIC_ID_KEY: 'test-public-id-key-0123456789abcdef',
   },
   isElectronMode: false,
   loadConfigFile: () => null,

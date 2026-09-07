@@ -1,5 +1,5 @@
 import { readFileSync, writeFileSync } from 'node:fs';
-import { randomBytes, randomUUID } from 'node:crypto';
+import { createHash, randomBytes, randomUUID } from 'node:crypto';
 import { z } from 'zod';
 import { configPath } from './paths.js';
 import {
@@ -90,7 +90,7 @@ export function saveConfigFile(settings: Record<string, string>): void {
     if (!isKnownConfigEnvironmentKey(key)) continue;
     process.env[key] = String(value);
   }
-  config = envSchema.parse(process.env);
+  config = parseEnvironment(process.env);
 }
 
 // ── Zod schema ──────────────────────────────────────────────────────────────
@@ -170,8 +170,38 @@ export function applyConfigFileToEnvironment(
   }
 }
 
-export type Config = z.infer<typeof envSchema>;
+type ParsedConfig = z.infer<typeof envSchema>;
+export type Config = Omit<ParsedConfig, 'MOBILE_PUBLIC_ID_KEY' | 'MOBILE_SERVER_ID'> & {
+  MOBILE_PUBLIC_ID_KEY: string;
+  MOBILE_SERVER_ID: string;
+};
 export let config: Config;
+
+function derivedServerId(masterKey: string): string {
+  const bytes = createHash('sha256')
+    .update('money-monitor/mobile-server-id/v1\0')
+    .update(masterKey)
+    .digest()
+    .subarray(0, 16);
+  bytes[6] = (bytes[6]! & 0x0f) | 0x40;
+  bytes[8] = (bytes[8]! & 0x3f) | 0x80;
+  const hex = bytes.toString('hex');
+  return `${hex.slice(0, 8)}-${hex.slice(8, 12)}-${hex.slice(12, 16)}-${hex.slice(16, 20)}-${hex.slice(20)}`;
+}
+
+function parseEnvironment(environment: NodeJS.ProcessEnv): Config {
+  const parsed = envSchema.parse(environment);
+  return {
+    ...parsed,
+    MOBILE_SERVER_ID: parsed.MOBILE_SERVER_ID ?? derivedServerId(parsed.CREDENTIALS_MASTER_KEY),
+    MOBILE_PUBLIC_ID_KEY:
+      parsed.MOBILE_PUBLIC_ID_KEY ??
+      createHash('sha256')
+        .update('money-monitor/mobile-public-ids/v1\0')
+        .update(parsed.CREDENTIALS_MASTER_KEY)
+        .digest('base64url'),
+  };
+}
 
 // ── Load config source ──────────────────────────────────────────────────────
 
@@ -221,7 +251,7 @@ if (!isElectronMode) {
   }
 }
 
-config = envSchema.parse(process.env);
+config = parseEnvironment(process.env);
 
 /**
  * Parse a model spec string like "anthropic:claude-sonnet-4-6" or "openai:gpt-4o".

@@ -125,7 +125,7 @@ enum MobileClientError: Error, Equatable, Sendable, CustomStringConvertible,
             return .rateLimited
         }
         if statusCode == 404,
-           code == .transactionNotFound,
+           code == .transactionNotFound || code == .resourceNotFound,
            case .transactionDetail = endpoint
         {
             return .notFound

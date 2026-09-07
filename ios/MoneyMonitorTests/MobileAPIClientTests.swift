@@ -521,7 +521,7 @@ struct MobileAPIClientTests {
         let transport = StubMobileHTTPTransport(
             responses: [
                 MobileHTTPResponse(
-                    data: try mobileAPIFixture("transaction-list-live.json"),
+                    data: try mobileAPIFixture("canonical-transaction-list.json"),
                     statusCode: 200
                 ),
             ]
@@ -529,7 +529,7 @@ struct MobileAPIClientTests {
         let client = URLSessionMobileAPIClient(transport: transport)
         let query = MobileTransactionQuery(
             query: " קפה ",
-            cursor: "cursor_v1_previous",
+            cursor: "cursor_v2_previous",
             limit: 20,
             startDate: "2026-07-01",
             endDate: "2026-07-16",
@@ -555,12 +555,12 @@ struct MobileAPIClientTests {
         )
 
         #expect(envelope.data.transactions.map(\.id) == [mobileTransactionID])
-        #expect(envelope.data.transactions.first?.owner == nil)
+        #expect(envelope.data.transactions.first?.owner?.kind == .shared)
         #expect(envelope.data.page.nextCursor == nil)
         #expect(request.authorization == "Bearer \(token)")
         #expect(request.method == "GET")
         #expect(values["q"] == "קפה")
-        #expect(values["cursor"] == "cursor_v1_previous")
+        #expect(values["cursor"] == "cursor_v2_previous")
         #expect(values["limit"] == "20")
         #expect(values["needsReview"] == "true")
         #expect(values["includeExcluded"] == "true")
@@ -568,11 +568,119 @@ struct MobileAPIClientTests {
     }
 
     @Test
+    func generatedTransactionClientRequestsTheSecondCursorV2Page() async throws {
+        let firstPage = try mutatedMobileTransactionFixture(
+            "canonical-transaction-list.json"
+        ) { root in
+            guard
+                var data = root["data"] as? [String: Any],
+                var page = data["page"] as? [String: Any]
+            else { throw MobileAPITestError.invalidFixture("canonical-transaction-list.json") }
+            page["hasMore"] = true
+            page["nextCursor"] = "cursor_v2_encrypted-page"
+            page["total"] = 2
+            data["page"] = page
+            root["data"] = data
+        }
+        let transport = StubMobileHTTPTransport(
+            responses: [
+                MobileHTTPResponse(data: firstPage, statusCode: 200),
+                MobileHTTPResponse(
+                    data: try mobileAPIFixture("canonical-transaction-list.json"),
+                    statusCode: 200
+                ),
+            ]
+        )
+        let client = URLSessionMobileAPIClient(transport: transport)
+        let first = try await client.transactions(
+            query: MobileTransactionQuery(limit: 1),
+            credential: makeMobileAPICredential()
+        )
+        let cursor = try #require(first.data.page.nextCursor)
+        _ = try await client.transactions(
+            query: MobileTransactionQuery(limit: 1).page(after: cursor),
+            credential: makeMobileAPICredential()
+        )
+
+        let request = try #require(await transport.requests().last)
+        let components = try #require(request.url.flatMap {
+            URLComponents(url: $0, resolvingAgainstBaseURL: false)
+        })
+        #expect(components.queryItems?.first(where: { $0.name == "cursor" })?.value == cursor)
+    }
+
+    @Test
+    func productionTransactionClientRejectsMalformedCanonicalSemantics() async throws {
+        let mutations: [(inout [String: Any]) throws -> Void] = [
+            { root in
+                try mutateListTransaction(in: &root) { $0["id"] = mobileAccountID }
+            },
+            { root in
+                try mutateListTransaction(in: &root) { transaction in
+                    guard var account = transaction["account"] as? [String: Any] else {
+                        throw MobileAPITestError.invalidFixture("canonical-transaction-list.json")
+                    }
+                    account["identifierMask"] = "4242424242424242"
+                    transaction["account"] = account
+                }
+            },
+            { root in
+                try mutateListTransaction(in: &root) { $0["confidence"] = 2 }
+            },
+        ]
+
+        for mutation in mutations {
+            let payload = try mutatedMobileTransactionFixture(
+                "canonical-transaction-list.json",
+                mutate: mutation
+            )
+            let client = URLSessionMobileAPIClient(
+                transport: StubMobileHTTPTransport(
+                    responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
+                )
+            )
+            await #expect(throws: MobileClientError.invalidPayload) {
+                try await client.transactions(
+                    query: MobileTransactionQuery(),
+                    credential: makeMobileAPICredential()
+                )
+            }
+        }
+    }
+
+    @Test
+    func transactionListRejectsAResponseFromAnotherServerIdentity() async throws {
+        let payload = try mutatedMobileTransactionFixture(
+            "canonical-transaction-list.json"
+        ) { root in
+            guard
+                var meta = root["meta"] as? [String: Any],
+                var server = meta["server"] as? [String: Any]
+            else { throw MobileAPITestError.invalidFixture("canonical-transaction-list.json") }
+            server["id"] = "22222222-2222-4222-8222-222222222222"
+            meta["server"] = server
+            root["meta"] = meta
+        }
+        let client = URLSessionMobileAPIClient(
+            transport: StubMobileHTTPTransport(
+                responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
+            )
+        )
+
+        await #expect(throws: MobileClientError.identityMismatch) {
+            try await client.transactions(
+                query: MobileTransactionQuery(),
+                credential: makeMobileAPICredential()
+            )
+        }
+    }
+
+    @Test
     func transactionDetailRequiresOwnerAndReturnsTheExactOpaqueID() async throws {
         let transport = StubMobileHTTPTransport(
             responses: [
                 MobileHTTPResponse(
-                    data: try mobileAPIFixture("transaction-detail-live.json"),
+                    data: try mobileAPIFixture("canonical-transaction-detail.json"),
                     statusCode: 200
                 ),
             ]
@@ -858,13 +966,15 @@ struct MobileAPIClientTests {
 
     @Test
     func transactionDetailRejectsAValidDifferentOpaqueID() async throws {
-        let payload = try mutatedMobileTransactionFixture(
-            "transaction-detail-live.json"
-        ) { root in
-            try mutateDetailTransaction(in: &root) {
-                $0["id"] = "transaction_\(String(repeating: "U", count: 22))"
-            }
-        }
+        var root = try #require(
+            JSONSerialization.jsonObject(
+                with: mobileAPIFixture("canonical-transaction-detail.json")
+            ) as? [String: Any]
+        )
+        var transaction = try #require(root["data"] as? [String: Any])
+        transaction["id"] = "transaction_\(String(repeating: "U", count: 22))"
+        root["data"] = transaction
+        let payload = try JSONSerialization.data(withJSONObject: root)
         let transport = StubMobileHTTPTransport(
             responses: [MobileHTTPResponse(data: payload, statusCode: 200)]
         )
@@ -883,7 +993,7 @@ struct MobileAPIClientTests {
         let detailTransport = StubMobileHTTPTransport(
             responses: [
                 MobileHTTPResponse(
-                    data: mobileErrorPayload("transaction_not_found"),
+                    data: mobileErrorPayload("resource_not_found"),
                     statusCode: 404
                 ),
             ]
@@ -891,7 +1001,7 @@ struct MobileAPIClientTests {
         let listTransport = StubMobileHTTPTransport(
             responses: [
                 MobileHTTPResponse(
-                    data: mobileErrorPayload("transaction_not_found"),
+                    data: mobileErrorPayload("resource_not_found"),
                     statusCode: 404
                 ),
             ]
@@ -899,7 +1009,7 @@ struct MobileAPIClientTests {
         let serverErrorTransport = StubMobileHTTPTransport(
             responses: [
                 MobileHTTPResponse(
-                    data: mobileErrorPayload("transaction_not_found"),
+                    data: mobileErrorPayload("resource_not_found"),
                     statusCode: 500
                 ),
             ]
