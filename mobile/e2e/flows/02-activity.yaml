@@ -1,0 +1,43 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Activity search filters and detail
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn: "Activity, tab, 2 of 4"
+- assertVisible:
+    id: activity-screen
+- assertVisible: Today
+- assertVisible: Yesterday
+- assertVisible:
+    id: transaction-txn-wolt
+- assertVisible:
+    id: transaction-txn-salary
+- tapOn: "Merchant, category, or account"
+- inputText: Apple
+- assertVisible:
+    id: transaction-txn-apple
+- assertNotVisible:
+    id: transaction-txn-wolt
+- eraseText
+- assertVisible:
+    id: transaction-txn-wolt
+- tapOn:
+    id: activity-filter-review
+- assertVisible:
+    id: transaction-txn-superpharm
+- assertVisible:
+    id: transaction-txn-booking
+- assertNotVisible:
+    id: transaction-txn-apple
+- tapOn:
+    id: transaction-txn-superpharm
+- assertVisible:
+    id: transaction-detail
+- assertVisible: "−₪214.90"
+- assertVisible: "סופר־פארם"
+- assertVisible: "Health"
+- assertVisible: "Isracard · 3098"
+- assertVisible: "Household"
+- assertVisible: "Needs review"

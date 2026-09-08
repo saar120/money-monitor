@@ -1,0 +1,50 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Capture product evidence
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- assertVisible:
+    id: home-screen
+- takeScreenshot: docs/screenshots/home
+- tapOn: "Activity, tab, 2 of 4"
+- assertVisible:
+    id: activity-screen
+- takeScreenshot: docs/screenshots/activity
+- tapOn: "Merchant, category, or account"
+- inputText: Apple
+- assertVisible:
+    id: transaction-txn-apple
+- takeScreenshot: docs/screenshots/activity-search
+- eraseText
+- hideKeyboard
+- tapOn:
+    id: activity-filter-review
+- assertVisible:
+    id: transaction-txn-superpharm
+- takeScreenshot: docs/screenshots/activity-filter
+- tapOn:
+    id: transaction-txn-superpharm
+- assertVisible:
+    id: transaction-detail
+- takeScreenshot: docs/screenshots/transaction-detail
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- setPermissions:
+    permissions:
+      camera: allow
+- tapOn: "Advisor, tab, 4 of 4"
+- tapOn: ".*Connect to your Mac.*"
+- assertVisible:
+    id: qr-scanner
+- takeScreenshot: docs/screenshots/qr-scanner
+- launchApp:
+    clearState: true
+    arguments:
+      MM_AUTH_PREVIEW: locked
+- assertVisible:
+    id: auth-gate
+- takeScreenshot: docs/screenshots/auth-gate

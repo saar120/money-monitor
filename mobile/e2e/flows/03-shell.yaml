@@ -1,0 +1,21 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: All root tabs are reachable
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn: "Plan, tab, 3 of 4"
+- assertVisible:
+    id: plan-placeholder
+- assertVisible: "Build the next month before it begins"
+- tapOn: "Advisor, tab, 4 of 4"
+- assertVisible:
+    id: advisor-placeholder
+- assertVisible: "Private advice, grounded in your finances"
+- tapOn: "Home, tab, 1 of 4"
+- assertVisible:
+    id: home-screen
+- tapOn: "Activity, tab, 2 of 4"
+- assertVisible:
+    id: activity-screen
