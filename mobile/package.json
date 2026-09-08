@@ -1,0 +1,44 @@
+{
+  "name": "money-monitor-mobile",
+  "version": "1.0.0",
+  "type": "module",
+  "main": "expo-router/entry",
+  "dependencies": {
+    "@shopify/react-native-skia": "2.6.2",
+    "expo": "~57.0.20",
+    "expo-camera": "~57.0.4",
+    "expo-constants": "~57.0.17",
+    "expo-device": "~57.0.1",
+    "expo-font": "~57.0.3",
+    "expo-linking": "~57.0.9",
+    "expo-local-authentication": "~57.0.2",
+    "expo-router": "~57.0.19",
+    "expo-screen-capture": "~57.0.2",
+    "expo-secure-store": "~57.0.3",
+    "expo-splash-screen": "~57.0.8",
+    "expo-status-bar": "~57.0.1",
+    "expo-symbols": "~57.0.2",
+    "react": "19.2.3",
+    "react-dom": "19.2.3",
+    "react-native": "0.86.3",
+    "react-native-gesture-handler": "~2.32.0",
+    "react-native-reanimated": "4.5.1",
+    "react-native-safe-area-context": "~5.7.0",
+    "react-native-screens": "~4.26.0",
+    "react-native-worklets": "0.10.1",
+    "victory-native": "^42.0.1"
+  },
+  "devDependencies": {
+    "@types/react": "~19.2.2",
+    "typescript": "~6.0.3"
+  },
+  "scripts": {
+    "start": "expo start",
+    "ios": "expo run:ios",
+    "prebuild:ios": "expo prebuild --platform ios",
+    "typecheck": "tsc --noEmit",
+    "test": "node --experimental-strip-types --test src/*.test.ts src/**/*.test.ts",
+    "e2e:ios": "./scripts/e2e-ios.sh"
+  },
+  "private": true
+}

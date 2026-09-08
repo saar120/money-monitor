@@ -1,0 +1,17 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Needs-attention fixture is reproducible
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: needs-attention
+- assertVisible:
+    id: home-screen
+- assertVisible: "₪26,840"
+- assertVisible: "−₪2,640"
+- assertVisible: "Over budget"
+- scrollUntilVisible:
+    element:
+      id: account-freshness
+    direction: DOWN
+- assertVisible: "Connection needs attention"

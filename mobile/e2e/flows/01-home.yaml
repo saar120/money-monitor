@@ -1,0 +1,26 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Home renders the normal fixture
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- assertVisible:
+    id: home-screen
+- assertVisible: "₪18,920"
+- assertVisible: "₪5,280"
+- assertVisible:
+    id: budget-status
+- assertVisible:
+    id: net-worth-summary
+- assertVisible: "₪1,284,500"
+- assertVisible:
+    id: category-spending
+- assertVisible:
+    id: cash-flow-trend
+- scrollUntilVisible:
+    element:
+      id: account-freshness
+    direction: DOWN
+- assertVisible: "Altshuler pension"
+- assertVisible: "Last valued 3 days ago"

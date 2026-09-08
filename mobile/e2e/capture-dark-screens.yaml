@@ -1,0 +1,25 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Capture dark-mode evidence
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn: "Activity, tab, 2 of 4"
+- assertVisible:
+    id: activity-screen
+- takeScreenshot: docs/screenshots/activity-dark
+- tapOn:
+    id: activity-filter-review
+- tapOn:
+    id: transaction-txn-superpharm
+- assertVisible:
+    id: transaction-detail
+- takeScreenshot: docs/screenshots/transaction-detail-dark
+- launchApp:
+    clearState: true
+    arguments:
+      MM_AUTH_PREVIEW: locked
+- assertVisible:
+    id: auth-gate
+- takeScreenshot: docs/screenshots/auth-gate-dark
