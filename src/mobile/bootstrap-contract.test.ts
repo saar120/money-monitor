@@ -9,7 +9,7 @@ import {
   type BootstrapSuccessEnvelope,
 } from './bootstrap-contract.js';
 
-const FIXTURE_DIRECTORY = join(process.cwd(), 'ios', 'Fixtures', 'MobileBootstrap');
+const FIXTURE_DIRECTORY = join(process.cwd(), 'src', 'mobile', 'fixtures', 'bootstrap');
 const ACCEPTED_FIXTURES = [
   'bootstrap-complete.json',
   'bootstrap-empty.json',
@@ -41,7 +41,7 @@ function expectSchemaRejection(value: unknown): void {
 }
 
 describe('mobile bootstrap canonical fixtures', () => {
-  it('keeps an explicit fixture inventory for TypeScript and future Swift tests', () => {
+  it('keeps an explicit fixture inventory for contract tests', () => {
     expect(
       readdirSync(FIXTURE_DIRECTORY)
         .filter((name) => name.startsWith('bootstrap-') && name.endsWith('.json'))

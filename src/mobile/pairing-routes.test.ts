@@ -17,7 +17,7 @@ import {
 } from './pairing-session.js';
 import { createMobileServer } from './mobile-server.js';
 
-const FIXTURE_DIRECTORY = join(process.cwd(), 'ios', 'Fixtures', 'MobilePairing');
+const FIXTURE_DIRECTORY = join(process.cwd(), 'src', 'mobile', 'fixtures', 'pairing');
 const PAIRING_FIXTURES = [
   'pairing-error-expired.json',
   'pairing-error-rejected.json',

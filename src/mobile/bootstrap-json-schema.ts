@@ -5,7 +5,7 @@ import {
 } from './bootstrap-contract.js';
 
 export const MOBILE_BOOTSTRAP_JSON_SCHEMA_RELATIVE_PATH =
-  'ios/Fixtures/MobileBootstrap/bootstrap.schema.json' as const;
+  'src/mobile/fixtures/bootstrap/bootstrap.schema.json' as const;
 
 export const MOBILE_BOOTSTRAP_JSON_SCHEMA_ID =
   'https://money-monitor.local/schemas/mobile-bootstrap-v1.schema.json' as const;

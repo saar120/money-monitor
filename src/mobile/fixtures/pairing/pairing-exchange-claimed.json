@@ -1,0 +1,25 @@
+{
+  "data": {
+    "status": "claimed",
+    "credential": {
+      "device": {
+        "id": "device-01",
+        "name": "Personal iPhone",
+        "capabilities": ["mobile.read"],
+        "protocolVersion": 1,
+        "tokenVersion": 1,
+        "createdAt": "2026-07-15T10:00:00.000Z",
+        "lastUsedAt": null,
+        "expiresAt": null,
+        "rotatedAt": null,
+        "revokedAt": null
+      },
+      "token": "TTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTTT"
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "source": "live"
+  }
+}

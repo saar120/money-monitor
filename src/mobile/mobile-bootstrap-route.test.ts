@@ -13,7 +13,7 @@ import { MobileApiError } from './contract.js';
 
 const TOKEN = 'A'.repeat(43);
 const ROTATED_TOKEN = 'B'.repeat(43);
-const FIXTURE_DIRECTORY = join(process.cwd(), 'ios', 'Fixtures', 'MobileBootstrap');
+const FIXTURE_DIRECTORY = join(process.cwd(), 'src', 'mobile', 'fixtures', 'bootstrap');
 const DEVICE: PublicMobileDevice = {
   id: 'device-test-01',
   name: 'Personal iPhone',

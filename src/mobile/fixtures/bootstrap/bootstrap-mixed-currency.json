@@ -1,0 +1,145 @@
+{
+  "data": {
+    "home": {
+      "primaryCurrencyCode": "ILS",
+      "aggregates": {
+        "netWorth": {
+          "amount": { "value": "151240.80", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-15", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-07-14", "endDate": "2026-07-14" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "income": {
+          "amount": { "value": "18500.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-06-01", "endDate": "2026-06-15" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "spending": {
+          "amount": { "value": "5260.10", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": { "startDate": "2026-06-01", "endDate": "2026-06-15" },
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        }
+      }
+    },
+    "budgetPulse": {
+      "status": "on_track",
+      "spent": { "value": "5260.10", "currencyCode": "ILS" },
+      "limit": { "value": "10000.00", "currencyCode": "ILS" },
+      "remaining": { "value": "4739.90", "currencyCode": "ILS" },
+      "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+      "calculatedAt": "2026-07-15T10:00:00.000Z"
+    },
+    "review": { "count": 0, "calculatedAt": "2026-07-15T10:00:00.000Z" },
+    "recentTransactions": [
+      {
+        "id": "transaction_currency_ils",
+        "occurredOn": "2026-07-15",
+        "displayName": "Local cafe",
+        "amount": { "value": "42.50", "currencyCode": "ILS" },
+        "direction": "debit",
+        "status": "posted",
+        "category": { "id": "category_dining_01", "label": "Dining" },
+        "account": {
+          "id": "account_currency_ils",
+          "displayName": "Shekel Checking",
+          "identifierMask": "•••• 1100"
+        }
+      },
+      {
+        "id": "transaction_currency_usd",
+        "occurredOn": "2026-07-14",
+        "displayName": "US software subscription",
+        "amount": { "value": "19.99", "currencyCode": "USD" },
+        "direction": "debit",
+        "status": "posted",
+        "category": { "id": "category_software_01", "label": "Software" },
+        "account": {
+          "id": "account_currency_usd",
+          "displayName": "Dollar Card",
+          "identifierMask": "•••• A234"
+        }
+      },
+      {
+        "id": "transaction_currency_eur",
+        "occurredOn": "2026-07-13",
+        "displayName": "European rail",
+        "amount": { "value": "64.20", "currencyCode": "EUR" },
+        "direction": "debit",
+        "status": "pending",
+        "category": { "id": "category_travel_01", "label": "Travel" },
+        "account": {
+          "id": "account_currency_eur",
+          "displayName": "Euro Card",
+          "identifierMask": "•••• E765"
+        }
+      }
+    ],
+    "accounts": [
+      {
+        "id": "account_currency_ils",
+        "displayName": "Shekel Checking",
+        "institutionName": "Example Bank IL",
+        "type": "checking",
+        "currencyCode": "ILS",
+        "identifierMask": "•••• 1100",
+        "freshness": {
+          "status": "fresh",
+          "lastSuccessfulSyncAt": "2026-07-15T09:58:00.000Z"
+        }
+      },
+      {
+        "id": "account_currency_usd",
+        "displayName": "Dollar Card",
+        "institutionName": "Example Bank US",
+        "type": "credit_card",
+        "currencyCode": "USD",
+        "identifierMask": "•••• A234",
+        "freshness": {
+          "status": "fresh",
+          "lastSuccessfulSyncAt": "2026-07-15T09:57:00.000Z"
+        }
+      },
+      {
+        "id": "account_currency_eur",
+        "displayName": "Euro Card",
+        "institutionName": "Example Bank EU",
+        "type": "credit_card",
+        "currencyCode": "EUR",
+        "identifierMask": "•••• E765",
+        "freshness": {
+          "status": "stale",
+          "lastSuccessfulSyncAt": "2026-07-13T08:00:00.000Z"
+        }
+      }
+    ],
+    "latestSync": {
+      "status": "succeeded",
+      "startedAt": "2026-07-15T09:55:00.000Z",
+      "completedAt": "2026-07-15T09:58:00.000Z",
+      "accountsSucceeded": 3,
+      "accountsFailed": 0
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "calculatedAt": "2026-07-15T10:00:00.000Z",
+    "financialDate": "2026-07-15",
+    "source": "live",
+    "bootstrapSchemaVersion": 1,
+    "snapshotId": "snapshot_currency_01",
+    "server": {
+      "id": "55555555-5555-4555-8555-555555555555",
+      "displayName": "Multi-currency Mac",
+      "serverVersion": "0.3.5",
+      "protocolVersion": 1,
+      "minimumClientVersion": "0.1.0",
+      "capabilities": ["mobile.read"],
+      "compatibility": { "status": "not_evaluated", "reason": null }
+    },
+    "cacheability": { "status": "cacheable", "maxAgeSeconds": 300 },
+    "completeness": { "status": "complete", "sectionErrors": [] }
+  }
+}

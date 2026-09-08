@@ -1,0 +1,10 @@
+{
+  "error": {
+    "code": "pairing_expired",
+    "message": "The pairing request has expired. Create a new code on the Mac."
+  },
+  "meta": {
+    "apiVersion": "1",
+    "requestId": "req-1"
+  }
+}

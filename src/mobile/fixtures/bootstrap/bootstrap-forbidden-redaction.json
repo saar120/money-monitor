@@ -1,0 +1,72 @@
+{
+  "data": {
+    "home": {
+      "primaryCurrencyCode": "ILS",
+      "aggregates": {
+        "netWorth": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-15", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "income": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "spending": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        }
+      }
+    },
+    "budgetPulse": {
+      "status": "unavailable",
+      "spent": null,
+      "limit": null,
+      "remaining": null,
+      "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+      "calculatedAt": "2026-07-15T10:00:00.000Z"
+    },
+    "review": { "count": 0, "calculatedAt": "2026-07-15T10:00:00.000Z" },
+    "recentTransactions": [],
+    "accounts": [],
+    "latestSync": {
+      "status": "never_run",
+      "startedAt": null,
+      "completedAt": null,
+      "accountsSucceeded": 0,
+      "accountsFailed": 0
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "calculatedAt": "2026-07-15T10:00:00.000Z",
+    "financialDate": "2026-07-15",
+    "source": "live",
+    "bootstrapSchemaVersion": 1,
+    "snapshotId": "snapshot_forbidden_01",
+    "server": {
+      "id": "66666666-6666-4666-8666-666666666666",
+      "displayName": "Redaction test Mac",
+      "serverVersion": "0.3.5",
+      "protocolVersion": 1,
+      "minimumClientVersion": "0.1.0",
+      "capabilities": ["mobile.read"],
+      "compatibility": { "status": "not_evaluated", "reason": null }
+    },
+    "cacheability": { "status": "cacheable", "maxAgeSeconds": 300 },
+    "completeness": { "status": "complete", "sectionErrors": [] }
+  },
+  "redactionSentinels": {
+    "credentialReference": "credential://FORBIDDEN_SENTINEL",
+    "deviceToken": "AAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAAA",
+    "tokenDigest": "aaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaaa",
+    "rawRow": { "fullAccountNumber": "1234567890123456" },
+    "rawMoneyValue": 12.34
+  }
+}

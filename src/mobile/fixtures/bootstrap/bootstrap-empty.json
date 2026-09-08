@@ -1,0 +1,65 @@
+{
+  "data": {
+    "home": {
+      "primaryCurrencyCode": "ILS",
+      "aggregates": {
+        "netWorth": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-15", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "income": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        },
+        "spending": {
+          "amount": { "value": "0.00", "currencyCode": "ILS" },
+          "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+          "comparisonPeriod": null,
+          "calculatedAt": "2026-07-15T10:00:00.000Z"
+        }
+      }
+    },
+    "budgetPulse": {
+      "status": "unavailable",
+      "spent": null,
+      "limit": null,
+      "remaining": null,
+      "period": { "startDate": "2026-07-01", "endDate": "2026-07-15" },
+      "calculatedAt": "2026-07-15T10:00:00.000Z"
+    },
+    "review": { "count": 0, "calculatedAt": "2026-07-15T10:00:00.000Z" },
+    "recentTransactions": [],
+    "accounts": [],
+    "latestSync": {
+      "status": "never_run",
+      "startedAt": null,
+      "completedAt": null,
+      "accountsSucceeded": 0,
+      "accountsFailed": 0
+    }
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "calculatedAt": "2026-07-15T10:00:00.000Z",
+    "financialDate": "2026-07-15",
+    "source": "live",
+    "bootstrapSchemaVersion": 1,
+    "snapshotId": "snapshot_empty_01",
+    "server": {
+      "id": "22222222-2222-4222-8222-222222222222",
+      "displayName": "New Money Monitor Mac",
+      "serverVersion": "0.3.5",
+      "protocolVersion": 1,
+      "minimumClientVersion": "0.1.0",
+      "capabilities": ["mobile.read"],
+      "compatibility": { "status": "not_evaluated", "reason": null }
+    },
+    "cacheability": { "status": "cacheable", "maxAgeSeconds": 300 },
+    "completeness": { "status": "complete", "sectionErrors": [] }
+  }
+}

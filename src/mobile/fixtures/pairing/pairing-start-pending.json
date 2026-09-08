@@ -1,0 +1,13 @@
+{
+  "data": {
+    "status": "pending_approval",
+    "expiresAt": "2026-07-15T10:05:00.000Z",
+    "pollAfterSeconds": 1,
+    "claimantSecret": "CCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCCC"
+  },
+  "meta": {
+    "apiVersion": "1",
+    "generatedAt": "2026-07-15T10:00:00.000Z",
+    "source": "live"
+  }
+}
