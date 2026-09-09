@@ -24,6 +24,13 @@ import {
 import type { MobileBootstrapRouteDependencies } from './mobile-server.js';
 import { createProductionMobileTransactionPorts } from './transaction-production-ports.js';
 import type { MobileTransactionRouteDependencies } from './transaction-routes.js';
+import {
+  createMobileOverviewProvider,
+  type MobileOverviewPortsOptions,
+} from './overview-production-ports.js';
+import type { MobileOverviewRouteDependencies } from './overview-routes.js';
+import type { MobileOverviewQuery } from './overview-contract.js';
+import type { MobileTransactionReadContext } from './transaction-routes.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
@@ -43,6 +50,9 @@ export interface ProductionMobileAccessOptions {
   publicIdKey: string;
   server: Omit<MobileBootstrapServerIdentity, 'id'>;
   readNetWorthIls: ProductionMobileBootstrapPortOptions['readNetWorthIls'];
+  readNetWorth?: MobileOverviewPortsOptions['readNetWorth'];
+  readNetWorthHistory?: MobileOverviewPortsOptions['readNetWorthHistory'];
+  updateTransactionCategory?: (transactionId: number, category: string) => unknown | null;
   /** Fail closed when the desktop data source is not safe to expose. */
   isMobileReadAvailable?: () => boolean;
   fallbackCurrencyCode?: string;
@@ -55,6 +65,7 @@ export interface ProductionMobileAccessOptions {
 export interface ProductionMobileAccess {
   bootstrapDependencies: MobileBootstrapRouteDependencies;
   transactionDependencies: MobileTransactionRouteDependencies;
+  overviewDependencies: MobileOverviewRouteDependencies;
   pairingDependencies: MobilePairingRouteDependencies;
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -92,6 +103,20 @@ export function createProductionMobileAccess(
   const transactionPorts = createProductionMobileTransactionPorts({
     db: options.db,
     publicIdKey: options.publicIdKey,
+    updateCategory: options.updateTransactionCategory,
+  });
+  const provideOverview = createMobileOverviewProvider({
+    db: options.db,
+    readNetWorth:
+      options.readNetWorth ??
+      (async () => {
+        const total = await options.readNetWorthIls({
+          calculatedAt: clock().toISOString(),
+          financialDate: financialDateInIsrael(clock()),
+        });
+        return { total, assetsTotal: total, liabilitiesTotal: 0 };
+      }),
+    readNetWorthHistory: options.readNetWorthHistory ?? (async () => []),
   });
   const provideBootstrap = createMobileBootstrapAdapter({
     ports,
@@ -126,8 +151,24 @@ export function createProductionMobileAccess(
       assertMobileReadAvailable();
       return transactionPorts.detail(publicId, context);
     },
+    update: (publicId, update, context) => {
+      assertMobileReadAvailable();
+      return transactionPorts.update(publicId, update, context);
+    },
+    reviewOptions: () => {
+      assertMobileReadAvailable();
+      return transactionPorts.reviewOptions();
+    },
   };
   Object.freeze(transactionDependencies);
+  const overviewDependencies: MobileOverviewRouteDependencies = Object.freeze({
+    authenticator: deviceRegistry,
+    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+    provide: (query: MobileOverviewQuery, context: MobileTransactionReadContext) => {
+      assertMobileReadAvailable();
+      return provideOverview(query, context);
+    },
+  });
 
   let activeManager: PairingManager | null = null;
   let pairingGeneration = 0;
@@ -193,6 +234,7 @@ export function createProductionMobileAccess(
   return {
     bootstrapDependencies,
     transactionDependencies,
+    overviewDependencies,
     pairingDependencies,
     deviceRegistry,
     createPairingManager,

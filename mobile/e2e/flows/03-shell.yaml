@@ -5,17 +5,14 @@ name: All root tabs are reachable
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
-- tapOn: "Plan, tab, 3 of 4"
+- tapOn: 'Explore, tab, 3 of 3'
 - assertVisible:
-    id: plan-placeholder
-- assertVisible: "Build the next month before it begins"
-- tapOn: "Advisor, tab, 4 of 4"
-- assertVisible:
-    id: advisor-placeholder
-- assertVisible: "Private advice, grounded in your finances"
-- tapOn: "Home, tab, 1 of 4"
+    id: explore-screen
+- assertVisible: 'Spending pace'
+- assertVisible: 'What changed?'
+- tapOn: 'Home, tab, 1 of 3'
 - assertVisible:
     id: home-screen
-- tapOn: "Activity, tab, 2 of 4"
+- tapOn: 'Activity, tab, 2 of 3'
 - assertVisible:
     id: activity-screen

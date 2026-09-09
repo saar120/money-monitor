@@ -1,4 +1,14 @@
-export type FixtureScenarioName = 'normal' | 'needs-attention' | 'light-data';
+export type FixtureScenarioName =
+  | 'normal'
+  | 'needs-attention'
+  | 'light-data'
+  | 'review-heavy'
+  | 'inbox-zero'
+  | 'no-budget'
+  | 'no-transactions'
+  | 'category-shift'
+  | 'slower-spending'
+  | 'mixed-currency';
 
 export type Transaction = {
   id: string;
@@ -19,8 +29,27 @@ export type Transaction = {
 type CategorySpend = {
   name: string;
   spent: number;
-  budget: number;
+  previous: number;
+  budget: number | null;
   color: string;
+};
+
+export type BudgetProgress = {
+  name: string;
+  spent: number;
+  limit: number;
+  remaining: number;
+  usedPercent: number;
+  elapsedPercent: number;
+  status: 'on_track' | 'watch' | 'over_budget';
+};
+
+export type MerchantChange = {
+  name: string;
+  category: string;
+  current: number;
+  previous: number;
+  count: number;
 };
 
 type Freshness = {
@@ -34,6 +63,9 @@ export type HomeData = {
   month: string;
   currencyCode: string;
   spent: number;
+  income: number;
+  previousSpent: number;
+  spendingVsIncomePercent: number | null;
   available: number | null;
   budget: number | null;
   budgetStatus: string;
@@ -44,6 +76,11 @@ export type HomeData = {
   liabilities: number | null;
   categories: CategorySpend[];
   trend: Array<{ day: number; current: number; previous: number }>;
+  budgets: BudgetProgress[];
+  merchants: MerchantChange[];
+  reviewCount: number;
+  sinceLastVisit: { transactions: number; spent: number } | null;
+  netWorthHistory: Array<{ date: string; total: number }>;
   freshness: Freshness[];
 };
 
@@ -198,33 +235,71 @@ const normal: FixtureScenario = {
   month: 'September',
   currencyCode: 'ILS',
   spent: 18920,
-  available: 5280,
-  budget: 24200,
+  income: 27000,
+  previousSpent: 19620,
+  spendingVsIncomePercent: 70,
+  available: 41080,
+  budget: 60000,
   budgetStatus: 'On track',
-  budgetNote: '₪730 below pace for today',
+  budgetNote: '15 points behind the month',
   netWorth: 1284500,
   netWorthChange: 29400,
   assets: 1512000,
   liabilities: 227500,
   categories: [
-    { name: 'Housing', spent: 7200, budget: 7600, color: '#446E60' },
-    { name: 'Groceries', spent: 2850, budget: 3500, color: '#C47A45' },
-    { name: 'Dining', spent: 2160, budget: 2400, color: '#9C5B67' },
-    { name: 'Transport', spent: 1550, budget: 2200, color: '#52799A' },
-    { name: 'Shopping', spent: 1360, budget: 1800, color: '#8B7651' },
+    { name: 'Housing', spent: 7200, previous: 7200, budget: 15000, color: '#446E60' },
+    { name: 'Groceries', spent: 2850, previous: 3160, budget: 7500, color: '#C47A45' },
+    { name: 'Dining', spent: 2160, previous: 1740, budget: 6000, color: '#9C5B67' },
+    { name: 'Transport', spent: 1550, previous: 2010, budget: 5000, color: '#52799A' },
+    { name: 'Shopping', spent: 1360, previous: 850, budget: 4500, color: '#8B7651' },
+  ],
+  budgets: [
+    {
+      name: 'Monthly spending',
+      spent: 18920,
+      limit: 60000,
+      remaining: 41080,
+      usedPercent: 32,
+      elapsedPercent: 23,
+      status: 'on_track',
+    },
+    {
+      name: 'Dining',
+      spent: 2160,
+      limit: 7000,
+      remaining: 4840,
+      usedPercent: 31,
+      elapsedPercent: 23,
+      status: 'on_track',
+    },
+  ],
+  merchants: [
+    { name: 'Wolt', category: 'Dining', current: 870, previous: 440, count: 6 },
+    { name: 'Restaurants', category: 'Dining', current: 910, previous: 620, count: 4 },
+    { name: 'Zara', category: 'Shopping', current: 680, previous: 180, count: 2 },
+    { name: 'Gett', category: 'Transport', current: 330, previous: 710, count: 5 },
+  ],
+  reviewCount: 3,
+  sinceLastVisit: { transactions: 6, spent: 384 },
+  netWorthHistory: [
+    { date: '2026-04-01', total: 1198000 },
+    { date: '2026-05-01', total: 1214000 },
+    { date: '2026-06-01', total: 1238000 },
+    { date: '2026-07-01', total: 1246000 },
+    { date: '2026-08-01', total: 1255100 },
+    { date: '2026-09-07', total: 1284500 },
   ],
   trend: [
     { day: 1, current: 2920, previous: 2600 },
-    { day: 7, current: 18920, previous: 20100 },
-    { day: 14, current: 18920, previous: 27300 },
-    { day: 21, current: 18920, previous: 34600 },
-    { day: 30, current: 18920, previous: 41200 },
+    { day: 3, current: 6450, previous: 7200 },
+    { day: 5, current: 12680, previous: 14100 },
+    { day: 7, current: 18920, previous: 19620 },
   ],
   freshness: [
     { account: 'One Zero · 4421', detail: 'Updated just now', state: 'fresh' },
     { account: 'Amex · 1004', detail: 'Updated 14 min ago', state: 'fresh' },
     { account: 'Isracard · 3098', detail: 'Updated 2 hr ago', state: 'aging' },
-    { account: 'Altshuler pension', detail: 'Last valued 3 days ago', state: 'stale' },
+    { account: 'Altshuler pension', detail: 'Last valued 3 days ago', state: 'aging' },
   ],
   transactions: normalTransactions,
 };
@@ -243,6 +318,32 @@ const needsAttention: FixtureScenario = {
         ? { ...category, spent: 4280 }
         : category,
   ),
+  budgets: [
+    {
+      name: 'Monthly spending',
+      spent: 26840,
+      limit: 24200,
+      remaining: -2640,
+      usedPercent: 111,
+      elapsedPercent: 23,
+      status: 'over_budget',
+    },
+    {
+      name: 'Dining',
+      spent: 3610,
+      limit: 2400,
+      remaining: -1210,
+      usedPercent: 150,
+      elapsedPercent: 23,
+      status: 'over_budget',
+    },
+  ],
+  trend: [
+    { day: 1, current: 4100, previous: 2600 },
+    { day: 3, current: 9800, previous: 7200 },
+    { day: 5, current: 18200, previous: 14100 },
+    { day: 7, current: 26840, previous: 19620 },
+  ],
   freshness: [
     { account: 'One Zero · 4421', detail: 'Updated 5 min ago', state: 'fresh' },
     { account: 'Amex · 1004', detail: 'Connection needs attention', state: 'stale' },
@@ -254,6 +355,9 @@ const lightData: FixtureScenario = {
   ...normal,
   name: 'light-data',
   spent: 627,
+  income: 0,
+  previousSpent: 910,
+  spendingVsIncomePercent: null,
   available: 6573,
   budget: 7200,
   budgetStatus: 'Plenty available',
@@ -262,14 +366,27 @@ const lightData: FixtureScenario = {
   netWorthChange: 320,
   assets: 48200,
   liabilities: 0,
-  categories: [{ name: 'Groceries', spent: 627, budget: 1800, color: '#C47A45' }],
+  categories: [{ name: 'Groceries', spent: 627, previous: 910, budget: 1800, color: '#C47A45' }],
   trend: [
     { day: 1, current: 0, previous: 0 },
+    { day: 3, current: 220, previous: 350 },
+    { day: 5, current: 410, previous: 610 },
     { day: 7, current: 627, previous: 910 },
-    { day: 14, current: 627, previous: 910 },
-    { day: 21, current: 627, previous: 910 },
-    { day: 30, current: 627, previous: 910 },
   ],
+  budgets: [
+    {
+      name: 'Monthly spending',
+      spent: 627,
+      limit: 7200,
+      remaining: 6573,
+      usedPercent: 9,
+      elapsedPercent: 23,
+      status: 'on_track',
+    },
+  ],
+  merchants: [{ name: 'Rami Levy', category: 'Groceries', current: 627, previous: 910, count: 1 }],
+  reviewCount: 0,
+  sinceLastVisit: null,
   freshness: [{ account: 'One Zero · 4421', detail: 'Updated just now', state: 'fresh' }],
   transactions: [normalTransactions[4]!],
 };
@@ -278,4 +395,73 @@ export const fixtureScenarios: Record<FixtureScenarioName, FixtureScenario> = {
   normal,
   'needs-attention': needsAttention,
   'light-data': lightData,
+  'review-heavy': {
+    ...normal,
+    name: 'review-heavy',
+    reviewCount: 8,
+    transactions: normalTransactions.map((transaction) => ({
+      ...transaction,
+      needsReview: transaction.amount < 0 && transaction.id !== 'txn-coffee',
+    })),
+  },
+  'inbox-zero': {
+    ...normal,
+    name: 'inbox-zero',
+    reviewCount: 0,
+    transactions: normalTransactions.map((transaction) => ({ ...transaction, needsReview: false })),
+  },
+  'no-budget': {
+    ...normal,
+    name: 'no-budget',
+    available: null,
+    budget: null,
+    budgetStatus: 'No budget',
+    budgetNote: 'No monthly budget',
+    budgets: [],
+    categories: normal.categories.map((category) => ({ ...category, budget: null })),
+  },
+  'no-transactions': {
+    ...lightData,
+    name: 'no-transactions',
+    spent: 0,
+    previousSpent: 0,
+    available: lightData.budget,
+    categories: [],
+    merchants: [],
+    budgets: lightData.budgets.map((budget) => ({
+      ...budget,
+      spent: 0,
+      remaining: budget.limit,
+      usedPercent: 0,
+    })),
+    transactions: [],
+    trend: [],
+    sinceLastVisit: null,
+  },
+  'category-shift': {
+    ...normal,
+    name: 'category-shift',
+    categories: normal.categories.map((category) =>
+      category.name === 'Dining' ? { ...category, spent: 4120, previous: 1540 } : category,
+    ),
+    merchants: normal.merchants.map((merchant) =>
+      merchant.category === 'Dining' ? { ...merchant, current: merchant.current * 2 } : merchant,
+    ),
+  },
+  'slower-spending': {
+    ...normal,
+    name: 'slower-spending',
+    spent: 14300,
+    previousSpent: 19620,
+    spendingVsIncomePercent: 53,
+    budgetNote: '₪5,320 below last month’s pace',
+    trend: normal.trend.map((point) => ({ ...point, current: Math.round(point.current * 0.76) })),
+  },
+  'mixed-currency': {
+    ...normal,
+    name: 'mixed-currency',
+    transactions: normalTransactions.map((transaction, index) =>
+      index === 0 ? { ...transaction, amount: -22.5, currencyCode: 'USD' } : transaction,
+    ),
+  },
 };

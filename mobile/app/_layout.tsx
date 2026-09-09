@@ -44,6 +44,7 @@ export default function RootLayout() {
               options={{ headerShown: false, presentation: 'fullScreenModal' }}
             />
             <Stack.Screen name="foundation" options={{ title: 'Foundation checks' }} />
+            <Stack.Screen name="review" options={{ title: 'Review' }} />
           </Stack>
         </MoneyDataProvider>
       </AuthGate>

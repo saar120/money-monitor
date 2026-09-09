@@ -13,6 +13,9 @@ export type TransactionPage = {
 };
 
 export type PairingProgress = 'requesting' | 'awaiting-approval' | 'exchanging';
+export type TransactionUpdate = Partial<
+  Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
+> & { reviewed?: true };
 
 const FINANCIAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
@@ -74,7 +77,7 @@ async function requestJson(
     return body;
   } catch (error) {
     if (controller.signal.aborted && !externalSignal?.aborted) {
-      throw new Error('The Mac did not respond in time.');
+      throw new Error('The Mac did not respond in time.', { cause: error });
     }
     throw error;
   } finally {
@@ -130,28 +133,34 @@ function freshnessDetail(
 export async function fetchHomeData(
   credential: PairingCredential,
   signal?: AbortSignal,
+  since?: string | null,
 ): Promise<HomeData> {
-  const root = object(
-    await authorizedGet(credential, '/api/mobile/v1/bootstrap', signal),
-    'bootstrap',
-  );
+  const overviewPath = since
+    ? `/api/mobile/v1/overview?since=${encodeURIComponent(since)}`
+    : '/api/mobile/v1/overview';
+  const [bootstrapValue, overviewValue] = await Promise.all([
+    authorizedGet(credential, '/api/mobile/v1/bootstrap', signal),
+    authorizedGet(credential, overviewPath, signal),
+  ]);
+  const root = object(bootstrapValue, 'bootstrap');
+  const overviewRoot = object(overviewValue, 'overview');
   verifyServer(root, credential);
+  verifyServer(overviewRoot, credential);
   const data = object(root.data, 'bootstrap');
   const meta = object(root.meta, 'response metadata');
+  const overview = object(overviewRoot.data, 'overview');
   const financialDate = date(meta.financialDate, 'financial date');
   const generatedAt = text(meta.generatedAt, 'generation time');
-  const home = object(data.home, 'Home');
-  const primaryCurrencyCode = text(home.primaryCurrencyCode, 'primary currency');
-  const aggregates = object(home.aggregates, 'Home aggregates');
-  const spending = money(object(aggregates.spending, 'spending').amount);
-  const netWorth = money(object(aggregates.netWorth, 'net worth').amount);
-  const pulse = object(data.budgetPulse, 'budget');
-  const pulseStatus = text(pulse.status, 'budget status');
-  const hasBudget = pulseStatus !== 'unavailable';
-  const budget = hasBudget ? money(pulse.limit) : null;
-  const available = hasBudget ? money(pulse.remaining) : null;
+  const primaryCurrencyCode = text(overview.currencyCode, 'primary currency');
+  const cashflow = object(overview.cashflow, 'cashflow');
+  const spending = money(cashflow.spending);
+  const income = money(cashflow.income);
+  const previousSpending = money(cashflow.previousSpending);
+  const overviewNetWorth = object(overview.netWorth, 'net worth');
+  const netWorth = money(overviewNetWorth.total);
+  const budgets = Array.isArray(overview.budgets) ? overview.budgets : [];
+  const primaryBudget = budgets[0] ? object(budgets[0], 'budget') : null;
   const accounts = Array.isArray(data.accounts) ? data.accounts : [];
-  const day = Number(financialDate.slice(8, 10));
   const month = new Intl.DateTimeFormat('en', { month: 'long' }).format(
     new Date(`${financialDate}T12:00:00Z`),
   );
@@ -168,16 +177,77 @@ export async function fetchHomeData(
     month,
     currencyCode: primaryCurrencyCode,
     spent: spending.value,
-    available: available?.value ?? null,
-    budget: budget?.value ?? null,
-    budgetStatus: statusLabels[pulseStatus] ?? 'Budget unavailable',
-    budgetNote: hasBudget ? 'Calculated on your Mac' : 'Manage budgets on your Mac',
+    income: income.value,
+    previousSpent: previousSpending.value,
+    spendingVsIncomePercent:
+      typeof cashflow.spendingVsIncomePercent === 'number'
+        ? cashflow.spendingVsIncomePercent
+        : null,
+    available: primaryBudget ? money(primaryBudget.remaining).value : null,
+    budget: primaryBudget ? money(primaryBudget.limit).value : null,
+    budgetStatus: primaryBudget
+      ? (statusLabels[text(primaryBudget.status, 'budget status')] ?? 'Budget unavailable')
+      : 'No budget',
+    budgetNote: primaryBudget ? 'Calculated on your Mac' : 'Manage budgets on your Mac',
     netWorth: netWorth.value,
-    netWorthChange: null,
-    assets: null,
-    liabilities: null,
-    categories: [],
-    trend: [],
+    netWorthChange: overviewNetWorth.change === null ? null : money(overviewNetWorth.change).value,
+    assets: overviewNetWorth.assets === null ? null : money(overviewNetWorth.assets).value,
+    liabilities:
+      overviewNetWorth.liabilities === null ? null : money(overviewNetWorth.liabilities).value,
+    categories: (Array.isArray(overview.categories) ? overview.categories : []).map((raw) => {
+      const category = object(raw, 'category');
+      return {
+        name: text(category.label, 'category label'),
+        spent: money(category.current).value,
+        previous: money(category.previous).value,
+        budget: null,
+        color: typeof category.color === 'string' ? category.color : '#52799A',
+      };
+    }),
+    trend: (Array.isArray(overview.daily) ? overview.daily : []).map((raw) => {
+      const point = object(raw, 'daily spending');
+      return {
+        day: Number(point.day),
+        current: money(point.current).value,
+        previous: money(point.previous).value,
+      };
+    }),
+    budgets: budgets.map((raw) => {
+      const budget = object(raw, 'budget');
+      return {
+        name: text(budget.name, 'budget name'),
+        spent: money(budget.spent).value,
+        limit: money(budget.limit).value,
+        remaining: money(budget.remaining).value,
+        usedPercent: Number(budget.usedPercent),
+        elapsedPercent: Number(budget.elapsedPercent),
+        status: text(budget.status, 'budget status') as HomeData['budgets'][number]['status'],
+      };
+    }),
+    merchants: (Array.isArray(overview.merchants) ? overview.merchants : []).map((raw) => {
+      const merchant = object(raw, 'merchant');
+      return {
+        name: text(merchant.name, 'merchant name'),
+        category: text(merchant.category, 'merchant category'),
+        current: money(merchant.current).value,
+        previous: money(merchant.previous).value,
+        count: Number(merchant.transactionCount),
+      };
+    }),
+    reviewCount: Number(overview.reviewCount),
+    sinceLastVisit:
+      overview.sinceLastVisit === null
+        ? null
+        : (() => {
+            const since = object(overview.sinceLastVisit, 'last visit');
+            return { transactions: Number(since.transactions), spent: money(since.spent).value };
+          })(),
+    netWorthHistory: (Array.isArray(overviewNetWorth.history) ? overviewNetWorth.history : []).map(
+      (raw) => {
+        const point = object(raw, 'net worth history');
+        return { date: date(point.date, 'net worth date'), total: money(point.total).value };
+      },
+    ),
     freshness: accounts.map((raw) => {
       const account = object(raw, 'account');
       const freshness = object(account.freshness, 'account freshness');
@@ -195,7 +265,7 @@ export async function fetchHomeData(
   };
 }
 
-function mapTransaction(value: unknown, detail = false): Transaction {
+function mapTransaction(value: unknown): Transaction {
   const item = object(value, 'transaction');
   const amount = money(item.amount);
   const direction = text(item.direction, 'transaction direction');
@@ -204,7 +274,7 @@ function mapTransaction(value: unknown, detail = false): Transaction {
   const category = item.category === null ? null : object(item.category, 'transaction category');
   const occurredOn = date(item.occurredOn, 'transaction date');
   let owner = 'Unknown';
-  if (detail) {
+  if (item.owner !== undefined) {
     const ownerValue = object(item.owner, 'transaction owner');
     const kind = text(ownerValue.kind, 'transaction owner');
     owner =
@@ -234,18 +304,22 @@ function mapTransaction(value: unknown, detail = false): Transaction {
     needsReview: boolean(item.needsReview, 'review state'),
     owner,
     included: !boolean(item.excludedFromReports, 'inclusion state'),
-    effectiveDate: occurredOn,
+    effectiveDate:
+      typeof item.effectiveOn === 'string' ? date(item.effectiveOn, 'effective date') : occurredOn,
   };
 }
 
 export async function fetchTransactions(
   credential: PairingCredential,
-  query: { q?: string; filter: ActivityFilter; startDate: string },
+  query: { q?: string; category?: string; filter: ActivityFilter; startDate?: string },
   signal?: AbortSignal,
 ): Promise<TransactionPage> {
-  const params = new URLSearchParams({ limit: '50', startDate: query.startDate });
+  const params = new URLSearchParams({ limit: '50' });
+  if (query.startDate) params.set('startDate', query.startDate);
   if (query.q?.trim()) params.set('q', query.q.trim());
+  if (query.category?.trim()) params.set('category', query.category.trim());
   if (query.filter === 'review') params.set('needsReview', 'true');
+  if (query.filter === 'review') params.set('includeExcluded', 'true');
   if (query.filter === 'pending') params.set('status', 'pending');
   if (query.filter === 'credits') params.set('direction', 'credit');
   const root = object(
@@ -277,7 +351,48 @@ export async function fetchTransactionDetail(
     'transaction',
   );
   verifyServer(root, credential);
-  return mapTransaction(object(root.data, 'transaction').transaction, true);
+  return mapTransaction(object(root.data, 'transaction').transaction);
+}
+
+export async function fetchReviewOptions(credential: PairingCredential, signal?: AbortSignal) {
+  const root = object(
+    await authorizedGet(credential, '/api/mobile/v1/transactions/review-options', signal),
+    'review options',
+  );
+  verifyServer(root, credential);
+  const data = object(root.data, 'review options');
+  if (!Array.isArray(data.categories) || !Array.isArray(data.owners))
+    throw new Error('The Mac returned invalid review options.');
+  return {
+    categories: data.categories.map((value) => text(value, 'category')),
+    owners: data.owners.map((value) => text(value, 'owner')),
+  };
+}
+
+export async function updateTransaction(
+  credential: PairingCredential,
+  id: string,
+  update: TransactionUpdate,
+  signal?: AbortSignal,
+): Promise<Transaction> {
+  const root = object(
+    await requestJson(
+      `${credential.baseURL}/api/mobile/v1/transactions/${encodeURIComponent(id)}`,
+      {
+        method: 'PATCH',
+        headers: {
+          Accept: 'application/json',
+          'Content-Type': 'application/json',
+          Authorization: `Bearer ${credential.token}`,
+        },
+        body: JSON.stringify(update),
+      },
+      signal,
+    ),
+    'transaction',
+  );
+  verifyServer(root, credential);
+  return mapTransaction(object(root.data, 'transaction').transaction);
 }
 
 function post(baseURL: string, path: string, body: JsonObject, signal?: AbortSignal) {
@@ -294,7 +409,6 @@ function post(baseURL: string, path: string, body: JsonObject, signal?: AbortSig
 
 function wait(ms: number, signal?: AbortSignal): Promise<void> {
   return new Promise((resolve, reject) => {
-    let timeout: ReturnType<typeof setTimeout>;
     const finish = () => {
       signal?.removeEventListener('abort', abort);
       resolve();
@@ -307,7 +421,7 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
       reject(new Error('Pairing was cancelled.'));
       return;
     }
-    timeout = setTimeout(finish, ms);
+    const timeout = setTimeout(finish, ms);
     signal?.addEventListener('abort', abort, { once: true });
   });
 }

@@ -15,6 +15,7 @@ import { createMobilePublicIdProjector } from './mobile-public-id.js';
 import {
   boundedMobileText,
   maskAccountIdentifier,
+  mobileTransactionDisplayName,
   projectMobileMoney,
   projectMobileTransactionDirection,
   projectMobileTransactionStatus,
@@ -276,7 +277,7 @@ export function createProductionMobileBootstrapPorts(
         return rows.map((row) => ({
           publicId: publicId('transaction', row.transactionId),
           occurredOn: row.occurredOn.slice(0, 10),
-          displayName: boundedMobileText(row.description, 'Transaction', 160),
+          displayName: mobileTransactionDisplayName(row.description),
           amount: projectMobileMoney(Math.abs(row.chargedAmount), row.chargedCurrency),
           direction: projectMobileTransactionDirection(row.chargedAmount),
           status: projectMobileTransactionStatus(row.transactionStatus),

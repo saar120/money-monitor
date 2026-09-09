@@ -1,4 +1,5 @@
 import { Stack, router } from 'expo-router';
+import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import {
   ActivityIndicator,
@@ -31,12 +32,13 @@ export default function ActivityScreen() {
   const money = useMoneyData();
   const result = useActivityTransactions(query, filter);
   const transactions = result.transactions;
+  const isEmptyMonth = !query.trim() && filter === 'all';
   const currentDate = money.home?.currentDate ?? new Date().toISOString().slice(0, 10);
   const month = money.home?.month ?? '';
 
   const sections = useMemo(
-    () => groupTransactions(transactions, currentDate, money.source === 'fixture'),
-    [currentDate, money.source, transactions],
+    () => groupTransactions(transactions, currentDate),
+    [currentDate, transactions],
   );
 
   if (money.status !== 'ready' || !money.home) return <ConnectionState />;
@@ -64,16 +66,42 @@ export default function ActivityScreen() {
         testID="activity-screen"
         refreshControl={
           <RefreshControl
-            refreshing={false}
+            refreshing={money.refreshing}
             onRefresh={() => void money.reload()}
             tintColor={colors.accent}
           />
         }
         ListHeaderComponent={
           <View>
+            {money.home.reviewCount > 0 ? (
+              <Pressable
+                onPress={() => router.push('/review')}
+                testID="activity-start-review"
+                style={[styles.reviewBanner, { backgroundColor: colors.accentSoft }]}
+              >
+                <View style={styles.reviewBannerIcon}>
+                  <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
+                </View>
+                <View style={styles.reviewBannerText}>
+                  <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
+                    {money.home.reviewCount} to review
+                  </Text>
+                  <Text style={[styles.reviewBannerDetail, { color: colors.secondary }]}>
+                    Open your financial inbox
+                  </Text>
+                </View>
+                <SymbolView name="chevron.right" size={12} tintColor={colors.accent} />
+              </Pressable>
+            ) : null}
+            {money.error ? (
+              <Text style={[styles.refreshError, { color: colors.danger }]}>
+                Couldn’t refresh · pull to retry
+              </Text>
+            ) : null}
             <Text style={[styles.summary, { color: colors.secondary }]}>
               {transactions.length}
-              {result.hasMore ? '+' : ''} transactions · {month}
+              {result.hasMore ? '+' : ''} transactions ·{' '}
+              {filter === 'review' ? 'financial inbox' : month}
             </Text>
             <ScrollView
               horizontal
@@ -122,8 +150,11 @@ export default function ActivityScreen() {
           >
             <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
             {section.total === null ? null : (
-              <Text style={[styles.sectionTotal, { color: colors.secondary }]}>
-                {formatMoney(section.total, 'ILS', true)}
+              <Text
+                testID={`section-total-${section.id}`}
+                style={[styles.sectionTotal, { color: colors.secondary }]}
+              >
+                {formatMoney(section.total.value, section.total.currencyCode, true)}
               </Text>
             )}
           </View>
@@ -143,13 +174,17 @@ export default function ActivityScreen() {
                 ? 'Loading activity'
                 : result.error
                   ? 'Couldn’t load activity'
-                  : 'No matching transactions'}
+                  : isEmptyMonth
+                    ? 'No transactions yet'
+                    : 'No matching transactions'}
             </Text>
             <Text style={[styles.emptyText, { color: colors.secondary }]}>
               {result.error ??
                 (result.loading
                   ? 'Reading transactions from your Mac.'
-                  : 'Clear search or choose another filter.')}
+                  : isEmptyMonth
+                    ? 'New activity will appear after your Mac syncs.'
+                    : 'Clear search or choose another filter.')}
             </Text>
           </View>
         }
@@ -241,7 +276,7 @@ function Flag({ label, color, background }: { label: string; color: string; back
   );
 }
 
-function groupTransactions(transactions: Transaction[], currentDate: string, showTotals: boolean) {
+function groupTransactions(transactions: Transaction[], currentDate: string) {
   const grouped = new Map<string, Transaction[]>();
   for (const transaction of transactions) {
     const day = transaction.occurredAt.slice(0, 10);
@@ -250,11 +285,21 @@ function groupTransactions(transactions: Transaction[], currentDate: string, sho
     grouped.set(day, group);
   }
 
-  return [...grouped.entries()].map(([day, data]) => ({
-    title: dayLabel(day, currentDate),
-    total: showTotals ? data.reduce((sum, transaction) => sum + transaction.amount, 0) : null,
-    data,
-  }));
+  return [...grouped.entries()].map(([day, data]) => {
+    const currencies = new Set(data.map((transaction) => transaction.currencyCode));
+    return {
+      id: day,
+      title: dayLabel(day, currentDate),
+      total:
+        currencies.size === 1
+          ? {
+              value: data.reduce((sum, transaction) => sum + transaction.amount, 0),
+              currencyCode: data[0]!.currencyCode,
+            }
+          : null,
+      data,
+    };
+  });
 }
 
 function dayLabel(day: string, currentDate: string) {
@@ -288,7 +333,23 @@ function markColor(category: string, fallback: string) {
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 40 },
+  reviewBanner: {
+    minHeight: 66,
+    marginHorizontal: 16,
+    marginTop: 10,
+    marginBottom: 8,
+    borderRadius: 16,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 11,
+  },
+  reviewBannerIcon: { width: 28, alignItems: 'center' },
+  reviewBannerText: { flex: 1 },
+  reviewBannerTitle: { fontSize: 15, fontWeight: '700' },
+  reviewBannerDetail: { marginTop: 2, fontSize: 12.5 },
   summary: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13 },
+  refreshError: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13, fontWeight: '600' },
   filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
   filter: {
     minHeight: 44,

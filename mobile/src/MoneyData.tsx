@@ -4,16 +4,21 @@ import {
   useContext,
   useEffect,
   useMemo,
+  useRef,
   useState,
   type ReactNode,
 } from 'react';
+import * as SecureStore from 'expo-secure-store';
 import { getFixtureScenario, isFixtureMode } from './fixture-selection';
 import type { HomeData, Transaction } from './fixtures';
 import {
   fetchHomeData,
+  fetchReviewOptions,
   fetchTransactionDetail,
   fetchTransactions,
+  updateTransaction,
   type ActivityFilter,
+  type TransactionUpdate,
 } from './mobile-api';
 import { readPairingCredential, type PairingCredential } from './security/pairing-credential-store';
 
@@ -25,11 +30,16 @@ type MoneyDataContextValue = {
   home: HomeData | null;
   credential: PairingCredential | null;
   error: string | null;
+  refreshing: boolean;
   revision: number;
   reload: () => Promise<void>;
+  fixtureTransactions: Transaction[];
+  saveTransaction: (id: string, update: TransactionUpdate) => Promise<Transaction>;
+  loadReviewOptions: () => Promise<{ categories: string[]; owners: string[] }>;
 };
 
 const MoneyDataContext = createContext<MoneyDataContextValue | null>(null);
+const LAST_VISIT_KEY = 'money-monitor-last-successful-visit';
 
 export function MoneyDataProvider({ children }: { children: ReactNode }) {
   const fixture = isFixtureMode();
@@ -37,41 +47,118 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
   const [home, setHome] = useState<HomeData | null>(fixture ? getFixtureScenario() : null);
   const [credential, setCredential] = useState<PairingCredential | null>(null);
   const [error, setError] = useState<string | null>(null);
+  const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
+  const [fixtureTransactions, setFixtureTransactions] = useState<Transaction[]>(
+    () => getFixtureScenario().transactions,
+  );
+  const hasHome = useRef(home !== null);
 
   const reload = useCallback(async () => {
     if (fixture) {
-      setHome(getFixtureScenario());
-      setStatus('ready');
-      setRevision((value) => value + 1);
+      setRefreshing(true);
+      try {
+        const scenario = getFixtureScenario();
+        setHome(scenario);
+        setFixtureTransactions(scenario.transactions);
+        setError(null);
+        setStatus('ready');
+        setRevision((value) => value + 1);
+      } finally {
+        setRefreshing(false);
+      }
       return;
     }
 
-    setStatus('loading');
+    const isRefresh = hasHome.current;
+    if (isRefresh) setRefreshing(true);
+    else setStatus('loading');
     setError(null);
     try {
       const stored = await readPairingCredential();
       setCredential(stored);
       if (!stored) {
+        hasHome.current = false;
         setHome(null);
         setStatus('unpaired');
         return;
       }
-      setHome(await fetchHomeData(stored));
+      const lastVisit = await SecureStore.getItemAsync(LAST_VISIT_KEY);
+      const nextHome = await fetchHomeData(stored, undefined, lastVisit);
+      hasHome.current = true;
+      setHome(nextHome);
+      await SecureStore.setItemAsync(LAST_VISIT_KEY, new Date().toISOString());
       setStatus('ready');
       setRevision((value) => value + 1);
     } catch (caught) {
-      setHome(null);
-      setStatus('error');
       setError(
         caught instanceof Error ? caught.message : 'Money Monitor could not load your data.',
       );
+      if (!isRefresh) {
+        hasHome.current = false;
+        setHome(null);
+        setStatus('error');
+      }
+    } finally {
+      setRefreshing(false);
     }
   }, [fixture]);
 
   useEffect(() => {
     void reload();
   }, [reload]);
+
+  const saveTransaction = useCallback(
+    async (id: string, update: TransactionUpdate) => {
+      if (fixture) {
+        const current = fixtureTransactions.find((transaction) => transaction.id === id);
+        if (!current) throw new Error('Transaction is no longer available.');
+        const next = {
+          ...current,
+          ...update,
+          needsReview: update.reviewed ? false : current.needsReview,
+        };
+        delete (next as Transaction & { reviewed?: true }).reviewed;
+        setFixtureTransactions((transactions) =>
+          transactions.map((transaction) => (transaction.id === id ? next : transaction)),
+        );
+        if (update.reviewed && current.needsReview)
+          setHome((value) =>
+            value ? { ...value, reviewCount: Math.max(0, value.reviewCount - 1) } : value,
+          );
+        setRevision((value) => value + 1);
+        return next;
+      }
+      if (!credential) throw new Error('Pair with your Mac to update transactions.');
+      const next = await updateTransaction(credential, id, update);
+      setRevision((value) => value + 1);
+      setHome((value) =>
+        update.reviewed && value
+          ? { ...value, reviewCount: Math.max(0, value.reviewCount - 1) }
+          : value,
+      );
+      return next;
+    },
+    [credential, fixture, fixtureTransactions],
+  );
+
+  const loadReviewOptions = useCallback(async () => {
+    if (fixture) {
+      const scenario = getFixtureScenario();
+      return {
+        categories: [...new Set(scenario.categories.map((category) => category.name))].sort(),
+        owners: [
+          ...new Set([
+            ...scenario.transactions.map((transaction) => transaction.owner),
+            'Shared',
+            'Unassigned',
+          ]),
+        ].sort(),
+      };
+    }
+    if (!credential) throw new Error('Pair with your Mac to review transactions.');
+    return fetchReviewOptions(credential);
+  }, [credential, fixture]);
 
   const value = useMemo(
     () => ({
@@ -80,10 +167,26 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       home,
       credential,
       error,
+      refreshing,
       revision,
       reload,
+      fixtureTransactions,
+      saveTransaction,
+      loadReviewOptions,
     }),
-    [credential, error, fixture, home, reload, revision, status],
+    [
+      credential,
+      error,
+      fixture,
+      fixtureTransactions,
+      home,
+      loadReviewOptions,
+      reload,
+      refreshing,
+      revision,
+      saveTransaction,
+      status,
+    ],
   );
 
   return <MoneyDataContext.Provider value={value}>{children}</MoneyDataContext.Provider>;
@@ -95,17 +198,18 @@ export function useMoneyData(): MoneyDataContextValue {
   return value;
 }
 
-export function useActivityTransactions(query: string, filter: ActivityFilter) {
+export function useActivityTransactions(query: string, filter: ActivityFilter, category?: string) {
   const money = useMoneyData();
-  const fixture = getFixtureScenario();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [hasMore, setHasMore] = useState(false);
+  const requestKey = `${filter}\u0000${query.trim()}\u0000${category ?? ''}`;
+  const [resultKey, setResultKey] = useState('');
 
   const fixtureTransactions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return fixture.transactions.filter((transaction) => {
+    return money.fixtureTransactions.filter((transaction) => {
       const matchesQuery =
         !normalized ||
         [transaction.merchant, transaction.description, transaction.category, transaction.account]
@@ -116,9 +220,9 @@ export function useActivityTransactions(query: string, filter: ActivityFilter) {
         (filter === 'review' && transaction.needsReview) ||
         (filter === 'pending' && transaction.pending) ||
         (filter === 'credits' && transaction.amount > 0);
-      return matchesQuery && matchesFilter;
+      return matchesQuery && matchesFilter && (!category || transaction.category === category);
     });
-  }, [filter, fixture.transactions, query]);
+  }, [category, filter, money.fixtureTransactions, query]);
 
   useEffect(() => {
     if (
@@ -130,19 +234,24 @@ export function useActivityTransactions(query: string, filter: ActivityFilter) {
       return;
     }
     const controller = new AbortController();
-    const timer = setTimeout(() => {
+    const load = () => {
       setLoading(true);
       setError(null);
       void fetchTransactions(
         money.credential as PairingCredential,
         {
           q: query,
+          category,
           filter,
-          startDate: `${(money.home as HomeData).currentDate.slice(0, 7)}-01`,
+          startDate:
+            filter === 'review'
+              ? undefined
+              : `${(money.home as HomeData).currentDate.slice(0, 7)}-01`,
         },
         controller.signal,
       )
         .then((page) => {
+          setResultKey(requestKey);
           setTransactions(page.transactions);
           setHasMore(page.hasMore);
         })
@@ -156,16 +265,33 @@ export function useActivityTransactions(query: string, filter: ActivityFilter) {
         .finally(() => {
           if (!controller.signal.aborted) setLoading(false);
         });
-    }, 250);
+    };
+    const timer = query.trim() ? setTimeout(load, 250) : null;
+    if (!timer) load();
     return () => {
-      clearTimeout(timer);
+      if (timer) clearTimeout(timer);
       controller.abort();
     };
-  }, [filter, money.credential, money.home, money.revision, money.source, money.status, query]);
+  }, [
+    category,
+    filter,
+    money.credential,
+    money.home,
+    money.revision,
+    money.source,
+    money.status,
+    query,
+    requestKey,
+  ]);
 
   return {
-    transactions: money.source === 'fixture' ? fixtureTransactions : transactions,
-    loading: money.source === 'live' && loading,
+    transactions:
+      money.source === 'fixture'
+        ? fixtureTransactions
+        : resultKey === requestKey
+          ? transactions
+          : [],
+    loading: money.source === 'live' && (loading || resultKey !== requestKey),
     error,
     hasMore: money.source === 'live' && hasMore,
   };
@@ -173,8 +299,7 @@ export function useActivityTransactions(query: string, filter: ActivityFilter) {
 
 export function useTransaction(id: string | undefined) {
   const money = useMoneyData();
-  const fixtureTransaction =
-    getFixtureScenario().transactions.find((item) => item.id === id) ?? null;
+  const fixtureTransaction = money.fixtureTransactions.find((item) => item.id === id) ?? null;
   const [transaction, setTransaction] = useState<Transaction | null>(null);
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState<string | null>(null);

@@ -36,7 +36,7 @@ Maestro selects a scenario with the iOS launch argument `MM_FIXTURE_SCENARIO`. T
       MM_FIXTURE_SCENARIO: needs-attention
 ```
 
-Available scenarios are `normal`, `needs-attention`, and `light-data`. In development builds only, a deep link can also select a scenario: `moneymonitor:///home?fixture=needs-attention`. Release builds ignore fixture URL parameters.
+Available scenarios are `normal`, `needs-attention`, `light-data`, `review-heavy`, `inbox-zero`, `no-budget`, `no-transactions`, `category-shift`, `slower-spending`, and `mixed-currency`. In development builds only, a deep link can also select a scenario: `moneymonitor:///home?fixture=needs-attention`. Release builds ignore fixture URL parameters.
 
 ## Real Mac integration check
 
@@ -45,11 +45,11 @@ This is intentionally separate from E2E:
 1. Run Money Monitor on the Mac and enable its existing Mobile Access feature.
 2. Confirm Tailscale is active on both devices and the iPhone is in the same Tailnet.
 3. On the Mac, create the real pairing QR.
-4. On iPhone, scan it from Home, Activity, or Advisor.
+4. On iPhone, scan it from Home or Activity.
 5. Approve the named iPhone in Mac Settings.
-6. The iPhone exchanges the approved request for a device credential, stores it in the iOS Keychain, and loads Home and Activity over authenticated private HTTPS.
+6. The iPhone exchanges the approved request for a device credential, stores it in the iOS Keychain, and loads Home, Activity, and Explore over authenticated private HTTPS.
 
-The client preserves the `/money-monitor` mount from the QR and never configures Tailscale or weakens TLS. Category breakdown, spending pace, and net-worth decomposition remain fixture-only until the Mac API exposes those Mac-calculated projections.
+The client preserves the `/money-monitor` mount from the QR and never configures Tailscale or weakens TLS. The Mac exposes a purpose-built overview projection; the phone does not reproduce financial calculations.
 
 ## Validation
 
@@ -59,4 +59,4 @@ npm test
 npx expo-doctor
 ```
 
-Product screenshots are in [`docs/screenshots`](./docs/screenshots). The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).
+The current product model and visual rules are recorded in [`PRODUCT.md`](./PRODUCT.md) and [`DESIGN.md`](./DESIGN.md). Local simulator review captures are written to `.impeccable/review` and intentionally ignored. The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).

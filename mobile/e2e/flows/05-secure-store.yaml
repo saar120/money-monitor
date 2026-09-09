@@ -5,14 +5,13 @@ name: Secure credential lifecycle works
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
-- tapOn: "Advisor, tab, 4 of 4"
-- tapOn: ".*Foundation checks.*"
-- assertVisible: "Ready. No credential operation has run."
-- tapOn: "Store dummy credential"
-- assertVisible: "Dummy pairing credential stored in the iOS Keychain."
-- tapOn: "Read credential"
-- assertVisible: "Read credential for 11111111…"
-- tapOn: "Delete credential"
-- assertVisible: "Pairing credential deleted."
-- tapOn: "Read credential"
-- assertVisible: "No pairing credential is stored."
+- openLink: 'moneymonitor://foundation'
+- assertVisible: 'Ready. No credential operation has run.'
+- tapOn: 'Store dummy credential'
+- assertVisible: 'Dummy pairing credential stored in the iOS Keychain.'
+- tapOn: 'Read credential'
+- assertVisible: 'Read credential for 11111111…'
+- tapOn: 'Delete credential'
+- assertVisible: 'Pairing credential deleted.'
+- tapOn: 'Read credential'
+- assertVisible: 'No pairing credential is stored.'

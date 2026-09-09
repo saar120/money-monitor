@@ -15,7 +15,7 @@ export default function TransactionDetailScreen() {
 
   if (money.status !== 'ready') return <ConnectionState />;
 
-  if (result.loading) {
+  if (result.loading && !transaction) {
     return (
       <View style={[styles.missing, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.accent} size="large" />

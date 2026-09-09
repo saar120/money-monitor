@@ -5,7 +5,7 @@ name: Activity search filters and detail
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
-- tapOn: "Activity, tab, 2 of 4"
+- tapOn: 'Activity, tab, 2 of 3'
 - assertVisible:
     id: activity-screen
 - assertVisible: Today
@@ -14,7 +14,7 @@ name: Activity search filters and detail
     id: transaction-txn-wolt
 - assertVisible:
     id: transaction-txn-salary
-- tapOn: "Merchant, category, or account"
+- tapOn: 'Merchant, category, or account'
 - inputText: Apple
 - assertVisible:
     id: transaction-txn-apple
@@ -35,9 +35,9 @@ name: Activity search filters and detail
     id: transaction-txn-superpharm
 - assertVisible:
     id: transaction-detail
-- assertVisible: "−₪214.90"
-- assertVisible: "סופר־פארם"
-- assertVisible: "Health"
-- assertVisible: "Isracard · 3098"
-- assertVisible: "Household"
-- assertVisible: "Needs review"
+- assertVisible: '−₪214.90'
+- assertVisible: 'סופר־פארם'
+- assertVisible: 'Health'
+- assertVisible: 'Isracard · 3098'
+- assertVisible: 'Household'
+- assertVisible: 'Needs review'
