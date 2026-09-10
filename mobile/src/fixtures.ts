@@ -348,6 +348,9 @@ const needsAttention: FixtureScenario = {
     { account: 'One Zero · 4421', detail: 'Updated 5 min ago', state: 'fresh' },
     { account: 'Amex · 1004', detail: 'Connection needs attention', state: 'stale' },
     { account: 'Isracard · 3098', detail: 'Last updated yesterday', state: 'stale' },
+    { account: 'Max · 7712', detail: 'Never synced', state: 'stale' },
+    { account: 'Bank Hapoalim · 2468', detail: 'Last updated 3 days ago', state: 'stale' },
+    { account: 'Altshuler pension', detail: 'Last valued 8 days ago', state: 'stale' },
   ],
 };
 

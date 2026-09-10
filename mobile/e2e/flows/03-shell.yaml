@@ -10,6 +10,10 @@ name: All root tabs are reachable
     id: explore-screen
 - assertVisible: 'Spending pace'
 - assertVisible: 'What changed?'
+- scrollUntilVisible:
+    element:
+      text: '.*₪41,080 remaining.*'
+    direction: DOWN
 - tapOn: 'Home, tab, 1 of 3'
 - assertVisible:
     id: home-screen

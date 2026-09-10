@@ -1,5 +1,6 @@
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
+import { useState } from 'react';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData } from '@/MoneyData';
@@ -8,7 +9,8 @@ import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
   const colors = useAppColors();
-  const { error, home, refreshing, status, reload } = useMoneyData();
+  const { error, home, status, reload } = useMoneyData();
+  const [refreshing, setRefreshing] = useState(false);
   if (status !== 'ready' || !home) return <ConnectionState />;
 
   const paceDelta = home.spent - home.previousSpent;
@@ -16,6 +18,14 @@ export default function HomeScreen() {
   const staleAccounts = home.freshness.filter((account) => account.state === 'stale');
   const attentionBudgets = home.budgets.filter((budget) => budget.status !== 'on_track');
   const topCategories = [...home.categories].sort((a, b) => b.spent - a.spent).slice(0, 4);
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await reload();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   return (
     <ScrollView
@@ -27,7 +37,7 @@ export default function HomeScreen() {
       refreshControl={
         <RefreshControl
           refreshing={refreshing}
-          onRefresh={() => void reload()}
+          onRefresh={() => void refresh()}
           tintColor={colors.accent}
         />
       }
@@ -58,7 +68,9 @@ export default function HomeScreen() {
 
       <View style={styles.hero} testID="home-primary-money">
         <Text
+          adjustsFontSizeToFit
           allowFontScaling={false}
+          minimumFontScale={0.7}
           numberOfLines={1}
           style={[styles.heroValue, { color: colors.text }]}
         >
@@ -115,7 +127,13 @@ export default function HomeScreen() {
       {primaryBudget ? (
         <BudgetPace budget={primaryBudget} colors={colors} currencyCode={home.currencyCode} />
       ) : (
-        <Pressable onPress={() => router.push('/(tabs)/explore')} style={styles.noBudget}>
+        <Pressable
+          accessibilityHint="Opens spending insights"
+          accessibilityRole="button"
+          onPress={() => router.push('/(tabs)/explore')}
+          style={styles.noBudget}
+          testID="no-budget-state"
+        >
           <Text style={[styles.noBudgetTitle, { color: colors.text }]}>No monthly budget</Text>
           <Text style={[styles.noBudgetText, { color: colors.secondary }]}>
             Spending pace is still compared with last month.
@@ -162,10 +180,16 @@ export default function HomeScreen() {
           {staleAccounts.length ? (
             <AttentionRow
               symbol="arrow.trianglehead.2.clockwise.rotate.90"
-              title="Account data needs attention"
-              detail={staleAccounts[0]!.account}
+              title={`${staleAccounts.length} account${staleAccounts.length === 1 ? '' : 's'} need attention`}
+              detail={
+                staleAccounts.length === 1
+                  ? staleAccounts[0]!.account
+                  : `${staleAccounts[0]!.account} and ${staleAccounts.length - 1} more`
+              }
               colors={colors}
               tone="danger"
+              onPress={() => router.push('/accounts-attention')}
+              testID="account-attention"
             />
           ) : null}
         </View>
@@ -191,6 +215,8 @@ export default function HomeScreen() {
             const share = home.spent > 0 ? category.spent / home.spent : 0;
             return (
               <Pressable
+                accessibilityHint={`Opens ${category.name} spending details`}
+                accessibilityRole="button"
                 key={category.name}
                 onPress={() =>
                   router.push({
@@ -201,8 +227,20 @@ export default function HomeScreen() {
                 style={styles.categoryRow}
               >
                 <View style={styles.categoryTop}>
-                  <Text style={[styles.categoryName, { color: colors.text }]}>{category.name}</Text>
-                  <Text style={[styles.categoryAmount, { color: colors.text }]}>
+                  <Text
+                    maxFontSizeMultiplier={1.5}
+                    numberOfLines={1}
+                    style={[styles.categoryName, { color: colors.text }]}
+                  >
+                    {category.name}
+                  </Text>
+                  <Text
+                    adjustsFontSizeToFit
+                    allowFontScaling={false}
+                    minimumFontScale={0.8}
+                    numberOfLines={1}
+                    style={[styles.categoryAmount, { color: colors.text }]}
+                  >
                     {formatUnsignedMoney(category.spent, home.currencyCode)}
                   </Text>
                 </View>
@@ -216,6 +254,7 @@ export default function HomeScreen() {
                     />
                   </View>
                   <Text
+                    allowFontScaling={false}
                     style={[
                       styles.categoryDelta,
                       { color: delta > 0 ? colors.warning : colors.secondary },
@@ -237,19 +276,28 @@ export default function HomeScreen() {
       </View>
 
       <Pressable
+        accessibilityHint="Opens net worth details"
+        accessibilityRole="button"
         onPress={() => router.push('/(tabs)/explore/net-worth')}
         style={[styles.netWorthRow, { borderTopColor: colors.separator }]}
         testID="net-worth-summary"
       >
-        <View>
+        <View style={styles.netWorthCopy}>
           <Text style={[styles.netWorthLabel, { color: colors.secondary }]}>Net worth</Text>
-          <Text style={[styles.netWorthValue, { color: colors.text }]}>
+          <Text
+            adjustsFontSizeToFit
+            allowFontScaling={false}
+            minimumFontScale={0.8}
+            numberOfLines={1}
+            style={[styles.netWorthValue, { color: colors.text }]}
+          >
             {formatUnsignedMoney(home.netWorth, home.currencyCode)}
           </Text>
         </View>
         <View style={styles.netWorthTrailing}>
           {home.netWorthChange !== null ? (
             <Text
+              allowFontScaling={false}
               style={[
                 styles.netWorthChange,
                 { color: home.netWorthChange >= 0 ? colors.accent : colors.danger },
@@ -379,8 +427,15 @@ function AttentionRow({
     <>
       <SymbolView name={symbol} size={18} tintColor={tint} />
       <View style={styles.attentionText}>
-        <Text style={[styles.attentionTitle, { color: colors.text }]}>{title}</Text>
-        <Text style={[styles.attentionDetail, { color: colors.secondary }]}>{detail}</Text>
+        <Text maxFontSizeMultiplier={1.6} style={[styles.attentionTitle, { color: colors.text }]}>
+          {title}
+        </Text>
+        <Text
+          maxFontSizeMultiplier={1.6}
+          style={[styles.attentionDetail, { color: colors.secondary }]}
+        >
+          {detail}
+        </Text>
       </View>
       {onPress ? <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} /> : null}
     </>
@@ -395,7 +450,9 @@ function AttentionRow({
       {content}
     </Pressable>
   ) : (
-    <View style={styles.attentionRow}>{content}</View>
+    <View style={styles.attentionRow} testID={testID}>
+      {content}
+    </View>
   );
 }
 
@@ -507,7 +564,7 @@ const styles = StyleSheet.create({
   emptyText: { fontSize: 14, lineHeight: 20 },
   categoryRow: { minHeight: 52 },
   categoryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  categoryName: { fontSize: 16, fontWeight: '600' },
+  categoryName: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 16, fontWeight: '600' },
   categoryAmount: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 7 },
   shareTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
@@ -532,5 +589,6 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   netWorthTrailing: { flexDirection: 'row', alignItems: 'center', gap: 9 },
+  netWorthCopy: { flex: 1, minWidth: 0, marginRight: 12 },
   netWorthChange: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

@@ -1,5 +1,6 @@
 import { Area, CartesianChart, Line } from 'victory-native';
 import { ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData } from '@/MoneyData';
 import { formatMoney, formatUnsignedMoney } from '@/money';
 import { chartColors, useAppColors } from '@/theme';
@@ -7,8 +8,8 @@ import { chartColors, useAppColors } from '@/theme';
 export default function NetWorthScreen() {
   const colors = useAppColors();
   const chart = chartColors(useColorScheme() === 'dark');
-  const { home } = useMoneyData();
-  if (!home) return null;
+  const { home, status } = useMoneyData();
+  if (status !== 'ready' || !home) return <ConnectionState />;
   const history = home.netWorthHistory.map((point, index) => ({
     index,
     total: point.total,
@@ -24,11 +25,18 @@ export default function NetWorthScreen() {
       contentInsetAdjustmentBehavior="automatic"
       testID="net-worth-detail"
     >
-      <Text style={[styles.amount, { color: colors.text }]}>
+      <Text
+        adjustsFontSizeToFit
+        allowFontScaling={false}
+        minimumFontScale={0.7}
+        numberOfLines={1}
+        style={[styles.amount, { color: colors.text }]}
+      >
         {formatUnsignedMoney(home.netWorth, home.currencyCode)}
       </Text>
       {home.netWorthChange !== null ? (
         <Text
+          allowFontScaling={false}
           style={[
             styles.change,
             { color: home.netWorthChange >= 0 ? colors.accent : colors.danger },
@@ -69,7 +77,9 @@ export default function NetWorthScreen() {
             )}
           </CartesianChart>
         ) : (
-          <View />
+          <View style={styles.noChart}>
+            <Text style={[styles.note, { color: colors.secondary }]}>No history available yet.</Text>
+          </View>
         )}
       </View>
       <View style={styles.historyLabels}>
@@ -101,13 +111,13 @@ export default function NetWorthScreen() {
       <View style={styles.compositionLabels}>
         <View>
           <Text style={[styles.label, { color: colors.secondary }]}>Assets</Text>
-          <Text style={[styles.value, { color: colors.text }]}>
+          <Text allowFontScaling={false} style={[styles.value, { color: colors.text }]}>
             {formatUnsignedMoney(assets, home.currencyCode)}
           </Text>
         </View>
         <View style={styles.right}>
           <Text style={[styles.label, { color: colors.secondary }]}>Liabilities</Text>
-          <Text style={[styles.value, { color: colors.text }]}>
+          <Text allowFontScaling={false} style={[styles.value, { color: colors.text }]}>
             {formatUnsignedMoney(liabilities, home.currencyCode)}
           </Text>
         </View>
@@ -131,6 +141,7 @@ const styles = StyleSheet.create({
   },
   change: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   chart: { height: 220, marginTop: 24 },
+  noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   historyLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 30 },
   title: { fontSize: 21, lineHeight: 27, fontWeight: '700' },

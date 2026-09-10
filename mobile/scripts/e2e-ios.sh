@@ -8,6 +8,4 @@ fi
 
 npx expo prebuild --platform ios
 npx expo run:ios --configuration Release --no-bundler
-for flow in e2e/flows/*.yaml; do
-  maestro test "$flow"
-done
+maestro test e2e/flows

@@ -25,3 +25,8 @@ name: Home renders the normal fixture
     end: 50%, 78%
 - assertVisible:
     id: home-primary-money
+- swipe:
+    start: 50%, 20%
+    end: 50%, 78%
+    duration: 600
+- assertVisible: '₪18,920'

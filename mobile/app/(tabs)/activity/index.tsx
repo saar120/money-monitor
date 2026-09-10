@@ -1,6 +1,6 @@
 import { Stack, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useMemo, useState } from 'react';
+import { useMemo, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
@@ -11,6 +11,7 @@ import {
   Text,
   View,
 } from 'react-native';
+import type { SearchBarCommands } from 'react-native-screens';
 import { ConnectionState } from '@/ConnectionState';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import { formatMoney } from '@/money';
@@ -29,12 +30,22 @@ export default function ActivityScreen() {
   const colors = useAppColors();
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ActivityFilter>('all');
+  const [refreshing, setRefreshing] = useState(false);
+  const searchBar = useRef<SearchBarCommands>(null);
   const money = useMoneyData();
   const result = useActivityTransactions(query, filter);
   const transactions = result.transactions;
   const isEmptyMonth = !query.trim() && filter === 'all';
   const currentDate = money.home?.currentDate ?? new Date().toISOString().slice(0, 10);
   const month = money.home?.month ?? '';
+  const refresh = async () => {
+    setRefreshing(true);
+    try {
+      await money.reload();
+    } finally {
+      setRefreshing(false);
+    }
+  };
 
   const sections = useMemo(
     () => groupTransactions(transactions, currentDate),
@@ -48,6 +59,7 @@ export default function ActivityScreen() {
       <Stack.Screen
         options={{
           headerSearchBarOptions: {
+            ref: searchBar,
             placeholder: 'Merchant, category, or account',
             hideWhenScrolling: false,
             onChangeText: (event) => setQuery(event.nativeEvent.text),
@@ -63,11 +75,11 @@ export default function ActivityScreen() {
         keyboardDismissMode="on-drag"
         sections={sections}
         keyExtractor={(item) => item.id}
-        testID="activity-screen"
+        testID={refreshing ? 'activity-screen-refreshing' : 'activity-screen'}
         refreshControl={
           <RefreshControl
-            refreshing={money.refreshing}
-            onRefresh={() => void money.reload()}
+            refreshing={refreshing}
+            onRefresh={() => void refresh()}
             tintColor={colors.accent}
           />
         }
@@ -75,6 +87,8 @@ export default function ActivityScreen() {
           <View>
             {money.home.reviewCount > 0 ? (
               <Pressable
+                accessibilityHint="Opens the review queue"
+                accessibilityRole="button"
                 onPress={() => router.push('/review')}
                 testID="activity-start-review"
                 style={[styles.reviewBanner, { backgroundColor: colors.accentSoft }]}
@@ -116,7 +130,10 @@ export default function ActivityScreen() {
                     key={item.key}
                     accessibilityRole="tab"
                     accessibilityState={{ selected }}
-                    onPress={() => setFilter(item.key)}
+                    onPress={() => {
+                      searchBar.current?.blur();
+                      setFilter(item.key);
+                    }}
                     testID={`activity-filter-${item.key}`}
                     style={({ pressed }) => [
                       styles.filter,
@@ -148,9 +165,19 @@ export default function ActivityScreen() {
               { backgroundColor: colors.background, borderBottomColor: colors.separator },
             ]}
           >
-            <Text style={[styles.sectionTitle, { color: colors.text }]}>{section.title}</Text>
+            <Text
+              maxFontSizeMultiplier={1.5}
+              numberOfLines={1}
+              style={[styles.sectionTitle, { color: colors.text }]}
+            >
+              {section.title}
+            </Text>
             {section.total === null ? null : (
               <Text
+                adjustsFontSizeToFit
+                allowFontScaling={false}
+                minimumFontScale={0.8}
+                numberOfLines={1}
                 testID={`section-total-${section.id}`}
                 style={[styles.sectionTotal, { color: colors.secondary }]}
               >
@@ -163,7 +190,10 @@ export default function ActivityScreen() {
           <TransactionRow
             transaction={item}
             isLast={index === section.data.length - 1}
-            onPress={() => router.push(`/(tabs)/activity/${item.id}`)}
+            onPress={() => {
+              searchBar.current?.blur();
+              router.push(`/(tabs)/activity/${item.id}`);
+            }}
           />
         )}
         ListEmptyComponent={
@@ -231,7 +261,9 @@ function TransactionRow({
           { backgroundColor: markColor(transaction.category, colors.surface) },
         ]}
       >
-        <Text style={styles.merchantInitial}>{merchantInitial(transaction.merchant)}</Text>
+        <Text allowFontScaling={false} style={styles.merchantInitial}>
+          {merchantInitial(transaction.merchant)}
+        </Text>
       </View>
       <View
         style={[
@@ -243,15 +275,29 @@ function TransactionRow({
         ]}
       >
         <View style={styles.rowTop}>
-          <Text numberOfLines={1} style={[styles.merchant, { color: colors.text }]}>
+          <Text
+            maxFontSizeMultiplier={1.5}
+            numberOfLines={1}
+            style={[styles.merchant, { color: colors.text }]}
+          >
             {transaction.merchant}
           </Text>
-          <Text style={[styles.amount, { color: positive ? colors.accent : colors.text }]}>
+          <Text
+            adjustsFontSizeToFit
+            allowFontScaling={false}
+            minimumFontScale={0.75}
+            numberOfLines={1}
+            style={[styles.amount, { color: positive ? colors.accent : colors.text }]}
+          >
             {formatMoney(transaction.amount, transaction.currencyCode, true)}
           </Text>
         </View>
         <View style={styles.rowBottom}>
-          <Text numberOfLines={1} style={[styles.metadata, { color: colors.secondary }]}>
+          <Text
+            maxFontSizeMultiplier={1.4}
+            numberOfLines={1}
+            style={[styles.metadata, { color: colors.secondary }]}
+          >
             {transaction.category} · {transaction.account}
           </Text>
           <View style={styles.flags}>
@@ -271,7 +317,9 @@ function TransactionRow({
 function Flag({ label, color, background }: { label: string; color: string; background: string }) {
   return (
     <View style={[styles.flag, { backgroundColor: background }]}>
-      <Text style={[styles.flagText, { color }]}>{label}</Text>
+      <Text maxFontSizeMultiplier={1.35} numberOfLines={1} style={[styles.flagText, { color }]}>
+        {label}
+      </Text>
     </View>
   );
 }
@@ -368,8 +416,14 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: { fontSize: 14, fontWeight: '700' },
-  sectionTotal: { fontSize: 12, fontWeight: '500', fontVariant: ['tabular-nums'] },
+  sectionTitle: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 14, fontWeight: '700' },
+  sectionTotal: {
+    flexShrink: 1,
+    fontSize: 12,
+    fontWeight: '500',
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
   row: { minHeight: 70, flexDirection: 'row', paddingLeft: 16 },
   merchantMark: {
     width: 38,
@@ -389,7 +443,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  merchant: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'auto' },
+  merchant: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
   amount: {
     minWidth: 116,
     flexShrink: 0,
@@ -400,7 +454,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   rowBottom: { minHeight: 22, flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 },
-  metadata: { flex: 1, fontSize: 12.5, writingDirection: 'auto' },
+  metadata: { flex: 1, fontSize: 12.5, writingDirection: 'ltr' },
   flags: { flexDirection: 'row', gap: 5 },
   flag: {
     height: 20,

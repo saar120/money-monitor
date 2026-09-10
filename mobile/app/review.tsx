@@ -3,6 +3,7 @@ import { Stack, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
 import {
+  ActivityIndicator,
   Animated,
   Modal,
   Pressable,
@@ -12,16 +13,19 @@ import {
   Text,
   View,
 } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import type { Transaction } from '@/fixtures';
 import { formatMoney } from '@/money';
+import { getReviewViewState } from '@/review-state';
 import { useAppColors, type AppColors } from '@/theme';
 import type { TransactionUpdate } from '@/mobile-api';
 
 export default function ReviewScreen() {
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
+  const reduceMotion = useReducedMotion();
   const { home, reload, saveTransaction, loadReviewOptions } = useMoneyData();
   const { transactions, loading, error } = useActivityTransactions('', 'review');
   const [dismissedIds, setDismissedIds] = useState(() => new Set<string>());
@@ -37,10 +41,16 @@ export default function ReviewScreen() {
   const [options, setOptions] = useState({ categories: [] as string[], owners: [] as string[] });
   const [saveError, setSaveError] = useState<string | null>(null);
   const opacity = useRef(new Animated.Value(1)).current;
+  const initializedQueue = useRef(false);
 
   useEffect(() => {
     if (transactions.length > sessionTotal) setSessionTotal(transactions.length);
   }, [sessionTotal, transactions.length]);
+  useEffect(() => {
+    if (initializedQueue.current || loading || error) return;
+    initializedQueue.current = true;
+    setSessionTotal(transactions.length);
+  }, [error, loading, transactions.length]);
   useEffect(() => {
     void loadReviewOptions()
       .then(setOptions)
@@ -56,20 +66,24 @@ export default function ReviewScreen() {
     setSaving(true);
     setSaveError(null);
     try {
-      await new Promise<void>((resolve) =>
-        Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(() =>
-          resolve(),
-        ),
-      );
+      if (!reduceMotion)
+        await new Promise<void>((resolve) =>
+          Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(() =>
+            resolve(),
+          ),
+        );
       setDismissedIds((ids) => new Set(ids).add(current.id));
-      opacity.setValue(0);
-      Animated.spring(opacity, {
-        toValue: 1,
-        damping: 18,
-        stiffness: 220,
-        mass: 0.7,
-        useNativeDriver: true,
-      }).start();
+      if (reduceMotion) opacity.setValue(1);
+      else {
+        opacity.setValue(0);
+        Animated.spring(opacity, {
+          toValue: 1,
+          damping: 18,
+          stiffness: 220,
+          mass: 0.7,
+          useNativeDriver: true,
+        }).start();
+      }
       await saveTransaction(current.id, update);
       await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (caught) {
@@ -114,15 +128,16 @@ export default function ReviewScreen() {
     }
   }
 
-  if (loading && sessionTotal === 0 && !current)
-    return (
-      <View style={[styles.center, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.secondary }}>Loading review queue…</Text>
-      </View>
-    );
   const reviewed = dismissedIds.size;
   const remaining = Math.max(0, sessionTotal - reviewed);
   const progress = sessionTotal ? reviewed / sessionTotal : 1;
+  const viewState = getReviewViewState({
+    loading,
+    saving,
+    hasCurrent: current !== null,
+    hasError: Boolean(error),
+    remaining,
+  });
 
   return (
     <>
@@ -136,7 +151,11 @@ export default function ReviewScreen() {
       >
         <View style={styles.progressHeader}>
           <Text style={[styles.progressText, { color: colors.secondary }]}>
-            {remaining ? `${remaining} to review` : 'Inbox zero'}
+            {saving && !current
+              ? 'Saving changes…'
+              : remaining
+                ? `${remaining} to review`
+                : 'Inbox zero'}
           </Text>
           <Text style={[styles.progressCount, { color: colors.secondary }]}>
             {reviewed}/{sessionTotal || reviewed}
@@ -151,19 +170,25 @@ export default function ReviewScreen() {
           />
         </View>
 
-        {!current && error && remaining ? (
+        {viewState === 'loading' ? (
+          <View style={styles.center}>
+            <ActivityIndicator color={colors.accent} />
+            <Text style={{ color: colors.secondary }}>Loading review queue…</Text>
+          </View>
+        ) : viewState === 'error' ? (
           <View style={styles.caughtUp} testID="review-error">
             <SymbolView name="exclamationmark.triangle.fill" size={44} tintColor={colors.warning} />
             <Text style={[styles.caughtUpTitle, { color: colors.text }]}>Couldn’t load review</Text>
             <Text style={[styles.caughtUpBody, { color: colors.secondary }]}>{error}</Text>
             <Pressable
+              accessibilityRole="button"
               onPress={() => void reload()}
               style={[styles.doneButton, { backgroundColor: colors.text }]}
             >
               <Text style={[styles.doneButtonText, { color: colors.background }]}>Try again</Text>
             </Pressable>
           </View>
-        ) : !current ? (
+        ) : viewState === 'complete' ? (
           <View style={styles.caughtUp} testID="review-complete">
             <SymbolView name="checkmark.circle.fill" size={58} tintColor={colors.accent} />
             <Text style={[styles.caughtUpTitle, { color: colors.text }]}>All caught up</Text>
@@ -171,6 +196,7 @@ export default function ReviewScreen() {
               Everything in your financial inbox has been reviewed.
             </Text>
             <Pressable
+              accessibilityRole="button"
               disabled={saving}
               onPress={() => router.back()}
               style={[
@@ -183,7 +209,7 @@ export default function ReviewScreen() {
               </Text>
             </Pressable>
           </View>
-        ) : (
+        ) : current ? (
           <Animated.View
             style={[
               styles.card,
@@ -204,10 +230,18 @@ export default function ReviewScreen() {
               <Text style={[styles.date, { color: colors.secondary }]}>
                 {relativeDate(current.occurredAt, home?.currentDate)} · {current.account}
               </Text>
-              <Text numberOfLines={2} style={[styles.merchant, { color: colors.text }]}>
+              <Text
+                maxFontSizeMultiplier={1.6}
+                numberOfLines={2}
+                style={[styles.merchant, { color: colors.text }]}
+              >
                 {current.merchant}
               </Text>
               <Text
+                adjustsFontSizeToFit
+                allowFontScaling={false}
+                minimumFontScale={0.7}
+                numberOfLines={1}
                 style={[styles.amount, { color: current.amount > 0 ? colors.accent : colors.text }]}
               >
                 {formatMoney(current.amount, current.currencyCode ?? home?.currencyCode, true)}
@@ -290,7 +324,7 @@ export default function ReviewScreen() {
               </Text>
             </View>
           </Animated.View>
-        )}
+        ) : null}
       </View>
       <OptionSheet
         visible={picker !== null}
@@ -372,7 +406,7 @@ function OptionSheet({
     >
       <View style={[styles.sheet, { backgroundColor: colors.background }]}>
         <View style={styles.sheetHeader}>
-          <Pressable onPress={onClose} style={styles.sheetButton}>
+          <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetButton}>
             <Text style={[styles.sheetButtonText, { color: colors.accent }]}>Cancel</Text>
           </Pressable>
           <Text style={[styles.sheetTitle, { color: colors.text }]}>{title}</Text>
@@ -381,6 +415,8 @@ function OptionSheet({
         <ScrollView contentContainerStyle={styles.sheetList}>
           {options.map((option) => (
             <Pressable
+              accessibilityRole="button"
+              accessibilityState={{ selected: selected === option }}
               key={option}
               onPress={() => onSelect(option)}
               style={[styles.option, { borderBottomColor: colors.separator }]}
@@ -410,7 +446,7 @@ function relativeDate(value: string, currentDate?: string) {
 
 const styles = StyleSheet.create({
   screen: { flex: 1 },
-  center: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   progressHeader: {
     flexDirection: 'row',
     justifyContent: 'space-between',
@@ -436,7 +472,7 @@ const styles = StyleSheet.create({
     lineHeight: 36,
     fontWeight: '700',
     textAlign: 'center',
-    writingDirection: 'auto',
+    writingDirection: 'ltr',
   },
   amount: {
     marginTop: 8,
@@ -453,7 +489,7 @@ const styles = StyleSheet.create({
   disabled: { opacity: 0.55 },
   fieldText: { flex: 1 },
   fieldLabel: { fontSize: 15, fontWeight: '600' },
-  fieldValue: { marginTop: 2, fontSize: 13, writingDirection: 'auto' },
+  fieldValue: { marginTop: 2, fontSize: 13, writingDirection: 'ltr' },
   error: { marginTop: 16, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   actions: { paddingHorizontal: 20, paddingTop: 10 },
   primaryButton: {
@@ -497,5 +533,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  optionText: { fontSize: 17, writingDirection: 'auto' },
+  optionText: { fontSize: 17, writingDirection: 'ltr' },
 });

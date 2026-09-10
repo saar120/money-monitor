@@ -9,7 +9,11 @@ import {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
-import { getFixtureScenario, isFixtureMode } from './fixture-selection';
+import {
+  getFixtureRefreshDelay,
+  getFixtureScenario,
+  isFixtureMode,
+} from './fixture-selection';
 import type { HomeData, Transaction } from './fixtures';
 import {
   fetchHomeData,
@@ -30,7 +34,6 @@ type MoneyDataContextValue = {
   home: HomeData | null;
   credential: PairingCredential | null;
   error: string | null;
-  refreshing: boolean;
   revision: number;
   reload: () => Promise<void>;
   fixtureTransactions: Transaction[];
@@ -47,32 +50,29 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
   const [home, setHome] = useState<HomeData | null>(fixture ? getFixtureScenario() : null);
   const [credential, setCredential] = useState<PairingCredential | null>(null);
   const [error, setError] = useState<string | null>(null);
-  const [refreshing, setRefreshing] = useState(false);
   const [revision, setRevision] = useState(0);
   const [fixtureTransactions, setFixtureTransactions] = useState<Transaction[]>(
     () => getFixtureScenario().transactions,
   );
   const hasHome = useRef(home !== null);
+  const fixtureReloads = useRef(0);
 
   const reload = useCallback(async () => {
     if (fixture) {
-      setRefreshing(true);
-      try {
-        const scenario = getFixtureScenario();
-        setHome(scenario);
-        setFixtureTransactions(scenario.transactions);
-        setError(null);
-        setStatus('ready');
-        setRevision((value) => value + 1);
-      } finally {
-        setRefreshing(false);
-      }
+      const delay = fixtureReloads.current > 0 ? getFixtureRefreshDelay() : 0;
+      fixtureReloads.current += 1;
+      if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      const scenario = getFixtureScenario();
+      setHome(scenario);
+      setFixtureTransactions(scenario.transactions);
+      setError(null);
+      setStatus('ready');
+      setRevision((value) => value + 1);
       return;
     }
 
     const isRefresh = hasHome.current;
-    if (isRefresh) setRefreshing(true);
-    else setStatus('loading');
+    if (!isRefresh) setStatus('loading');
     setError(null);
     try {
       const stored = await readPairingCredential();
@@ -99,8 +99,6 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
         setHome(null);
         setStatus('error');
       }
-    } finally {
-      setRefreshing(false);
     }
   }, [fixture]);
 
@@ -167,7 +165,6 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       home,
       credential,
       error,
-      refreshing,
       revision,
       reload,
       fixtureTransactions,
@@ -182,7 +179,6 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       home,
       loadReviewOptions,
       reload,
-      refreshing,
       revision,
       saveTransaction,
       status,

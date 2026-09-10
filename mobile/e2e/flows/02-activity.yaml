@@ -37,7 +37,26 @@ name: Activity search filters and detail
     id: transaction-detail
 - assertVisible: '−₪214.90'
 - assertVisible: 'סופר־פארם'
-- assertVisible: 'Health'
+- assertVisible: '.*Category, Health.*'
 - assertVisible: 'Isracard · 3098'
 - assertVisible: 'Household'
 - assertVisible: 'Needs review'
+- tapOn:
+    id: transaction-category
+- assertVisible: 'Change category'
+- tapOn: 'Groceries'
+- assertVisible: '.*Category, Groceries.*'
+- tapOn:
+    id: transaction-effective-date
+- assertVisible:
+    id: effective-date-sheet
+- tapOn: 'Monday, 7 September'
+- tapOn: 'Done'
+- assertVisible: '.*Effective date, Sep 7, 2026.*'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible:
+    id: activity-screen
+- assertVisible: '.*Groceries.*Isracard · 3098.*'

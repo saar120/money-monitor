@@ -322,19 +322,38 @@ export async function fetchTransactions(
   if (query.filter === 'review') params.set('includeExcluded', 'true');
   if (query.filter === 'pending') params.set('status', 'pending');
   if (query.filter === 'credits') params.set('direction', 'credit');
-  const root = object(
-    await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
-    'transactions',
-  );
-  verifyServer(root, credential);
-  const data = object(root.data, 'transactions');
-  const page = object(data.page, 'transaction page');
-  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid transactions.');
-  return {
-    financialDate: date(data.financialDate, 'financial date'),
-    transactions: data.transactions.map((item) => mapTransaction(item)),
-    hasMore: boolean(page.hasMore, 'transaction page'),
-  };
+  const transactions: Transaction[] = [];
+  const seenCursors = new Set<string>();
+  let financialDate: string;
+  let cursor: string | null = null;
+
+  do {
+    if (cursor) params.set('cursor', cursor);
+    const root = object(
+      await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
+      'transactions',
+    );
+    verifyServer(root, credential);
+    const data = object(root.data, 'transactions');
+    const page = object(data.page, 'transaction page');
+    if (!Array.isArray(data.transactions))
+      throw new Error('The Mac returned invalid transactions.');
+    const hasMore = boolean(page.hasMore, 'transaction page');
+    const nextCursor =
+      page.nextCursor === null || page.nextCursor === undefined
+        ? null
+        : text(page.nextCursor, 'transaction cursor');
+    if (hasMore !== (nextCursor !== null))
+      throw new Error('The Mac returned invalid transaction paging data.');
+    if (nextCursor && seenCursors.has(nextCursor))
+      throw new Error('The Mac returned repeated transaction paging data.');
+    if (nextCursor) seenCursors.add(nextCursor);
+    financialDate = date(data.financialDate, 'financial date');
+    transactions.push(...data.transactions.map((item) => mapTransaction(item)));
+    cursor = nextCursor;
+  } while (cursor);
+
+  return { financialDate, transactions, hasMore: false };
 }
 
 export async function fetchTransactionDetail(

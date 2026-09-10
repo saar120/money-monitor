@@ -1,5 +1,6 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ConnectionState } from '@/ConnectionState';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import { formatMoney, formatUnsignedMoney } from '@/money';
 import { useAppColors } from '@/theme';
@@ -7,10 +8,10 @@ import { useAppColors } from '@/theme';
 export default function MerchantScreen() {
   const colors = useAppColors();
   const { name } = useLocalSearchParams<{ name: string }>();
-  const { home } = useMoneyData();
+  const { home, status } = useMoneyData();
   const { transactions } = useActivityTransactions(name ?? '', 'all');
   const merchant = home?.merchants.find((item) => item.name === name);
-  if (!home) return null;
+  if (status !== 'ready' || !home) return <ConnectionState />;
   const delta = merchant ? merchant.current - merchant.previous : null;
   return (
     <>
@@ -22,7 +23,13 @@ export default function MerchantScreen() {
       >
         {merchant ? (
           <>
-            <Text style={[styles.amount, { color: colors.text }]}>
+            <Text
+              adjustsFontSizeToFit
+              allowFontScaling={false}
+              minimumFontScale={0.7}
+              numberOfLines={1}
+              style={[styles.amount, { color: colors.text }]}
+            >
               {formatUnsignedMoney(merchant.current, home.currencyCode)}
             </Text>
             <Text style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.accent }]}>
@@ -37,6 +44,8 @@ export default function MerchantScreen() {
         {transactions.length ? (
           transactions.map((transaction) => (
             <Pressable
+              accessibilityHint="Opens transaction details"
+              accessibilityRole="button"
               key={transaction.id}
               onPress={() => router.push(`/(tabs)/activity/${transaction.id}`)}
               style={styles.row}
@@ -45,14 +54,23 @@ export default function MerchantScreen() {
                 <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
                   {transaction.merchant}
                 </Text>
-                <Text style={[styles.rowMeta, { color: colors.secondary }]}>
+                <Text
+                  maxFontSizeMultiplier={1.4}
+                  style={[styles.rowMeta, { color: colors.secondary }]}
+                >
                   {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
                     new Date(transaction.occurredAt),
                   )}{' '}
                   · {transaction.account}
                 </Text>
               </View>
-              <Text style={[styles.rowAmount, { color: colors.text }]}>
+              <Text
+                adjustsFontSizeToFit
+                allowFontScaling={false}
+                minimumFontScale={0.75}
+                numberOfLines={1}
+                style={[styles.rowAmount, { color: colors.text }]}
+              >
                 {formatMoney(
                   transaction.amount,
                   transaction.currencyCode ?? home.currencyCode,
@@ -86,8 +104,8 @@ const styles = StyleSheet.create({
   title: { marginTop: 36, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12 },
   rowText: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'auto' },
-  rowMeta: { marginTop: 3, fontSize: 12.5, writingDirection: 'auto' },
+  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
+  rowMeta: { marginTop: 3, fontSize: 12.5, writingDirection: 'ltr' },
   rowAmount: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   empty: { marginTop: 10, fontSize: 14 },
 });

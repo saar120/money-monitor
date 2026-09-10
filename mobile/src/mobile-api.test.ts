@@ -187,3 +187,41 @@ test('loads the full review inbox while keeping normal activity month-scoped', a
     globalThis.fetch = originalFetch;
   }
 });
+
+test('follows transaction cursors so the review queue cannot stop at the first page', async () => {
+  const paths: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    const url = new URL(String(input));
+    paths.push(url.toString());
+    const secondPage = url.searchParams.has('cursor');
+    return new Response(
+      JSON.stringify({
+        data: {
+          financialDate: '2026-09-08',
+          transactions: secondPage ? [] : [],
+          page: secondPage
+            ? { hasMore: false, nextCursor: null }
+            : { hasMore: true, nextCursor: 'cursor_v1_next' },
+        },
+        meta: { server: { id: '11111111-1111-4111-8111-111111111111' } },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  try {
+    await fetchTransactions(
+      {
+        serverId: '11111111-1111-4111-8111-111111111111',
+        baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+        token: 'T'.repeat(43),
+      },
+      { filter: 'review' },
+    );
+    assert.equal(paths.length, 2);
+    assert.equal(new URL(paths[1]!).searchParams.get('cursor'), 'cursor_v1_next');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});

@@ -23,7 +23,7 @@ export default function ExploreScreen() {
 
   useAnimatedReaction(
     () => ({
-      day: Number(pressState.x.value.value),
+      day: Math.round(Number(pressState.x.value.value)),
       current: pressState.y.current.value.value,
       previous: pressState.y.previous.value.value,
     }),
@@ -32,6 +32,10 @@ export default function ExploreScreen() {
   useEffect(() => {
     if (isActive) void Haptics.selectionAsync();
   }, [isActive, selected.day]);
+  useEffect(() => {
+    const latest = home?.trend.at(-1);
+    if (!isActive && latest) setSelected(latest);
+  }, [home?.trend, isActive]);
 
   if (status !== 'ready' || !home) return <ConnectionState />;
   const categoryChanges = [...home.categories].sort(
@@ -58,9 +62,17 @@ export default function ExploreScreen() {
       </Text>
 
       <View style={styles.paceHeader}>
-        <View>
-          <Text style={[styles.sectionTitle, { color: colors.text }]}>Spending pace</Text>
-          <Text style={[styles.scrubHint, { color: colors.secondary }]}>
+        <View style={styles.paceCopy}>
+          <Text
+            maxFontSizeMultiplier={1.6}
+            style={[styles.sectionTitle, { color: colors.text }]}
+          >
+            Spending pace
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.6}
+            style={[styles.scrubHint, { color: colors.secondary }]}
+          >
             Touch and drag to compare any day
           </Text>
         </View>
@@ -72,8 +84,10 @@ export default function ExploreScreen() {
                 home.spent <= home.previousSpent ? colors.accentSoft : colors.warningSoft,
             },
           ]}
+          testID="pace-delta-badge"
         >
           <Text
+            allowFontScaling={false}
             style={[
               styles.paceBadgeText,
               { color: home.spent <= home.previousSpent ? colors.accent : colors.warning },
@@ -87,10 +101,10 @@ export default function ExploreScreen() {
         <Text style={[styles.scrubDay, { color: colors.text }]}>
           {home.month.slice(0, 3)} {selected.day}
         </Text>
-        <Text style={[styles.scrubCurrent, { color: colors.text }]}>
+        <Text allowFontScaling={false} style={[styles.scrubCurrent, { color: colors.text }]}>
           Current {formatUnsignedMoney(selected.current, home.currencyCode)}
         </Text>
-        <Text style={[styles.scrubPrevious, { color: colors.secondary }]}>
+        <Text allowFontScaling={false} style={[styles.scrubPrevious, { color: colors.secondary }]}>
           Last month {formatUnsignedMoney(selected.previous, home.currencyCode)}
         </Text>
       </View>
@@ -106,7 +120,6 @@ export default function ExploreScreen() {
             xKey="day"
             yKeys={['current', 'previous']}
             chartPressState={pressState}
-            gestureLongPressDelay={0}
             domain={{
               y: [
                 0,
@@ -158,6 +171,8 @@ export default function ExploreScreen() {
             const delta = category.spent - category.previous;
             return (
               <Pressable
+                accessibilityHint={`Opens ${category.name} spending details`}
+                accessibilityRole="button"
                 key={category.name}
                 testID={`explore-category-${category.name}`}
                 onPress={() =>
@@ -169,8 +184,15 @@ export default function ExploreScreen() {
                 style={styles.comparisonRow}
               >
                 <View style={styles.comparisonTop}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>{category.name}</Text>
                   <Text
+                    maxFontSizeMultiplier={1.5}
+                    numberOfLines={1}
+                    style={[styles.itemName, { color: colors.text }]}
+                  >
+                    {category.name}
+                  </Text>
+                  <Text
+                    allowFontScaling={false}
                     style={[
                       styles.itemDelta,
                       { color: delta > 0 ? colors.warning : colors.accent },
@@ -200,7 +222,10 @@ export default function ExploreScreen() {
                   />
                 </View>
                 <View style={styles.comparisonBottom}>
-                  <Text style={[styles.itemAmount, { color: colors.secondary }]}>
+                  <Text
+                    allowFontScaling={false}
+                    style={[styles.itemAmount, { color: colors.secondary }]}
+                  >
                     {formatUnsignedMoney(category.spent, home.currencyCode)} now
                   </Text>
                   <SymbolView name="chevron.right" size={11} tintColor={colors.tertiary} />
@@ -226,6 +251,8 @@ export default function ExploreScreen() {
               const delta = merchant.current - merchant.previous;
               return (
                 <Pressable
+                  accessibilityHint={`Opens ${merchant.name} merchant details`}
+                  accessibilityRole="button"
                   key={`${merchant.category}-${merchant.name}`}
                   testID={`explore-merchant-${merchant.name}`}
                   onPress={() =>
@@ -236,14 +263,25 @@ export default function ExploreScreen() {
                   }
                   style={styles.merchantRow}
                 >
-                  <View>
-                    <Text style={[styles.itemName, { color: colors.text }]}>{merchant.name}</Text>
-                    <Text style={[styles.merchantMeta, { color: colors.secondary }]}>
+                  <View style={styles.merchantText}>
+                    <Text
+                      maxFontSizeMultiplier={1.5}
+                      numberOfLines={1}
+                      style={[styles.itemName, { color: colors.text }]}
+                    >
+                      {merchant.name}
+                    </Text>
+                    <Text
+                      maxFontSizeMultiplier={1.4}
+                      numberOfLines={1}
+                      style={[styles.merchantMeta, { color: colors.secondary }]}
+                    >
                       {merchant.category} · {merchant.count} transaction
                       {merchant.count === 1 ? '' : 's'}
                     </Text>
                   </View>
                   <Text
+                    allowFontScaling={false}
                     style={[
                       styles.itemDelta,
                       { color: delta > 0 ? colors.warning : colors.accent },
@@ -266,8 +304,15 @@ export default function ExploreScreen() {
             {home.budgets.map((budget) => (
               <View key={budget.name} style={styles.exploreBudget}>
                 <View style={styles.comparisonTop}>
-                  <Text style={[styles.itemName, { color: colors.text }]}>{budget.name}</Text>
                   <Text
+                    maxFontSizeMultiplier={1.5}
+                    numberOfLines={1}
+                    style={[styles.itemName, { color: colors.text }]}
+                  >
+                    {budget.name}
+                  </Text>
+                  <Text
+                    allowFontScaling={false}
                     style={[
                       styles.itemAmount,
                       { color: budget.status === 'over_budget' ? colors.danger : colors.secondary },
@@ -288,9 +333,13 @@ export default function ExploreScreen() {
                     ]}
                   />
                 </View>
-                <Text style={[styles.merchantMeta, { color: colors.secondary }]}>
+                <Text
+                  maxFontSizeMultiplier={1.4}
+                  style={[styles.merchantMeta, { color: colors.secondary }]}
+                >
                   {Math.round(budget.elapsedPercent)}% of the month passed ·{' '}
-                  {formatMoney(budget.remaining, home.currencyCode)} remaining
+                  {formatUnsignedMoney(Math.abs(budget.remaining), home.currencyCode)}{' '}
+                  {budget.remaining < 0 ? 'over' : 'remaining'}
                 </Text>
               </View>
             ))}
@@ -299,12 +348,20 @@ export default function ExploreScreen() {
       ) : null}
 
       <Pressable
+        accessibilityHint="Opens net worth details"
+        accessibilityRole="button"
         onPress={() => router.push('/(tabs)/explore/net-worth')}
         style={[styles.netWorthLink, { borderTopColor: colors.separator }]}
       >
-        <View>
+        <View style={styles.netWorthCopy}>
           <Text style={[styles.sectionTitle, { color: colors.text }]}>Net worth</Text>
-          <Text style={[styles.netWorthAmount, { color: colors.text }]}>
+          <Text
+            adjustsFontSizeToFit
+            allowFontScaling={false}
+            minimumFontScale={0.8}
+            numberOfLines={1}
+            style={[styles.netWorthAmount, { color: colors.text }]}
+          >
             {formatUnsignedMoney(home.netWorth, home.currencyCode)}
           </Text>
         </View>
@@ -323,6 +380,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     marginTop: 28,
   },
+  paceCopy: { flex: 1, minWidth: 0, marginRight: 12 },
   sectionTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700', letterSpacing: -0.35 },
   scrubHint: { marginTop: 3, fontSize: 12.5 },
   paceBadge: { minHeight: 32, borderRadius: 16, paddingHorizontal: 10, justifyContent: 'center' },
@@ -346,7 +404,14 @@ const styles = StyleSheet.create({
   emptyText: { marginTop: 16, fontSize: 14, lineHeight: 20 },
   comparisonRow: { minHeight: 72 },
   comparisonTop: { flexDirection: 'row', justifyContent: 'space-between', alignItems: 'baseline' },
-  itemName: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  itemName: {
+    flex: 1,
+    minWidth: 0,
+    marginRight: 12,
+    fontSize: 16,
+    lineHeight: 21,
+    fontWeight: '600',
+  },
   itemDelta: { fontSize: 14, lineHeight: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
   comparisonBars: { gap: 4, marginTop: 8 },
   bar: { height: 4, borderRadius: 2 },
@@ -364,7 +429,8 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  merchantMeta: { marginTop: 3, fontSize: 12.5 },
+  merchantText: { flex: 1, minWidth: 0 },
+  merchantMeta: { marginTop: 3, fontSize: 12.5, writingDirection: 'ltr' },
   budgetList: { marginTop: 14, gap: 22 },
   exploreBudget: { minHeight: 64 },
   budgetTrack: { height: 5, borderRadius: 3, overflow: 'hidden', marginTop: 9 },
@@ -386,4 +452,5 @@ const styles = StyleSheet.create({
     letterSpacing: -0.8,
     fontVariant: ['tabular-nums'],
   },
+  netWorthCopy: { flex: 1, minWidth: 0, marginRight: 12 },
 });
