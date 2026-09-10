@@ -2,6 +2,7 @@ import { Settings } from 'react-native';
 import { fixtureScenarios, type FixtureScenario, type FixtureScenarioName } from './fixtures';
 
 const launchScenario = Settings.get('MM_FIXTURE_SCENARIO') as string | undefined;
+const launchRefreshDelay = Number(Settings.get('MM_FIXTURE_REFRESH_DELAY_MS')) || 0;
 let fixtureMode = Boolean(launchScenario && launchScenario in fixtureScenarios);
 
 let selectedScenario: FixtureScenarioName =
@@ -23,4 +24,8 @@ export function isFixtureMode(): boolean {
 
 export function getFixtureScenario(): FixtureScenario {
   return fixtureScenarios[selectedScenario];
+}
+
+export function getFixtureRefreshDelay(): number {
+  return Math.max(0, launchRefreshDelay);
 }

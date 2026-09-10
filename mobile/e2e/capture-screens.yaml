@@ -8,11 +8,11 @@ name: Capture product evidence
 - assertVisible:
     id: home-screen
 - takeScreenshot: docs/screenshots/home
-- tapOn: "Activity, tab, 2 of 4"
+- tapOn: 'Activity, tab, 2 of 3'
 - assertVisible:
     id: activity-screen
 - takeScreenshot: docs/screenshots/activity
-- tapOn: "Merchant, category, or account"
+- tapOn: 'Merchant, category, or account'
 - inputText: Apple
 - assertVisible:
     id: transaction-txn-apple
@@ -36,8 +36,7 @@ name: Capture product evidence
 - setPermissions:
     permissions:
       camera: allow
-- tapOn: "Advisor, tab, 4 of 4"
-- tapOn: ".*Connect to your Mac.*"
+- openLink: 'moneymonitor://scanner'
 - assertVisible:
     id: qr-scanner
 - takeScreenshot: docs/screenshots/qr-scanner

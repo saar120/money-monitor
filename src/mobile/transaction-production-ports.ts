@@ -5,6 +5,7 @@ import { MobileBootstrapSectionReadError } from './bootstrap-adapter.js';
 import {
   boundedMobileText,
   maskAccountIdentifier,
+  mobileTransactionDisplayName,
   projectMobileMoney,
   projectMobileTransactionDirection,
   projectMobileTransactionStatus,
@@ -20,6 +21,7 @@ import type {
   MobileTransactionListEnvelope,
   MobileTransactionItem,
   MobileTransactionQuery,
+  MobileTransactionUpdate,
 } from './transaction-contract.js';
 import type { MobileTransactionReadContext } from './transaction-routes.js';
 
@@ -29,6 +31,7 @@ type MobileTransactionListData = MobileTransactionListEnvelope['data'];
 export interface ProductionMobileTransactionPortOptions {
   db: MoneyMonitorDatabase;
   publicIdKey: string;
+  updateCategory?: (transactionId: number, category: string) => unknown | null;
 }
 
 export interface ProductionMobileTransactionPorts {
@@ -40,6 +43,12 @@ export interface ProductionMobileTransactionPorts {
     publicId: string,
     context: Readonly<MobileTransactionReadContext>,
   ): MobileTransactionDetail | null;
+  update(
+    publicId: string,
+    update: MobileTransactionUpdate,
+    context: Readonly<MobileTransactionReadContext>,
+  ): MobileTransactionDetail | null;
+  reviewOptions(): { categories: string[]; owners: string[] };
 }
 
 interface ProjectableTransactionRow {
@@ -57,6 +66,9 @@ interface ProjectableTransactionRow {
   accountNumber: string | null;
   needsReview: boolean;
   ignored: boolean;
+  effectiveOn: string | null;
+  ownerType: string | null;
+  ownerName: string | null;
 }
 
 function financialDate(value: string): string {
@@ -96,7 +108,7 @@ export function createProductionMobileTransactionPorts(
     return {
       id: publicId('transaction', row.transactionId),
       occurredOn: financialDate(row.occurredOn),
-      displayName: boundedMobileText(row.description, 'Transaction', 160),
+      displayName: mobileTransactionDisplayName(row.description),
       amount: projectMobileMoney(Math.abs(row.chargedAmount), row.chargedCurrency),
       direction: projectMobileTransactionDirection(row.chargedAmount),
       status: projectMobileTransactionStatus(row.transactionStatus),
@@ -114,6 +126,15 @@ export function createProductionMobileTransactionPorts(
       },
       needsReview: row.needsReview,
       excludedFromReports: row.ignored,
+      effectiveOn: row.effectiveOn ? financialDate(row.effectiveOn) : null,
+      owner:
+        row.ownerType === 'member' && row.ownerName
+          ? { kind: 'member', displayName: boundedMobileText(row.ownerName, 'Member', 80) }
+          : row.ownerType === 'shared'
+            ? { kind: 'shared', displayName: null }
+            : row.ownerType === 'unassigned'
+              ? { kind: 'unassigned', displayName: null }
+              : { kind: 'unknown', displayName: null },
     };
   }
 
@@ -157,6 +178,9 @@ export function createProductionMobileTransactionPorts(
     accountNumber: schema.accounts.accountNumber,
     needsReview: schema.transactions.needsReview,
     ignored: schema.transactions.ignored,
+    effectiveOn: schema.transactions.effectiveDate,
+    ownerType: schema.transactions.expenseOwnerType,
+    ownerName: schema.members.name,
   };
 
   function list(
@@ -204,6 +228,14 @@ export function createProductionMobileTransactionPorts(
       }
       conditions.push(eq(schema.transactions.accountId, accountId));
     }
+    if (query.category) {
+      conditions.push(
+        or(
+          eq(schema.transactions.category, query.category),
+          eq(schema.categories.label, query.category),
+        ) as SQL,
+      );
+    }
     if (query.q) {
       const expression = literalSearchExpression(query.q);
       if (expression === null) {
@@ -233,6 +265,7 @@ export function createProductionMobileTransactionPorts(
       .from(schema.transactions)
       .leftJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
       .leftJoin(schema.categories, eq(schema.transactions.category, schema.categories.name))
+      .leftJoin(schema.members, eq(schema.transactions.expenseOwnerMemberId, schema.members.id))
       .where(and(...conditions))
       .orderBy(desc(schema.transactions.date), desc(schema.transactions.id))
       .limit(query.limit + 1)
@@ -269,8 +302,6 @@ export function createProductionMobileTransactionPorts(
     const row = options.db
       .select({
         ...selection,
-        ownerType: schema.transactions.expenseOwnerType,
-        ownerName: schema.members.name,
       })
       .from(schema.transactions)
       .leftJoin(schema.accounts, eq(schema.transactions.accountId, schema.accounts.id))
@@ -289,16 +320,93 @@ export function createProductionMobileTransactionPorts(
     }
 
     const item = projectRow(row);
-    const owner: MobileTransactionDetail['owner'] =
-      row.ownerType === 'member' && row.ownerName
-        ? { kind: 'member', displayName: boundedMobileText(row.ownerName, 'Member', 80) }
-        : row.ownerType === 'shared'
-          ? { kind: 'shared', displayName: null }
-          : row.ownerType === 'unassigned'
-            ? { kind: 'unassigned', displayName: null }
-            : { kind: 'unknown', displayName: null };
-    return { ...item, owner };
+    return item as MobileTransactionDetail;
   }
 
-  return Object.freeze({ list, detail });
+  function reviewOptions() {
+    const categories = options.db
+      .select({ label: schema.categories.label })
+      .from(schema.categories)
+      .orderBy(schema.categories.label)
+      .all()
+      .map((row) => boundedMobileText(row.label, 'Category', 80));
+    const owners = options.db
+      .select({ name: schema.members.name })
+      .from(schema.members)
+      .where(eq(schema.members.isActive, true))
+      .orderBy(schema.members.name)
+      .all()
+      .map((row) => boundedMobileText(row.name, 'Member', 80));
+    return { categories, owners: [...owners, 'Shared', 'Unassigned'] };
+  }
+
+  function update(
+    publicTransactionId: string,
+    patch: MobileTransactionUpdate,
+    context: Readonly<MobileTransactionReadContext>,
+  ) {
+    const transactionId = localTransactionId(publicTransactionId);
+    if (transactionId === null) return null;
+    const values: Partial<typeof schema.transactions.$inferInsert> = {};
+    if (patch.category !== undefined) {
+      const matches = options.db
+        .select({ name: schema.categories.name, ignored: schema.categories.ignoredFromStats })
+        .from(schema.categories)
+        .where(
+          or(
+            eq(schema.categories.label, patch.category),
+            eq(schema.categories.name, patch.category),
+          ),
+        )
+        .all();
+      if (matches.length !== 1) throw new Error('Category is unavailable');
+      if (options.updateCategory) {
+        if (options.updateCategory(transactionId, matches[0]!.name) === null) return null;
+      } else {
+        values.category = matches[0]!.name;
+        values.ignored = matches[0]!.ignored;
+        values.needsReview = false;
+        values.reviewReason = null;
+      }
+    }
+    if (patch.owner !== undefined) {
+      if (patch.owner === 'Shared' || patch.owner === 'Unassigned') {
+        values.expenseOwnerType = patch.owner === 'Shared' ? 'shared' : 'unassigned';
+        values.expenseOwnerMemberId = null;
+      } else {
+        const matches = options.db
+          .select({ id: schema.members.id })
+          .from(schema.members)
+          .where(and(eq(schema.members.name, patch.owner), eq(schema.members.isActive, true)))
+          .all();
+        if (matches.length !== 1) throw new Error('Owner is unavailable');
+        values.expenseOwnerType = 'member';
+        values.expenseOwnerMemberId = matches[0]!.id;
+      }
+      values.ownerSource = 'manual';
+      values.ownerConfidence = 1;
+      values.ownerReviewReason = null;
+    }
+    if (patch.included !== undefined) values.ignored = !patch.included;
+    if (patch.effectiveDate !== undefined) values.effectiveDate = patch.effectiveDate;
+    if (patch.reviewed) {
+      values.needsReview = false;
+      values.reviewReason = null;
+    }
+    if (Object.keys(values).length > 0) {
+      options.db
+        .update(schema.transactions)
+        .set(values)
+        .where(
+          and(
+            eq(schema.transactions.id, transactionId),
+            lte(schema.transactions.date, context.financialDate),
+          ),
+        )
+        .run();
+    }
+    return detail(publicTransactionId, context);
+  }
+
+  return Object.freeze({ list, detail, update, reviewOptions });
 }

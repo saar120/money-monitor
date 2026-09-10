@@ -50,6 +50,8 @@ describe('protected mobile transaction routes', () => {
       authenticationResult?: MobileAuthenticationResult;
       list?: MobileTransactionRouteDependencies['list'];
       detail?: MobileTransactionRouteDependencies['detail'];
+      update?: MobileTransactionRouteDependencies['update'];
+      reviewOptions?: MobileTransactionRouteDependencies['reviewOptions'];
       errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
     } = {},
   ) {
@@ -70,7 +72,14 @@ describe('protected mobile transaction routes', () => {
         (() => ({ ...transaction(), owner: { kind: 'unassigned', displayName: null } })),
     );
     const server = createMobileServer({
-      transactions: { authenticator, server: SERVER, list, detail },
+      transactions: {
+        authenticator,
+        server: SERVER,
+        list,
+        detail,
+        update: options.update,
+        reviewOptions: options.reviewOptions,
+      },
       clock: () => NOW,
       errorObserver: options.errorObserver,
       logger: false,
@@ -205,6 +214,51 @@ describe('protected mobile transaction routes', () => {
     expect(missingResponse.statusCode).toBe(404);
     expect(missingResponse.json().error.code).toBe('transaction_not_found');
     expect(missingResponse.body).not.toContain(missingId);
+  });
+
+  it('exposes only the narrow review options and transaction patch when their providers exist', async () => {
+    const update = vi.fn(() => ({
+      ...transaction(),
+      category: { id: project('category', 3), label: 'Dining' },
+      needsReview: false,
+      owner: { kind: 'unassigned' as const, displayName: null },
+    }));
+    const reviewOptions = vi.fn(() => ({
+      categories: ['Dining', 'Groceries'],
+      owners: ['Saar', 'Shared'],
+    }));
+    const { app } = makeServer({ update, reviewOptions });
+
+    const optionsResponse = await app.inject({
+      method: 'GET',
+      url: '/api/mobile/v1/transactions/review-options',
+      headers: { authorization: `Bearer ${TOKEN}` },
+    });
+    const updateResponse = await app.inject({
+      method: 'PATCH',
+      url: `/api/mobile/v1/transactions/${project('transaction', 1)}`,
+      headers: { authorization: `Bearer ${TOKEN}` },
+      payload: { category: 'Dining', reviewed: true },
+    });
+
+    expect(optionsResponse.statusCode).toBe(200);
+    expect(optionsResponse.json().data).toEqual({
+      categories: ['Dining', 'Groceries'],
+      owners: ['Saar', 'Shared'],
+    });
+    expect(updateResponse.statusCode).toBe(200);
+    expect(updateResponse.json().data.transaction).toEqual(
+      expect.objectContaining({
+        category: { id: project('category', 3), label: 'Dining' },
+        needsReview: false,
+      }),
+    );
+    expect(update).toHaveBeenCalledWith(
+      project('transaction', 1),
+      { category: 'Dining', reviewed: true },
+      { generatedAt: NOW.toISOString(), financialDate: '2026-07-16' },
+      DEVICE,
+    );
   });
 
   it('rejects malformed query and public IDs without invoking providers', async () => {

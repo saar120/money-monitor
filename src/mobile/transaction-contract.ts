@@ -57,6 +57,7 @@ export const mobileTransactionQuerySchema = z
     needsReview: queryBooleanSchema().optional(),
     includeExcluded: queryBooleanSchema().default(false),
     accountId: accountIdSchema.optional(),
+    category: normalizedQuerySchema.optional(),
   })
   .strict()
   .superRefine((query, context) => {
@@ -95,6 +96,8 @@ export const mobileTransactionItemSchema = z
       .strict(),
     needsReview: z.boolean(),
     excludedFromReports: z.boolean(),
+    effectiveOn: bootstrapFinancialDateSchema.nullable().optional(),
+    owner: z.lazy(() => mobileTransactionOwnerSchema).optional(),
   })
   .strict();
 
@@ -117,6 +120,19 @@ export const mobileTransactionOwnerSchema = z
 export const mobileTransactionDetailSchema = mobileTransactionItemSchema
   .extend({ owner: mobileTransactionOwnerSchema })
   .strict();
+
+export const mobileTransactionUpdateSchema = z
+  .object({
+    category: z.string().trim().min(1).max(80).optional(),
+    owner: z.string().trim().min(1).max(80).optional(),
+    included: z.boolean().optional(),
+    effectiveDate: bootstrapFinancialDateSchema.nullable().optional(),
+    reviewed: z.literal(true).optional(),
+  })
+  .strict()
+  .refine((value) => Object.keys(value).length > 0, 'At least one update is required');
+
+export type MobileTransactionUpdate = z.infer<typeof mobileTransactionUpdateSchema>;
 
 const mobileTransactionMetaSchema = z
   .object({

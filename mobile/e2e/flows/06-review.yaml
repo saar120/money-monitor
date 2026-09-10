@@ -1,0 +1,45 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Review reaches financial inbox zero
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: review-heavy
+- tapOn:
+    id: start-review
+- assertVisible:
+    id: review-screen
+- assertVisible: '8 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '7 to review'
+- tapOn:
+    id: review-category
+- assertVisible: 'Choose category'
+- tapOn: 'Dining'
+- assertVisible: '6 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '5 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '4 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '3 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '2 to review'
+- tapOn:
+    id: looks-right
+- assertVisible: '1 to review'
+- tapOn:
+    id: looks-right
+- assertVisible:
+    id: review-complete
+- assertVisible: 'All caught up'
+- tapOn: 'Done'
+- assertVisible:
+    id: home-screen
+- assertNotVisible:
+    id: start-review

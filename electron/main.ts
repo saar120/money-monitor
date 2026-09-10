@@ -277,7 +277,8 @@ async function startMobileAccessIfEnabled(): Promise<void> {
     const { config, saveConfigFile } = await import('../dist/config.js');
     const connection = await import('../dist/db/connection.js');
     const { db } = connection;
-    const { getNetWorth } = await import('../dist/services/net-worth.js');
+    const { getNetWorth, getNetWorthHistory } = await import('../dist/services/net-worth.js');
+    const { updateTransactionCategory } = await import('../dist/services/transactions.js');
     const { createProductionMobileAccess } =
       await import('../dist/mobile/production-mobile-access.js');
     const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
@@ -296,6 +297,21 @@ async function startMobileAccessIfEnabled(): Promise<void> {
         minimumClientVersion: '0.1.0',
       },
       readNetWorthIls: async () => (await getNetWorth()).total,
+      readNetWorth: async () => {
+        const value = await getNetWorth();
+        return {
+          total: value.total,
+          assetsTotal: value.banksTotal + value.assetsTotal,
+          liabilitiesTotal: value.liabilitiesTotal,
+        };
+      },
+      readNetWorthHistory: async (startDate, endDate) => {
+        const value = await getNetWorthHistory({ startDate, endDate, granularity: 'monthly' });
+        return 'series' in value && value.series
+          ? value.series.map((point) => ({ date: point.date, total: point.total }))
+          : [];
+      },
+      updateTransactionCategory,
       // The bootstrap ports intentionally retain the real database used for
       // device credentials. While the desktop swaps to its demo database,
       // fail the entire mobile snapshot closed instead of mixing sources.
@@ -318,6 +334,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
             bootstrap: production.bootstrapDependencies,
             pairing: production.pairingDependencies,
             transactions: production.transactionDependencies,
+            overview: production.overviewDependencies,
           });
           try {
             const port = await server.start({ host });

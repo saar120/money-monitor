@@ -10,6 +10,14 @@ export function boundedMobileText(value: string, fallback: string, maximum: numb
   return (normalized || fallback).slice(0, maximum);
 }
 
+export function mobileTransactionDisplayName(value: string): string {
+  const withoutLongIdentifiers = value.replace(/\d(?:[ -]*\d){11,}/g, (candidate) => {
+    const digits = candidate.replace(/\D/g, '');
+    return ` •••• ${digits.slice(-4)} `;
+  });
+  return boundedMobileText(withoutLongIdentifiers, 'Transaction', 160);
+}
+
 export function projectedMobileCurrencyCode(persistedCurrency: string): string {
   return LEGACY_CURRENCY_CODE_PROJECTION[persistedCurrency] ?? persistedCurrency;
 }

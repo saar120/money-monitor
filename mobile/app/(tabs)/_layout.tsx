@@ -5,8 +5,7 @@ import { useAppColors } from '@/theme';
 const icons: Record<string, { regular: SFSymbol; selected: SFSymbol }> = {
   home: { regular: 'house', selected: 'house.fill' },
   activity: { regular: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' },
-  plan: { regular: 'chart.pie', selected: 'chart.pie.fill' },
-  advisor: { regular: 'sparkles', selected: 'sparkles' },
+  explore: { regular: 'chart.xyaxis.line', selected: 'chart.xyaxis.line' },
 };
 
 export default function TabsLayout() {
@@ -22,14 +21,15 @@ export default function TabsLayout() {
         sceneStyle: { backgroundColor: colors.background },
         tabBarIcon: ({ color, focused }) => {
           const icon = icons[route.name] ?? icons.home!;
-          return <SymbolView name={focused ? icon.selected : icon.regular} size={21} tintColor={color} />;
+          return (
+            <SymbolView name={focused ? icon.selected : icon.regular} size={21} tintColor={color} />
+          );
         },
       })}
     >
       <Tabs.Screen name="home" options={{ title: 'Home' }} />
       <Tabs.Screen name="activity" options={{ title: 'Activity' }} />
-      <Tabs.Screen name="plan" options={{ title: 'Plan' }} />
-      <Tabs.Screen name="advisor" options={{ title: 'Advisor' }} />
+      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
     </Tabs>
   );
 }

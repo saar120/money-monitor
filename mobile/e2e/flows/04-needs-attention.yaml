@@ -7,11 +7,35 @@ name: Needs-attention fixture is reproducible
       MM_FIXTURE_SCENARIO: needs-attention
 - assertVisible:
     id: home-screen
-- assertVisible: "₪26,840"
-- assertVisible: "−₪2,640"
-- assertVisible: "Over budget"
+- assertVisible: '₪26,840'
+- assertVisible:
+    id: budget-status
+- assertVisible:
+    id: home-attention
+- assertVisible: '5 accounts need attention'
+- tapOn:
+    id: account-attention
+- assertVisible:
+    id: account-attention-screen
+- assertVisible: 'Home'
+- assertVisible: 'Amex · 1004'
+- assertVisible: 'Connection needs attention'
+- assertVisible: 'Isracard · 3098'
+- assertVisible: 'Last updated yesterday'
+- assertVisible: 'Max · 7712'
+- assertVisible: 'Never synced'
+- assertVisible: 'Bank Hapoalim · 2468'
+- assertVisible: 'Last updated 3 days ago'
+- assertVisible: 'Altshuler pension'
+- assertVisible: 'Last valued 8 days ago'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible:
+    id: home-screen
+- tapOn: 'Explore, tab, 3 of 3'
 - scrollUntilVisible:
     element:
-      id: account-freshness
+      text: '.*₪2,640 over.*'
     direction: DOWN
-- assertVisible: "Connection needs attention"

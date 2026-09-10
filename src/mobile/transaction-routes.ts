@@ -15,6 +15,7 @@ import { isMobilePublicId } from './mobile-public-id.js';
 import { MobileTransactionCursorError } from './transaction-cursor.js';
 import {
   mobileTransactionQuerySchema,
+  mobileTransactionUpdateSchema,
   validateMobileTransactionDetailEnvelope,
   validateMobileTransactionListEnvelope,
   type MobileTransactionQuery,
@@ -43,6 +44,17 @@ export interface MobileTransactionRouteDependencies {
     context: Readonly<MobileTransactionReadContext>,
     device: PublicMobileDevice,
   ) => unknown | null | Promise<unknown | null>;
+  update?: (
+    publicId: string,
+    update: import('./transaction-contract.js').MobileTransactionUpdate,
+    context: Readonly<MobileTransactionReadContext>,
+    device: PublicMobileDevice,
+  ) => unknown | null | Promise<unknown | null>;
+  reviewOptions?: (
+    device: PublicMobileDevice,
+  ) =>
+    | { categories: string[]; owners: string[] }
+    | Promise<{ categories: string[]; owners: string[] }>;
 }
 
 function successEnvelope(
@@ -97,6 +109,51 @@ export function registerMobileTransactionRoutes(
     if (!validated.success) throw new MobileApiError('internal_server_error');
     return validated.data;
   });
+
+  const reviewOptions = dependencies.reviewOptions;
+  if (reviewOptions)
+    app.get(
+      `${MOBILE_TRANSACTIONS_ROUTE}/review-options`,
+      { onRequest: authorize },
+      async (request) => {
+        const device = request.mobileDevice;
+        if (!device) throw new MobileApiError('internal_server_error');
+        const data = await reviewOptions(device);
+        if (
+          !Array.isArray(data.categories) ||
+          !Array.isArray(data.owners) ||
+          [...data.categories, ...data.owners].some(
+            (value) => typeof value !== 'string' || !value || value.length > 80,
+          )
+        ) {
+          throw new MobileApiError('internal_server_error');
+        }
+        return successEnvelope(data, dependencies, clock());
+      },
+    );
+
+  const update = dependencies.update;
+  if (update)
+    app.patch<{ Params: { id: string }; Body: unknown }>(
+      `${MOBILE_TRANSACTIONS_ROUTE}/:id`,
+      { onRequest: authorize, bodyLimit: 4096 },
+      async (request) => {
+        const device = request.mobileDevice;
+        if (!device) throw new MobileApiError('internal_server_error');
+        if (!isMobilePublicId(request.params.id, 'transaction'))
+          throw new MobileApiError('validation_error');
+        const parsed = mobileTransactionUpdateSchema.safeParse(request.body);
+        if (!parsed.success) throw new MobileApiError('validation_error');
+        const now = clock();
+        const transaction = await update(request.params.id, parsed.data, readContext(now), device);
+        if (transaction === null) throw new MobileApiError('transaction_not_found');
+        const validated = validateMobileTransactionDetailEnvelope(
+          successEnvelope({ transaction }, dependencies, now),
+        );
+        if (!validated.success) throw new MobileApiError('internal_server_error');
+        return validated.data;
+      },
+    );
 
   app.get<{ Params: { id: string } }>(
     `${MOBILE_TRANSACTIONS_ROUTE}/:id`,

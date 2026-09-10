@@ -1,0 +1,26 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Inbox-zero, no-budget, and slower-spending states stay truthful
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: inbox-zero
+- assertNotVisible:
+    id: start-review
+- openLink: 'moneymonitor://review'
+- assertVisible:
+    id: review-complete
+- assertVisible: 'All caught up'
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: no-budget
+- assertVisible:
+    id: no-budget-state
+- assertNotVisible:
+    id: budget-status
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: slower-spending
+- assertVisible: '₪5,320 slower than last month’s pace'

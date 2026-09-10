@@ -1,4 +1,5 @@
-import { afterEach, describe, expect, it } from 'vitest';
+import { eq } from 'drizzle-orm';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import {
   insertAccount,
@@ -92,12 +93,11 @@ describe('production mobile transaction ports', () => {
         },
         needsReview: true,
         excludedFromReports: true,
+        effectiveOn: null,
+        owner: { kind: 'member', displayName: 'Saar' },
       },
     ]);
-    expect(detail).toEqual({
-      ...list.transactions[0],
-      owner: { kind: 'member', displayName: 'Saar' },
-    });
+    expect(detail).toEqual(list.transactions[0]);
     const serialized = JSON.stringify({ list, detail });
     for (const forbidden of [
       '123-4567890123456',
@@ -151,6 +151,76 @@ describe('production mobile transaction ports', () => {
     expect(third.page).toEqual({ hasMore: false, nextCursor: null });
   });
 
+  it('applies the narrow review patch and returns the updated projection', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db);
+    const category = insertCategory(testDb.db, { name: 'dining', label: 'Dining' });
+    const transaction = insertTransaction(testDb.db, account.id, {
+      needsReview: true,
+      category: null,
+      ignored: false,
+    });
+    const read = ports(testDb);
+    const updated = read.update(
+      project('transaction', transaction.id),
+      { category: category.label, included: false, reviewed: true },
+      CONTEXT,
+    );
+
+    expect(updated).toMatchObject({
+      category: { label: 'Dining' },
+      needsReview: false,
+      excludedFromReports: true,
+    });
+    expect(testDb.db.select().from(schema.transactions).get()).toMatchObject({
+      category: 'dining',
+      needsReview: false,
+      ignored: true,
+    });
+  });
+
+  it('delegates category changes so canonical ownership rules remain authoritative', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db);
+    const category = insertCategory(testDb.db, { name: 'dining', label: 'Dining' });
+    const transaction = insertTransaction(testDb.db, account.id, {
+      needsReview: true,
+      category: null,
+      expenseOwnerType: 'unassigned',
+    });
+    const updateCategory = vi.fn((transactionId: number, name: string) => {
+      testDb.db
+        .update(schema.transactions)
+        .set({
+          category: name,
+          needsReview: false,
+          reviewReason: null,
+          expenseOwnerType: 'shared',
+        })
+        .where(eq(schema.transactions.id, transactionId))
+        .run();
+      return transaction;
+    });
+    const read = createProductionMobileTransactionPorts({
+      db: testDb.db,
+      publicIdKey: KEY,
+      updateCategory,
+    });
+
+    const updated = read.update(
+      project('transaction', transaction.id),
+      { category: category.label },
+      CONTEXT,
+    );
+
+    expect(updateCategory).toHaveBeenCalledWith(transaction.id, category.name);
+    expect(updated).toMatchObject({
+      category: { label: 'Dining' },
+      needsReview: false,
+      owner: { kind: 'shared' },
+    });
+  });
+
   it('rejects tampered and cross-filter cursors before returning another page', () => {
     const testDb = database();
     const account = insertAccount(testDb.db, { memberId: null });
@@ -200,12 +270,15 @@ describe('production mobile transaction ports', () => {
     const testDb = database();
     const accountOne = insertAccount(testDb.db, { memberId: null });
     const accountTwo = insertAccount(testDb.db, { memberId: null });
+    const dining = insertCategory(testDb.db, { name: 'dining', label: 'Dining' });
+    const groceries = insertCategory(testDb.db, { name: 'groceries', label: 'Groceries' });
     const expected = insertTransaction(testDb.db, accountOne.id, {
       date: '2026-07-10',
       processedDate: '2026-07-10',
       chargedAmount: -50,
       status: 'pending',
       needsReview: true,
+      category: dining.name,
     });
     insertTransaction(testDb.db, accountOne.id, {
       date: '2026-07-11',
@@ -213,6 +286,7 @@ describe('production mobile transaction ports', () => {
       chargedAmount: 50,
       status: 'completed',
       needsReview: false,
+      category: groceries.name,
     });
     insertTransaction(testDb.db, accountTwo.id, {
       date: '2026-07-10',
@@ -220,6 +294,7 @@ describe('production mobile transaction ports', () => {
       chargedAmount: -50,
       status: 'pending',
       needsReview: true,
+      category: dining.name,
     });
     const read = ports(testDb);
     const result = read.list(
@@ -230,6 +305,7 @@ describe('production mobile transaction ports', () => {
         status: 'pending',
         needsReview: true,
         accountId: project('account', accountOne.id),
+        category: dining.label,
       }),
       CONTEXT,
     );

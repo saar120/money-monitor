@@ -7,20 +7,26 @@ name: Home renders the normal fixture
       MM_FIXTURE_SCENARIO: normal
 - assertVisible:
     id: home-screen
-- assertVisible: "₪18,920"
-- assertVisible: "₪5,280"
+- assertVisible: '₪18,920'
+- assertVisible: '₪700 slower than last month’s pace'
+- assertVisible: '₪27,000'
 - assertVisible:
     id: budget-status
 - assertVisible:
-    id: net-worth-summary
-- assertVisible: "₪1,284,500"
-- assertVisible:
     id: category-spending
-- assertVisible:
-    id: cash-flow-trend
 - scrollUntilVisible:
     element:
-      id: account-freshness
+      id: net-worth-summary
     direction: DOWN
-- assertVisible: "Altshuler pension"
-- assertVisible: "Last valued 3 days ago"
+- assertVisible:
+    id: net-worth-summary
+- swipe:
+    start: 50%, 20%
+    end: 50%, 78%
+- assertVisible:
+    id: home-primary-money
+- swipe:
+    start: 50%, 20%
+    end: 50%, 78%
+    duration: 600
+- assertVisible: '₪18,920'

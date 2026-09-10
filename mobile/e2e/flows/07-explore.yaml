@@ -1,0 +1,21 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Explore explains category and merchant changes
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn: 'Explore, tab, 3 of 3'
+- assertVisible:
+    id: pace-scrub-value
+- assertVisible: 'What changed?'
+- scrollUntilVisible:
+    element:
+      id: explore-category-Dining
+    direction: DOWN
+- tapOn:
+    id: explore-category-Dining
+- assertVisible: 'What caused the change?'
+- tapOn:
+    id: category-merchant-Wolt
+- assertVisible: 'Transactions'

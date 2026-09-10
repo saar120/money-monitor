@@ -1,0 +1,185 @@
+{
+  "schemaVersion": 2,
+  "generatedAt": "2026-09-09T07:22:56Z",
+  "title": "Design System: Money Monitor for iPhone",
+  "extensions": {
+    "colorMeta": {
+      "ledger-green": {
+        "role": "primary",
+        "displayName": "Ledger Green",
+        "canonical": "#216849",
+        "tonalRamp": [
+          "#0E2119",
+          "#143326",
+          "#194735",
+          "#216849",
+          "#3D8867",
+          "#68AA89",
+          "#A9D1BC",
+          "#EAF5EF"
+        ]
+      },
+      "warm-paper": {
+        "role": "neutral",
+        "displayName": "Warm Paper",
+        "canonical": "#F5F3EE",
+        "tonalRamp": [
+          "#24231F",
+          "#44423D",
+          "#66635D",
+          "#8B877F",
+          "#B0ACA4",
+          "#D3D0C8",
+          "#E8E5DF",
+          "#F8F7F3"
+        ]
+      },
+      "warning": {
+        "role": "secondary",
+        "displayName": "Warning Amber",
+        "canonical": "#83500D",
+        "tonalRamp": [
+          "#271704",
+          "#402605",
+          "#5C3708",
+          "#83500D",
+          "#A66C25",
+          "#C68D4D",
+          "#E4BC83",
+          "#F8EBD6"
+        ]
+      },
+      "danger": {
+        "role": "tertiary",
+        "displayName": "Attention Red",
+        "canonical": "#A63D35",
+        "tonalRamp": [
+          "#2D0D0B",
+          "#4B1714",
+          "#70241F",
+          "#A63D35",
+          "#C65E55",
+          "#DC877F",
+          "#EDB8B3",
+          "#FAEBE9"
+        ]
+      }
+    },
+    "typographyMeta": {
+      "display": {
+        "displayName": "Financial Display",
+        "purpose": "One leading financial amount per viewport."
+      },
+      "headline": {
+        "displayName": "Native Headline",
+        "purpose": "Review merchants and completion states."
+      },
+      "title": {
+        "displayName": "Section Question",
+        "purpose": "Progressive-disclosure section headings."
+      },
+      "body": {
+        "displayName": "Readable Body",
+        "purpose": "Transactions, labels, and explanations."
+      },
+      "label": {
+        "displayName": "Financial Metadata",
+        "purpose": "Dates, accounts, deltas, and progress."
+      }
+    },
+    "shadows": [],
+    "motion": [
+      {
+        "name": "review-advance",
+        "value": "120ms opacity and -16pt translation",
+        "purpose": "Moves a confirmed transaction out before revealing the next item."
+      },
+      {
+        "name": "system-navigation",
+        "value": "native iOS transition",
+        "purpose": "Push, sheet, and tab transitions remain platform-owned."
+      }
+    ],
+    "breakpoints": [{ "name": "iphone", "value": "single-column safe-area layout" }]
+  },
+  "components": [
+    {
+      "name": "Primary Review Button",
+      "kind": "button",
+      "refersTo": "button-primary",
+      "description": "The single full-width completion action in Review.",
+      "html": "<button class=\"ds-primary-review\">✓ Looks right</button>",
+      "css": ".ds-primary-review { width: 100%; min-height: 54px; border: 0; border-radius: 17px; background: #171914; color: #F5F3EE; font: 700 17px/1.2 system-ui; } .ds-primary-review:hover { opacity: .84; } .ds-primary-review:active { opacity: .72; } .ds-primary-review:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+    },
+    {
+      "name": "Attention Group",
+      "kind": "card",
+      "refersTo": "attention-group",
+      "description": "A contextual cluster used only when the current state deserves attention.",
+      "html": "<section class=\"ds-attention\"><strong>3 transactions to review</strong><span>Clean up your financial inbox</span></section>",
+      "css": ".ds-attention { display: grid; gap: 3px; padding: 16px 14px; border-radius: 16px; background: #FCFBF8; color: #171914; font-family: system-ui; } .ds-attention strong { font-size: 15px; } .ds-attention span { color: #656A61; font-size: 13px; }"
+    },
+    {
+      "name": "Filter Chip",
+      "kind": "chip",
+      "refersTo": "filter-chip",
+      "description": "A 44-point Activity filter with a solid selected state.",
+      "html": "<button class=\"ds-filter-chip\" aria-pressed=\"true\">Review</button>",
+      "css": ".ds-filter-chip { min-height: 44px; padding: 0 14px; border: 0; border-radius: 22px; background: #171914; color: #F5F3EE; font: 600 13px system-ui; } .ds-filter-chip:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+    },
+    {
+      "name": "Budget Pace",
+      "kind": "custom",
+      "description": "Paired time and budget tracks that make pacing visible without a decorative chart.",
+      "html": "<div class=\"ds-budget\"><div>Month passed <i style=\"--p:23%\"></i><b>23%</b></div><div>Budget used <i style=\"--p:32%\"></i><b>32%</b></div></div>",
+      "css": ".ds-budget { display: grid; gap: 10px; color: #656A61; font: 13px system-ui; } .ds-budget div { display: grid; grid-template-columns: 96px 1fr 36px; align-items: center; gap: 10px; } .ds-budget i { height: 5px; border-radius: 3px; background: linear-gradient(90deg, #216849 var(--p), #D8D7CF var(--p)); } .ds-budget b { color: #171914; font-variant-numeric: tabular-nums; text-align: right; }"
+    },
+    {
+      "name": "Three-Tab Navigation",
+      "kind": "nav",
+      "description": "The stable Home, Activity, and Explore information architecture.",
+      "html": "<nav class=\"ds-tabs\"><a class=\"active\">Home</a><a>Activity</a><a>Explore</a></nav>",
+      "css": ".ds-tabs { display: grid; grid-template-columns: repeat(3, 1fr); padding: 10px 0 14px; border-top: 1px solid #D8D7CF; background: #F8F6F2; font: 12px system-ui; text-align: center; } .ds-tabs a { color: #656A61; } .ds-tabs .active { color: #216849; font-weight: 600; } .ds-tabs a:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+    }
+  ],
+  "narrative": {
+    "northStar": "The Quiet Ledger",
+    "overview": "Money Monitor feels like a private financial instrument: calm enough for daily use, precise enough to trust, and immediately useful without decoration. Hierarchy comes from the financial comparison itself, generous spacing, and a small number of native surfaces—not from a grid of interchangeable dashboard cards. The first screen states current spending, explains its pace, relates it to income and time elapsed, then surfaces only actionable changes.",
+    "keyCharacteristics": [
+      "Warm neutral light mode and near-black olive dark mode.",
+      "One deep-green interaction voice, with amber and red reserved for financial meaning.",
+      "Large tabular financial numerals paired with plain-language comparisons.",
+      "Native iOS navigation, sheets, controls, SF Symbols, haptics, and system transitions.",
+      "Flat, hairline-separated structure with no decorative shadows or gradients."
+    ],
+    "rules": [
+      {
+        "name": "The Meaningful Color Rule",
+        "body": "Green, amber, and red describe interaction or financial state; they never decorate empty space.",
+        "section": "colors"
+      },
+      {
+        "name": "The One Statement Rule",
+        "body": "Only one financial value receives display scale in a viewport; comparisons explain it instead of competing with it.",
+        "section": "typography"
+      },
+      {
+        "name": "The Flat Ledger Rule",
+        "body": "Do not add card shadows, floating glass, or elevation to make ordinary content feel important.",
+        "section": "elevation"
+      }
+    ],
+    "dos": [
+      "Do lead with a comparison that answers whether the current number is normal, improving, or worsening.",
+      "Do let Home say very little when accounts, budgets, and review state are healthy.",
+      "Do use SF Symbols and native iOS controls for familiar interaction.",
+      "Do use tabular numerals for money, percentages, and progress."
+    ],
+    "donts": [
+      "Don't recreate the desktop dashboard or introduce permanent cards for operationally healthy state.",
+      "Don't use green, amber, or red without a financial or interaction meaning.",
+      "Don't add decorative charts, gradients, glass, shadows, achievement mechanics, or placeholder tabs.",
+      "Don't duplicate financial calculations on the phone; render the Mac's mobile projection."
+    ]
+  }
+}

@@ -1,0 +1,33 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Empty and mixed-currency fixtures stay truthful
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: light-data
+- assertVisible:
+    id: home-calm-state
+- assertNotVisible:
+    id: start-review
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: no-transactions
+- tapOn: 'Activity, tab, 2 of 3'
+- assertVisible:
+    id: activity-empty
+- assertVisible: 'No transactions yet'
+- tapOn: 'Explore, tab, 3 of 3'
+- assertVisible:
+    id: spending-chart
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: mixed-currency
+- tapOn: 'Activity, tab, 2 of 3'
+- assertVisible:
+    id: transaction-txn-wolt
+- assertVisible:
+    id: transaction-txn-salary
+- assertNotVisible:
+    id: section-total-2026-09-07

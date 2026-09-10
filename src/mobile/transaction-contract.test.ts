@@ -54,6 +54,7 @@ describe('mobile transaction query contract', () => {
   it('normalizes NFKC search text and applies bounded defaults', () => {
     const result = mobileTransactionQuerySchema.parse({
       q: '  Ｍａｒｋｅｔ   רמי  ',
+      category: '  Ｄｉｎｉｎｇ  ',
       includeExcluded: 'false',
       needsReview: 'true',
       limit: '40',
@@ -61,6 +62,7 @@ describe('mobile transaction query contract', () => {
 
     expect(result).toEqual({
       q: 'Market רמי',
+      category: 'Dining',
       includeExcluded: false,
       needsReview: true,
       limit: 40,
