@@ -1,0 +1,17 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Capture Blue Ledger native controls
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn: 'Activity, tab, 2 of 3'
+- tapOn:
+    id: activity-filter-review
+- tapOn:
+    id: transaction-txn-superpharm
+- assertVisible:
+    id: transaction-detail
+- tapOn:
+    id: transaction-effective-date
+- takeScreenshot: docs/screenshots/blue-ledger/date-picker-light

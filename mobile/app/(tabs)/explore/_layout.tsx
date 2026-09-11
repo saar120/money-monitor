@@ -15,7 +15,10 @@ export default function ExploreLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Explore', headerTitleAlign: 'left' }} />
+      <Stack.Screen
+        name="index"
+        options={{ title: 'Explore', headerLargeTitleEnabled: false, headerTitleAlign: 'left' }}
+      />
       <Stack.Screen name="category/[name]" options={{ title: 'Category' }} />
       <Stack.Screen name="merchant/[name]" options={{ title: 'Merchant' }} />
       <Stack.Screen name="net-worth" options={{ title: 'Net worth' }} />

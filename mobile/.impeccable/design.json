@@ -1,185 +1,109 @@
 {
   "schemaVersion": 2,
-  "generatedAt": "2026-09-09T07:22:56Z",
-  "title": "Design System: Money Monitor for iPhone",
+  "generatedAt": "2026-09-11T10:30:00+03:00",
+  "title": "Design System: Money Monitor — Blue Ledger",
   "extensions": {
     "colorMeta": {
-      "ledger-green": {
-        "role": "primary",
-        "displayName": "Ledger Green",
-        "canonical": "#216849",
-        "tonalRamp": [
-          "#0E2119",
-          "#143326",
-          "#194735",
-          "#216849",
-          "#3D8867",
-          "#68AA89",
-          "#A9D1BC",
-          "#EAF5EF"
-        ]
-      },
-      "warm-paper": {
-        "role": "neutral",
-        "displayName": "Warm Paper",
-        "canonical": "#F5F3EE",
-        "tonalRamp": [
-          "#24231F",
-          "#44423D",
-          "#66635D",
-          "#8B877F",
-          "#B0ACA4",
-          "#D3D0C8",
-          "#E8E5DF",
-          "#F8F7F3"
-        ]
-      },
-      "warning": {
-        "role": "secondary",
-        "displayName": "Warning Amber",
-        "canonical": "#83500D",
-        "tonalRamp": [
-          "#271704",
-          "#402605",
-          "#5C3708",
-          "#83500D",
-          "#A66C25",
-          "#C68D4D",
-          "#E4BC83",
-          "#F8EBD6"
-        ]
-      },
-      "danger": {
-        "role": "tertiary",
-        "displayName": "Attention Red",
-        "canonical": "#A63D35",
-        "tonalRamp": [
-          "#2D0D0B",
-          "#4B1714",
-          "#70241F",
-          "#A63D35",
-          "#C65E55",
-          "#DC877F",
-          "#EDB8B3",
-          "#FAEBE9"
-        ]
-      }
+      "porcelain": { "role": "neutral", "displayName": "Warm Porcelain" },
+      "ink": { "role": "neutral", "displayName": "Ledger Ink" },
+      "cobalt": { "role": "primary", "displayName": "Ledger Cobalt" },
+      "positive": { "role": "secondary", "displayName": "Positive Green" },
+      "warning": { "role": "secondary", "displayName": "Warning Amber" },
+      "danger": { "role": "secondary", "displayName": "Attention Red" },
+      "dusk": { "role": "neutral", "displayName": "Dusk Canvas" },
+      "dusk-surface": { "role": "neutral", "displayName": "Dusk Surface" },
+      "dusk-raised": { "role": "neutral", "displayName": "Raised Dusk" },
+      "dusk-cobalt": { "role": "primary", "displayName": "Dusk Cobalt" }
     },
     "typographyMeta": {
-      "display": {
-        "displayName": "Financial Display",
-        "purpose": "One leading financial amount per viewport."
-      },
-      "headline": {
-        "displayName": "Native Headline",
-        "purpose": "Review merchants and completion states."
-      },
-      "title": {
-        "displayName": "Section Question",
-        "purpose": "Progressive-disclosure section headings."
-      },
-      "body": {
-        "displayName": "Readable Body",
-        "purpose": "Transactions, labels, and explanations."
-      },
-      "label": {
-        "displayName": "Financial Metadata",
-        "purpose": "Dates, accounts, deltas, and progress."
-      }
+      "display": { "displayName": "Financial Display", "purpose": "One leading amount per viewport." },
+      "headline": { "displayName": "Headline", "purpose": "Review merchants and completion states." },
+      "title": { "displayName": "Section Title", "purpose": "Section questions and drill-down headings." },
+      "body": { "displayName": "Body", "purpose": "Merchants, fields, and explanations." },
+      "label": { "displayName": "Label", "purpose": "Dates, status, metadata, and progress." }
     },
-    "shadows": [],
-    "motion": [
-      {
-        "name": "review-advance",
-        "value": "120ms opacity and -16pt translation",
-        "purpose": "Moves a confirmed transaction out before revealing the next item."
-      },
-      {
-        "name": "system-navigation",
-        "value": "native iOS transition",
-        "purpose": "Push, sheet, and tab transitions remain platform-owned."
-      }
+    "shadows": [
+      { "name": "glass-ambient-light", "value": "0 14px 24px rgba(30,55,95,0.18)", "purpose": "Floating navigation only." },
+      { "name": "glass-ambient-dark", "value": "0 14px 24px rgba(3,8,17,0.48)", "purpose": "Floating navigation in dusk mode." }
     ],
-    "breakpoints": [{ "name": "iphone", "value": "single-column safe-area layout" }]
+    "motion": [
+      { "name": "selection-spring", "value": "stiffness 300; damping 28; mass 0.82", "purpose": "Persistent tab and range lenses." },
+      { "name": "peer-fade", "value": "160ms linear opacity", "purpose": "Root tab content changes." },
+      { "name": "press-feedback", "value": "scale 0.94; opacity 0.76", "purpose": "Immediate control feedback." }
+    ],
+    "breakpoints": []
   },
   "components": [
     {
-      "name": "Primary Review Button",
+      "name": "Primary Button",
       "kind": "button",
       "refersTo": "button-primary",
-      "description": "The single full-width completion action in Review.",
-      "html": "<button class=\"ds-primary-review\">✓ Looks right</button>",
-      "css": ".ds-primary-review { width: 100%; min-height: 54px; border: 0; border-radius: 17px; background: #171914; color: #F5F3EE; font: 700 17px/1.2 system-ui; } .ds-primary-review:hover { opacity: .84; } .ds-primary-review:active { opacity: .72; } .ds-primary-review:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+      "description": "Cobalt confirmation action.",
+      "html": "<button class=\"ds-primary\">Looks right</button>",
+      "css": ".ds-primary{height:54px;padding:0 24px;border:0;border-radius:16px;background:#0B5DDD;color:#fff;font:600 16px system-ui;box-shadow:0 8px 18px rgba(11,93,221,.18);transition:transform 100ms,opacity 100ms}.ds-primary:hover{background:#176FE5}.ds-primary:active{transform:scale(.94);opacity:.76}.ds-primary:focus-visible{outline:3px solid #68A4FF;outline-offset:2px}"
     },
     {
-      "name": "Attention Group",
-      "kind": "card",
-      "refersTo": "attention-group",
-      "description": "A contextual cluster used only when the current state deserves attention.",
-      "html": "<section class=\"ds-attention\"><strong>3 transactions to review</strong><span>Clean up your financial inbox</span></section>",
-      "css": ".ds-attention { display: grid; gap: 3px; padding: 16px 14px; border-radius: 16px; background: #FCFBF8; color: #171914; font-family: system-ui; } .ds-attention strong { font-size: 15px; } .ds-attention span { color: #656A61; font-size: 13px; }"
+      "name": "Search Field",
+      "kind": "input",
+      "refersTo": "search-field",
+      "description": "Soft native-feeling search field.",
+      "html": "<input class=\"ds-search\" placeholder=\"Merchant, category, or account\">",
+      "css": ".ds-search{width:330px;height:48px;padding:0 14px;border:1px solid transparent;border-radius:16px;background:#EFEEE9;color:#09111F;font:400 16px system-ui}.ds-search:focus{border-color:#68A4FF;outline:0}.ds-search::placeholder{color:#7A8290}"
     },
     {
       "name": "Filter Chip",
       "kind": "chip",
       "refersTo": "filter-chip",
-      "description": "A 44-point Activity filter with a solid selected state.",
-      "html": "<button class=\"ds-filter-chip\" aria-pressed=\"true\">Review</button>",
-      "css": ".ds-filter-chip { min-height: 44px; padding: 0 14px; border: 0; border-radius: 22px; background: #171914; color: #F5F3EE; font: 600 13px system-ui; } .ds-filter-chip:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+      "description": "Compact capsule for Activity filters.",
+      "html": "<button class=\"ds-chip\">Needs review</button>",
+      "css": ".ds-chip{height:44px;padding:0 14px;border:1px solid rgba(255,255,255,.96);border-radius:22px;background:#EFEEE9;color:#687081;font:600 13px system-ui;transition:transform 100ms,opacity 100ms}.ds-chip:hover{color:#0B5DDD}.ds-chip:active{transform:scale(.94);opacity:.76}.ds-chip:focus-visible{outline:3px solid #68A4FF;outline-offset:2px}"
     },
     {
-      "name": "Budget Pace",
-      "kind": "custom",
-      "description": "Paired time and budget tracks that make pacing visible without a decorative chart.",
-      "html": "<div class=\"ds-budget\"><div>Month passed <i style=\"--p:23%\"></i><b>23%</b></div><div>Budget used <i style=\"--p:32%\"></i><b>32%</b></div></div>",
-      "css": ".ds-budget { display: grid; gap: 10px; color: #656A61; font: 13px system-ui; } .ds-budget div { display: grid; grid-template-columns: 96px 1fr 36px; align-items: center; gap: 10px; } .ds-budget i { height: 5px; border-radius: 3px; background: linear-gradient(90deg, #216849 var(--p), #D8D7CF var(--p)); } .ds-budget b { color: #171914; font-variant-numeric: tabular-nums; text-align: right; }"
-    },
-    {
-      "name": "Three-Tab Navigation",
+      "name": "Glass Navigation",
       "kind": "nav",
-      "description": "The stable Home, Activity, and Explore information architecture.",
-      "html": "<nav class=\"ds-tabs\"><a class=\"active\">Home</a><a>Activity</a><a>Explore</a></nav>",
-      "css": ".ds-tabs { display: grid; grid-template-columns: repeat(3, 1fr); padding: 10px 0 14px; border-top: 1px solid #D8D7CF; background: #F8F6F2; font: 12px system-ui; text-align: center; } .ds-tabs a { color: #656A61; } .ds-tabs .active { color: #216849; font-weight: 600; } .ds-tabs a:focus-visible { outline: 3px solid #68C697; outline-offset: 2px; }"
+      "refersTo": "glass-navigation",
+      "description": "Floating root navigation with one moving selection lens.",
+      "html": "<nav class=\"ds-nav\"><span class=\"ds-lens\">Home</span><span>Activity</span><span>Explore</span></nav>",
+      "css": ".ds-nav{display:grid;grid-template-columns:repeat(3,1fr);align-items:center;width:350px;height:71px;padding:5px;border:1px solid rgba(255,255,255,.96);border-radius:28px;background:rgba(241,246,253,.86);box-shadow:0 14px 24px rgba(30,55,95,.18);backdrop-filter:blur(24px);color:#7A8290;font:600 12px system-ui;text-align:center}.ds-lens{display:grid;place-items:center;height:61px;border-radius:23px;background:#E5EEFC;color:#0B5DDD}.ds-nav:focus-within{outline:3px solid #68A4FF;outline-offset:2px}"
+    },
+    {
+      "name": "Category Option",
+      "kind": "card",
+      "refersTo": "category-option",
+      "description": "Two-column searchable category choice.",
+      "html": "<button class=\"ds-category\">Groceries</button>",
+      "css": ".ds-category{width:160px;height:52px;padding:0 14px;border:1px solid #DFE1E4;border-radius:14px;background:#EFEEE9;color:#09111F;font:600 16px system-ui;text-align:left}.ds-category:hover{border-color:#68A4FF}.ds-category:active{background:#E5EEFC}.ds-category:focus-visible{outline:3px solid #68A4FF;outline-offset:2px}"
     }
   ],
   "narrative": {
-    "northStar": "The Quiet Ledger",
-    "overview": "Money Monitor feels like a private financial instrument: calm enough for daily use, precise enough to trust, and immediately useful without decoration. Hierarchy comes from the financial comparison itself, generous spacing, and a small number of native surfaces—not from a grid of interchangeable dashboard cards. The first screen states current spending, explains its pace, relates it to income and time elapsed, then surfaces only actionable changes.",
+    "northStar": "Blue Ledger",
+    "overview": "Money Monitor is a private financial instrument: calm enough for daily use, exact enough to trust, and dense enough to get work done. A cobalt spending chart anchors an editorial ledger of aligned figures, quiet rules, and progressively disclosed detail. Native iOS conventions do the familiar work while glass remains reserved for navigation and selection controls.",
     "keyCharacteristics": [
-      "Warm neutral light mode and near-black olive dark mode.",
-      "One deep-green interaction voice, with amber and red reserved for financial meaning.",
-      "Large tabular financial numerals paired with plain-language comparisons.",
-      "Native iOS navigation, sheets, controls, SF Symbols, haptics, and system transitions.",
-      "Flat, hairline-separated structure with no decorative shadows or gradients."
+      "Warm porcelain light mode and tonal blue-graphite dusk mode.",
+      "One cobalt interaction voice, with green, amber, and red reserved for financial meaning.",
+      "Large tabular financial numerals supported by plain-language comparisons.",
+      "A persistent moving lens for root navigation and range selection.",
+      "Editorial lists with shared surfaces, restrained separators, and aligned amounts.",
+      "Live Mac data and contract semantics remain more important than decorative parity."
     ],
     "rules": [
-      {
-        "name": "The Meaningful Color Rule",
-        "body": "Green, amber, and red describe interaction or financial state; they never decorate empty space.",
-        "section": "colors"
-      },
-      {
-        "name": "The One Statement Rule",
-        "body": "Only one financial value receives display scale in a viewport; comparisons explain it instead of competing with it.",
-        "section": "typography"
-      },
-      {
-        "name": "The Flat Ledger Rule",
-        "body": "Do not add card shadows, floating glass, or elevation to make ordinary content feel important.",
-        "section": "elevation"
-      }
+      { "name": "The Meaningful Color Rule", "body": "Cobalt means interaction or chart focus. Green, amber, and red communicate financial or operational state; they do not decorate empty space.", "section": "colors" },
+      { "name": "The One Statement Rule", "body": "Only one amount receives display scale per viewport; surrounding values support it instead of competing with it.", "section": "typography" },
+      { "name": "The Material Restraint Rule", "body": "Glass clarifies controls moving above content; it is not a background for ordinary financial cards.", "section": "elevation" }
     ],
     "dos": [
-      "Do lead with a comparison that answers whether the current number is normal, improving, or worsening.",
-      "Do let Home say very little when accounts, budgets, and review state are healthy.",
-      "Do use SF Symbols and native iOS controls for familiar interaction.",
-      "Do use tabular numerals for money, percentages, and progress."
+      "Do use semantic theme roles from src/theme.ts.",
+      "Do align money values and use tabular numerals.",
+      "Do preserve production data semantics.",
+      "Do use native primitives and existing dependencies before adding code.",
+      "Do omit unavailable values instead of inventing them."
     ],
     "donts": [
-      "Don't recreate the desktop dashboard or introduce permanent cards for operationally healthy state.",
-      "Don't use green, amber, or red without a financial or interaction meaning.",
-      "Don't add decorative charts, gradients, glass, shadows, achievement mechanics, or placeholder tabs.",
-      "Don't duplicate financial calculations on the phone; render the Mac's mobile projection."
+      "Don't turn every row or statistic into a card.",
+      "Don't put glass behind ordinary financial content.",
+      "Don't use an all-black dark mode.",
+      "Don't hardcode prototype financial claims into production UI.",
+      "Don't add competing client aggregates without a typed contract and reconciliation test."
     ]
   }
 }

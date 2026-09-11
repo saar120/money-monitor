@@ -10,14 +10,18 @@ name: Needs-attention fixture is reproducible
 - assertVisible: '₪26,840'
 - assertVisible:
     id: budget-status
-- assertVisible:
-    id: home-attention
-- assertVisible: '5 accounts need attention'
+- scrollUntilVisible:
+    element:
+      id: home-attention
+    direction: DOWN
+- scrollUntilVisible:
+    element:
+      id: account-attention
+    direction: DOWN
 - tapOn:
     id: account-attention
 - assertVisible:
     id: account-attention-screen
-- assertVisible: 'Home'
 - assertVisible: 'Amex · 1004'
 - assertVisible: 'Connection needs attention'
 - assertVisible: 'Isracard · 3098'
@@ -34,8 +38,3 @@ name: Needs-attention fixture is reproducible
     duration: 500
 - assertVisible:
     id: home-screen
-- tapOn: 'Explore, tab, 3 of 3'
-- scrollUntilVisible:
-    element:
-      text: '.*₪2,640 over.*'
-    direction: DOWN

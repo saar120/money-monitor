@@ -36,6 +36,7 @@ export default function CategoryScreen() {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
+        testID="category-detail"
       >
         <Text
           adjustsFontSizeToFit
@@ -46,7 +47,7 @@ export default function CategoryScreen() {
         >
           {formatUnsignedMoney(category.spent, home.currencyCode)}
         </Text>
-        <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.accent }]}>
+        <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
           {delta === 0
             ? 'Unchanged from last month'
             : `${formatMoney(delta, home.currencyCode)} compared with this point last month`}
@@ -64,11 +65,11 @@ export default function CategoryScreen() {
                 testID={`category-merchant-${merchant.name}`}
                 onPress={() =>
                   router.push({
-                    pathname: '/(tabs)/explore/merchant/[name]',
+                    pathname: '/merchant/[name]',
                     params: { name: merchant.name },
                   })
                 }
-                style={styles.row}
+                style={[styles.row, { borderBottomColor: colors.separator }]}
               >
                 <View style={styles.rowText}>
                   <Text
@@ -91,7 +92,7 @@ export default function CategoryScreen() {
                     allowFontScaling={false}
                     style={[
                       styles.delta,
-                      { color: merchantDelta > 0 ? colors.warning : colors.accent },
+                      { color: merchantDelta > 0 ? colors.warning : colors.positive },
                     ]}
                   >
                     {formatMoney(merchantDelta, home.currencyCode)}
@@ -107,7 +108,7 @@ export default function CategoryScreen() {
           </Text>
         ) : null}
         {Math.abs(merchantRemainder) >= 1 ? (
-          <View style={styles.row}>
+          <View style={[styles.row, { borderBottomColor: colors.separator }]}>
             <View style={styles.rowText}>
               <Text style={[styles.rowTitle, { color: colors.text }]}>Other merchants</Text>
               <Text style={[styles.rowMeta, { color: colors.secondary }]}>Combined change</Text>
@@ -116,7 +117,7 @@ export default function CategoryScreen() {
               allowFontScaling={false}
               style={[
                 styles.delta,
-                { color: merchantRemainder > 0 ? colors.warning : colors.accent },
+                { color: merchantRemainder > 0 ? colors.warning : colors.positive },
               ]}
             >
               {formatMoney(merchantRemainder, home.currencyCode)}
@@ -130,8 +131,8 @@ export default function CategoryScreen() {
             accessibilityHint="Opens transaction details"
             accessibilityRole="button"
             key={transaction.id}
-            onPress={() => router.push(`/(tabs)/activity/${transaction.id}`)}
-            style={styles.transaction}
+            onPress={() => router.push(`/transaction/${transaction.id}`)}
+            style={[styles.transaction, { borderBottomColor: colors.separator }]}
           >
             <View style={styles.transactionText}>
               <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
@@ -164,7 +165,7 @@ export default function CategoryScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   amount: {
     marginTop: 18,
@@ -178,6 +179,7 @@ const styles = StyleSheet.create({
   title: { marginTop: 36, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: {
     minHeight: 64,
+    borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -188,7 +190,13 @@ const styles = StyleSheet.create({
   trailing: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   delta: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   empty: { marginTop: 8, fontSize: 14, lineHeight: 20 },
-  transaction: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  transaction: {
+    minHeight: 64,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   transactionText: { flex: 1, minWidth: 0 },
   transactionAmount: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
 });

@@ -31,7 +31,15 @@ export default function RootLayout() {
       <ThemeProvider
         value={{
           ...baseNavigationTheme,
-          colors: { ...baseNavigationTheme.colors, background: colors.background },
+          colors: {
+            ...baseNavigationTheme.colors,
+            background: colors.background,
+            border: colors.separator,
+            card: colors.background,
+            notification: colors.danger,
+            primary: colors.accent,
+            text: colors.text,
+          },
         }}
       >
         <AuthGate previewLocked={previewLocked}>
@@ -39,6 +47,7 @@ export default function RootLayout() {
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: colors.background },
+                headerBackButtonDisplayMode: 'minimal',
                 headerStyle: { backgroundColor: colors.background },
                 headerTintColor: colors.accent,
                 headerShadowVisible: false,
@@ -52,6 +61,10 @@ export default function RootLayout() {
               />
               <Stack.Screen name="foundation" options={{ title: 'Foundation checks' }} />
               <Stack.Screen name="review" options={{ title: 'Review' }} />
+              <Stack.Screen name="category/[name]" options={{ title: 'Category' }} />
+              <Stack.Screen name="merchant/[name]" options={{ title: 'Merchant' }} />
+              <Stack.Screen name="transaction/[id]" options={{ title: 'Transaction' }} />
+              <Stack.Screen name="net-worth" options={{ title: 'Net worth' }} />
               <Stack.Screen
                 name="accounts-attention"
                 options={{ title: 'Accounts', headerBackTitle: 'Home' }}

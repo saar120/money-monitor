@@ -3,16 +3,8 @@ import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import {
-  ActionSheetIOS,
-  ActivityIndicator,
-  Modal,
-  Pressable,
-  ScrollView,
-  StyleSheet,
-  Text,
-  View,
-} from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData, useTransaction } from '@/MoneyData';
 import { formatMoney } from '@/money';
@@ -32,8 +24,8 @@ export default function TransactionDetailScreen() {
   } | null>(null);
   const [saving, setSaving] = useState<'category' | 'effectiveDate' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
-  const [dateVisible, setDateVisible] = useState(false);
-  const [draftDate, setDraftDate] = useState(new Date());
+  const [categoryVisible, setCategoryVisible] = useState(false);
+  const [categories, setCategories] = useState<string[]>([]);
   const transaction =
     sourceTransaction && edits?.id === sourceTransaction.id
       ? { ...sourceTransaction, ...edits }
@@ -104,29 +96,13 @@ export default function TransactionDetailScreen() {
     setSaveError(null);
     try {
       const { categories } = await money.loadReviewOptions();
+      setCategories(categories);
       setSaving(null);
-      const options = ['Cancel', ...categories];
-      ActionSheetIOS.showActionSheetWithOptions(
-        { title: 'Change category', options, cancelButtonIndex: 0, tintColor: colors.accent },
-        (index) => {
-          const category = options[index];
-          if (index > 0 && category && category !== currentCategory) {
-            void saveField('category', { category });
-          }
-        },
-      );
+      setCategoryVisible(true);
     } catch (caught) {
       setSaving(null);
-      setSaveError(
-        caught instanceof Error ? caught.message : 'Categories could not be loaded.',
-      );
+      setSaveError(caught instanceof Error ? caught.message : 'Categories could not be loaded.');
     }
-  }
-
-  function openDatePicker() {
-    if (saving) return;
-    setDraftDate(parseFinancialDate(currentEffectiveDate));
-    setDateVisible(true);
   }
 
   return (
@@ -144,14 +120,20 @@ export default function TransactionDetailScreen() {
             allowFontScaling={false}
             minimumFontScale={0.7}
             numberOfLines={1}
-            style={[styles.amount, { color: transaction.amount > 0 ? colors.accent : colors.text }]}
+            style={[
+              styles.amount,
+              { color: transaction.amount > 0 ? colors.positive : colors.text },
+            ]}
           >
             {formatMoney(transaction.amount, transaction.currencyCode, true)}
           </Text>
           <Text maxFontSizeMultiplier={1.6} style={[styles.merchant, { color: colors.text }]}>
             {transaction.merchant}
           </Text>
-          <Text maxFontSizeMultiplier={1.5} style={[styles.description, { color: colors.secondary }]}>
+          <Text
+            maxFontSizeMultiplier={1.5}
+            style={[styles.description, { color: colors.secondary }]}
+          >
             {transaction.description ?? date}
           </Text>
           <View style={styles.flags}>
@@ -191,17 +173,16 @@ export default function TransactionDetailScreen() {
             value={transaction.included ? 'Included in reports' : 'Excluded'}
             symbol="checkmark.circle"
           />
-          <DetailRow
-            label="Effective date"
-            value={
-              saving === 'effectiveDate'
-                ? 'Saving…'
-                : formatFinancialDate(transaction.effectiveDate)
-            }
-            symbol="calendar"
+          <DatePickerRow
             disabled={saving !== null}
-            onPress={openDatePicker}
-            testID="transaction-effective-date"
+            onChange={(value) => {
+              const effectiveDate = financialDate(value);
+              if (effectiveDate !== currentEffectiveDate) {
+                void saveField('effectiveDate', { effectiveDate });
+              }
+            }}
+            saving={saving === 'effectiveDate'}
+            value={parseFinancialDate(currentEffectiveDate)}
           />
           <DetailRow
             label="Review"
@@ -214,47 +195,62 @@ export default function TransactionDetailScreen() {
           <Text style={[styles.saveError, { color: colors.danger }]}>{saveError}</Text>
         ) : null}
       </ScrollView>
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setDateVisible(false)}
-        presentationStyle="pageSheet"
-        visible={dateVisible}
+      <CategoryPickerSheet
+        categories={categories}
+        onClose={() => setCategoryVisible(false)}
+        onSelect={(category) => {
+          setCategoryVisible(false);
+          if (category !== currentCategory) void saveField('category', { category });
+        }}
+        selected={currentCategory}
+        title="Change category"
+        visible={categoryVisible}
+      />
+    </>
+  );
+}
+
+function DatePickerRow({
+  disabled,
+  onChange,
+  saving,
+  value,
+}: {
+  disabled: boolean;
+  onChange: (value: Date) => void;
+  saving: boolean;
+  value: Date;
+}) {
+  const colors = useAppColors();
+  return (
+    <View style={[styles.detailRow, disabled && styles.disabled]}>
+      <SymbolView name="calendar" size={17} tintColor={colors.secondary} style={styles.rowIcon} />
+      <View
+        style={[
+          styles.detailRowBody,
+          { borderBottomColor: colors.separator, borderBottomWidth: StyleSheet.hairlineWidth },
+        ]}
       >
-        <View
-          style={[styles.dateSheet, { backgroundColor: colors.background }]}
-          testID="effective-date-sheet"
-        >
-          <View style={styles.dateSheetHeader}>
-            <Pressable onPress={() => setDateVisible(false)} style={styles.dateSheetButton}>
-              <Text style={[styles.dateSheetButtonText, { color: colors.accent }]}>Cancel</Text>
-            </Pressable>
-            <Text style={[styles.dateSheetTitle, { color: colors.text }]}>Effective date</Text>
-            <Pressable
-              onPress={() => {
-                setDateVisible(false);
-                const effectiveDate = financialDate(draftDate);
-                if (effectiveDate !== transaction.effectiveDate) {
-                  void saveField('effectiveDate', { effectiveDate });
-                }
-              }}
-              style={styles.dateSheetButton}
-              testID="save-effective-date"
-            >
-              <Text style={[styles.dateSheetDone, { color: colors.accent }]}>Done</Text>
-            </Pressable>
-          </View>
+        <Text maxFontSizeMultiplier={1.5} style={[styles.detailLabel, { color: colors.text }]}>
+          Effective date
+        </Text>
+        {saving ? (
+          <Text style={[styles.dateSaving, { color: colors.secondary }]}>Saving…</Text>
+        ) : (
           <DateTimePicker
             accentColor={colors.accent}
-            display="inline"
+            disabled={disabled}
+            display="compact"
             mode="date"
-            onChange={(_, value) => {
-              if (value) setDraftDate(value);
+            onChange={(_, nextValue) => {
+              if (nextValue) onChange(nextValue);
             }}
-            value={draftDate}
+            testID="transaction-effective-date"
+            value={value}
           />
-        </View>
-      </Modal>
-    </>
+        )}
+      </View>
+    </View>
   );
 }
 
@@ -300,9 +296,7 @@ function DetailRow({
         >
           {value}
         </Text>
-        {onPress ? (
-          <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} />
-        ) : null}
+        {onPress ? <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} /> : null}
       </View>
     </>
   );
@@ -330,14 +324,6 @@ function financialDate(value: Date): string {
   const month = String(value.getMonth() + 1).padStart(2, '0');
   const day = String(value.getDate()).padStart(2, '0');
   return `${year}-${month}-${day}`;
-}
-
-function formatFinancialDate(value: string): string {
-  return new Intl.DateTimeFormat('en', {
-    month: 'short',
-    day: 'numeric',
-    year: 'numeric',
-  }).format(parseFinancialDate(value));
 }
 
 function DetailFlag({
@@ -394,7 +380,7 @@ const styles = StyleSheet.create({
     marginTop: 23,
     letterSpacing: 0.25,
   },
-  group: { borderRadius: 12, overflow: 'hidden' },
+  group: { borderRadius: 16, overflow: 'hidden' },
   detailRow: { minHeight: 52, flexDirection: 'row', paddingLeft: 16 },
   rowIcon: { width: 22, marginRight: 8, alignSelf: 'center' },
   detailRowBody: {
@@ -408,20 +394,9 @@ const styles = StyleSheet.create({
   },
   detailLabel: { flex: 0.42, fontSize: 15 },
   detailValue: { flex: 0.58, fontSize: 15, textAlign: 'right', writingDirection: 'ltr' },
+  dateSaving: { flex: 1, fontSize: 15, textAlign: 'right' },
   disabled: { opacity: 0.55 },
   saveError: { marginTop: 12, paddingHorizontal: 16, fontSize: 13, lineHeight: 18 },
-  dateSheet: { flex: 1 },
-  dateSheetHeader: {
-    minHeight: 58,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    paddingHorizontal: 12,
-  },
-  dateSheetButton: { width: 72, minHeight: 44, justifyContent: 'center' },
-  dateSheetButtonText: { fontSize: 16 },
-  dateSheetDone: { fontSize: 16, fontWeight: '600', textAlign: 'right' },
-  dateSheetTitle: { fontSize: 17, fontWeight: '700' },
   missing: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 30 },
   missingTitle: { fontSize: 21, fontWeight: '700' },
   missingBody: { marginTop: 8, fontSize: 15, textAlign: 'center' },

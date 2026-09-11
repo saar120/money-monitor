@@ -1,0 +1,18 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Capture Blue Ledger dark evidence
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- assertVisible:
+    id: home-screen
+- takeScreenshot: docs/screenshots/blue-ledger/home-dark
+- tapOn: 'Activity, tab, 2 of 3'
+- assertVisible:
+    id: activity-screen
+- takeScreenshot: docs/screenshots/blue-ledger/activity-dark
+- tapOn: 'Explore, tab, 3 of 3'
+- assertVisible:
+    id: explore-screen
+- takeScreenshot: docs/screenshots/blue-ledger/explore-dark

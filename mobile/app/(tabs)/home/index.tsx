@@ -1,14 +1,17 @@
+import { Area, CartesianChart, Line } from 'victory-native';
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useState } from 'react';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney } from '@/money';
+import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
 import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
   const colors = useAppColors();
+  const insets = useSafeAreaInsets();
   const { error, home, status, reload } = useMoneyData();
   const [refreshing, setRefreshing] = useState(false);
   if (status !== 'ready' || !home) return <ConnectionState />;
@@ -18,6 +21,7 @@ export default function HomeScreen() {
   const staleAccounts = home.freshness.filter((account) => account.state === 'stale');
   const attentionBudgets = home.budgets.filter((budget) => budget.status !== 'on_track');
   const topCategories = [...home.categories].sort((a, b) => b.spent - a.spent).slice(0, 4);
+  const cashFlow = overviewCashFlow(home.income, home.spent);
   const refresh = async () => {
     setRefreshing(true);
     try {
@@ -30,8 +34,8 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={styles.content}
-      contentInsetAdjustmentBehavior="automatic"
+      contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}
+      contentInsetAdjustmentBehavior="never"
       showsVerticalScrollIndicator={false}
       testID="home-screen"
       refreshControl={
@@ -43,13 +47,18 @@ export default function HomeScreen() {
       }
     >
       <View style={styles.contextRow}>
-        <Text
-          maxFontSizeMultiplier={1.25}
-          numberOfLines={1}
-          style={[styles.period, { color: colors.secondary }]}
-        >
-          {home.month}
-        </Text>
+        <View>
+          <Text maxFontSizeMultiplier={1.25} style={[styles.greeting, { color: colors.secondary }]}>
+            Good morning
+          </Text>
+          <Text
+            maxFontSizeMultiplier={1.25}
+            numberOfLines={1}
+            style={[styles.period, { color: colors.text }]}
+          >
+            {home.month} · day {Number(home.currentDate.slice(8, 10))}
+          </Text>
+        </View>
         <Text
           maxFontSizeMultiplier={1.25}
           numberOfLines={1}
@@ -74,29 +83,29 @@ export default function HomeScreen() {
           numberOfLines={1}
           style={[styles.heroValue, { color: colors.text }]}
         >
-          {formatUnsignedMoney(home.spent, home.currencyCode)}
+          {formatUnsignedMoney(home.available ?? home.spent, home.currencyCode)}
         </Text>
         <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
-          spent this month
-        </Text>
-        <Text
-          maxFontSizeMultiplier={1.3}
-          style={[styles.pace, { color: paceDelta <= 0 ? colors.accent : colors.warning }]}
-          testID="spending-pace-summary"
-        >
-          {paceDelta === 0
-            ? 'Right in line with last month'
-            : `${formatUnsignedMoney(Math.abs(paceDelta), home.currencyCode)} ${paceDelta < 0 ? 'slower' : 'higher'} than last month’s pace`}
+          {home.available === null ? 'spent this month' : 'left in plan'}
         </Text>
       </View>
 
-      <View style={styles.cashflowRow}>
+      <SpendingHero
+        colors={colors}
+        currencyCode={home.currencyCode}
+        currentDate={home.currentDate}
+        paceDelta={paceDelta}
+        spent={home.spent}
+        trend={home.trend}
+      />
+
+      <View style={[styles.cashflowRow, { borderBottomColor: colors.separator }]}>
         <View style={styles.cashflowItem}>
           <Text
             maxFontSizeMultiplier={1.25}
             style={[styles.supportLabel, { color: colors.secondary }]}
           >
-            Income
+            Posted income
           </Text>
           <Text
             allowFontScaling={false}
@@ -107,19 +116,22 @@ export default function HomeScreen() {
             {formatUnsignedMoney(home.income, home.currencyCode)}
           </Text>
         </View>
-        <View style={[styles.cashflowDivider, { backgroundColor: colors.separator }]} />
         <View style={styles.cashflowItem}>
           <Text
             maxFontSizeMultiplier={1.25}
             numberOfLines={1}
             style={[styles.supportLabel, { color: colors.secondary }]}
           >
-            Income spent
+            Net cash flow
           </Text>
-          <Text allowFontScaling={false} style={[styles.supportValue, { color: colors.text }]}>
-            {home.spendingVsIncomePercent === null
-              ? '—'
-              : `${Math.round(home.spendingVsIncomePercent)}%`}
+          <Text
+            allowFontScaling={false}
+            style={[
+              styles.supportValue,
+              { color: cashFlow >= 0 ? colors.positive : colors.danger },
+            ]}
+          >
+            {formatMoney(cashFlow, home.currencyCode)}
           </Text>
         </View>
       </View>
@@ -195,7 +207,7 @@ export default function HomeScreen() {
         </View>
       ) : (
         <View style={styles.caughtUp} testID="home-calm-state">
-          <SymbolView name="checkmark.circle.fill" size={18} tintColor={colors.accent} />
+          <SymbolView name="checkmark.circle.fill" size={18} tintColor={colors.positive} />
           <Text style={[styles.caughtUpText, { color: colors.secondary }]}>
             Everything looks current
           </Text>
@@ -220,7 +232,7 @@ export default function HomeScreen() {
                 key={category.name}
                 onPress={() =>
                   router.push({
-                    pathname: '/(tabs)/explore/category/[name]',
+                    pathname: '/category/[name]',
                     params: { name: category.name },
                   })
                 }
@@ -278,7 +290,7 @@ export default function HomeScreen() {
       <Pressable
         accessibilityHint="Opens net worth details"
         accessibilityRole="button"
-        onPress={() => router.push('/(tabs)/explore/net-worth')}
+        onPress={() => router.push('/net-worth')}
         style={[styles.netWorthRow, { borderTopColor: colors.separator }]}
         testID="net-worth-summary"
       >
@@ -300,7 +312,7 @@ export default function HomeScreen() {
               allowFontScaling={false}
               style={[
                 styles.netWorthChange,
-                { color: home.netWorthChange >= 0 ? colors.accent : colors.danger },
+                { color: home.netWorthChange >= 0 ? colors.positive : colors.danger },
               ]}
             >
               {formatMoney(home.netWorthChange, home.currencyCode)} this month
@@ -310,6 +322,110 @@ export default function HomeScreen() {
         </View>
       </Pressable>
     </ScrollView>
+  );
+}
+
+function SpendingHero({
+  colors,
+  currencyCode,
+  currentDate,
+  paceDelta,
+  spent,
+  trend,
+}: {
+  colors: AppColors;
+  currencyCode: string;
+  currentDate: string;
+  paceDelta: number;
+  spent: number;
+  trend: Array<{ day: number; current: number; previous: number }>;
+}) {
+  const day = Number(currentDate.slice(8, 10));
+  const max = Math.max(1, ...trend.flatMap((point) => [point.current, point.previous]));
+  return (
+    <View
+      style={[styles.spendingHero, { backgroundColor: colors.chart, shadowColor: colors.chart }]}
+      testID="home-spending-chart"
+    >
+      <View style={styles.chartHeading}>
+        <Text style={styles.chartTitle}>Spending through day {day}</Text>
+        <View style={styles.chartSource}>
+          <SymbolView name="checkmark.circle" size={11} tintColor="rgba(255,255,255,0.8)" />
+          <Text style={styles.chartSourceText}>Posted only</Text>
+        </View>
+      </View>
+      <View style={styles.chartBody}>
+        <View pointerEvents="none" style={styles.chartGrid}>
+          <View style={styles.chartGridLine} />
+          <View style={styles.chartGridLine} />
+          <View style={styles.chartGridLine} />
+        </View>
+        {trend.length ? (
+          <CartesianChart
+            data={trend}
+            domain={{ y: [0, max * 1.08] }}
+            padding={{ top: 14, bottom: 8, left: 2, right: 2 }}
+            xKey="day"
+            yKeys={['current', 'previous']}
+          >
+            {({ points, chartBounds }) => (
+              <>
+                <Area
+                  color="#86B9FF"
+                  curveType="natural"
+                  opacity={0.42}
+                  points={points.current}
+                  y0={chartBounds.bottom}
+                />
+                <Line
+                  color="rgba(255,255,255,0.58)"
+                  curveType="natural"
+                  points={points.previous}
+                  strokeWidth={2}
+                />
+                <Line
+                  color="#FFFFFF"
+                  curveType="natural"
+                  points={points.current}
+                  strokeWidth={2.8}
+                />
+              </>
+            )}
+          </CartesianChart>
+        ) : (
+          <View style={styles.noChart}>
+            <Text style={styles.noChartText}>No posted spending yet</Text>
+          </View>
+        )}
+      </View>
+      <View style={styles.chartAxis}>
+        <Text style={styles.chartAxisText}>Day 1</Text>
+        <Text style={styles.chartAxisText}>Today · {day}</Text>
+      </View>
+      <View style={styles.chartFooter}>
+        <View style={styles.chartMetricRow}>
+          <Text allowFontScaling={false} style={styles.chartMetricStrong}>
+            {formatUnsignedMoney(spent, currencyCode)}
+          </Text>
+          <Text allowFontScaling={false} style={styles.chartMetric}>
+            {' '}
+            spent
+          </Text>
+        </View>
+        <Text allowFontScaling={false} style={styles.chartMetric}>
+          {paceDelta === 0 ? (
+            'Right in line with last month'
+          ) : (
+            <>
+              <Text style={styles.chartMetricStrong}>
+                {formatUnsignedMoney(Math.abs(paceDelta), currencyCode)}
+              </Text>{' '}
+              {paceDelta < 0 ? 'slower' : 'higher'} than last month’s pace
+            </>
+          )}
+        </Text>
+      </View>
+    </View>
   );
 }
 
@@ -357,7 +473,7 @@ function BudgetPace({
       <PaceLine
         label="Budget used"
         value={budget.usedPercent}
-        color={over ? colors.danger : colors.accent}
+        color={over ? colors.danger : colors.positive}
         colors={colors}
       />
       <Text
@@ -490,28 +606,99 @@ function SectionHeader({
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 20, paddingBottom: 36 },
   contextRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
     alignItems: 'baseline',
     marginTop: 8,
   },
-  period: { fontSize: 16, fontWeight: '600' },
+  greeting: { fontSize: 14, lineHeight: 20 },
+  period: { fontSize: 15, lineHeight: 21, fontWeight: '600' },
   freshness: { maxWidth: '56%', fontSize: 13, textAlign: 'right' },
-  hero: { paddingTop: 28 },
+  hero: { paddingTop: 29, paddingBottom: 22 },
   heroValue: {
-    fontSize: 48,
-    lineHeight: 53,
+    fontSize: 56,
+    lineHeight: 59,
     fontWeight: '700',
     letterSpacing: -2,
     fontVariant: ['tabular-nums'],
   },
-  heroLabel: { marginTop: 1, fontSize: 23, lineHeight: 29, fontWeight: '600', letterSpacing: -0.4 },
-  pace: { marginTop: 12, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  cashflowRow: { flexDirection: 'row', alignItems: 'stretch', gap: 22, marginTop: 26 },
+  heroLabel: {
+    marginTop: 4,
+    fontSize: 25,
+    lineHeight: 30,
+    fontWeight: '600',
+    letterSpacing: -0.45,
+  },
+  spendingHero: {
+    overflow: 'hidden',
+    borderRadius: 25,
+    paddingTop: 17,
+    paddingHorizontal: 14,
+    paddingBottom: 13,
+    shadowOffset: { width: 0, height: 16 },
+    shadowOpacity: 0.22,
+    shadowRadius: 22,
+  },
+  chartHeading: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  chartTitle: { color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '700' },
+  chartSource: {
+    minHeight: 28,
+    paddingHorizontal: 9,
+    borderWidth: StyleSheet.hairlineWidth,
+    borderColor: 'rgba(255,255,255,0.3)',
+    borderRadius: 14,
+    backgroundColor: 'rgba(255,255,255,0.1)',
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 5,
+  },
+  chartSourceText: { color: 'rgba(255,255,255,0.82)', fontSize: 10.5, fontWeight: '600' },
+  chartBody: { height: 176, marginTop: 4 },
+  chartGrid: {
+    position: 'absolute',
+    top: 22,
+    right: 2,
+    bottom: 18,
+    left: 2,
+    justifyContent: 'space-between',
+  },
+  chartGridLine: {
+    height: StyleSheet.hairlineWidth,
+    backgroundColor: 'rgba(255,255,255,0.18)',
+  },
+  noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
+  noChartText: { color: 'rgba(255,255,255,0.72)', fontSize: 13 },
+  chartAxis: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 3 },
+  chartAxisText: { color: 'rgba(255,255,255,0.64)', fontSize: 10.5 },
+  chartFooter: {
+    marginTop: 10,
+    paddingTop: 10,
+    borderTopWidth: StyleSheet.hairlineWidth,
+    borderTopColor: 'rgba(255,255,255,0.22)',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    gap: 10,
+  },
+  chartMetricRow: { flexDirection: 'row', alignItems: 'baseline' },
+  chartMetric: { color: 'rgba(255,255,255,0.74)', fontSize: 11 },
+  chartMetricStrong: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  cashflowRow: {
+    flexDirection: 'row',
+    alignItems: 'stretch',
+    gap: 24,
+    marginTop: 14,
+    paddingHorizontal: 3,
+    paddingVertical: 20,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
   cashflowItem: { flex: 1, minWidth: 0 },
-  cashflowDivider: { width: StyleSheet.hairlineWidth },
   supportLabel: { fontSize: 13, fontWeight: '500' },
   supportValue: {
     marginTop: 3,

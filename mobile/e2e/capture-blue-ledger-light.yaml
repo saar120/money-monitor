@@ -1,0 +1,73 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Capture Blue Ledger light evidence
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- assertVisible:
+    id: home-screen
+- takeScreenshot: docs/screenshots/blue-ledger/home-light
+- tapOn: 'Activity, tab, 2 of 3'
+- assertVisible:
+    id: activity-screen
+- takeScreenshot: docs/screenshots/blue-ledger/activity-light
+- tapOn: 'Explore, tab, 3 of 3'
+- assertVisible:
+    id: explore-screen
+- takeScreenshot: docs/screenshots/blue-ledger/explore-light
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: review-heavy
+- scrollUntilVisible:
+    element:
+      id: start-review
+    direction: DOWN
+- tapOn:
+    id: start-review
+- assertVisible:
+    id: review-screen
+- takeScreenshot: docs/screenshots/blue-ledger/review-light
+- tapOn:
+    id: review-category
+- assertVisible: 'Choose category'
+- takeScreenshot: docs/screenshots/blue-ledger/category-picker-light
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: needs-attention
+- scrollUntilVisible:
+    element:
+      id: account-attention
+    direction: DOWN
+- tapOn:
+    id: account-attention
+- assertVisible:
+    id: account-attention-screen
+- takeScreenshot: docs/screenshots/blue-ledger/account-attention-light
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn: 'Explore, tab, 3 of 3'
+- scrollUntilVisible:
+    element:
+      id: explore-category-Dining
+    direction: DOWN
+- tapOn:
+    id: explore-category-Dining
+- assertVisible: 'What caused the change?'
+- takeScreenshot: docs/screenshots/blue-ledger/category-drilldown-light
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: no-transactions
+- tapOn: 'Activity, tab, 2 of 3'
+- assertVisible:
+    id: activity-empty
+- takeScreenshot: docs/screenshots/blue-ledger/activity-empty-light

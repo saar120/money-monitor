@@ -1,0 +1,29 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Blue Ledger tab and range lens motion
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn: "Activity, tab, 2 of 3"
+- assertVisible:
+    id: activity-screen
+- tapOn: "Explore, tab, 3 of 3"
+- assertVisible:
+    id: explore-screen
+- tapOn: "Home, tab, 1 of 3"
+- assertVisible:
+    id: home-screen
+- scrollUntilVisible:
+    element:
+      id: net-worth-summary
+    direction: DOWN
+    speed: 40
+    timeout: 20000
+- tapOn:
+    id: net-worth-summary
+- assertVisible:
+    id: net-worth-detail
+- tapOn: "3M"
+- tapOn: "6M"
+- tapOn: "All"

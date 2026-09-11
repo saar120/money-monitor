@@ -12,8 +12,10 @@ name: Home renders the normal fixture
 - assertVisible: '₪27,000'
 - assertVisible:
     id: budget-status
-- assertVisible:
-    id: category-spending
+- scrollUntilVisible:
+    element:
+      id: category-spending
+    direction: DOWN
 - scrollUntilVisible:
     element:
       id: net-worth-summary

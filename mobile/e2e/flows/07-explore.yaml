@@ -7,8 +7,10 @@ name: Explore explains category and merchant changes
       MM_FIXTURE_SCENARIO: category-shift
 - tapOn: 'Explore, tab, 3 of 3'
 - assertVisible:
-    id: pace-scrub-value
-- assertVisible: 'What changed?'
+    id: explore-cashflow
+- assertVisible:
+    id: cashflow-chart
+- assertVisible: 'What changed'
 - scrollUntilVisible:
     element:
       id: explore-category-Dining
@@ -19,3 +21,14 @@ name: Explore explains category and merchant changes
 - tapOn:
     id: category-merchant-Wolt
 - assertVisible: 'Transactions'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible: 'What caused the change?'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible:
+    id: explore-screen

@@ -13,6 +13,12 @@ export type TransactionPage = {
 };
 
 export type PairingProgress = 'requesting' | 'awaiting-approval' | 'exchanging';
+export type CashflowMonth = {
+  month: string;
+  label: string;
+  income: number;
+  spending: number;
+};
 export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
 > & { reviewed?: true };
@@ -262,6 +268,30 @@ export async function fetchHomeData(
         ...state,
       };
     }),
+  };
+}
+
+export async function fetchCashflowMonth(
+  credential: PairingCredential,
+  month: string,
+  signal?: AbortSignal,
+): Promise<CashflowMonth> {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid cash-flow month.');
+  const value = await authorizedGet(
+    credential,
+    `/api/mobile/v1/overview?month=${encodeURIComponent(month)}`,
+    signal,
+  );
+  const root = object(value, 'overview');
+  verifyServer(root, credential);
+  const overview = object(root.data, 'overview');
+  const period = object(overview.period, 'overview period');
+  const cashflow = object(overview.cashflow, 'cashflow');
+  return {
+    month: text(period.month, 'overview month'),
+    label: text(period.label, 'overview month label').slice(0, 3),
+    income: money(cashflow.income).value,
+    spending: money(cashflow.spending).value,
   };
 }
 

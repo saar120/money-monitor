@@ -27,10 +27,16 @@ name: Activity search filters and detail
     id: activity-filter-review
 - assertVisible:
     id: transaction-txn-superpharm
-- assertVisible:
-    id: transaction-txn-booking
+- scrollUntilVisible:
+    element:
+      id: transaction-txn-booking
+    direction: DOWN
 - assertNotVisible:
     id: transaction-txn-apple
+- scrollUntilVisible:
+    element:
+      id: transaction-txn-superpharm
+    direction: UP
 - tapOn:
     id: transaction-txn-superpharm
 - assertVisible:
@@ -44,15 +50,14 @@ name: Activity search filters and detail
 - tapOn:
     id: transaction-category
 - assertVisible: 'Change category'
-- tapOn: 'Groceries'
+- tapOn:
+    id: category-option-Groceries
 - assertVisible: '.*Category, Groceries.*'
 - tapOn:
     id: transaction-effective-date
-- assertVisible:
-    id: effective-date-sheet
 - tapOn: 'Monday, 7 September'
-- tapOn: 'Done'
-- assertVisible: '.*Effective date, Sep 7, 2026.*'
+- assertVisible:
+    id: transaction-effective-date
 - swipe:
     start: 3%, 50%
     end: 90%, 50%

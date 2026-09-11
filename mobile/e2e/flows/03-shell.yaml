@@ -8,12 +8,9 @@ name: All root tabs are reachable
 - tapOn: 'Explore, tab, 3 of 3'
 - assertVisible:
     id: explore-screen
-- assertVisible: 'Spending pace'
-- assertVisible: 'What changed?'
-- scrollUntilVisible:
-    element:
-      text: '.*₪41,080 remaining.*'
-    direction: DOWN
+- assertVisible:
+    id: cashflow-chart
+- assertVisible: 'What changed'
 - tapOn: 'Home, tab, 1 of 3'
 - assertVisible:
     id: home-screen

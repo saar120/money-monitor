@@ -1,4 +1,4 @@
-import { Stack, router } from 'expo-router';
+import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useRef, useState } from 'react';
 import {
@@ -9,15 +9,16 @@ import {
   SectionList,
   StyleSheet,
   Text,
+  TextInput,
+  useColorScheme,
   View,
 } from 'react-native';
-import type { SearchBarCommands } from 'react-native-screens';
 import { ConnectionState } from '@/ConnectionState';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import { formatMoney } from '@/money';
 import type { Transaction } from '@/fixtures';
 import type { ActivityFilter } from '@/mobile-api';
-import { useAppColors } from '@/theme';
+import { categoryMarkColor, useAppColors } from '@/theme';
 
 const filters: Array<{ key: ActivityFilter; label: string }> = [
   { key: 'all', label: 'All' },
@@ -31,7 +32,7 @@ export default function ActivityScreen() {
   const [query, setQuery] = useState('');
   const [filter, setFilter] = useState<ActivityFilter>('all');
   const [refreshing, setRefreshing] = useState(false);
-  const searchBar = useRef<SearchBarCommands>(null);
+  const searchBar = useRef<TextInput>(null);
   const money = useMoneyData();
   const result = useActivityTransactions(query, filter);
   const transactions = result.transactions;
@@ -55,171 +56,173 @@ export default function ActivityScreen() {
   if (money.status !== 'ready' || !money.home) return <ConnectionState />;
 
   return (
-    <>
-      <Stack.Screen
-        options={{
-          headerSearchBarOptions: {
-            ref: searchBar,
-            placeholder: 'Merchant, category, or account',
-            hideWhenScrolling: false,
-            onChangeText: (event) => setQuery(event.nativeEvent.text),
-            onCancelButtonPress: () => setQuery(''),
-          },
-        }}
-      />
-      <SectionList
-        style={{ backgroundColor: colors.background }}
-        contentContainerStyle={styles.content}
-        contentInsetAdjustmentBehavior="automatic"
-        stickySectionHeadersEnabled
-        keyboardDismissMode="on-drag"
-        sections={sections}
-        keyExtractor={(item) => item.id}
-        testID={refreshing ? 'activity-screen-refreshing' : 'activity-screen'}
-        refreshControl={
-          <RefreshControl
-            refreshing={refreshing}
-            onRefresh={() => void refresh()}
-            tintColor={colors.accent}
-          />
-        }
-        ListHeaderComponent={
-          <View>
-            {money.home.reviewCount > 0 ? (
-              <Pressable
-                accessibilityHint="Opens the review queue"
-                accessibilityRole="button"
-                onPress={() => router.push('/review')}
-                testID="activity-start-review"
-                style={[styles.reviewBanner, { backgroundColor: colors.accentSoft }]}
-              >
-                <View style={styles.reviewBannerIcon}>
-                  <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
-                </View>
-                <View style={styles.reviewBannerText}>
-                  <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
-                    {money.home.reviewCount} to review
-                  </Text>
-                  <Text style={[styles.reviewBannerDetail, { color: colors.secondary }]}>
-                    Open your financial inbox
-                  </Text>
-                </View>
-                <SymbolView name="chevron.right" size={12} tintColor={colors.accent} />
-              </Pressable>
-            ) : null}
-            {money.error ? (
-              <Text style={[styles.refreshError, { color: colors.danger }]}>
-                Couldn’t refresh · pull to retry
-              </Text>
-            ) : null}
-            <Text style={[styles.summary, { color: colors.secondary }]}>
-              {transactions.length}
-              {result.hasMore ? '+' : ''} transactions ·{' '}
-              {filter === 'review' ? 'financial inbox' : month}
-            </Text>
-            <ScrollView
-              horizontal
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filters}
-              accessibilityRole="tablist"
-            >
-              {filters.map((item) => {
-                const selected = filter === item.key;
-                return (
-                  <Pressable
-                    key={item.key}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      searchBar.current?.blur();
-                      setFilter(item.key);
-                    }}
-                    testID={`activity-filter-${item.key}`}
-                    style={({ pressed }) => [
-                      styles.filter,
-                      {
-                        backgroundColor: selected ? colors.text : colors.surface,
-                        borderColor: selected ? colors.text : colors.separator,
-                        opacity: pressed ? 0.7 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.filterLabel,
-                        { color: selected ? colors.background : colors.text },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+    <SectionList
+      style={{ backgroundColor: colors.background }}
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
+      stickySectionHeadersEnabled
+      keyboardDismissMode="interactive"
+      keyboardShouldPersistTaps="handled"
+      sections={sections}
+      keyExtractor={(item) => item.id}
+      testID={refreshing ? 'activity-screen-refreshing' : 'activity-screen'}
+      refreshControl={
+        <RefreshControl
+          refreshing={refreshing}
+          onRefresh={() => void refresh()}
+          tintColor={colors.accent}
+        />
+      }
+      ListHeaderComponent={
+        <View>
+          <View style={[styles.search, { backgroundColor: colors.surfaceSoft }]}>
+            <SymbolView name="magnifyingglass" size={16} tintColor={colors.tertiary} />
+            <TextInput
+              ref={searchBar}
+              accessibilityLabel="Merchant, category, or account"
+              clearButtonMode="while-editing"
+              onChangeText={setQuery}
+              placeholder="Merchant, category, or account"
+              placeholderTextColor={colors.tertiary}
+              returnKeyType="search"
+              style={[styles.searchInput, { color: colors.text }]}
+              value={query}
+            />
           </View>
-        }
-        renderSectionHeader={({ section }) => (
-          <View
-            style={[
-              styles.sectionHeader,
-              { backgroundColor: colors.background, borderBottomColor: colors.separator },
-            ]}
+          {money.home.reviewCount > 0 ? (
+            <Pressable
+              accessibilityHint="Opens the review queue"
+              accessibilityRole="button"
+              onPress={() => router.push('/review')}
+              testID="activity-start-review"
+              style={[styles.reviewBanner, { backgroundColor: colors.accentSoft }]}
+            >
+              <View style={styles.reviewBannerIcon}>
+                <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
+              </View>
+              <View style={styles.reviewBannerText}>
+                <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
+                  {money.home.reviewCount} to review
+                </Text>
+                <Text style={[styles.reviewBannerDetail, { color: colors.secondary }]}>
+                  Open your financial inbox
+                </Text>
+              </View>
+              <SymbolView name="chevron.right" size={12} tintColor={colors.accent} />
+            </Pressable>
+          ) : null}
+          {money.error ? (
+            <Text style={[styles.refreshError, { color: colors.danger }]}>
+              Couldn’t refresh · pull to retry
+            </Text>
+          ) : null}
+          <Text style={[styles.summary, { color: colors.secondary }]}>
+            {transactions.length}
+            {result.hasMore ? '+' : ''} transactions ·{' '}
+            {filter === 'review' ? 'financial inbox' : month}
+          </Text>
+          <ScrollView
+            horizontal
+            keyboardShouldPersistTaps="handled"
+            showsHorizontalScrollIndicator={false}
+            contentContainerStyle={styles.filters}
+            accessibilityRole="tablist"
           >
+            {filters.map((item) => {
+              const selected = filter === item.key;
+              return (
+                <Pressable
+                  key={item.key}
+                  accessibilityRole="tab"
+                  accessibilityState={{ selected }}
+                  onPress={() => {
+                    searchBar.current?.blur();
+                    setFilter(item.key);
+                  }}
+                  testID={`activity-filter-${item.key}`}
+                  style={({ pressed }) => [
+                    styles.filter,
+                    {
+                      backgroundColor: selected ? colors.accent : colors.glass,
+                      borderColor: selected ? colors.accent : colors.glassBorder,
+                      shadowColor: selected ? colors.accent : colors.glassShadow,
+                      opacity: pressed ? 0.76 : 1,
+                      transform: [{ scale: pressed ? 0.94 : 1 }],
+                    },
+                  ]}
+                >
+                  <Text
+                    style={[styles.filterLabel, { color: selected ? '#FFFFFF' : colors.secondary }]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </ScrollView>
+        </View>
+      }
+      renderSectionHeader={({ section }) => (
+        <View
+          style={[
+            styles.sectionHeader,
+            { backgroundColor: colors.background, borderBottomColor: colors.separator },
+          ]}
+        >
+          <Text
+            maxFontSizeMultiplier={1.5}
+            numberOfLines={1}
+            style={[styles.sectionTitle, { color: colors.text }]}
+          >
+            {section.title}
+          </Text>
+          {section.total === null ? null : (
             <Text
-              maxFontSizeMultiplier={1.5}
+              adjustsFontSizeToFit
+              allowFontScaling={false}
+              minimumFontScale={0.8}
               numberOfLines={1}
-              style={[styles.sectionTitle, { color: colors.text }]}
+              testID={`section-total-${section.id}`}
+              style={[styles.sectionTotal, { color: colors.secondary }]}
             >
-              {section.title}
+              {formatMoney(section.total.value, section.total.currencyCode, true)}
             </Text>
-            {section.total === null ? null : (
-              <Text
-                adjustsFontSizeToFit
-                allowFontScaling={false}
-                minimumFontScale={0.8}
-                numberOfLines={1}
-                testID={`section-total-${section.id}`}
-                style={[styles.sectionTotal, { color: colors.secondary }]}
-              >
-                {formatMoney(section.total.value, section.total.currencyCode, true)}
-              </Text>
-            )}
-          </View>
-        )}
-        renderItem={({ item, index, section }) => (
-          <TransactionRow
-            transaction={item}
-            isLast={index === section.data.length - 1}
-            onPress={() => {
-              searchBar.current?.blur();
-              router.push(`/(tabs)/activity/${item.id}`);
-            }}
-          />
-        )}
-        ListEmptyComponent={
-          <View style={styles.empty} testID="activity-empty">
-            {result.loading ? <ActivityIndicator color={colors.accent} /> : null}
-            <Text style={[styles.emptyTitle, { color: colors.text }]}>
-              {result.loading
-                ? 'Loading activity'
-                : result.error
-                  ? 'Couldn’t load activity'
-                  : isEmptyMonth
-                    ? 'No transactions yet'
-                    : 'No matching transactions'}
-            </Text>
-            <Text style={[styles.emptyText, { color: colors.secondary }]}>
-              {result.error ??
-                (result.loading
-                  ? 'Reading transactions from your Mac.'
-                  : isEmptyMonth
-                    ? 'New activity will appear after your Mac syncs.'
-                    : 'Clear search or choose another filter.')}
-            </Text>
-          </View>
-        }
-      />
-    </>
+          )}
+        </View>
+      )}
+      renderItem={({ item, index, section }) => (
+        <TransactionRow
+          transaction={item}
+          isLast={index === section.data.length - 1}
+          onPress={() => {
+            searchBar.current?.blur();
+            router.push(`/transaction/${item.id}`);
+          }}
+        />
+      )}
+      ListEmptyComponent={
+        <View style={styles.empty} testID="activity-empty">
+          {result.loading ? <ActivityIndicator color={colors.accent} /> : null}
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {result.loading
+              ? 'Loading activity'
+              : result.error
+                ? 'Couldn’t load activity'
+                : isEmptyMonth
+                  ? 'No transactions yet'
+                  : 'No matching transactions'}
+          </Text>
+          <Text style={[styles.emptyText, { color: colors.secondary }]}>
+            {result.error ??
+              (result.loading
+                ? 'Reading transactions from your Mac.'
+                : isEmptyMonth
+                  ? 'New activity will appear after your Mac syncs.'
+                  : 'Clear search or choose another filter.')}
+          </Text>
+        </View>
+      }
+    />
   );
 }
 
@@ -233,6 +236,7 @@ function TransactionRow({
   onPress: () => void;
 }) {
   const colors = useAppColors();
+  const isDark = useColorScheme() === 'dark';
   const positive = transaction.amount > 0;
   return (
     <Pressable
@@ -252,16 +256,16 @@ function TransactionRow({
       testID={`transaction-${transaction.id}`}
       style={({ pressed }) => [
         styles.row,
-        { backgroundColor: pressed ? colors.surface : colors.background },
+        { backgroundColor: pressed ? colors.surfaceSoft : colors.background },
       ]}
     >
       <View
         style={[
           styles.merchantMark,
-          { backgroundColor: markColor(transaction.category, colors.surface) },
+          { backgroundColor: categoryMarkColor(transaction.category, isDark, colors.surfaceSoft) },
         ]}
       >
-        <Text allowFontScaling={false} style={styles.merchantInitial}>
+        <Text allowFontScaling={false} style={[styles.merchantInitial, { color: colors.text }]}>
           {merchantInitial(transaction.merchant)}
         </Text>
       </View>
@@ -287,7 +291,7 @@ function TransactionRow({
             allowFontScaling={false}
             minimumFontScale={0.75}
             numberOfLines={1}
-            style={[styles.amount, { color: positive ? colors.accent : colors.text }]}
+            style={[styles.amount, { color: positive ? colors.positive : colors.text }]}
           >
             {formatMoney(transaction.amount, transaction.currencyCode, true)}
           </Text>
@@ -364,23 +368,20 @@ function merchantInitial(merchant: string) {
   return merchant.trim().charAt(0).toLocaleUpperCase();
 }
 
-function markColor(category: string, fallback: string) {
-  const colors: Record<string, string> = {
-    Dining: '#D8E9DE',
-    Income: '#D4E7E0',
-    Health: '#E9DED7',
-    Subscriptions: '#E1DDEA',
-    Groceries: '#EFE1D2',
-    Transfer: '#D9E4EB',
-    Transport: '#D7E4EE',
-    Housing: '#E6DFD2',
-    Travel: '#DCE5DC',
-  };
-  return colors[category] ?? fallback;
-}
-
 const styles = StyleSheet.create({
-  content: { paddingBottom: 40 },
+  content: { paddingBottom: 36 },
+  search: {
+    height: 48,
+    marginHorizontal: 16,
+    marginTop: 8,
+    marginBottom: 14,
+    paddingHorizontal: 14,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 9,
+  },
+  searchInput: { flex: 1, height: 48, fontSize: 16 },
   reviewBanner: {
     minHeight: 66,
     marginHorizontal: 16,
@@ -406,6 +407,9 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
+    shadowOffset: { width: 0, height: 6 },
+    shadowOpacity: 0.12,
+    shadowRadius: 12,
   },
   filterLabel: { fontSize: 13, fontWeight: '600' },
   sectionHeader: {
@@ -433,7 +437,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 13,
   },
-  merchantInitial: { color: '#263029', fontSize: 16, fontWeight: '700' },
+  merchantInitial: { fontSize: 16, fontWeight: '700' },
   rowBody: {
     flex: 1,
     minWidth: 0,

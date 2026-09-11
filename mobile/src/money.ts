@@ -36,3 +36,8 @@ export function formatUnsignedMoney(value: number, currencyCode = 'ILS'): string
   const formatted = formatMoney(Math.abs(value), currencyCode);
   return formatted.startsWith('+') ? formatted.slice(1) : formatted;
 }
+
+// Both inputs are Mac-calculated, posted/included overview aggregates in the same currency.
+export function overviewCashFlow(income: number, spending: number): number {
+  return Math.round((income - spending + Number.EPSILON) * 100) / 100;
+}

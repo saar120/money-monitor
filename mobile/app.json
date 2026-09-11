@@ -42,9 +42,9 @@
           "image": "./assets/icon.png",
           "imageWidth": 112,
           "resizeMode": "contain",
-          "backgroundColor": "#F5F3EE",
+          "backgroundColor": "#F8F7F3",
           "dark": {
-            "backgroundColor": "#111310"
+            "backgroundColor": "#17212E"
           }
         }
       ],

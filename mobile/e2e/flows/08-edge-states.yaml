@@ -5,8 +5,10 @@ name: Empty and mixed-currency fixtures stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: light-data
-- assertVisible:
-    id: home-calm-state
+- scrollUntilVisible:
+    element:
+      id: home-calm-state
+    direction: DOWN
 - assertNotVisible:
     id: start-review
 - launchApp:
@@ -19,7 +21,7 @@ name: Empty and mixed-currency fixtures stay truthful
 - assertVisible: 'No transactions yet'
 - tapOn: 'Explore, tab, 3 of 3'
 - assertVisible:
-    id: spending-chart
+    id: cashflow-chart
 - launchApp:
     clearState: true
     arguments:
