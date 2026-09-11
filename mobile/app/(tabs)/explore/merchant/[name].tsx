@@ -20,6 +20,7 @@ export default function MerchantScreen() {
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
+        testID="merchant-detail"
       >
         {merchant ? (
           <>
@@ -32,7 +33,9 @@ export default function MerchantScreen() {
             >
               {formatUnsignedMoney(merchant.current, home.currencyCode)}
             </Text>
-            <Text style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.accent }]}>
+            <Text
+              style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.positive }]}
+            >
               {formatMoney(delta!, home.currencyCode)} compared with last month
             </Text>
             <Text style={[styles.meta, { color: colors.secondary }]}>
@@ -47,8 +50,8 @@ export default function MerchantScreen() {
               accessibilityHint="Opens transaction details"
               accessibilityRole="button"
               key={transaction.id}
-              onPress={() => router.push(`/(tabs)/activity/${transaction.id}`)}
-              style={styles.row}
+              onPress={() => router.push(`/transaction/${transaction.id}`)}
+              style={[styles.row, { borderBottomColor: colors.separator }]}
             >
               <View style={styles.rowText}>
                 <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
@@ -90,7 +93,7 @@ export default function MerchantScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
   amount: {
     marginTop: 18,
     fontSize: 42,
@@ -102,7 +105,13 @@ const styles = StyleSheet.create({
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   meta: { marginTop: 5, fontSize: 13 },
   title: { marginTop: 36, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
-  row: { minHeight: 66, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  row: {
+    minHeight: 66,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+  },
   rowText: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
   rowMeta: { marginTop: 3, fontSize: 12.5, writingDirection: 'ltr' },

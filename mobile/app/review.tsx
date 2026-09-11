@@ -15,6 +15,7 @@ import {
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import type { Transaction } from '@/fixtures';
 import { formatMoney } from '@/money';
@@ -183,14 +184,14 @@ export default function ReviewScreen() {
             <Pressable
               accessibilityRole="button"
               onPress={() => void reload()}
-              style={[styles.doneButton, { backgroundColor: colors.text }]}
+              style={[styles.doneButton, { backgroundColor: colors.accent }]}
             >
-              <Text style={[styles.doneButtonText, { color: colors.background }]}>Try again</Text>
+              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>Try again</Text>
             </Pressable>
           </View>
         ) : viewState === 'complete' ? (
           <View style={styles.caughtUp} testID="review-complete">
-            <SymbolView name="checkmark.circle.fill" size={58} tintColor={colors.accent} />
+            <SymbolView name="checkmark.circle.fill" size={58} tintColor={colors.positive} />
             <Text style={[styles.caughtUpTitle, { color: colors.text }]}>All caught up</Text>
             <Text style={[styles.caughtUpBody, { color: colors.secondary }]}>
               Everything in your financial inbox has been reviewed.
@@ -201,10 +202,10 @@ export default function ReviewScreen() {
               onPress={() => router.back()}
               style={[
                 styles.doneButton,
-                { backgroundColor: colors.text, opacity: saving ? 0.5 : 1 },
+                { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 },
               ]}
             >
-              <Text style={[styles.doneButtonText, { color: colors.background }]}>
+              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>
                 {saving ? 'Finishing…' : 'Done'}
               </Text>
             </Pressable>
@@ -242,7 +243,7 @@ export default function ReviewScreen() {
                 allowFontScaling={false}
                 minimumFontScale={0.7}
                 numberOfLines={1}
-                style={[styles.amount, { color: current.amount > 0 ? colors.accent : colors.text }]}
+                style={[styles.amount, { color: current.amount > 0 ? colors.positive : colors.text }]}
               >
                 {formatMoney(current.amount, current.currencyCode ?? home?.currencyCode, true)}
               </Text>
@@ -286,7 +287,7 @@ export default function ReviewScreen() {
                     onValueChange={(included) => {
                       void saveField(current, { included });
                     }}
-                    trackColor={{ true: colors.accent }}
+                    trackColor={{ true: colors.positive }}
                   />
                 </View>
                 <View style={styles.fieldRow}>
@@ -311,11 +312,15 @@ export default function ReviewScreen() {
                 testID="looks-right"
                 style={({ pressed }) => [
                   styles.primaryButton,
-                  { backgroundColor: colors.text, opacity: saving ? 0.5 : pressed ? 0.75 : 1 },
+                  {
+                    backgroundColor: colors.accent,
+                    opacity: saving ? 0.5 : pressed ? 0.76 : 1,
+                    transform: [{ scale: pressed ? 0.94 : 1 }],
+                  },
                 ]}
               >
-                <SymbolView name="checkmark" size={17} tintColor={colors.background} />
-                <Text style={[styles.primaryButtonText, { color: colors.background }]}>
+                <SymbolView name="checkmark" size={17} tintColor="#FFFFFF" />
+                <Text style={[styles.primaryButtonText, { color: '#FFFFFF' }]}>
                   {saving ? 'Saving…' : 'Looks right'}
                 </Text>
               </Pressable>
@@ -326,19 +331,26 @@ export default function ReviewScreen() {
           </Animated.View>
         ) : null}
       </View>
+      <CategoryPickerSheet
+        categories={options.categories}
+        onClose={() => setPicker(null)}
+        onSelect={(category) => {
+          setPicker(null);
+          if (current) void complete({ category, reviewed: true });
+        }}
+        selected={current?.category}
+        visible={picker === 'category'}
+      />
       <OptionSheet
-        visible={picker !== null}
-        title={picker === 'category' ? 'Choose category' : 'Choose owner'}
-        options={picker === 'category' ? options.categories : options.owners}
-        selected={picker === 'category' ? current?.category : current?.owner}
+        visible={picker === 'owner'}
+        title="Choose owner"
+        options={options.owners}
+        selected={current?.owner}
         colors={colors}
         onClose={() => setPicker(null)}
         onSelect={(value) => {
-          const kind = picker;
           setPicker(null);
-          if (!current || !kind) return;
-          if (kind === 'category') void complete({ category: value, reviewed: true });
-          else void saveField(current, { owner: value });
+          if (current) void saveField(current, { owner: value });
         }}
       />
     </>

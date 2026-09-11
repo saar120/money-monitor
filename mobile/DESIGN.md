@@ -1,31 +1,29 @@
 ---
-name: Money Monitor for iPhone
-description: A calm, native financial pulse with depth on demand.
+name: Money Monitor — Blue Ledger
+description: A calm, precise iPhone ledger with cobalt focus and dusk depth.
 colors:
-  ledger-green: '#216849'
-  ledger-green-soft: '#DCEAE2'
-  warm-paper: '#F5F3EE'
-  raised-paper: '#FCFBF8'
-  ink: '#171914'
-  secondary-ink: '#656A61'
-  tertiary-ink: '#6B7167'
-  hairline: '#D8D7CF'
-  warning: '#83500D'
-  warning-soft: '#F3E7D1'
-  danger: '#A63D35'
-  danger-soft: '#F3DEDA'
-  night: '#11130F'
-  night-raised: '#191C17'
-  night-ink: '#F3F3EC'
-  night-secondary: '#ADB1A8'
-  night-hairline: '#32362F'
-  night-green: '#68C697'
+  porcelain: '#F8F7F3'
+  paper: '#FFFFFF'
+  paper-soft: '#EFEEE9'
+  ink: '#09111F'
+  muted-ink: '#687081'
+  cobalt: '#0B5DDD'
+  cobalt-soft: '#E5EEFC'
+  positive: '#137556'
+  warning: '#9C671B'
+  danger: '#D55B45'
+  dusk: '#17212E'
+  dusk-surface: '#1E2B3A'
+  dusk-raised: '#27374A'
+  dusk-ink: '#F4F3EF'
+  dusk-muted: '#AEB8C5'
+  dusk-cobalt: '#68A4FF'
 typography:
   display:
     fontFamily: 'San Francisco, system-ui, sans-serif'
-    fontSize: '48px'
+    fontSize: '56px'
     fontWeight: 700
-    lineHeight: 1.1
+    lineHeight: 1.05
     letterSpacing: '-2px'
   headline:
     fontFamily: 'San Francisco, system-ui, sans-serif'
@@ -49,10 +47,13 @@ typography:
     fontWeight: 600
     lineHeight: 1.38
 rounded:
-  sm: '6px'
-  md: '12px'
-  lg: '16px'
-  pill: '22px'
+  compact: '10px'
+  control: '14px'
+  field: '16px'
+  chip: '22px'
+  nav-lens: '23px'
+  nav: '28px'
+  sheet: '32px'
 spacing:
   xs: '4px'
   sm: '8px'
@@ -62,141 +63,164 @@ spacing:
   section: '36px'
 components:
   button-primary:
-    backgroundColor: '{colors.ink}'
-    textColor: '{colors.warm-paper}'
+    backgroundColor: '{colors.cobalt}'
+    textColor: '{colors.paper}'
     typography: '{typography.body}'
-    rounded: '{rounded.lg}'
+    rounded: '{rounded.field}'
     height: '54px'
-  attention-group:
-    backgroundColor: '{colors.raised-paper}'
+  search-field:
+    backgroundColor: '{colors.paper-soft}'
     textColor: '{colors.ink}'
-    rounded: '{rounded.lg}'
-    padding: '0 14px'
+    typography: '{typography.body}'
+    rounded: '{rounded.field}'
+    height: '48px'
   filter-chip:
-    backgroundColor: '{colors.raised-paper}'
-    textColor: '{colors.ink}'
+    backgroundColor: '{colors.paper-soft}'
+    textColor: '{colors.muted-ink}'
     typography: '{typography.label}'
-    rounded: '{rounded.pill}'
+    rounded: '{rounded.chip}'
     height: '44px'
+  glass-navigation:
+    backgroundColor: '{colors.cobalt-soft}'
+    textColor: '{colors.cobalt}'
+    rounded: '{rounded.nav}'
+    height: 'system-managed'
+  category-option:
+    backgroundColor: '{colors.paper-soft}'
+    textColor: '{colors.ink}'
+    typography: '{typography.body}'
+    rounded: '{rounded.control}'
+    height: '52px'
 ---
 
-# Design System: Money Monitor for iPhone
+# Design System: Money Monitor — Blue Ledger
 
 ## Overview
 
-**Creative North Star: "The Quiet Ledger"**
+**Creative North Star: "Blue Ledger"**
 
-Money Monitor feels like a private financial instrument: calm enough for daily use, precise enough to trust, and immediately useful without decoration. Hierarchy comes from the financial comparison itself, generous spacing, and a small number of native surfaces—not from a grid of interchangeable dashboard cards.
+Money Monitor is a private financial instrument: calm enough for daily use, exact enough to trust, and dense enough to get work done. A cobalt spending chart is the visual anchor. Everything around it behaves like an editorial ledger—aligned figures, clear section questions, quiet rules, and progressively disclosed detail.
 
-The first screen is intentionally quiet. It states current spending, explains whether its pace is better or worse, relates it to income and time elapsed, then surfaces only actionable changes. Depth appears through native navigation and progressive drill-down when the user asks why.
+The system is recognizably iOS without becoming a generic bank template. Native navigation, sheets, switches, SF Symbols, haptics, and system type do the familiar work. Glass is reserved for navigation and compact selection controls; financial content stays on stable, readable surfaces.
 
 **Key Characteristics:**
 
-- Warm neutral light mode and near-black olive dark mode.
-- One deep-green interaction voice, with amber and red reserved for financial meaning.
-- Large tabular financial numerals paired with plain-language comparisons.
-- Native iOS navigation, sheets, controls, SF Symbols, haptics, and system transitions.
-- Flat, hairline-separated structure with no decorative shadows or gradients.
+- Warm porcelain light mode and tonal blue-graphite dusk mode.
+- One cobalt interaction voice, with green, amber, and red reserved for financial meaning.
+- Large tabular financial numerals supported by plain-language comparisons.
+- A persistent moving lens for root navigation and range selection.
+- Editorial lists with shared surfaces, restrained separators, and aligned amounts.
+- Live Mac data and contract semantics remain more important than decorative parity.
 
 ## Colors
 
-The palette is warm, muted, and semantic. Light and dark values live together in `src/theme.ts`; use those roles rather than introducing screen-local neutrals.
+Light mode uses porcelain rather than stark white. Dark mode is dusk, not black: `#17212E` canvas, `#1E2B3A` primary surfaces, `#27374A` raised surfaces, `#F4F3EF` text, and `#AEB8C5` muted text. Semantic values live in `src/theme.ts`; screens should not introduce their own canvas or surface colors.
 
 ### Primary
 
-- **Ledger Green:** Interaction tint, positive movement, successful review progress, and current-period chart lines.
-- **Soft Ledger Green:** Quiet selected or positive-state backgrounds.
+- **Ledger Cobalt** (`#0B5DDD`, dusk `#68A4FF`): navigation, selected controls, links, chart focus, and primary actions.
+- **Cobalt Wash** (`#E5EEFC`, dusk `#253F63`): selected lenses and quiet interaction backgrounds.
 
 ### Secondary
 
-- **Warning Amber:** Spending moving unfavorably, budgets requiring attention, and positive expense deltas.
-- **Danger Red:** Crossed budgets, broken sync, stale accounts, and destructive financial state.
+- **Positive Green** (`#137556`, dusk `#53D2A7`): income, favorable movement, and included/success states.
+- **Warning Amber** (`#9C671B`, dusk `#EFB456`): pending items, budget risk, and unfavorable expense deltas.
+- **Attention Red** (`#D55B45`, dusk `#FF8975`): stale accounts, crossed budgets, errors, and destructive state.
 
 ### Neutral
 
-- **Warm Paper / Night:** Root screen fields for light and dark appearance.
-- **Raised Paper / Night Raised:** Grouped transaction fields and contextual attention containers.
-- **Ink / Night Ink:** Primary content and high-emphasis financial values.
-- **Secondary and Tertiary Ink:** Supporting comparisons, metadata, and disclosure marks.
-- **Hairline / Night Hairline:** Dividers, tracks, and structural boundaries.
+- **Porcelain / Dusk Canvas:** the root reading field.
+- **Paper / Dusk Surface:** grouped rows and stable cards.
+- **Soft Paper / Raised Dusk:** inputs, inactive controls, and nested surfaces.
+- **Ink / Dusk Ink:** primary labels and amounts.
+- **Muted Ink / Dusk Muted:** metadata and explanations.
 
-**The Meaningful Color Rule.** Green, amber, and red describe interaction or financial state; they never decorate empty space.
+**The Meaningful Color Rule.** Cobalt means interaction or chart focus. Green, amber, and red communicate financial or operational state; they do not decorate empty space.
 
 ## Typography
 
-**Display Font:** San Francisco
-**Body Font:** San Francisco
-**Label Font:** San Francisco
+**Display Font:** San Francisco system UI
 
-**Character:** Native, compact, and numerical. Weight and scale establish hierarchy; tabular numerals keep changing values stable and easy to compare.
+**Body Font:** San Francisco system UI
+
+**Numeric Treatment:** tabular figures
+
+**Character:** Native, compact, and numerical. Scale establishes hierarchy while fixed-width figures keep changing amounts stable and comparable.
 
 ### Hierarchy
 
-- **Display** (700, 48px, 1.1): The single leading financial amount on a screen. Display amounts do not grow with Dynamic Type because they are already oversized; adjacent explanatory copy does.
-- **Headline** (700, 30px, 1.2): Review merchants and caught-up states.
-- **Title** (700, 21px, 1.29): Section questions such as “What changed?” and “Where it went.”
-- **Body** (400–600, 16px, 1.31): Merchant names, primary labels, and readable explanations.
-- **Label** (500–700, 13px, 1.38): Dates, account metadata, comparison details, and progress counts.
+- **Display** (700, up to 56pt): the single leading financial amount in a viewport.
+- **Headline** (700, 30pt): review merchants and completion states.
+- **Title** (700, 21pt): section questions such as “What changed?” and “Where it went.”
+- **Body** (400–600, 16pt): merchants, field labels, and explanations.
+- **Label** (500–700, 13pt): dates, account metadata, status, and progress.
 
-**The One Statement Rule.** Only one financial value receives display scale in a viewport; comparisons explain it instead of competing with it.
+**The One Statement Rule.** Only one amount receives display scale per viewport; surrounding values support it instead of competing with it.
 
 ## Layout
 
-Screens use the iPhone safe area, native navigation bars, a 20-point horizontal content inset, and an approximately 8/12/20/28/36-point vertical rhythm. Related labels stay tight; sections receive visibly more space above than below. Top-level screens scroll vertically and never depend on horizontal scrolling.
+Screens use iPhone safe areas, a 20-point horizontal inset for editorial content, and an approximately 8/12/20/28/36-point vertical rhythm. Related labels stay tight; sections receive visibly more space above than below. The native tab controller owns the bottom safe-area inset and minimizes while scrolling on supported iOS versions.
 
-Compact rows constrain oversized numerals and labels so explanatory text can still respond to Dynamic Type. The shipped Home surface is verified at XXL text size. The app targets iPhone only; do not infer an iPad grid.
+Home leads with the most decision-useful server value and cobalt chart. Activity preserves compact, high-density rows. Explore keeps its chart and ranked drivers on the same monthly inclusion semantics. Secondary screens retain native push navigation and use shared row language rather than isolated cards.
 
 ## Elevation & Depth
 
-The system is flat by default. Depth comes from tonal grouping, native sheets, navigation transitions, and the tab bar—not shadows. A raised neutral surface may group an actionable cluster, but it should remain visually quieter than the financial statement above it.
+The page is flat by default. Stable financial sections use tonal separation and hairlines. Native Liquid Glass appears only on the floating tab bar, its active lens, and range-selection lenses. It uses translucent blue-gray tint, a fine light edge, a quiet inner highlight, and a restrained ambient shadow. On systems without the glass API, the same views fall back to the equivalent translucent surface.
 
-**The Flat Ledger Rule.** Do not add card shadows, floating glass, or elevation to make ordinary content feel important.
+**The Material Restraint Rule.** Glass clarifies controls moving above content; it is not a background for ordinary financial cards.
 
 ## Shapes
 
-Small status flags use 6-point corners, grouped rows use 12–16 points, and compact filters use a 22-point capsule. Progress tracks are thin and fully rounded. Shapes group actions; they are not repeated around every statistic.
+Corners are continuous and concentric: 10-point selected range lenses inside 14-point controls, 23-point active tab lenses inside the 28-point navigation shell, 16-point search and row groups, 22-point chips, and native page sheets with approximately 32-point top corners. Compact status flags use 6-point corners. Interactive targets remain at least 44 points tall.
 
 ## Components
 
 ### Buttons
 
-- Primary review actions are full-width, 54 points tall, high contrast, and 16–17 points rounded.
-- Disabled and saving states reduce opacity and replace the verb with explicit progress copy.
-- Press feedback is restrained opacity plus a native haptic where completion matters.
+- Primary actions are cobalt, full-width where the workflow needs certainty, at least 54 points tall, and 16-point rounded.
+- Press feedback reaches approximately 0.94 scale and 0.76 opacity, then returns with the standard damped spring.
+- Existing review haptics remain tied to confirmation, selection, and failure—not decoration.
 
 ### Chips
 
-- Activity filters are 44-point tap targets with a soft surface at rest and solid ink when selected.
-- Chips name a filter directly; icons are unnecessary.
+- Activity filters are 44-point capsules with a soft glass-tinted rest state and solid cobalt selection.
+- Status flags remain smaller and use semantic state colors.
 
 ### Cards / Containers
 
-- The attention group and review field group use the raised surface and 16-point corners.
-- Containers hold related actions or fields. Standalone metrics remain on the page field.
+- Cards exist only for a real group or material layer: the cobalt chart, review field group, attention group, and sheet options.
+- Transaction and ranking lists share the page surface and use restrained separators.
+
+### Inputs / Fields
+
+- Search fields use the soft surface, a 16-point radius, 48-point height, native text input behavior, and visible system clear affordance.
+- The category picker is a compact bottom sheet with search, current selection, a two-column scrolling list, and the complete Mac-provided category set. Transaction dates use the compact native iOS date control and calendar popover.
 
 ### Navigation
 
 - Home, Activity, and Explore are the only root tabs.
-- Review is a focused stack workflow launched contextually.
-- Category, merchant, transaction, and net-worth explanations use native push navigation.
-- Category and owner selection use a dismissible page sheet with Cancel.
+- Expo Router's native tabs provide the system-sized iOS Liquid Glass bar, active lens, scroll minimization, and platform transition behavior.
+- Explore cash flow and net-worth history share a compact persistent-lens control. Its spring uses stiffness `300`, damping `28`, and mass `0.82`.
+- Reduced Motion switches the custom range lens to the selected position immediately; the native tab controller follows the system preference.
 
-### Spending Pace
+### Spending Chart
 
-Current spending is a solid green line with a restrained area fill; the previous period is a neutral line. Scrubbing updates day, current value, and reference value together and supplies subtle selection haptics.
+The chart is the Blue Ledger signature. Home places current and prior posted spending inside a cobalt shell. Explore requests the existing month-scoped overview endpoint for up to six months and plots the Mac-provided posted income and spending totals as grouped bars. Values and comparisons come from the overview contract; the phone does not extrapolate future points.
 
 ## Do's and Don'ts
 
 ### Do:
 
-- **Do** lead with a comparison that answers whether the current number is normal, improving, or worsening.
-- **Do** let Home say very little when accounts, budgets, and review state are healthy.
-- **Do** use SF Symbols and native iOS controls for familiar interaction.
-- **Do** use tabular numerals for money, percentages, and progress.
+- **Do** use semantic theme roles from `src/theme.ts`.
+- **Do** align money values and use tabular numerals.
+- **Do** preserve data inclusion, date-range, owner, pending, excluded, transfer, and currency semantics.
+- **Do** use native primitives and existing dependencies before adding code.
+- **Do** omit unavailable values or category recency instead of inventing them.
 
 ### Don't:
 
-- **Don't** recreate the desktop dashboard or introduce permanent cards for operationally healthy state.
-- **Don't** use green, amber, or red without a financial or interaction meaning.
-- **Don't** add decorative charts, gradients, glass, shadows, achievement mechanics, or placeholder tabs.
-- **Don't** duplicate financial calculations on the phone; render the Mac's mobile projection.
+- **Don't** turn every row or statistic into a card.
+- **Don't** put glass behind ordinary financial content.
+- **Don't** use an all-black dark mode.
+- **Don't** hardcode prototype financial claims into production UI.
+- **Don't** add client forecasts, trend definitions, or competing aggregates without a typed contract and reconciliation test.

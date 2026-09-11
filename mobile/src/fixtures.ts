@@ -89,6 +89,30 @@ export type FixtureScenario = HomeData & {
   transactions: Transaction[];
 };
 
+// Deterministic review metadata mirrors a realistically sized Mac category response.
+export const FIXTURE_REVIEW_CATEGORIES = [
+  'Dining',
+  'Groceries',
+  'Housing',
+  'Transport',
+  'Travel',
+  'Shopping',
+  'Health',
+  'Subscriptions',
+  'Utilities',
+  'Entertainment',
+  'Education',
+  'Personal',
+  'Gifts',
+  'Insurance',
+  'Taxes',
+  'Pets',
+  'Fees',
+  'Transfer',
+  'Income',
+  'Other',
+] as const;
+
 const normalTransactions: Transaction[] = [
   {
     id: 'txn-wolt',

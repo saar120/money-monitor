@@ -25,7 +25,7 @@ cd mobile
 npm run e2e:ios
 ```
 
-The command prebuilds iOS, creates a Release simulator build, then runs the Maestro flows in `e2e/flows`. Tests do not require Money Monitor on the Mac, Tailscale, a network connection, or credentials.
+The command prebuilds iOS, creates a Release simulator build, then runs the Maestro flows in `e2e/flows` sequentially so their launch fixtures cannot share simulator state. Tests do not require Money Monitor on the Mac, Tailscale, a network connection, or credentials.
 
 Maestro selects a scenario with the iOS launch argument `MM_FIXTURE_SCENARIO`. The app reads it through React Native's native Settings API; normal production launches use the paired Mac, and no fixture picker is shown. Add a typed scenario beside the existing values in `src/fixtures.ts`, then launch it from a flow like this:
 
@@ -59,4 +59,4 @@ npm test
 npx expo-doctor
 ```
 
-The current product model and visual rules are recorded in [`PRODUCT.md`](./PRODUCT.md) and [`DESIGN.md`](./DESIGN.md). Local simulator review captures are written to `.impeccable/review` and intentionally ignored. The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).
+The current product model and Blue Ledger visual rules are recorded in [`PRODUCT.md`](./PRODUCT.md) and [`DESIGN.md`](./DESIGN.md). Reviewed iPhone 17 Pro captures live in [`docs/screenshots/blue-ledger`](./docs/screenshots/blue-ledger); the repeatable capture flows are `e2e/capture-blue-ledger-light.yaml` and `e2e/capture-blue-ledger-dark.yaml`. The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).

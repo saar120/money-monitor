@@ -16,7 +16,7 @@ export default function HomeLayout() {
         contentStyle: { backgroundColor: colors.background },
       }}
     >
-      <Stack.Screen name="index" options={{ title: 'Home', headerTitleAlign: 'left' }} />
+      <Stack.Screen name="index" options={{ headerShown: false }} />
     </Stack>
   );
 }

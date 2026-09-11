@@ -9,19 +9,17 @@ import {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { getFixtureRefreshDelay, getFixtureScenario, isFixtureMode } from './fixture-selection';
+import { FIXTURE_REVIEW_CATEGORIES, type HomeData, type Transaction } from './fixtures';
 import {
-  getFixtureRefreshDelay,
-  getFixtureScenario,
-  isFixtureMode,
-} from './fixture-selection';
-import type { HomeData, Transaction } from './fixtures';
-import {
+  fetchCashflowMonth,
   fetchHomeData,
   fetchReviewOptions,
   fetchTransactionDetail,
   fetchTransactions,
   updateTransaction,
   type ActivityFilter,
+  type CashflowMonth,
   type TransactionUpdate,
 } from './mobile-api';
 import { readPairingCredential, type PairingCredential } from './security/pairing-credential-store';
@@ -39,10 +37,38 @@ type MoneyDataContextValue = {
   fixtureTransactions: Transaction[];
   saveTransaction: (id: string, update: TransactionUpdate) => Promise<Transaction>;
   loadReviewOptions: () => Promise<{ categories: string[]; owners: string[] }>;
+  loadCashflowHistory: () => Promise<CashflowMonth[]>;
 };
 
 const MoneyDataContext = createContext<MoneyDataContextValue | null>(null);
 const LAST_VISIT_KEY = 'money-monitor-last-successful-visit';
+
+function recentMonths(financialDate: string, count: number) {
+  const [year, month] = financialDate.slice(0, 7).split('-').map(Number);
+  return Array.from({ length: count }, (_, index) => {
+    const date = new Date(Date.UTC(year, month - count + index, 1));
+    return `${date.getUTCFullYear()}-${String(date.getUTCMonth() + 1).padStart(2, '0')}`;
+  });
+}
+
+function fixtureCashflowHistory(home: HomeData): CashflowMonth[] {
+  const months = recentMonths(home.currentDate, 6);
+  const incomeFactors = [0.91, 1.04, 0.96, 1.07, 0.98, 1];
+  const spendingFactors = [0.87, 1.02, 0.94, 1.09];
+  return months.map((month, index) => ({
+    month,
+    label: new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(
+      new Date(`${month}-01T12:00:00Z`),
+    ),
+    income: Math.round(home.income * incomeFactors[index]!),
+    spending:
+      index === 5
+        ? home.spent
+        : index === 4
+          ? home.previousSpent
+          : Math.round(home.spent * spendingFactors[index]!),
+  }));
+}
 
 export function MoneyDataProvider({ children }: { children: ReactNode }) {
   const fixture = isFixtureMode();
@@ -144,7 +170,12 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     if (fixture) {
       const scenario = getFixtureScenario();
       return {
-        categories: [...new Set(scenario.categories.map((category) => category.name))].sort(),
+        categories: [
+          ...new Set([
+            ...FIXTURE_REVIEW_CATEGORIES,
+            ...scenario.categories.map((category) => category.name),
+          ]),
+        ].sort(),
         owners: [
           ...new Set([
             ...scenario.transactions.map((transaction) => transaction.owner),
@@ -158,6 +189,17 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     return fetchReviewOptions(credential);
   }, [credential, fixture]);
 
+  const loadCashflowHistory = useCallback(async () => {
+    const currentHome = home ?? getFixtureScenario();
+    if (fixture) return fixtureCashflowHistory(currentHome);
+    if (!credential) throw new Error('Pair with your Mac to explore cash flow.');
+    return Promise.all(
+      recentMonths(currentHome.currentDate, 6).map((month) =>
+        fetchCashflowMonth(credential, month),
+      ),
+    );
+  }, [credential, fixture, home]);
+
   const value = useMemo(
     () => ({
       source: fixture ? ('fixture' as const) : ('live' as const),
@@ -170,6 +212,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       fixtureTransactions,
       saveTransaction,
       loadReviewOptions,
+      loadCashflowHistory,
     }),
     [
       credential,
@@ -178,6 +221,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       fixtureTransactions,
       home,
       loadReviewOptions,
+      loadCashflowHistory,
       reload,
       revision,
       saveTransaction,

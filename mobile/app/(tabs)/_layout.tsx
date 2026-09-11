@@ -1,35 +1,39 @@
-import { Tabs } from 'expo-router';
-import { SymbolView, type SFSymbol } from 'expo-symbols';
+import { NativeTabs } from 'expo-router/unstable-native-tabs';
 import { useAppColors } from '@/theme';
-
-const icons: Record<string, { regular: SFSymbol; selected: SFSymbol }> = {
-  home: { regular: 'house', selected: 'house.fill' },
-  activity: { regular: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' },
-  explore: { regular: 'chart.xyaxis.line', selected: 'chart.xyaxis.line' },
-};
 
 export default function TabsLayout() {
   const colors = useAppColors();
+
   return (
-    <Tabs
-      initialRouteName="home"
-      screenOptions={({ route }) => ({
-        headerShown: false,
-        tabBarActiveTintColor: colors.accent,
-        tabBarInactiveTintColor: colors.tertiary,
-        tabBarStyle: { backgroundColor: colors.tabBar, borderTopColor: colors.separator },
-        sceneStyle: { backgroundColor: colors.background },
-        tabBarIcon: ({ color, focused }) => {
-          const icon = icons[route.name] ?? icons.home!;
-          return (
-            <SymbolView name={focused ? icon.selected : icon.regular} size={21} tintColor={color} />
-          );
-        },
-      })}
+    <NativeTabs
+      minimizeBehavior="onScrollDown"
+      tintColor={colors.accent}
+      labelStyle={{ fontSize: 11, fontWeight: '600' }}
     >
-      <Tabs.Screen name="home" options={{ title: 'Home' }} />
-      <Tabs.Screen name="activity" options={{ title: 'Activity' }} />
-      <Tabs.Screen name="explore" options={{ title: 'Explore' }} />
-    </Tabs>
+      <NativeTabs.Trigger name="home" accessibilityLabel="Home, tab, 1 of 3" testID="tab-home">
+        <NativeTabs.Trigger.Icon sf={{ default: 'house', selected: 'house.fill' }} />
+        <NativeTabs.Trigger.Label>Home</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger
+        name="activity"
+        accessibilityLabel="Activity, tab, 2 of 3"
+        testID="tab-activity"
+      >
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'list.bullet.rectangle', selected: 'list.bullet.rectangle.fill' }}
+        />
+        <NativeTabs.Trigger.Label>Activity</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+      <NativeTabs.Trigger
+        name="explore"
+        accessibilityLabel="Explore, tab, 3 of 3"
+        testID="tab-explore"
+      >
+        <NativeTabs.Trigger.Icon
+          sf={{ default: 'chart.xyaxis.line', selected: 'chart.xyaxis.line' }}
+        />
+        <NativeTabs.Trigger.Label>Explore</NativeTabs.Trigger.Label>
+      </NativeTabs.Trigger>
+    </NativeTabs>
   );
 }

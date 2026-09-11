@@ -1,6 +1,8 @@
 import { Area, CartesianChart, Line } from 'victory-native';
+import { useState } from 'react';
 import { ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
+import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useMoneyData } from '@/MoneyData';
 import { formatMoney, formatUnsignedMoney } from '@/money';
 import { chartColors, useAppColors } from '@/theme';
@@ -9,12 +11,14 @@ export default function NetWorthScreen() {
   const colors = useAppColors();
   const chart = chartColors(useColorScheme() === 'dark');
   const { home, status } = useMoneyData();
+  const [range, setRange] = useState<'3' | '6' | 'all'>('all');
   if (status !== 'ready' || !home) return <ConnectionState />;
-  const history = home.netWorthHistory.map((point, index) => ({
+  const allHistory = home.netWorthHistory.map((point, index) => ({
     index,
     total: point.total,
     date: point.date,
   }));
+  const history = range === 'all' ? allHistory : allHistory.slice(-Number(range));
   const assets = home.assets ?? home.netWorth;
   const liabilities = home.liabilities ?? 0;
   const compositionTotal = Math.max(assets + liabilities, 1);
@@ -39,12 +43,24 @@ export default function NetWorthScreen() {
           allowFontScaling={false}
           style={[
             styles.change,
-            { color: home.netWorthChange >= 0 ? colors.accent : colors.danger },
+            { color: home.netWorthChange >= 0 ? colors.positive : colors.danger },
           ]}
         >
           {formatMoney(home.netWorthChange, home.currencyCode)} this month
         </Text>
       ) : null}
+      <View style={styles.rangeSpacing}>
+        <GlassSegmentedControl
+          onChange={setRange}
+          options={[
+            { label: '3M', value: '3' },
+            { label: '6M', value: '6' },
+            { label: 'All', value: 'all' },
+          ]}
+          testID="net-worth-range"
+          value={range}
+        />
+      </View>
       <View
         style={styles.chart}
         accessible
@@ -78,7 +94,9 @@ export default function NetWorthScreen() {
           </CartesianChart>
         ) : (
           <View style={styles.noChart}>
-            <Text style={[styles.note, { color: colors.secondary }]}>No history available yet.</Text>
+            <Text style={[styles.note, { color: colors.secondary }]}>
+              No history available yet.
+            </Text>
           </View>
         )}
       </View>
@@ -103,7 +121,7 @@ export default function NetWorthScreen() {
             styles.assetsFill,
             {
               width: `${Math.min((assets / compositionTotal) * 100, 100)}%`,
-              backgroundColor: colors.accent,
+              backgroundColor: colors.positive,
             },
           ]}
         />
@@ -130,7 +148,7 @@ export default function NetWorthScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 20, paddingBottom: 40 },
   amount: {
     marginTop: 18,
     fontSize: 42,
@@ -140,7 +158,8 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   change: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  chart: { height: 220, marginTop: 24 },
+  rangeSpacing: { marginTop: 25 },
+  chart: { height: 220, marginTop: 18 },
   noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   historyLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 30 },

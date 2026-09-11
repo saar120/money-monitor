@@ -25,7 +25,7 @@ export default function AccountsAttentionScreen() {
         <Text style={[styles.intro, { color: colors.secondary }]}>
           These sources need attention before their balances are current.
         </Text>
-        <View style={styles.list}>
+        <View style={[styles.list, { backgroundColor: colors.surface }]}>
           {accounts.map((account) => (
             <View
               key={account.account}
@@ -49,10 +49,10 @@ export default function AccountsAttentionScreen() {
 }
 
 const styles = StyleSheet.create({
-  content: { paddingHorizontal: 20, paddingBottom: 48 },
+  content: { paddingHorizontal: 20, paddingBottom: 72 },
   title: { marginTop: 12, fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 },
   intro: { marginTop: 8, fontSize: 15, lineHeight: 21 },
-  list: { marginTop: 24 },
+  list: { marginTop: 24, borderRadius: 16, paddingHorizontal: 14, overflow: 'hidden' },
   row: {
     minHeight: 68,
     flexDirection: 'row',
