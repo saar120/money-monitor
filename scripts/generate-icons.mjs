@@ -2,10 +2,10 @@
  * Generate the Money Monitor app icons and macOS menu-bar template glyph.
  * Run: node scripts/generate-icons.mjs
  */
-import { copyFileSync, writeFileSync, mkdirSync, mkdtempSync, existsSync, rmSync } from 'fs';
+import sharp from 'sharp';
+import { mkdirSync, existsSync, rmSync } from 'fs';
 import { join, dirname } from 'path';
 import { execFileSync } from 'child_process';
-import { tmpdir } from 'os';
 import { fileURLToPath } from 'url';
 
 const __dirname = dirname(fileURLToPath(new URL(import.meta.url)));
@@ -13,7 +13,6 @@ const ROOT = join(__dirname, '..');
 const ICONS_DIR = join(ROOT, 'electron/icons');
 const PUBLIC_DIR = join(ROOT, 'dashboard/public');
 const MOBILE_ASSETS_DIR = join(ROOT, 'mobile/assets');
-const TEMP_DIR = mkdtempSync(join(tmpdir(), 'money-monitor-icons-'));
 
 function appIconSvg({ dark, mac }) {
   const tile = mac
@@ -84,12 +83,21 @@ const trayGlyphSvg = `
     <rect x="15.3" y="5.7" width="2.2" height="9.3" rx="0.9" fill="#000"/>
   </svg>`;
 
-function png(source, size, outputPath) {
-  const svgPath = join(TEMP_DIR, `${Date.now()}-${Math.random().toString(16).slice(2)}.svg`);
-  writeFileSync(svgPath, source);
-  execFileSync('qlmanage', ['-t', '-s', String(size), '-o', TEMP_DIR, svgPath]);
-  copyFileSync(`${svgPath}.png`, outputPath);
+async function png(source, size, outputPath) {
+  await sharp(Buffer.from(source))
+    .resize(size, size)
+    .withIccProfile('/System/Library/ColorSync/Profiles/sRGB Profile.icc')
+    .png()
+    .toFile(outputPath);
   console.log(`  generated ${size}x${size} -> ${outputPath}`);
+}
+
+async function assertTransparentCorner(path) {
+  const pixel = await sharp(path)
+    .extract({ left: 0, top: 0, width: 1, height: 1 })
+    .raw()
+    .toBuffer();
+  if (pixel[3] !== 0) throw new Error(`${path} must have a transparent corner`);
 }
 
 async function main() {
@@ -143,14 +151,13 @@ async function main() {
   await png(trayGlyphSvg, 18, join(ICONS_DIR, 'trayTemplate.png'));
   await png(trayGlyphSvg, 36, join(ICONS_DIR, 'trayTemplate@2x.png'));
 
+  await assertTransparentCorner(join(ICONS_DIR, 'icon-master.png'));
+  await assertTransparentCorner(join(ICONS_DIR, 'trayTemplate.png'));
+
   console.log('\nAll brand assets generated successfully.');
 }
 
-main()
-  .catch((error) => {
-    console.error('Error generating icons:', error);
-    process.exit(1);
-  })
-  .finally(() => {
-    rmSync(TEMP_DIR, { recursive: true, force: true });
-  });
+main().catch((error) => {
+  console.error('Error generating icons:', error);
+  process.exit(1);
+});
