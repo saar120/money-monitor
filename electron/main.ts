@@ -103,6 +103,14 @@ function getAccentColor(): string {
   return nativeTheme.shouldUseDarkColors ? '#0A84FF' : '#007AFF';
 }
 
+function updateDockIcon(): void {
+  if (!isMac || !app.dock) return;
+
+  const filename = nativeTheme.shouldUseDarkColors ? 'icon-dark.png' : 'icon-1024.png';
+  const icon = nativeImage.createFromPath(join(__dirname, 'icons', filename));
+  if (!icon.isEmpty()) app.dock.setIcon(icon);
+}
+
 // ── 5. Native menu (platform-aware) ─────────────────────────────────────────
 function buildMenu() {
   const template: Electron.MenuItemConstructorOptions[] = [];
@@ -759,6 +767,7 @@ async function promptMoveToApplications(): Promise<boolean> {
 // CRITICAL: Do NOT top-level await app.whenReady() — it deadlocks in ESM.
 app.whenReady().then(async () => {
   try {
+    updateDockIcon();
     if (await promptMoveToApplications()) return;
 
     // About panel
@@ -812,6 +821,7 @@ app.whenReady().then(async () => {
     // Re-send accent color when system preferences change
     nativeTheme.on('updated', () => {
       sendAccentColor();
+      updateDockIcon();
     });
 
     app.on('activate', () => {

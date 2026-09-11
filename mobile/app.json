@@ -8,6 +8,10 @@
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
     "ios": {
+      "icon": {
+        "light": "./assets/icon.png",
+        "dark": "./assets/icon-dark.png"
+      },
       "supportsTablet": false,
       "bundleIdentifier": "com.saaramrani.moneymonitor.mobile",
       "config": {
@@ -44,6 +48,7 @@
           "resizeMode": "contain",
           "backgroundColor": "#F8F7F3",
           "dark": {
+            "image": "./assets/icon-dark.png",
             "backgroundColor": "#17212E"
           }
         }
