@@ -16,6 +16,7 @@ import {
   fetchHomeData,
   fetchReviewOptions,
   fetchTransactionDetail,
+  fetchTransactionPage,
   fetchTransactions,
   updateTransaction,
   type ActivityFilter,
@@ -388,14 +389,19 @@ export function useActivityTransactions(
   query: string,
   filter: ActivityFilter = 'all',
   criteria: ActivityCriteria = EMPTY_ACTIVITY_CRITERIA,
+  paginate = false,
 ) {
   const money = useMoneyData();
   const [transactions, setTransactions] = useState<Transaction[]>([]);
   const [loading, setLoading] = useState(false);
+  const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  const [hasMore, setHasMore] = useState(false);
+  const [nextCursor, setNextCursor] = useState<string | null>(null);
   const requestKey = `${filter}\u0000${query.trim()}\u0000${JSON.stringify(criteria)}`;
   const [resultKey, setResultKey] = useState('');
+  const activeRequestKey = useRef(requestKey);
+  const moreRequest = useRef<AbortController | null>(null);
+  activeRequestKey.current = requestKey;
 
   const fixtureTransactions = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
@@ -439,40 +445,31 @@ export function useActivityTransactions(
       return;
     }
     const controller = new AbortController();
+    moreRequest.current?.abort();
+    moreRequest.current = null;
+    setNextCursor(null);
+    setLoadingMore(false);
     const load = () => {
       setLoading(true);
       setError(null);
-      void fetchTransactions(
-        money.credential as PairingCredential,
-        {
-          q: query,
-          category: criteria.category,
-          filter,
-          startDate: criteria.startDate,
-          endDate: criteria.endDate,
-          accountId: criteria.accountId,
-          status: criteria.status,
-          direction: criteria.direction,
-          needsReview: criteria.needsReview,
-          includeExcluded: criteria.inclusion === 'all' || criteria.inclusion === 'excluded',
-        },
-        controller.signal,
-      )
+      const transactionQuery = activityTransactionQuery(query, filter, criteria);
+      const request = paginate
+        ? fetchVisibleTransactionPage(
+            money.credential as PairingCredential,
+            transactionQuery,
+            criteria,
+            controller.signal,
+          )
+        : fetchTransactions(
+            money.credential as PairingCredential,
+            transactionQuery,
+            controller.signal,
+          );
+      void request
         .then((page) => {
           setResultKey(requestKey);
-          setTransactions(
-            page.transactions.filter(
-              (transaction) =>
-                (!criteria.owner || transaction.owner === criteria.owner) &&
-                (!criteria.account || transaction.account === criteria.account) &&
-                (criteria.needsReview === undefined ||
-                  Boolean(transaction.needsReview) === criteria.needsReview) &&
-                (!criteria.inclusion ||
-                  criteria.inclusion === 'all' ||
-                  transaction.included === (criteria.inclusion === 'included')),
-            ),
-          );
-          setHasMore(page.hasMore);
+          setTransactions(filterActivityPage(page.transactions, criteria));
+          setNextCursor(page.nextCursor);
         })
         .catch((caught) => {
           if (!controller.signal.aborted) {
@@ -490,6 +487,7 @@ export function useActivityTransactions(
     return () => {
       if (timer) clearTimeout(timer);
       controller.abort();
+      moreRequest.current?.abort();
     };
   }, [
     criteria,
@@ -499,6 +497,55 @@ export function useActivityTransactions(
     money.revision,
     money.source,
     money.status,
+    paginate,
+    query,
+    requestKey,
+  ]);
+
+  const loadMore = useCallback(() => {
+    if (
+      !paginate ||
+      !nextCursor ||
+      loadingMore ||
+      moreRequest.current ||
+      money.source !== 'live' ||
+      !money.credential
+    )
+      return;
+    const key = requestKey;
+    const controller = new AbortController();
+    moreRequest.current = controller;
+    setError(null);
+    setLoadingMore(true);
+    void fetchVisibleTransactionPage(
+      money.credential,
+      { ...activityTransactionQuery(query, filter, criteria), cursor: nextCursor },
+      criteria,
+      controller.signal,
+    )
+      .then((page) => {
+        if (activeRequestKey.current !== key) return;
+        setTransactions((current) => [...current, ...page.transactions]);
+        setNextCursor(page.nextCursor);
+      })
+      .catch((caught) => {
+        if (!controller.signal.aborted && activeRequestKey.current === key)
+          setError(caught instanceof Error ? caught.message : 'More transactions could not load.');
+      })
+      .finally(() => {
+        if (moreRequest.current === controller) moreRequest.current = null;
+        if (!controller.signal.aborted && activeRequestKey.current === key) {
+          setLoadingMore(false);
+        }
+      });
+  }, [
+    criteria,
+    filter,
+    loadingMore,
+    money.credential,
+    money.source,
+    nextCursor,
+    paginate,
     query,
     requestKey,
   ]);
@@ -511,9 +558,59 @@ export function useActivityTransactions(
           ? transactions
           : [],
     loading: money.source === 'live' && (loading || resultKey !== requestKey),
+    loadingMore: money.source === 'live' && loadingMore,
     error,
-    hasMore: money.source === 'live' && hasMore,
+    hasMore: money.source === 'live' && nextCursor !== null,
+    loadMore,
   };
+}
+
+function activityTransactionQuery(
+  query: string,
+  filter: ActivityFilter,
+  criteria: ActivityCriteria,
+) {
+  return {
+    limit: 50,
+    q: query,
+    category: criteria.category,
+    filter,
+    startDate: criteria.startDate,
+    endDate: criteria.endDate,
+    accountId: criteria.accountId,
+    status: criteria.status,
+    direction: criteria.direction,
+    needsReview: criteria.needsReview,
+    includeExcluded: criteria.inclusion === 'all' || criteria.inclusion === 'excluded',
+  };
+}
+
+function filterActivityPage(transactions: Transaction[], criteria: ActivityCriteria) {
+  return transactions.filter(
+    (transaction) =>
+      (!criteria.owner || transaction.owner === criteria.owner) &&
+      (!criteria.account || transaction.account === criteria.account) &&
+      (criteria.needsReview === undefined ||
+        Boolean(transaction.needsReview) === criteria.needsReview) &&
+      (!criteria.inclusion ||
+        criteria.inclusion === 'all' ||
+        transaction.included === (criteria.inclusion === 'included')),
+  );
+}
+
+async function fetchVisibleTransactionPage(
+  credential: PairingCredential,
+  query: ReturnType<typeof activityTransactionQuery> & { cursor?: string },
+  criteria: ActivityCriteria,
+  signal: AbortSignal,
+) {
+  let cursor = query.cursor;
+  while (true) {
+    const page = await fetchTransactionPage(credential, { ...query, cursor }, signal);
+    const transactions = filterActivityPage(page.transactions, criteria);
+    if (transactions.length || !page.nextCursor) return { ...page, transactions };
+    cursor = page.nextCursor;
+  }
 }
 
 export function useTransaction(id: string | undefined) {

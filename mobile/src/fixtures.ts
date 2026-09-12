@@ -85,6 +85,7 @@ export type HomeData = {
   sinceLastVisit: { transactions: number; spent: number } | null;
   netWorthHistory: Array<{ date: string; total: number }>;
   freshness: Freshness[];
+  accounts: Array<{ id: string; label: string }>;
 };
 
 export type FixtureScenario = HomeData & {
@@ -329,6 +330,12 @@ const normal: FixtureScenario = {
     { account: 'Amex · 1004', detail: 'Updated 14 min ago', state: 'fresh' },
     { account: 'Isracard · 3098', detail: 'Updated 2 hr ago', state: 'aging' },
     { account: 'Altshuler pension', detail: 'Last valued 3 days ago', state: 'aging' },
+  ],
+  accounts: [
+    { id: 'account-one-zero', label: 'One Zero · 4421' },
+    { id: 'account-amex', label: 'Amex · 1004' },
+    { id: 'account-isracard', label: 'Isracard · 3098' },
+    { id: 'account-pension', label: 'Altshuler pension' },
   ],
   transactions: normalTransactions,
 };

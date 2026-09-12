@@ -6,6 +6,7 @@ type JsonObject = Record<string, unknown>;
 
 export type ActivityFilter = 'all' | 'review' | 'pending' | 'credits';
 export type TransactionQuery = {
+  limit?: number;
   q?: string;
   category?: string;
   filter?: ActivityFilter;
@@ -16,12 +17,14 @@ export type TransactionQuery = {
   direction?: 'debit' | 'credit';
   needsReview?: boolean;
   includeExcluded?: boolean;
+  cursor?: string;
 };
 
 export type TransactionPage = {
   financialDate: string;
   transactions: Transaction[];
   hasMore: boolean;
+  nextCursor: string | null;
 };
 
 export type PairingProgress = 'requesting' | 'awaiting-approval' | 'exchanging';
@@ -301,6 +304,14 @@ export async function fetchHomeData(
         ...state,
       };
     }),
+    accounts: accounts.map((raw) => {
+      const account = object(raw, 'account');
+      const mask = text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '');
+      return {
+        id: text(account.id, 'account ID'),
+        label: `${text(account.displayName, 'account name')} · ${mask}`,
+      };
+    }),
   };
 }
 
@@ -373,7 +384,7 @@ function mapTransaction(value: unknown): Transaction {
   };
 }
 
-export async function fetchTransactions(
+export async function fetchTransactionPage(
   credential: PairingCredential,
   query: TransactionQuery,
   signal?: AbortSignal,
@@ -382,6 +393,7 @@ export async function fetchTransactions(
   if (query.startDate) params.set('startDate', query.startDate);
   if (query.endDate) params.set('endDate', query.endDate);
   if (query.q?.trim()) params.set('q', query.q.trim());
+  if (query.limit) params.set('limit', String(query.limit));
   if (query.category?.trim()) params.set('category', query.category.trim());
   if (query.accountId) params.set('accountId', query.accountId);
   if (query.status) params.set('status', query.status);
@@ -392,38 +404,55 @@ export async function fetchTransactions(
   if (query.filter === 'review') params.set('includeExcluded', 'true');
   if (query.filter === 'pending') params.set('status', 'pending');
   if (query.filter === 'credits') params.set('direction', 'credit');
+  if (query.cursor) params.set('cursor', query.cursor);
+  const root = object(
+    await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
+    'transactions',
+  );
+  verifyServer(root, credential);
+  const data = object(root.data, 'transactions');
+  const page = object(data.page, 'transaction page');
+  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid transactions.');
+  const hasMore = boolean(page.hasMore, 'transaction page');
+  const nextCursor =
+    page.nextCursor === null || page.nextCursor === undefined
+      ? null
+      : text(page.nextCursor, 'transaction cursor');
+  if (hasMore !== (nextCursor !== null))
+    throw new Error('The Mac returned invalid transaction paging data.');
+  return {
+    financialDate: date(data.financialDate, 'financial date'),
+    transactions: data.transactions.map((item) => mapTransaction(item)),
+    hasMore,
+    nextCursor,
+  };
+}
+
+export async function fetchTransactions(
+  credential: PairingCredential,
+  query: TransactionQuery,
+  signal?: AbortSignal,
+): Promise<TransactionPage> {
   const transactions: Transaction[] = [];
   const seenCursors = new Set<string>();
   let financialDate: string;
-  let cursor: string | null = null;
+  let cursor: string | null = query.cursor ?? null;
 
   do {
-    if (cursor) params.set('cursor', cursor);
-    const root = object(
-      await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
-      'transactions',
+    const page = await fetchTransactionPage(
+      credential,
+      { ...query, cursor: cursor ?? undefined },
+      signal,
     );
-    verifyServer(root, credential);
-    const data = object(root.data, 'transactions');
-    const page = object(data.page, 'transaction page');
-    if (!Array.isArray(data.transactions))
-      throw new Error('The Mac returned invalid transactions.');
-    const hasMore = boolean(page.hasMore, 'transaction page');
-    const nextCursor =
-      page.nextCursor === null || page.nextCursor === undefined
-        ? null
-        : text(page.nextCursor, 'transaction cursor');
-    if (hasMore !== (nextCursor !== null))
-      throw new Error('The Mac returned invalid transaction paging data.');
-    if (nextCursor && seenCursors.has(nextCursor))
+    if (page.nextCursor && seenCursors.has(page.nextCursor))
       throw new Error('The Mac returned repeated transaction paging data.');
-    if (nextCursor) seenCursors.add(nextCursor);
-    financialDate = date(data.financialDate, 'financial date');
-    transactions.push(...data.transactions.map((item) => mapTransaction(item)));
-    cursor = nextCursor;
+    if (page.nextCursor) seenCursors.add(page.nextCursor);
+    financialDate = page.financialDate;
+    transactions.push(...page.transactions);
+    cursor = page.nextCursor;
   } while (cursor);
 
-  return { financialDate, transactions, hasMore: false };
+  return { financialDate, transactions, hasMore: false, nextCursor: null };
 }
 
 export async function fetchTransactionDetail(

@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   completePairing,
   fetchHomeData,
+  fetchTransactionPage,
   fetchTransactions,
   type PairingProgress,
 } from './mobile-api.ts';
@@ -101,6 +102,9 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     assert.equal(home.available, 4439.7);
     assert.equal(home.netWorth, 128430.27);
     assert.equal(home.freshness[0]?.account, 'Everyday Checking · 4321');
+    assert.deepEqual(home.accounts, [
+      { id: 'account_checking_01', label: 'Everyday Checking · 4321' },
+    ]);
     assert.equal(home.merchants[0]?.category, 'Other');
   } finally {
     globalThis.fetch = originalFetch;
@@ -262,6 +266,42 @@ test('follows transaction cursors so the review queue cannot stop at the first p
     );
     assert.equal(paths.length, 2);
     assert.equal(new URL(paths[1]!).searchParams.get('cursor'), 'cursor_v1_next');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('loads one transaction page for paginated Activity', async () => {
+  const paths: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    paths.push(String(input));
+    return new Response(
+      JSON.stringify({
+        data: {
+          financialDate: '2026-09-08',
+          transactions: [],
+          page: { hasMore: true, nextCursor: 'cursor_v1_next' },
+        },
+        meta: { server: { id: '11111111-1111-4111-8111-111111111111' } },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  try {
+    const page = await fetchTransactionPage(
+      {
+        serverId: '11111111-1111-4111-8111-111111111111',
+        baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+        token: 'T'.repeat(43),
+      },
+      { filter: 'all', limit: 50 },
+    );
+    assert.equal(paths.length, 1);
+    assert.equal(new URL(paths[0]!).searchParams.get('limit'), '50');
+    assert.equal(page.hasMore, true);
+    assert.equal(page.nextCursor, 'cursor_v1_next');
   } finally {
     globalThis.fetch = originalFetch;
   }

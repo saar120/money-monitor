@@ -38,13 +38,13 @@ export default function ActivityScreen() {
     categories: [],
     owners: [],
   });
-  const [knownAccounts, setKnownAccounts] = useState<Array<{ id?: string; label: string }>>([]);
   const [refreshing, setRefreshing] = useState(false);
   const searchBar = useRef<TextInput>(null);
   const money = useMoneyData();
-  const result = useActivityTransactions(query, filter, criteria);
+  const result = useActivityTransactions(query, filter, criteria, true);
   const transactions = result.transactions;
-  const activeFilters = activityFilterCount(criteria) + (filter === 'all' ? 0 : 1);
+  const advancedFilters = activityFilterCount(criteria);
+  const activeFilters = advancedFilters + (filter === 'all' ? 0 : 1);
   const isUnfiltered = !query.trim() && activeFilters === 0;
   const currentDate = money.home?.currentDate ?? new Date().toISOString().slice(0, 10);
   const categories = useMemo(
@@ -55,8 +55,11 @@ export default function ActivityScreen() {
     [reviewOptions.categories, transactions],
   );
   const accounts = useMemo(
-    () => [...knownAccounts].sort((left, right) => left.label.localeCompare(right.label)),
-    [knownAccounts],
+    () =>
+      [...(money.home?.accounts ?? [])].sort((left, right) =>
+        left.label.localeCompare(right.label),
+      ),
+    [money.home?.accounts],
   );
   const owners = useMemo(
     () => [...new Set([...reviewOptions.owners, ...transactions.map((item) => item.owner)])].sort(),
@@ -69,17 +72,6 @@ export default function ActivityScreen() {
       .then(setReviewOptions)
       .catch(() => undefined);
   }, [money.loadReviewOptions]);
-  useEffect(() => {
-    if (!transactions.length) return;
-    setKnownAccounts((current) => [
-      ...new Map(
-        [
-          ...current,
-          ...transactions.map((item) => ({ id: item.accountId, label: item.account })),
-        ].map((item) => [item.label, item]),
-      ).values(),
-    ]);
-  }, [transactions]);
   const refresh = async () => {
     setRefreshing(true);
     try {
@@ -107,6 +99,10 @@ export default function ActivityScreen() {
         keyboardShouldPersistTaps="handled"
         sections={sections}
         keyExtractor={(item) => item.id}
+        onEndReached={() => {
+          if (!result.error) result.loadMore();
+        }}
+        onEndReachedThreshold={0.35}
         testID={refreshing ? 'activity-screen-refreshing' : 'activity-screen'}
         refreshControl={
           <RefreshControl
@@ -183,9 +179,8 @@ export default function ActivityScreen() {
                 style={({ pressed }) => [
                   styles.filter,
                   {
-                    backgroundColor: activeFilters ? colors.accent : colors.glass,
-                    borderColor: activeFilters ? colors.accent : colors.glassBorder,
-                    shadowColor: activeFilters ? colors.accent : colors.glassShadow,
+                    backgroundColor: advancedFilters ? colors.accentSoft : colors.surfaceSoft,
+                    borderColor: advancedFilters ? colors.accent : colors.separator,
                     opacity: pressed ? 0.76 : 1,
                   },
                 ]}
@@ -195,20 +190,21 @@ export default function ActivityScreen() {
                   <SymbolView
                     name="line.3.horizontal.decrease"
                     size={13}
-                    tintColor={activeFilters ? '#FFFFFF' : colors.secondary}
+                    tintColor={advancedFilters ? colors.accent : colors.secondary}
                   />
                   <Text
                     style={[
                       styles.filterLabel,
-                      { color: activeFilters ? '#FFFFFF' : colors.secondary },
+                      { color: advancedFilters ? colors.accent : colors.secondary },
                     ]}
                   >
-                    Filters{activeFilters ? ` · ${activeFilters}` : ''}
+                    Filters{advancedFilters ? ` · ${advancedFilters}` : ''}
                   </Text>
                 </View>
               </Pressable>
               {filters.map((item) => {
-                const selected = filter === item.key;
+                const selected =
+                  filter === item.key && (item.key !== 'all' || advancedFilters === 0);
                 return (
                   <Pressable
                     key={item.key}
@@ -223,9 +219,8 @@ export default function ActivityScreen() {
                     style={({ pressed }) => [
                       styles.filter,
                       {
-                        backgroundColor: selected ? colors.accent : colors.glass,
-                        borderColor: selected ? colors.accent : colors.glassBorder,
-                        shadowColor: selected ? colors.accent : colors.glassShadow,
+                        backgroundColor: selected ? colors.accent : colors.surfaceSoft,
+                        borderColor: selected ? colors.accent : colors.separator,
                         opacity: pressed ? 0.76 : 1,
                       },
                     ]}
@@ -304,10 +299,24 @@ export default function ActivityScreen() {
             </Text>
           </View>
         }
+        ListFooterComponent={
+          result.loadingMore ? (
+            <ActivityIndicator color={colors.accent} style={styles.loadingMore} />
+          ) : result.error && transactions.length && result.hasMore ? (
+            <Pressable
+              accessibilityRole="button"
+              onPress={() => result.loadMore()}
+              style={({ pressed }) => [styles.retryMore, { opacity: pressed ? 0.62 : 1 }]}
+            >
+              <Text style={[styles.retryMoreText, { color: colors.accent }]}>Try loading more</Text>
+            </Pressable>
+          ) : null
+        }
       />
       <ActivityFiltersSheet
         accounts={accounts}
         categories={categories}
+        currentDate={currentDate}
         onApply={(value) => {
           setCriteria(value);
           setFilter('all');
@@ -503,9 +512,6 @@ const styles = StyleSheet.create({
     paddingHorizontal: 14,
     alignItems: 'center',
     justifyContent: 'center',
-    shadowOffset: { width: 0, height: 6 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
   },
   filterLabel: { fontSize: 13, fontWeight: '600' },
   filterWithIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
@@ -568,4 +574,7 @@ const styles = StyleSheet.create({
   empty: { alignItems: 'center', paddingHorizontal: 34, paddingTop: 72 },
   emptyTitle: { fontSize: 20, fontWeight: '700' },
   emptyText: { marginTop: 8, fontSize: 15, textAlign: 'center' },
+  loadingMore: { paddingVertical: 24 },
+  retryMore: { minHeight: 52, alignItems: 'center', justifyContent: 'center' },
+  retryMoreText: { fontSize: 14, fontWeight: '600' },
 });

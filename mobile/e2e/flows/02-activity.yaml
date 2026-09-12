@@ -16,6 +16,7 @@ name: Activity search filters and detail
     id: transaction-txn-salary
 - tapOn:
     id: activity-open-filters
+- tapOn: 'Category'
 - tapOn: 'Dining'
 - tapOn: 'Done'
 - assertVisible:
