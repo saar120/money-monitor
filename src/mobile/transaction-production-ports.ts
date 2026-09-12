@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 import { MobileBootstrapSectionReadError } from './bootstrap-adapter.js';
@@ -232,10 +232,12 @@ export function createProductionMobileTransactionPorts(
     }
     if (query.category) {
       conditions.push(
-        or(
-          eq(schema.transactions.category, query.category),
-          eq(schema.categories.label, query.category),
-        ) as SQL,
+        query.category === 'Uncategorized'
+          ? isNull(schema.transactions.category)
+          : (or(
+              eq(schema.transactions.category, query.category),
+              eq(schema.categories.label, query.category),
+            ) as SQL),
       );
     }
     if (query.q) {

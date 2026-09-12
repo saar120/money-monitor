@@ -318,6 +318,25 @@ describe('production mobile transaction ports', () => {
     ).toEqual([]);
   });
 
+  it('filters uncategorized transactions by their mobile display label', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db, { memberId: null });
+    const uncategorized = insertTransaction(testDb.db, account.id, {
+      category: null,
+      description: 'Needs a category',
+    });
+    insertTransaction(testDb.db, account.id, {
+      category: insertCategory(testDb.db, { name: 'dining', label: 'Dining' }).name,
+      description: 'Already categorized',
+    });
+
+    const result = ports(testDb).list(query({ category: 'Uncategorized' }), CONTEXT);
+
+    expect(result.transactions.map((value) => value.id)).toEqual([
+      project('transaction', uncategorized.id),
+    ]);
+  });
+
   it('filters and orders by the canonical effective reporting date', () => {
     const testDb = database();
     const account = insertAccount(testDb.db, { memberId: null });
