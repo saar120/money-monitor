@@ -12,14 +12,14 @@ name: Home renders the normal fixture
 - assertVisible: '₪27,000'
 - assertVisible:
     id: budget-status
-- swipe:
-    start: 90%, 48%
-    end: 10%, 48%
-    duration: 450
+- scrollUntilVisible:
+    element:
+      id: category-spending
+    direction: DOWN
 - assertVisible:
-    id: home-category-donut
+    id: category-spending
 - tapOn:
-    id: home-donut-category-Housing
+    id: home-category-Housing
 - assertVisible:
     id: category-detail
 - swipe:
@@ -45,7 +45,5 @@ name: Home renders the normal fixture
     duration: 600
 - assertVisible: '₪18,920'
 - tapOn:
-    id: home-month-picker
-- tapOn:
-    id: month-option-2026-08
+    id: home-month-picker-previous
 - assertVisible: '₪19,620'

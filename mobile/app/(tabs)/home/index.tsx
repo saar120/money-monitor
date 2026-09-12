@@ -1,18 +1,21 @@
-import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia';
+import { Circle } from '@shopify/react-native-skia';
 import { Area, CartesianChart, Line, useChartPressState } from 'victory-native';
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { useEffect, useState } from 'react';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useMoneyData, useOverviewMonth } from '@/MoneyData';
-import { categoryArcs, categoryAtAngle } from '@/category-chart';
-import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
-import type { HomeData } from '@/fixtures';
+import {
+  formatMoney,
+  formatSpendingChange,
+  formatUnsignedMoney,
+  overviewCashFlow,
+  spendingTotal,
+} from '@/money';
 import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
@@ -28,6 +31,10 @@ export default function HomeScreen() {
   const primaryBudget = home.budgets[0] ?? null;
   const staleAccounts = home.freshness.filter((account) => account.state === 'stale');
   const attentionBudgets = home.budgets.filter((budget) => budget.status !== 'on_track');
+  const topCategories = [...home.categories]
+    .filter((category) => category.spent > 0)
+    .sort((a, b) => b.spent - a.spent)
+    .slice(0, 4);
   const cashFlow = overviewCashFlow(home.income, home.spent);
   const refresh = async () => {
     setRefreshing(true);
@@ -96,15 +103,16 @@ export default function HomeScreen() {
         </Text>
       </View>
 
-      <ChartCarousel
-        categories={home.categories}
+      <SpendingTrendCard
         colors={colors}
         currencyCode={home.currencyCode}
         currentDate={home.currentDate}
-        month={home.monthKey}
         spent={home.spent}
         trend={home.trend}
       />
+      <Text style={[styles.chartHint, { color: colors.secondary }]}>
+        Hold and slide to inspect daily spending
+      </Text>
 
       <View style={[styles.cashflowRow, { borderBottomColor: colors.separator }]}>
         <View style={styles.cashflowItem}>
@@ -221,6 +229,76 @@ export default function HomeScreen() {
         </View>
       )}
 
+      <View style={styles.categorySectionHeader}>
+        <Text style={[styles.categorySectionTitle, { color: colors.text }]}>Where it went</Text>
+        <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/explore')}>
+          <Text style={[styles.categorySectionAction, { color: colors.accent }]}>Explore</Text>
+        </Pressable>
+      </View>
+      <View style={styles.categoryList} testID="category-spending">
+        {topCategories.length ? (
+          topCategories.map((category) => {
+            const delta = category.spent - category.previous;
+            const total = spendingTotal(category.spent, home.currencyCode);
+            return (
+              <Pressable
+                accessibilityHint={`Opens ${category.name} spending details`}
+                accessibilityRole="button"
+                key={category.name}
+                onPress={() =>
+                  router.push({
+                    pathname: '/category/[name]',
+                    params: { name: category.name, month: home.monthKey },
+                  })
+                }
+                style={({ pressed }) => [styles.categoryRow, { opacity: pressed ? 0.62 : 1 }]}
+                testID={`home-category-${category.name}`}
+              >
+                <View style={styles.categoryTop}>
+                  <Text numberOfLines={1} style={[styles.categoryName, { color: colors.text }]}>
+                    {category.name}
+                  </Text>
+                  <Text
+                    allowFontScaling={false}
+                    style={[styles.categoryAmount, { color: colors.text }]}
+                  >
+                    {total.amount} {total.label.toLowerCase()}
+                  </Text>
+                </View>
+                <View style={styles.categoryBottom}>
+                  <View style={[styles.categoryTrack, { backgroundColor: colors.separator }]}>
+                    <View
+                      style={[
+                        styles.categoryFill,
+                        {
+                          backgroundColor: category.color,
+                          width: `${Math.min(1, category.spent / Math.max(1, home.spent)) * 100}%`,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    allowFontScaling={false}
+                    style={[
+                      styles.categoryDelta,
+                      { color: delta > 0 ? colors.warning : colors.secondary },
+                    ]}
+                  >
+                    {delta === 0
+                      ? 'No change'
+                      : `${formatSpendingChange(delta, home.currencyCode)} than last month`}
+                  </Text>
+                </View>
+              </Pressable>
+            );
+          })
+        ) : (
+          <Text style={[styles.emptyText, { color: colors.secondary }]}>
+            No spending to show yet.
+          </Text>
+        )}
+      </View>
+
       <Pressable
         accessibilityHint="Opens net worth details"
         accessibilityRole="button"
@@ -256,80 +334,6 @@ export default function HomeScreen() {
         </View>
       </Pressable>
     </ScrollView>
-  );
-}
-
-function ChartCarousel({
-  categories,
-  colors,
-  currencyCode,
-  currentDate,
-  month,
-  spent,
-  trend,
-}: {
-  categories: HomeData['categories'];
-  colors: AppColors;
-  currencyCode: string;
-  currentDate: string;
-  month: string;
-  spent: number;
-  trend: Array<{ day: number; current: number; previous: number }>;
-}) {
-  const [width, setWidth] = useState(0);
-  const [page, setPage] = useState(0);
-  return (
-    <View
-      onLayout={(event) => setWidth(Math.round(event.nativeEvent.layout.width))}
-      testID="home-chart-carousel"
-    >
-      {width ? (
-        <ScrollView
-          horizontal
-          bounces={false}
-          decelerationRate="fast"
-          onMomentumScrollEnd={(event) =>
-            setPage(Math.round(event.nativeEvent.contentOffset.x / width))
-          }
-          pagingEnabled
-          showsHorizontalScrollIndicator={false}
-        >
-          <View style={{ width }}>
-            <SpendingTrendCard
-              colors={colors}
-              currencyCode={currencyCode}
-              currentDate={currentDate}
-              spent={spent}
-              trend={trend}
-            />
-          </View>
-          <View style={{ width }}>
-            <CategoryDonutCard
-              categories={categories}
-              colors={colors}
-              currencyCode={currencyCode}
-              month={month}
-            />
-          </View>
-        </ScrollView>
-      ) : null}
-      <View style={styles.carouselFooter}>
-        <Text style={[styles.carouselLabel, { color: colors.secondary }]}>
-          {page === 0 ? 'Spending pace · hold and slide' : 'Categories · tap to drill down'}
-        </Text>
-        <View style={styles.pageDots}>
-          {[0, 1].map((index) => (
-            <View
-              key={index}
-              style={[
-                styles.pageDot,
-                { backgroundColor: index === page ? colors.accent : colors.separator },
-              ]}
-            />
-          ))}
-        </View>
-      </View>
-    </View>
   );
 }
 
@@ -446,162 +450,6 @@ function SpendingTrendCard({
             : `${formatUnsignedMoney(Math.abs(delta), currencyCode)} ${delta < 0 ? 'slower' : 'higher'} than last month’s pace`}
         </Text>
       </View>
-    </View>
-  );
-}
-
-function CategoryDonutCard({
-  categories,
-  colors,
-  currencyCode,
-  month,
-}: {
-  categories: HomeData['categories'];
-  colors: AppColors;
-  currencyCode: string;
-  month: string;
-}) {
-  const data = useMemo(
-    () =>
-      [...categories].filter((category) => category.spent > 0).sort((a, b) => b.spent - a.spent),
-    [categories],
-  );
-  const arcs = useMemo(() => categoryArcs(data), [data]);
-  const categoryTotal = useMemo(
-    () => data.reduce((sum, category) => sum + category.spent, 0),
-    [data],
-  );
-  const leading = arcs[0] ?? null;
-  const [chartSize, setChartSize] = useState(0);
-  const openAt = useCallback(
-    (x: number, y: number) => {
-      const center = chartSize / 2;
-      const distance = Math.hypot(x - center, y - center);
-      if (distance < chartSize * 0.32 || distance > chartSize * 0.5) return;
-      const angle = (Math.atan2(y - center, x - center) * 180) / Math.PI;
-      const position = (angle + 450) % 360;
-      const category = categoryAtAngle(arcs, position);
-      if (category)
-        router.push({
-          pathname: '/category/[name]',
-          params: { name: category.name, month },
-        });
-    },
-    [arcs, chartSize, month],
-  );
-  const tap = useMemo(
-    () =>
-      Gesture.Tap().onEnd((event, success) => {
-        if (success) runOnJS(openAt)(event.x, event.y);
-      }),
-    [openAt],
-  );
-
-  return (
-    <View
-      accessibilityLabel={`Where it went. ${data.map((item) => `${item.name}, ${formatUnsignedMoney(item.spent, currencyCode)}`).join('. ')}`}
-      style={[styles.donutCard, { backgroundColor: colors.surface }]}
-      testID="home-category-donut"
-    >
-      <View style={styles.donutHeading}>
-        <View>
-          <Text style={[styles.donutTitle, { color: colors.text }]}>Where it went</Text>
-          <Text style={[styles.donutHint, { color: colors.secondary }]}>
-            Tap a segment to explore
-          </Text>
-        </View>
-        <SymbolView name="arrow.up.right" size={14} tintColor={colors.tertiary} />
-      </View>
-      {data.length ? (
-        <View style={styles.donutContent}>
-          <GestureDetector gesture={tap}>
-            <View
-              onLayout={(event) => setChartSize(event.nativeEvent.layout.width)}
-              style={styles.donutChart}
-            >
-              <Canvas style={StyleSheet.absoluteFill}>
-                <Circle
-                  color={colors.surfaceSoft}
-                  cx={82}
-                  cy={82}
-                  r={61}
-                  strokeWidth={22}
-                  style="stroke"
-                />
-                {arcs.map((arc) => {
-                  const gap = Math.min(4, arc.sweepAngle * 0.28);
-                  const path = Skia.Path.Make();
-                  path.addArc(
-                    { x: 21, y: 21, width: 122, height: 122 },
-                    arc.startAngle - 90 + gap / 2,
-                    Math.max(0.5, arc.sweepAngle - gap),
-                  );
-                  return (
-                    <Path
-                      color={arc.color}
-                      key={arc.name}
-                      path={path}
-                      strokeCap="round"
-                      strokeWidth={22}
-                      style="stroke"
-                    />
-                  );
-                })}
-              </Canvas>
-              <View pointerEvents="none" style={styles.donutCenter}>
-                <Text
-                  allowFontScaling={false}
-                  style={[styles.donutCenterValue, { color: colors.text }]}
-                >
-                  {leading ? formatUnsignedMoney(leading.spent, currencyCode) : '—'}
-                </Text>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.donutCenterLabel, { color: colors.secondary }]}
-                >
-                  {leading?.name}
-                </Text>
-                <Text style={[styles.donutCenterShare, { color: colors.tertiary }]}>
-                  {leading ? `${Math.round(leading.share * 100)}%` : ''}
-                </Text>
-              </View>
-            </View>
-          </GestureDetector>
-          <View style={styles.donutLegend}>
-            {data.slice(0, 4).map((category) => (
-              <Pressable
-                accessibilityRole="button"
-                key={category.name}
-                onPress={() =>
-                  router.push({
-                    pathname: '/category/[name]',
-                    params: { name: category.name, month },
-                  })
-                }
-                style={({ pressed }) => [styles.donutLegendRow, { opacity: pressed ? 0.62 : 1 }]}
-                testID={`home-donut-category-${category.name}`}
-              >
-                <View style={[styles.donutLegendDot, { backgroundColor: category.color }]} />
-                <Text numberOfLines={1} style={[styles.donutLegendName, { color: colors.text }]}>
-                  {category.name}
-                </Text>
-                <Text
-                  allowFontScaling={false}
-                  style={[styles.donutLegendAmount, { color: colors.secondary }]}
-                >
-                  {Math.round((category.spent / categoryTotal) * 100)}%
-                </Text>
-              </Pressable>
-            ))}
-          </View>
-        </View>
-      ) : (
-        <View style={styles.noChart}>
-          <Text style={[styles.emptyText, { color: colors.secondary }]}>
-            No spending to show yet.
-          </Text>
-        </View>
-      )}
     </View>
   );
 }
@@ -835,59 +683,31 @@ const styles = StyleSheet.create({
   chartMetricRow: { flexDirection: 'row', alignItems: 'baseline' },
   chartMetric: { color: 'rgba(255,255,255,0.74)', fontSize: 11 },
   chartMetricStrong: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  carouselFooter: {
+  chartHint: {
     minHeight: 34,
     paddingHorizontal: 4,
+    paddingTop: 10,
+    fontSize: 11.5,
+    fontWeight: '500',
+  },
+  categorySectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
+    marginTop: 36,
+    marginBottom: 12,
   },
-  carouselLabel: { fontSize: 11.5, fontWeight: '500' },
-  pageDots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
-  pageDot: { width: 6, height: 6, borderRadius: 3 },
-  donutCard: { height: 292, borderRadius: 25, padding: 17, overflow: 'hidden' },
-  donutHeading: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  donutTitle: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  donutHint: { marginTop: 1, fontSize: 11.5, lineHeight: 16 },
-  donutContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  donutChart: { width: 164, height: 164 },
-  donutCenter: {
-    ...StyleSheet.absoluteFill,
-    alignItems: 'center',
-    justifyContent: 'center',
-    paddingHorizontal: 34,
-  },
-  donutCenterValue: {
-    fontSize: 19,
-    lineHeight: 23,
-    fontWeight: '700',
-    letterSpacing: -0.35,
-    fontVariant: ['tabular-nums'],
-  },
-  donutCenterLabel: {
-    marginTop: 1,
-    maxWidth: 82,
-    fontSize: 11,
-    lineHeight: 14,
-    fontWeight: '600',
-    textAlign: 'center',
-  },
-  donutCenterShare: { marginTop: 1, fontSize: 8.5, lineHeight: 11, textAlign: 'center' },
-  donutLegend: { flex: 1, minWidth: 0 },
-  donutLegendRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  donutLegendDot: { width: 7, height: 22, borderRadius: 4 },
-  donutLegendName: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 16, fontWeight: '600' },
-  donutLegendAmount: {
-    fontSize: 10.5,
-    lineHeight: 16,
-    fontWeight: '600',
-    fontVariant: ['tabular-nums'],
-  },
+  categorySectionTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700', letterSpacing: -0.35 },
+  categorySectionAction: { minHeight: 44, paddingTop: 12, fontSize: 14, fontWeight: '600' },
+  categoryList: { gap: 18 },
+  categoryRow: { minHeight: 52 },
+  categoryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
+  categoryName: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 16, fontWeight: '600' },
+  categoryAmount: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 7 },
+  categoryTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
+  categoryFill: { height: '100%', borderRadius: 2 },
+  categoryDelta: { width: 164, fontSize: 12, textAlign: 'right', fontVariant: ['tabular-nums'] },
   cashflowRow: {
     flexDirection: 'row',
     alignItems: 'stretch',

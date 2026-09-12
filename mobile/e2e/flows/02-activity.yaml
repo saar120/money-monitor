@@ -37,7 +37,10 @@ name: Activity search filters and detail
 - assertVisible:
     id: transaction-txn-wolt
 - tapOn:
-    id: activity-filter-review
+    id: activity-open-filters
+- tapOn:
+    id: activity-filter-needs-review
+- tapOn: 'Done'
 - assertVisible:
     id: transaction-txn-superpharm
 - scrollUntilVisible:

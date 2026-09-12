@@ -1,8 +1,7 @@
-import { SymbolView } from 'expo-symbols';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
-import { useMemo, useState } from 'react';
-import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { SymbolView } from 'expo-symbols';
+import { useMemo } from 'react';
+import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useAppColors } from './theme';
 
 export function formatMonthLabel(month: string, short = false) {
@@ -25,164 +24,130 @@ export function MonthPicker({
   testID?: string;
 }) {
   const colors = useAppColors();
-  const insets = useSafeAreaInsets();
-  const [visible, setVisible] = useState(false);
   const supportsGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable();
   const options = useMemo(
-    () => (months.includes(month) ? months : [month, ...months]).filter(Boolean),
+    () => [...new Set([month, ...months].filter(Boolean))].sort().reverse(),
     [month, months],
   );
-
-  return (
+  const index = options.indexOf(month);
+  const older = options[index + 1];
+  const newer = index > 0 ? options[index - 1] : undefined;
+  const content = (
     <>
-      <Pressable
-        accessibilityHint="Choose another month"
-        accessibilityRole="button"
-        onPress={() => setVisible(true)}
-        style={styles.trigger}
-        testID={testID}
+      <MonthButton
+        direction="left"
+        month={older}
+        onPress={onSelect}
+        testID={testID ? `${testID}-previous` : undefined}
+      />
+      <View style={[styles.divider, { backgroundColor: colors.glassBorder }]} />
+      <Text
+        adjustsFontSizeToFit
+        allowFontScaling={false}
+        minimumFontScale={0.85}
+        numberOfLines={1}
+        style={[styles.label, { color: colors.text }]}
       >
-        {({ pressed }) => {
-          const content = (
-            <>
-              <SymbolView name="calendar" size={14} tintColor={colors.accent} />
-              <Text numberOfLines={1} style={[styles.triggerText, { color: colors.text }]}>
-                {formatMonthLabel(month, true)}
-              </Text>
-              <SymbolView name="chevron.down" size={11} tintColor={colors.tertiary} />
-            </>
-          );
-
-          return supportsGlass ? (
-            <GlassView
-              glassEffectStyle="regular"
-              isInteractive
-              style={[styles.triggerSurface, { opacity: pressed ? 0.72 : 1 }]}
-              tintColor={colors.glass}
-            >
-              {content}
-            </GlassView>
-          ) : (
-            <View
-              style={[
-                styles.triggerSurface,
-                styles.fallbackSurface,
-                {
-                  backgroundColor: colors.glass,
-                  borderColor: colors.glassBorder,
-                  opacity: pressed ? 0.72 : 1,
-                  shadowColor: colors.glassShadow,
-                },
-              ]}
-            >
-              {content}
-            </View>
-          );
-        }}
-      </Pressable>
-
-      <Modal
-        animationType="slide"
-        onRequestClose={() => setVisible(false)}
-        presentationStyle="pageSheet"
-        visible={visible}
-      >
-        <View
-          style={[
-            styles.sheet,
-            { backgroundColor: colors.background, paddingBottom: Math.max(insets.bottom, 16) },
-          ]}
-        >
-          <View style={[styles.header, { borderBottomColor: colors.separator }]}>
-            <Pressable
-              accessibilityRole="button"
-              onPress={() => setVisible(false)}
-              style={styles.headerButton}
-            >
-              <Text style={[styles.cancel, { color: colors.accent }]}>Cancel</Text>
-            </Pressable>
-            <Text style={[styles.title, { color: colors.text }]}>Choose month</Text>
-            <View style={styles.headerButton} />
-          </View>
-          <FlatList
-            contentContainerStyle={styles.list}
-            data={options}
-            keyExtractor={(item) => item}
-            renderItem={({ item }) => {
-              const selected = item === month;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected }}
-                  onPress={() => {
-                    onSelect(item);
-                    setVisible(false);
-                  }}
-                  style={({ pressed }) => [
-                    styles.row,
-                    {
-                      backgroundColor: pressed ? colors.surfaceSoft : colors.background,
-                      borderBottomColor: colors.separator,
-                    },
-                  ]}
-                  testID={`month-option-${item}`}
-                >
-                  <Text style={[styles.month, { color: colors.text }]}>
-                    {formatMonthLabel(item)}
-                  </Text>
-                  {selected ? (
-                    <SymbolView name="checkmark" size={16} tintColor={colors.accent} />
-                  ) : null}
-                </Pressable>
-              );
-            }}
-          />
-        </View>
-      </Modal>
+        {formatMonthLabel(month)}
+      </Text>
+      <View style={[styles.divider, { backgroundColor: colors.glassBorder }]} />
+      <MonthButton
+        direction="right"
+        month={newer}
+        onPress={onSelect}
+        testID={testID ? `${testID}-next` : undefined}
+      />
     </>
+  );
+
+  return supportsGlass ? (
+    <GlassView
+      glassEffectStyle="regular"
+      style={styles.switcher}
+      testID={testID}
+      tintColor={colors.glass}
+    >
+      {content}
+    </GlassView>
+  ) : (
+    <View
+      style={[
+        styles.switcher,
+        styles.fallback,
+        {
+          backgroundColor: colors.glass,
+          borderColor: colors.glassBorder,
+          shadowColor: colors.glassShadow,
+        },
+      ]}
+      testID={testID}
+    >
+      {content}
+    </View>
+  );
+}
+
+function MonthButton({
+  direction,
+  month,
+  onPress,
+  testID,
+}: {
+  direction: 'left' | 'right';
+  month?: string;
+  onPress: (month: string) => void;
+  testID?: string;
+}) {
+  const colors = useAppColors();
+  const label = direction === 'left' ? 'Previous' : 'Next';
+  return (
+    <Pressable
+      accessibilityLabel={
+        month ? `${label} month, ${formatMonthLabel(month)}` : `${label} month unavailable`
+      }
+      accessibilityRole="button"
+      accessibilityState={{ disabled: !month }}
+      disabled={!month}
+      hitSlop={4}
+      onPress={() => {
+        if (month) onPress(month);
+      }}
+      style={({ pressed }) => [styles.button, { opacity: !month ? 0.24 : pressed ? 0.5 : 1 }]}
+      testID={testID}
+    >
+      <SymbolView
+        name={direction === 'left' ? 'chevron.left' : 'chevron.right'}
+        size={13}
+        tintColor={colors.text}
+      />
+    </Pressable>
   );
 }
 
 const styles = StyleSheet.create({
-  trigger: {
-    minHeight: 44,
-    justifyContent: 'center',
-  },
-  triggerSurface: {
-    minHeight: 40,
-    paddingHorizontal: 12,
-    borderRadius: 20,
+  switcher: {
+    minWidth: 218,
+    height: 42,
+    borderRadius: 21,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 7,
+    overflow: 'hidden',
   },
-  fallbackSurface: {
+  fallback: {
     borderWidth: StyleSheet.hairlineWidth,
     shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.14,
+    shadowOpacity: 0.12,
     shadowRadius: 12,
   },
-  triggerText: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
-  sheet: { flex: 1 },
-  header: {
-    minHeight: 58,
-    paddingHorizontal: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
+  button: { width: 44, height: 42, alignItems: 'center', justifyContent: 'center' },
+  divider: { width: StyleSheet.hairlineWidth, height: 18 },
+  label: {
+    flex: 1,
+    paddingHorizontal: 8,
+    fontSize: 14,
+    lineHeight: 19,
+    fontWeight: '600',
+    textAlign: 'center',
+    fontVariant: ['tabular-nums'],
   },
-  headerButton: { width: 76, minHeight: 44, justifyContent: 'center' },
-  cancel: { fontSize: 16 },
-  title: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  list: { paddingHorizontal: 20 },
-  row: {
-    minHeight: 58,
-    paddingHorizontal: 4,
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  month: { fontSize: 17, lineHeight: 23 },
 });

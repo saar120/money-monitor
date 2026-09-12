@@ -228,6 +228,7 @@ export function ActivityFiltersSheet({
                       }))
                     }
                     trackColor={{ false: colors.separator, true: colors.accent }}
+                    testID="activity-filter-needs-review"
                     value={Boolean(draft.needsReview)}
                   />
                 </View>

@@ -5,7 +5,6 @@ import {
   ActivityIndicator,
   Pressable,
   RefreshControl,
-  ScrollView,
   SectionList,
   StyleSheet,
   Text,
@@ -18,20 +17,11 @@ import { ActivityFiltersSheet, activityFilterCount } from '@/ActivityFiltersShee
 import { useActivityTransactions, useMoneyData, type ActivityCriteria } from '@/MoneyData';
 import { formatMoney } from '@/money';
 import type { Transaction } from '@/fixtures';
-import type { ActivityFilter } from '@/mobile-api';
 import { categoryMarkColor, useAppColors } from '@/theme';
-
-const filters: Array<{ key: ActivityFilter; label: string }> = [
-  { key: 'all', label: 'All' },
-  { key: 'review', label: 'Needs review' },
-  { key: 'pending', label: 'Pending' },
-  { key: 'credits', label: 'Credits' },
-];
 
 export default function ActivityScreen() {
   const colors = useAppColors();
   const [query, setQuery] = useState('');
-  const [filter, setFilter] = useState<ActivityFilter>('all');
   const [criteria, setCriteria] = useState<ActivityCriteria>({ inclusion: 'all' });
   const [filtersVisible, setFiltersVisible] = useState(false);
   const [reviewOptions, setReviewOptions] = useState<{ categories: string[]; owners: string[] }>({
@@ -41,11 +31,10 @@ export default function ActivityScreen() {
   const [refreshing, setRefreshing] = useState(false);
   const searchBar = useRef<TextInput>(null);
   const money = useMoneyData();
-  const result = useActivityTransactions(query, filter, criteria, true);
+  const result = useActivityTransactions(query, 'all', criteria, true);
   const transactions = result.transactions;
   const advancedFilters = activityFilterCount(criteria);
-  const activeFilters = advancedFilters + (filter === 'all' ? 0 : 1);
-  const isUnfiltered = !query.trim() && activeFilters === 0;
+  const isUnfiltered = !query.trim() && advancedFilters === 0;
   const currentDate = money.home?.currentDate ?? new Date().toISOString().slice(0, 10);
   const categories = useMemo(
     () =>
@@ -154,22 +143,14 @@ export default function ActivityScreen() {
                 Couldn’t refresh · pull to retry
               </Text>
             ) : null}
-            <Text style={[styles.summary, { color: colors.secondary }]}>
-              {transactions.length}
-              {result.hasMore ? '+' : ''} transactions ·{' '}
-              {filter === 'review'
-                ? 'financial inbox'
-                : criteria.startDate || criteria.endDate
+            <View style={styles.filterBar}>
+              <Text style={[styles.summary, { color: colors.secondary }]}>
+                {transactions.length}
+                {result.hasMore ? '+' : ''} transactions ·{' '}
+                {criteria.startDate || criteria.endDate
                   ? `${criteria.startDate ?? 'first'}–${criteria.endDate ?? 'today'}`
                   : 'all dates'}
-            </Text>
-            <ScrollView
-              horizontal
-              keyboardShouldPersistTaps="handled"
-              showsHorizontalScrollIndicator={false}
-              contentContainerStyle={styles.filters}
-              accessibilityRole="tablist"
-            >
+              </Text>
               <Pressable
                 accessibilityRole="button"
                 onPress={() => {
@@ -202,41 +183,7 @@ export default function ActivityScreen() {
                   </Text>
                 </View>
               </Pressable>
-              {filters.map((item) => {
-                const selected =
-                  filter === item.key && (item.key !== 'all' || advancedFilters === 0);
-                return (
-                  <Pressable
-                    key={item.key}
-                    accessibilityRole="tab"
-                    accessibilityState={{ selected }}
-                    onPress={() => {
-                      searchBar.current?.blur();
-                      setFilter(item.key);
-                      setCriteria({ inclusion: 'all' });
-                    }}
-                    testID={`activity-filter-${item.key}`}
-                    style={({ pressed }) => [
-                      styles.filter,
-                      {
-                        backgroundColor: selected ? colors.accent : colors.surfaceSoft,
-                        borderColor: selected ? colors.accent : colors.separator,
-                        opacity: pressed ? 0.76 : 1,
-                      },
-                    ]}
-                  >
-                    <Text
-                      style={[
-                        styles.filterLabel,
-                        { color: selected ? '#FFFFFF' : colors.secondary },
-                      ]}
-                    >
-                      {item.label}
-                    </Text>
-                  </Pressable>
-                );
-              })}
-            </ScrollView>
+            </View>
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -319,7 +266,6 @@ export default function ActivityScreen() {
         currentDate={currentDate}
         onApply={(value) => {
           setCriteria(value);
-          setFilter('all');
           setFiltersVisible(false);
         }}
         onClose={() => setFiltersVisible(false)}
@@ -502,12 +448,19 @@ const styles = StyleSheet.create({
   reviewBannerText: { flex: 1 },
   reviewBannerTitle: { fontSize: 15, fontWeight: '700' },
   reviewBannerDetail: { marginTop: 2, fontSize: 12.5 },
-  summary: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13 },
+  filterBar: {
+    minHeight: 60,
+    paddingHorizontal: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summary: { flex: 1, minWidth: 0, fontSize: 13 },
   refreshError: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13, fontWeight: '600' },
-  filters: { flexDirection: 'row', gap: 8, paddingHorizontal: 16, paddingVertical: 14 },
   filter: {
-    minHeight: 44,
-    borderRadius: 22,
+    minHeight: 38,
+    borderRadius: 19,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     alignItems: 'center',
