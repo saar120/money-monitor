@@ -4,7 +4,6 @@ import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
-import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
@@ -20,7 +19,6 @@ import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
   const colors = useAppColors();
-  const insets = useSafeAreaInsets();
   const money = useMoneyData();
   const selected = useOverviewMonth();
   const { error, status, reload } = money;
@@ -48,8 +46,8 @@ export default function HomeScreen() {
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}
-      contentContainerStyle={[styles.content, { paddingTop: insets.top + 10 }]}
-      contentInsetAdjustmentBehavior="never"
+      contentContainerStyle={styles.content}
+      contentInsetAdjustmentBehavior="automatic"
       showsVerticalScrollIndicator={false}
       testID="home-screen"
       refreshControl={
@@ -80,15 +78,20 @@ export default function HomeScreen() {
                 : (home.freshness[0]?.detail ?? 'Updated on your Mac')}
           </Text>
         </View>
-        <MonthPicker
-          month={selected.month}
-          months={selected.months}
-          onSelect={selected.selectMonth}
-          testID="home-month-picker"
-        />
       </View>
 
       <View style={styles.hero} testID="home-primary-money">
+        <View style={styles.heroHeader}>
+          <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
+            Total spending
+          </Text>
+          <MonthPicker
+            month={selected.month}
+            months={selected.months}
+            onSelect={selected.selectMonth}
+            testID="home-month-picker"
+          />
+        </View>
         <Text
           adjustsFontSizeToFit
           allowFontScaling={false}
@@ -97,9 +100,6 @@ export default function HomeScreen() {
           style={[styles.heroValue, { color: colors.text }]}
         >
           {formatUnsignedMoney(home.spent, home.currencyCode)}
-        </Text>
-        <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
-          spent this month
         </Text>
       </View>
 
@@ -600,16 +600,19 @@ function AttentionRow({
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   contextRow: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    gap: 12,
     marginTop: 8,
   },
-  contextCopy: { flex: 1, minWidth: 0 },
+  contextCopy: { minWidth: 0 },
   greeting: { fontSize: 14, lineHeight: 20 },
   freshness: { marginTop: 1, fontSize: 12.5 },
-  hero: { paddingTop: 29, paddingBottom: 22 },
+  hero: { paddingTop: 24, paddingBottom: 20 },
+  heroHeader: {
+    marginBottom: 12,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   heroValue: {
     fontSize: 56,
     lineHeight: 59,
@@ -618,11 +621,10 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   heroLabel: {
-    marginTop: 4,
-    fontSize: 25,
-    lineHeight: 30,
+    fontSize: 17,
+    lineHeight: 22,
     fontWeight: '600',
-    letterSpacing: -0.45,
+    letterSpacing: -0.2,
   },
   spendingHero: {
     height: 292,

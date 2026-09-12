@@ -161,7 +161,7 @@ Light mode uses porcelain rather than stark white. Dark mode is dusk, not black:
 
 Screens use iPhone safe areas, a 20-point horizontal inset for editorial content, and an approximately 8/12/20/28/36-point vertical rhythm. Related labels stay tight; sections receive visibly more space above than below. The native tab controller owns the bottom safe-area inset and minimizes while scrolling on supported iOS versions.
 
-Home leads with the most decision-useful server value and cobalt chart. Activity preserves compact, high-density rows. Explore keeps its chart and ranked drivers on the same monthly inclusion semantics. Secondary screens retain native push navigation and use shared row language rather than isolated cards.
+Home leads with the most decision-useful server value and cobalt chart. Home and Explore attach a compact glass month switcher to the primary metric it controls rather than presenting it as a separate page-level feature. Activity preserves compact, high-density rows. Explore keeps its chart and ranked drivers on the same monthly inclusion semantics. Secondary screens retain native push navigation and use shared row language rather than isolated cards.
 
 ## Elevation & Depth
 
@@ -205,7 +205,7 @@ Corners are continuous and concentric: 10-point selected range lenses inside 14-
 
 ### Spending Chart
 
-The chart is the Blue Ledger signature. Home swipes between two equal cards: a cobalt current-versus-prior spending curve that reveals exact daily values under a finger, and a category donut whose slices and legend open the selected month’s category drilldown. Home and Explore each own an independent month picker populated only by months present on the Mac. Explore plots up to six available months ending at its selected month. Values and comparisons come from the overview contract; the phone does not extrapolate future points.
+The chart is the Blue Ledger signature. Home uses a cobalt current-versus-prior spending curve that reveals exact daily values under a finger, followed by ranked category bars near the bottom of the page. Home and Explore each own an independent compact month switcher populated only by months present on the Mac. Explore plots up to six available months ending at its selected month. Values and comparisons come from the overview contract; the phone does not extrapolate future points.
 
 ## Do's and Don'ts
 

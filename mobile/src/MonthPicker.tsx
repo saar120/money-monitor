@@ -48,7 +48,7 @@ export function MonthPicker({
         numberOfLines={1}
         style={[styles.label, { color: colors.text }]}
       >
-        {formatMonthLabel(month)}
+        {formatMonthLabel(month, true)}
       </Text>
       <View style={[styles.divider, { backgroundColor: colors.glassBorder }]} />
       <MonthButton
@@ -126,26 +126,26 @@ function MonthButton({
 
 const styles = StyleSheet.create({
   switcher: {
-    minWidth: 218,
-    height: 42,
-    borderRadius: 21,
+    minWidth: 176,
+    height: 40,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
   },
   fallback: {
     borderWidth: StyleSheet.hairlineWidth,
-    shadowOffset: { width: 0, height: 5 },
-    shadowOpacity: 0.12,
-    shadowRadius: 12,
+    shadowOffset: { width: 0, height: 3 },
+    shadowOpacity: 0.08,
+    shadowRadius: 8,
   },
-  button: { width: 44, height: 42, alignItems: 'center', justifyContent: 'center' },
-  divider: { width: StyleSheet.hairlineWidth, height: 18 },
+  button: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
+  divider: { width: StyleSheet.hairlineWidth, height: 16 },
   label: {
     flex: 1,
-    paddingHorizontal: 8,
-    fontSize: 14,
-    lineHeight: 19,
+    paddingHorizontal: 6,
+    fontSize: 13,
+    lineHeight: 18,
     fontWeight: '600',
     textAlign: 'center',
     fontVariant: ['tabular-nums'],

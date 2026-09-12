@@ -76,28 +76,23 @@ export default function ExploreScreen() {
         Every insight opens the transactions behind it
       </Text>
 
-      <View style={styles.monthPicker}>
-        <MonthPicker
-          month={selected.month}
-          months={selected.months}
-          onSelect={selected.selectMonth}
-          testID="explore-month-picker"
-        />
-      </View>
-
       <View style={[styles.hero, { borderColor: colors.separator }]}>
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: colors.secondary }]}>
-            {home.month} cash flow
-          </Text>
-          <Text
-            allowFontScaling={false}
-            style={[styles.cashFlow, { color: cashFlow >= 0 ? colors.positive : colors.danger }]}
-            testID="explore-cashflow"
-          >
-            {formatMoney(cashFlow, home.currencyCode)}
-          </Text>
+        <View style={styles.summaryHeader}>
+          <Text style={[styles.summaryLabel, { color: colors.text }]}>Cash flow</Text>
+          <MonthPicker
+            month={selected.month}
+            months={selected.months}
+            onSelect={selected.selectMonth}
+            testID="explore-month-picker"
+          />
         </View>
+        <Text
+          allowFontScaling={false}
+          style={[styles.cashFlow, { color: cashFlow >= 0 ? colors.positive : colors.danger }]}
+          testID="explore-cashflow"
+        >
+          {formatMoney(cashFlow, home.currencyCode)}
+        </Text>
         <Text style={[styles.summaryNote, { color: colors.secondary }]}>
           {cashFlowDelta === null
             ? `Posted income minus spending · through day ${day}`
@@ -336,30 +331,29 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   subtitle: { marginTop: 2, fontSize: 14, lineHeight: 19 },
-  monthPicker: {
-    marginTop: 10,
-    minHeight: 48,
-    alignItems: 'flex-end',
-    justifyContent: 'center',
-  },
   hero: {
     marginTop: 20,
     paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  summaryRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  summaryLabel: { fontSize: 14, fontWeight: '500' },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   cashFlow: {
-    marginLeft: 16,
-    fontSize: 30,
-    lineHeight: 35,
+    marginTop: 12,
+    fontSize: 38,
+    lineHeight: 43,
     fontWeight: '700',
     letterSpacing: -1.25,
     fontVariant: ['tabular-nums'],
   },
-  summaryNote: { marginTop: 4, textAlign: 'right', fontSize: 12.5, lineHeight: 17 },
-  chart: { height: 184, marginTop: 16, justifyContent: 'flex-end' },
+  summaryNote: { marginTop: 4, fontSize: 12.5, lineHeight: 17 },
+  chart: { height: 184, marginTop: 20, justifyContent: 'flex-end' },
   grid: { ...StyleSheet.absoluteFill, justifyContent: 'space-between', paddingBottom: 22 },
   gridLine: { height: StyleSheet.hairlineWidth },
   months: { height: 174, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
