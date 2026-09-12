@@ -76,7 +76,7 @@ export default function ExploreScreen() {
         Every insight opens the transactions behind it
       </Text>
 
-      <View style={[styles.monthPicker, { borderBottomColor: colors.separator }]}>
+      <View style={styles.monthPicker}>
         <MonthPicker
           month={selected.month}
           months={selected.months}
@@ -338,8 +338,8 @@ const styles = StyleSheet.create({
   subtitle: { marginTop: 2, fontSize: 14, lineHeight: 19 },
   monthPicker: {
     marginTop: 10,
-    minHeight: 52,
-    borderBottomWidth: StyleSheet.hairlineWidth,
+    minHeight: 48,
+    alignItems: 'flex-end',
     justifyContent: 'center',
   },
   hero: {

@@ -1,6 +1,7 @@
 import { SymbolView } from 'expo-symbols';
+import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { useMemo, useState } from 'react';
-import { FlatList, Modal, Pressable, StyleSheet, Text, View } from 'react-native';
+import { FlatList, Modal, Platform, Pressable, StyleSheet, Text, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppColors } from './theme';
 
@@ -26,6 +27,7 @@ export function MonthPicker({
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
   const [visible, setVisible] = useState(false);
+  const supportsGlass = Platform.OS === 'ios' && isGlassEffectAPIAvailable();
   const options = useMemo(
     () => (months.includes(month) ? months : [month, ...months]).filter(Boolean),
     [month, months],
@@ -37,14 +39,46 @@ export function MonthPicker({
         accessibilityHint="Choose another month"
         accessibilityRole="button"
         onPress={() => setVisible(true)}
-        style={({ pressed }) => [styles.trigger, { opacity: pressed ? 0.64 : 1 }]}
+        style={styles.trigger}
         testID={testID}
       >
-        <SymbolView name="calendar" size={14} tintColor={colors.accent} />
-        <Text numberOfLines={1} style={[styles.triggerText, { color: colors.text }]}>
-          {formatMonthLabel(month)}
-        </Text>
-        <SymbolView name="chevron.down" size={11} tintColor={colors.tertiary} />
+        {({ pressed }) => {
+          const content = (
+            <>
+              <SymbolView name="calendar" size={14} tintColor={colors.accent} />
+              <Text numberOfLines={1} style={[styles.triggerText, { color: colors.text }]}>
+                {formatMonthLabel(month, true)}
+              </Text>
+              <SymbolView name="chevron.down" size={11} tintColor={colors.tertiary} />
+            </>
+          );
+
+          return supportsGlass ? (
+            <GlassView
+              glassEffectStyle="regular"
+              isInteractive
+              style={[styles.triggerSurface, { opacity: pressed ? 0.72 : 1 }]}
+              tintColor={colors.glass}
+            >
+              {content}
+            </GlassView>
+          ) : (
+            <View
+              style={[
+                styles.triggerSurface,
+                styles.fallbackSurface,
+                {
+                  backgroundColor: colors.glass,
+                  borderColor: colors.glassBorder,
+                  opacity: pressed ? 0.72 : 1,
+                  shadowColor: colors.glassShadow,
+                },
+              ]}
+            >
+              {content}
+            </View>
+          );
+        }}
       </Pressable>
 
       <Modal
@@ -112,9 +146,21 @@ export function MonthPicker({
 const styles = StyleSheet.create({
   trigger: {
     minHeight: 44,
+    justifyContent: 'center',
+  },
+  triggerSurface: {
+    minHeight: 40,
+    paddingHorizontal: 12,
+    borderRadius: 20,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 7,
+  },
+  fallbackSurface: {
+    borderWidth: StyleSheet.hairlineWidth,
+    shadowOffset: { width: 0, height: 5 },
+    shadowOpacity: 0.14,
+    shadowRadius: 12,
   },
   triggerText: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   sheet: { flex: 1 },

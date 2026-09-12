@@ -1,5 +1,5 @@
-import { Circle } from '@shopify/react-native-skia';
-import { Area, CartesianChart, Line, Pie, PolarChart, useChartPressState } from 'victory-native';
+import { Canvas, Circle, Path, Skia } from '@shopify/react-native-skia';
+import { Area, CartesianChart, Line, useChartPressState } from 'victory-native';
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -10,6 +10,7 @@ import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'r
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useMoneyData, useOverviewMonth } from '@/MoneyData';
+import { categoryArcs, categoryAtAngle } from '@/category-chart';
 import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
 import type { HomeData } from '@/fixtures';
 import { useAppColors, type AppColors } from '@/theme';
@@ -53,31 +54,31 @@ export default function HomeScreen() {
       }
     >
       <View style={styles.contextRow}>
-        <View style={styles.monthContext}>
+        <View style={styles.contextCopy}>
           <Text maxFontSizeMultiplier={1.25} style={[styles.greeting, { color: colors.secondary }]}>
             Good morning
           </Text>
-          <MonthPicker
-            month={selected.month}
-            months={selected.months}
-            onSelect={selected.selectMonth}
-            testID="home-month-picker"
-          />
+          <Text
+            maxFontSizeMultiplier={1.25}
+            numberOfLines={1}
+            style={[
+              styles.freshness,
+              { color: error || staleAccounts.length ? colors.danger : colors.secondary },
+            ]}
+          >
+            {error
+              ? 'Couldn’t refresh · pull to retry'
+              : staleAccounts.length
+                ? `${staleAccounts.length} account${staleAccounts.length === 1 ? '' : 's'} need attention`
+                : (home.freshness[0]?.detail ?? 'Updated on your Mac')}
+          </Text>
         </View>
-        <Text
-          maxFontSizeMultiplier={1.25}
-          numberOfLines={1}
-          style={[
-            styles.freshness,
-            { color: error || staleAccounts.length ? colors.danger : colors.secondary },
-          ]}
-        >
-          {error
-            ? 'Couldn’t refresh · pull to retry'
-            : staleAccounts.length
-              ? `${staleAccounts.length} account${staleAccounts.length === 1 ? '' : 's'} need attention`
-              : (home.freshness[0]?.detail ?? 'Updated on your Mac')}
-        </Text>
+        <MonthPicker
+          month={selected.month}
+          months={selected.months}
+          onSelect={selected.selectMonth}
+          testID="home-month-picker"
+        />
       </View>
 
       <View style={styles.hero} testID="home-primary-money">
@@ -308,7 +309,6 @@ function ChartCarousel({
               colors={colors}
               currencyCode={currencyCode}
               month={month}
-              spent={spent}
             />
           </View>
         </ScrollView>
@@ -455,23 +455,23 @@ function CategoryDonutCard({
   colors,
   currencyCode,
   month,
-  spent,
 }: {
   categories: HomeData['categories'];
   colors: AppColors;
   currencyCode: string;
   month: string;
-  spent: number;
 }) {
   const data = useMemo(
     () =>
       [...categories].filter((category) => category.spent > 0).sort((a, b) => b.spent - a.spent),
     [categories],
   );
+  const arcs = useMemo(() => categoryArcs(data), [data]);
   const categoryTotal = useMemo(
     () => data.reduce((sum, category) => sum + category.spent, 0),
     [data],
   );
+  const leading = arcs[0] ?? null;
   const [chartSize, setChartSize] = useState(0);
   const openAt = useCallback(
     (x: number, y: number) => {
@@ -480,18 +480,14 @@ function CategoryDonutCard({
       if (distance < chartSize * 0.32 || distance > chartSize * 0.5) return;
       const angle = (Math.atan2(y - center, x - center) * 180) / Math.PI;
       const position = (angle + 450) % 360;
-      let end = 0;
-      const category = data.find((item) => {
-        end += (item.spent / categoryTotal) * 360;
-        return position <= end;
-      });
+      const category = categoryAtAngle(arcs, position);
       if (category)
         router.push({
           pathname: '/category/[name]',
           params: { name: category.name, month },
         });
     },
-    [categoryTotal, chartSize, data, month],
+    [arcs, chartSize, month],
   );
   const tap = useMemo(
     () =>
@@ -508,10 +504,13 @@ function CategoryDonutCard({
       testID="home-category-donut"
     >
       <View style={styles.donutHeading}>
-        <Text style={[styles.donutTitle, { color: colors.text }]}>Where it went</Text>
-        <Text style={[styles.donutTotal, { color: colors.secondary }]}>
-          {formatUnsignedMoney(spent, currencyCode)} total
-        </Text>
+        <View>
+          <Text style={[styles.donutTitle, { color: colors.text }]}>Where it went</Text>
+          <Text style={[styles.donutHint, { color: colors.secondary }]}>
+            Tap a segment to explore
+          </Text>
+        </View>
+        <SymbolView name="arrow.up.right" size={14} tintColor={colors.tertiary} />
       </View>
       {data.length ? (
         <View style={styles.donutContent}>
@@ -520,21 +519,50 @@ function CategoryDonutCard({
               onLayout={(event) => setChartSize(event.nativeEvent.layout.width)}
               style={styles.donutChart}
             >
-              <PolarChart data={data} colorKey="color" labelKey="name" valueKey="spent">
-                <Pie.Chart innerRadius="66%" startAngle={-90} />
-              </PolarChart>
+              <Canvas style={StyleSheet.absoluteFill}>
+                <Circle
+                  color={colors.surfaceSoft}
+                  cx={82}
+                  cy={82}
+                  r={61}
+                  strokeWidth={22}
+                  style="stroke"
+                />
+                {arcs.map((arc) => {
+                  const gap = Math.min(4, arc.sweepAngle * 0.28);
+                  const path = Skia.Path.Make();
+                  path.addArc(
+                    { x: 21, y: 21, width: 122, height: 122 },
+                    arc.startAngle - 90 + gap / 2,
+                    Math.max(0.5, arc.sweepAngle - gap),
+                  );
+                  return (
+                    <Path
+                      color={arc.color}
+                      key={arc.name}
+                      path={path}
+                      strokeCap="round"
+                      strokeWidth={22}
+                      style="stroke"
+                    />
+                  );
+                })}
+              </Canvas>
               <View pointerEvents="none" style={styles.donutCenter}>
                 <Text
                   allowFontScaling={false}
                   style={[styles.donutCenterValue, { color: colors.text }]}
                 >
-                  {Math.round((data[0]!.spent / categoryTotal) * 100)}%
+                  {leading ? formatUnsignedMoney(leading.spent, currencyCode) : '—'}
                 </Text>
                 <Text
                   numberOfLines={1}
                   style={[styles.donutCenterLabel, { color: colors.secondary }]}
                 >
-                  {data[0]!.name}
+                  {leading?.name}
+                </Text>
+                <Text style={[styles.donutCenterShare, { color: colors.tertiary }]}>
+                  {leading ? `${Math.round(leading.share * 100)}%` : ''}
                 </Text>
               </View>
             </View>
@@ -561,7 +589,7 @@ function CategoryDonutCard({
                   allowFontScaling={false}
                   style={[styles.donutLegendAmount, { color: colors.secondary }]}
                 >
-                  {formatUnsignedMoney(category.spent, currencyCode)}
+                  {Math.round((category.spent / categoryTotal) * 100)}%
                 </Text>
               </Pressable>
             ))}
@@ -726,12 +754,13 @@ const styles = StyleSheet.create({
   contextRow: {
     flexDirection: 'row',
     justifyContent: 'space-between',
-    alignItems: 'baseline',
+    alignItems: 'center',
+    gap: 12,
     marginTop: 8,
   },
-  monthContext: { flex: 1, minWidth: 0 },
+  contextCopy: { flex: 1, minWidth: 0 },
   greeting: { fontSize: 14, lineHeight: 20 },
-  freshness: { maxWidth: '56%', fontSize: 13, textAlign: 'right' },
+  freshness: { marginTop: 1, fontSize: 12.5 },
   hero: { paddingTop: 29, paddingBottom: 22 },
   heroValue: {
     fontSize: 56,
@@ -819,33 +848,42 @@ const styles = StyleSheet.create({
   donutCard: { height: 292, borderRadius: 25, padding: 17, overflow: 'hidden' },
   donutHeading: {
     flexDirection: 'row',
-    alignItems: 'baseline',
+    alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
   donutTitle: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
-  donutTotal: { fontSize: 12.5, lineHeight: 18, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  donutContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  donutChart: { width: 156, height: 156 },
+  donutHint: { marginTop: 1, fontSize: 11.5, lineHeight: 16 },
+  donutContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 10 },
+  donutChart: { width: 164, height: 164 },
   donutCenter: {
     ...StyleSheet.absoluteFill,
     alignItems: 'center',
     justifyContent: 'center',
-    paddingHorizontal: 38,
+    paddingHorizontal: 34,
   },
   donutCenterValue: {
-    fontSize: 24,
-    lineHeight: 28,
+    fontSize: 19,
+    lineHeight: 23,
     fontWeight: '700',
+    letterSpacing: -0.35,
     fontVariant: ['tabular-nums'],
   },
-  donutCenterLabel: { marginTop: 1, maxWidth: 76, fontSize: 10.5, lineHeight: 14 },
+  donutCenterLabel: {
+    marginTop: 1,
+    maxWidth: 82,
+    fontSize: 11,
+    lineHeight: 14,
+    fontWeight: '600',
+    textAlign: 'center',
+  },
+  donutCenterShare: { marginTop: 1, fontSize: 8.5, lineHeight: 11, textAlign: 'center' },
   donutLegend: { flex: 1, minWidth: 0 },
-  donutLegendRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7 },
-  donutLegendDot: { width: 8, height: 8, borderRadius: 4 },
-  donutLegendName: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '600' },
+  donutLegendRow: { minHeight: 40, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  donutLegendDot: { width: 7, height: 22, borderRadius: 4 },
+  donutLegendName: { flex: 1, minWidth: 0, fontSize: 12, lineHeight: 16, fontWeight: '600' },
   donutLegendAmount: {
-    fontSize: 11.5,
+    fontSize: 10.5,
     lineHeight: 16,
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
