@@ -1,9 +1,10 @@
-import { afterAll, beforeEach, describe, expect, it, vi } from 'vitest';
+import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
-import { transactions } from '../db/schema.js';
+import { accounts, transactions } from '../db/schema.js';
+import { createProductionMobileBootstrapPorts } from '../mobile/bootstrap-production-ports.js';
 
 let testDb: TestDb;
 
@@ -46,16 +47,23 @@ describe('One Zero import', () => {
     testDb = createTestDb();
   });
 
+  afterEach(() => {
+    vi.useRealTimers();
+  });
+
   afterAll(() => {
     testDb?.close();
   });
 
-  it('links scraped rows, inserts new rows, and deduplicates a repeated statement', () => {
+  it('links scraped rows, inserts new rows, refreshes the account, and deduplicates a repeated statement', async () => {
+    vi.useFakeTimers();
+    vi.setSystemTime('2026-08-06T10:15:00.000Z');
     const member = insertMember(testDb.db);
     const account = insertAccount(testDb.db, {
       companyId: 'oneZero',
       displayName: 'One Zero',
       memberId: member.id,
+      lastScrapedAt: '2026-07-01T00:00:00.000Z',
     });
     const existing = insertTransaction(testDb.db, account.id, {
       date: '2026-08-03',
@@ -94,6 +102,19 @@ describe('One Zero import', () => {
       .map(({ meta }) => JSON.parse(meta ?? '{}').oneZeroReference)
       .sort();
     expect(stored).toEqual(['ref-1', 'ref-2']);
+    expect(
+      testDb.db
+        .select({ lastScrapedAt: accounts.lastScrapedAt })
+        .from(accounts)
+        .where(eq(accounts.id, account.id))
+        .get()?.lastScrapedAt,
+    ).toBe('2026-08-06T10:15:00.000Z');
+    const mobileAccounts = await createProductionMobileBootstrapPorts({
+      db: testDb.db,
+      publicIdKey: 'one-zero-import-test-public-id-key',
+      readNetWorthIls: () => 0,
+    }).readAccounts({ calculatedAt: '2026-08-06T10:15:00.000Z', financialDate: '2026-08-06' });
+    expect(mobileAccounts[0]?.freshness.status).toBe('fresh');
     expect(createOneZeroImportPreview(account.id, buffer)).toMatchObject({
       newCount: 0,
       matchedExistingCount: 0,
