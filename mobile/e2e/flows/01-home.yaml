@@ -16,6 +16,18 @@ name: Home renders the normal fixture
     element:
       id: category-spending
     direction: DOWN
+- assertVisible:
+    id: category-spending
+- tapOn:
+    id: home-category-Housing
+- assertVisible:
+    id: category-detail
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible:
+    id: home-screen
 - scrollUntilVisible:
     element:
       id: net-worth-summary
@@ -32,3 +44,6 @@ name: Home renders the normal fixture
     end: 50%, 78%
     duration: 600
 - assertVisible: '₪18,920'
+- tapOn:
+    id: home-month-picker-previous
+- assertVisible: '₪19,620'

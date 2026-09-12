@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 import { MobileBootstrapSectionReadError } from './bootstrap-adapter.js';
@@ -54,6 +54,7 @@ export interface ProductionMobileTransactionPorts {
 interface ProjectableTransactionRow {
   transactionId: number;
   occurredOn: string;
+  reportingOn: string;
   description: string;
   chargedAmount: number;
   chargedCurrency: string;
@@ -166,6 +167,7 @@ export function createProductionMobileTransactionPorts(
   const selection = {
     transactionId: schema.transactions.id,
     occurredOn: schema.transactions.date,
+    reportingOn: schema.transactions.reportingDate,
     description: schema.transactions.description,
     chargedAmount: schema.transactions.chargedAmount,
     chargedCurrency: schema.transactions.chargedCurrency,
@@ -200,11 +202,11 @@ export function createProductionMobileTransactionPorts(
       0;
 
     const conditions: SQL[] = [
-      lte(schema.transactions.date, context.financialDate),
+      lte(schema.transactions.reportingDate, context.financialDate),
       lte(schema.transactions.id, snapshotCeilingId),
     ];
-    if (query.startDate) conditions.push(gte(schema.transactions.date, query.startDate));
-    if (query.endDate) conditions.push(lte(schema.transactions.date, query.endDate));
+    if (query.startDate) conditions.push(gte(schema.transactions.reportingDate, query.startDate));
+    if (query.endDate) conditions.push(lte(schema.transactions.reportingDate, query.endDate));
     if (!query.includeExcluded) conditions.push(eq(schema.transactions.ignored, false));
     if (query.needsReview !== undefined) {
       conditions.push(eq(schema.transactions.needsReview, query.needsReview));
@@ -230,10 +232,12 @@ export function createProductionMobileTransactionPorts(
     }
     if (query.category) {
       conditions.push(
-        or(
-          eq(schema.transactions.category, query.category),
-          eq(schema.categories.label, query.category),
-        ) as SQL,
+        query.category === 'Uncategorized'
+          ? isNull(schema.transactions.category)
+          : (or(
+              eq(schema.transactions.category, query.category),
+              eq(schema.categories.label, query.category),
+            ) as SQL),
       );
     }
     if (query.q) {
@@ -254,8 +258,11 @@ export function createProductionMobileTransactionPorts(
     if (cursor) {
       conditions.push(
         or(
-          lt(schema.transactions.date, cursor.date),
-          and(eq(schema.transactions.date, cursor.date), lt(schema.transactions.id, cursor.id)),
+          lt(schema.transactions.reportingDate, cursor.date),
+          and(
+            eq(schema.transactions.reportingDate, cursor.date),
+            lt(schema.transactions.id, cursor.id),
+          ),
         ) as SQL,
       );
     }
@@ -267,7 +274,7 @@ export function createProductionMobileTransactionPorts(
       .leftJoin(schema.categories, eq(schema.transactions.category, schema.categories.name))
       .leftJoin(schema.members, eq(schema.transactions.expenseOwnerMemberId, schema.members.id))
       .where(and(...conditions))
-      .orderBy(desc(schema.transactions.date), desc(schema.transactions.id))
+      .orderBy(desc(schema.transactions.reportingDate), desc(schema.transactions.id))
       .limit(query.limit + 1)
       .all();
     const hasMore = rows.length > query.limit;
@@ -282,7 +289,7 @@ export function createProductionMobileTransactionPorts(
           hasMore && lastRow
             ? cursorCodec.encode(
                 {
-                  date: financialDate(lastRow.occurredOn),
+                  date: financialDate(lastRow.reportingOn),
                   id: lastRow.transactionId,
                   snapshotCeilingId,
                 },
@@ -310,7 +317,7 @@ export function createProductionMobileTransactionPorts(
       .where(
         and(
           eq(schema.transactions.id, transactionId),
-          lte(schema.transactions.date, context.financialDate),
+          lte(schema.transactions.reportingDate, context.financialDate),
         ),
       )
       .get();
@@ -400,7 +407,7 @@ export function createProductionMobileTransactionPorts(
         .where(
           and(
             eq(schema.transactions.id, transactionId),
-            lte(schema.transactions.date, context.financialDate),
+            lte(schema.transactions.reportingDate, context.financialDate),
           ),
         )
         .run();

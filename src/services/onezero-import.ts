@@ -249,6 +249,12 @@ export function commitOneZeroImport(accountId: number, buffer: Buffer): OneZeroI
       imported += 1;
       insertedIds.push(inserted.id);
     }
+
+    transaction
+      .update(accounts)
+      .set({ lastScrapedAt: new Date().toISOString() })
+      .where(eq(accounts.id, accountId))
+      .run();
   });
 
   if (insertedIds.length > 0) {

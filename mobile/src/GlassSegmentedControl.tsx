@@ -80,10 +80,7 @@ export function GlassSegmentedControl<T extends string>({
           <Pressable
             key={option.value}
             onPress={() => onChange(option.value)}
-            style={({ pressed }) => [
-              styles.button,
-              { opacity: pressed ? 0.76 : 1, transform: [{ scale: pressed ? 0.94 : 1 }] },
-            ]}
+            style={({ pressed }) => [styles.button, { opacity: pressed ? 0.64 : 1 }]}
           >
             <Text style={[styles.label, { color: selected ? colors.text : colors.secondary }]}>
               {option.label}

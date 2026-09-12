@@ -4,6 +4,7 @@ import test from 'node:test';
 import {
   completePairing,
   fetchHomeData,
+  fetchTransactionPage,
   fetchTransactions,
   type PairingProgress,
 } from './mobile-api.ts';
@@ -18,6 +19,14 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     data: {
       financialDate: '2026-03-08',
       currencyCode: 'ILS',
+      availableMonths: ['2026-03', '2026-02'],
+      period: {
+        month: '2026-03',
+        label: 'March 2026',
+        startDate: '2026-03-01',
+        endDate: '2026-03-08',
+        elapsedPercent: 26,
+      },
       cashflow: {
         spending: { value: '4560.30', currencyCode: 'ILS' },
         income: { value: '12000.00', currencyCode: 'ILS' },
@@ -32,8 +41,26 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
           previous: { value: '5000.00', currencyCode: 'ILS' },
         },
       ],
-      categories: [],
-      merchants: [],
+      categories: [
+        {
+          name: 'other',
+          label: 'Other',
+          color: '#52799A',
+          current: { value: '-2480.10', currencyCode: 'ILS' },
+          previous: { value: '30.57', currencyCode: 'ILS' },
+          delta: { value: '-2510.67', currencyCode: 'ILS' },
+        },
+      ],
+      merchants: [
+        {
+          name: 'Friend repayment',
+          category: 'other',
+          current: { value: '-2500.00', currencyCode: 'ILS' },
+          previous: { value: '0.00', currencyCode: 'ILS' },
+          delta: { value: '-2500.00', currencyCode: 'ILS' },
+          transactionCount: 1,
+        },
+      ],
       budgets: [
         {
           name: 'Monthly',
@@ -70,9 +97,15 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
       token: 'T'.repeat(43),
     });
     assert.equal(home.spent, 4560.3);
+    assert.equal(home.monthKey, '2026-03');
+    assert.deepEqual(home.availableMonths, ['2026-03', '2026-02']);
     assert.equal(home.available, 4439.7);
     assert.equal(home.netWorth, 128430.27);
     assert.equal(home.freshness[0]?.account, 'Everyday Checking · 4321');
+    assert.deepEqual(home.accounts, [
+      { id: 'account_checking_01', label: 'Everyday Checking · 4321' },
+    ]);
+    assert.equal(home.merchants[0]?.category, 'Other');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -148,7 +181,7 @@ test('completes the Mac approval flow and returns the device credential', async 
   }
 });
 
-test('loads the full review inbox while keeping normal activity month-scoped', async () => {
+test('maps the complete Activity filter set onto the transaction query', async () => {
   const paths: string[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
@@ -176,6 +209,12 @@ test('loads the full review inbox while keeping normal activity month-scoped', a
     await fetchTransactions(credential, {
       filter: 'all',
       startDate: '2026-09-01',
+      endDate: '2026-09-08',
+      accountId: 'account_public',
+      status: 'posted',
+      direction: 'debit',
+      needsReview: false,
+      includeExcluded: true,
     });
 
     const review = new URL(paths[0]!);
@@ -183,6 +222,12 @@ test('loads the full review inbox while keeping normal activity month-scoped', a
     assert.equal(review.searchParams.get('needsReview'), 'true');
     assert.equal(review.searchParams.has('startDate'), false);
     assert.equal(activity.searchParams.get('startDate'), '2026-09-01');
+    assert.equal(activity.searchParams.get('endDate'), '2026-09-08');
+    assert.equal(activity.searchParams.get('accountId'), 'account_public');
+    assert.equal(activity.searchParams.get('status'), 'posted');
+    assert.equal(activity.searchParams.get('direction'), 'debit');
+    assert.equal(activity.searchParams.get('needsReview'), 'false');
+    assert.equal(activity.searchParams.get('includeExcluded'), 'true');
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -221,6 +266,42 @@ test('follows transaction cursors so the review queue cannot stop at the first p
     );
     assert.equal(paths.length, 2);
     assert.equal(new URL(paths[1]!).searchParams.get('cursor'), 'cursor_v1_next');
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('loads one transaction page for paginated Activity', async () => {
+  const paths: string[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input) => {
+    paths.push(String(input));
+    return new Response(
+      JSON.stringify({
+        data: {
+          financialDate: '2026-09-08',
+          transactions: [],
+          page: { hasMore: true, nextCursor: 'cursor_v1_next' },
+        },
+        meta: { server: { id: '11111111-1111-4111-8111-111111111111' } },
+      }),
+      { status: 200, headers: { 'Content-Type': 'application/json' } },
+    );
+  };
+
+  try {
+    const page = await fetchTransactionPage(
+      {
+        serverId: '11111111-1111-4111-8111-111111111111',
+        baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+        token: 'T'.repeat(43),
+      },
+      { filter: 'all', limit: 50 },
+    );
+    assert.equal(paths.length, 1);
+    assert.equal(new URL(paths[0]!).searchParams.get('limit'), '50');
+    assert.equal(page.hasMore, true);
+    assert.equal(page.nextCursor, 'cursor_v1_next');
   } finally {
     globalThis.fetch = originalFetch;
   }

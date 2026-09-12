@@ -14,6 +14,19 @@ name: Activity search filters and detail
     id: transaction-txn-wolt
 - assertVisible:
     id: transaction-txn-salary
+- tapOn:
+    id: activity-open-filters
+- tapOn: 'Category'
+- tapOn: 'Dining'
+- tapOn: 'Done'
+- assertVisible:
+    id: transaction-txn-wolt
+- assertNotVisible:
+    id: transaction-txn-salary
+- tapOn:
+    id: activity-open-filters
+- tapOn: 'Reset all filters'
+- tapOn: 'Done'
 - tapOn: 'Merchant, category, or account'
 - inputText: Apple
 - assertVisible:
@@ -24,7 +37,10 @@ name: Activity search filters and detail
 - assertVisible:
     id: transaction-txn-wolt
 - tapOn:
-    id: activity-filter-review
+    id: activity-open-filters
+- tapOn:
+    id: activity-filter-needs-review
+- tapOn: 'Done'
 - assertVisible:
     id: transaction-txn-superpharm
 - scrollUntilVisible:

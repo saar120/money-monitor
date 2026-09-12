@@ -18,6 +18,7 @@ export type Transaction = {
   amount: number;
   category: string;
   account: string;
+  accountId?: string;
   pending?: boolean;
   needsReview?: boolean;
   owner: string;
@@ -60,7 +61,9 @@ type Freshness = {
 
 export type HomeData = {
   currentDate: string;
+  monthKey: string;
   month: string;
+  availableMonths: string[];
   currencyCode: string;
   spent: number;
   income: number;
@@ -82,6 +85,7 @@ export type HomeData = {
   sinceLastVisit: { transactions: number; spent: number } | null;
   netWorthHistory: Array<{ date: string; total: number }>;
   freshness: Freshness[];
+  accounts: Array<{ id: string; label: string }>;
 };
 
 export type FixtureScenario = HomeData & {
@@ -256,7 +260,9 @@ const normalTransactions: Transaction[] = [
 const normal: FixtureScenario = {
   name: 'normal',
   currentDate: '2026-09-07',
+  monthKey: '2026-09',
   month: 'September',
+  availableMonths: ['2026-09', '2026-08'],
   currencyCode: 'ILS',
   spent: 18920,
   income: 27000,
@@ -324,6 +330,12 @@ const normal: FixtureScenario = {
     { account: 'Amex · 1004', detail: 'Updated 14 min ago', state: 'fresh' },
     { account: 'Isracard · 3098', detail: 'Updated 2 hr ago', state: 'aging' },
     { account: 'Altshuler pension', detail: 'Last valued 3 days ago', state: 'aging' },
+  ],
+  accounts: [
+    { id: 'account-one-zero', label: 'One Zero · 4421' },
+    { id: 'account-amex', label: 'Amex · 1004' },
+    { id: 'account-isracard', label: 'Isracard · 3098' },
+    { id: 'account-pension', label: 'Altshuler pension' },
   ],
   transactions: normalTransactions,
 };
@@ -468,12 +480,44 @@ export const fixtureScenarios: Record<FixtureScenarioName, FixtureScenario> = {
   'category-shift': {
     ...normal,
     name: 'category-shift',
-    categories: normal.categories.map((category) =>
-      category.name === 'Dining' ? { ...category, spent: 4120, previous: 1540 } : category,
-    ),
-    merchants: normal.merchants.map((merchant) =>
-      merchant.category === 'Dining' ? { ...merchant, current: merchant.current * 2 } : merchant,
-    ),
+    categories: [
+      ...normal.categories.map((category) =>
+        category.name === 'Dining' ? { ...category, spent: 4120, previous: 1540 } : category,
+      ),
+      { name: 'Other', spent: -2480.1, previous: 30.57, budget: null, color: '#52799A' },
+    ],
+    merchants: [
+      ...normal.merchants.map((merchant) =>
+        merchant.category === 'Dining' ? { ...merchant, current: merchant.current * 2 } : merchant,
+      ),
+      { name: 'Friend repayment', category: 'Other', current: -2500, previous: 0, count: 1 },
+      { name: 'CashCal', category: 'Other', current: 19.9, previous: 30.57, count: 1 },
+    ],
+    transactions: [
+      ...normal.transactions,
+      {
+        id: 'txn-friend-repayment',
+        occurredAt: '2026-09-06T12:00:00+03:00',
+        merchant: 'Friend repayment',
+        amount: 2500,
+        category: 'Other',
+        account: 'One Zero · 4421',
+        owner: 'Saar',
+        included: true,
+        effectiveDate: '2026-09-06',
+      },
+      {
+        id: 'txn-cashcal',
+        occurredAt: '2026-09-06T11:00:00+03:00',
+        merchant: 'CashCal',
+        amount: -19.9,
+        category: 'Other',
+        account: 'CashCal · 4185',
+        owner: 'Saar',
+        included: true,
+        effectiveDate: '2026-09-06',
+      },
+    ],
   },
   'slower-spending': {
     ...normal,

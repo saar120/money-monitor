@@ -32,3 +32,13 @@ name: Explore explains category and merchant changes
     duration: 500
 - assertVisible:
     id: explore-screen
+- scrollUntilVisible:
+    element:
+      id: explore-category-Other
+    direction: DOWN
+- tapOn:
+    id: explore-category-Other
+- assertVisible: '₪2,480'
+- assertVisible: 'Net received this month'
+- assertVisible: '₪2,511 less spent than this point last month'
+- assertVisible: 'Friend repayment'

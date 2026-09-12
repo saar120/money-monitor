@@ -37,6 +37,18 @@ export function formatUnsignedMoney(value: number, currencyCode = 'ILS'): string
   return formatted.startsWith('+') ? formatted.slice(1) : formatted;
 }
 
+export function spendingTotal(value: number, currencyCode = 'ILS') {
+  return {
+    amount: formatUnsignedMoney(value, currencyCode),
+    label: value > 0 ? 'Net spent' : value < 0 ? 'Net received' : 'No net spending',
+  } as const;
+}
+
+export function formatSpendingChange(value: number, currencyCode = 'ILS'): string {
+  if (value === 0) return 'No change';
+  return `${formatUnsignedMoney(value, currencyCode)} ${value > 0 ? 'more spent' : 'less spent'}`;
+}
+
 // Both inputs are Mac-calculated, posted/included overview aggregates in the same currency.
 export function overviewCashFlow(income: number, spending: number): number {
   return Math.round((income - spending + Number.EPSILON) * 100) / 100;

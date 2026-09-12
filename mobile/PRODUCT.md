@@ -40,10 +40,10 @@ The iPhone is a deliberately thin, private client of the owner's Mac: financial 
 ## Capabilities and Constraints
 
 - Three root tabs: Home, Activity, and Explore.
-- Home leads with comparative financial state, not a grid of permanent dashboard cards.
-- Activity includes search, useful filters, transaction detail, and entry into Review.
+- Home leads with total spending, independent month selection, and an interactive spending chart.
+- Activity includes all-time search; date, category, account, owner, status, direction, review, and inclusion filters; transaction detail; and entry into Review.
 - Review supports narrowly scoped mobile writes while the Mac remains authoritative.
-- Explore progressively discloses spending pace, category/merchant explanations, transactions, and net-worth history.
+- Explore has its own month selection and progressively discloses category/merchant explanations, transactions, and net-worth history.
 - Device authentication gates financial content where supported.
 - Pairing credentials use iOS-appropriate secure storage.
 - Sensitive app-switcher snapshots are protected as reliably as Expo permits.

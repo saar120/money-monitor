@@ -318,6 +318,51 @@ describe('production mobile transaction ports', () => {
     ).toEqual([]);
   });
 
+  it('filters uncategorized transactions by their mobile display label', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db, { memberId: null });
+    const uncategorized = insertTransaction(testDb.db, account.id, {
+      category: null,
+      description: 'Needs a category',
+    });
+    insertTransaction(testDb.db, account.id, {
+      category: insertCategory(testDb.db, { name: 'dining', label: 'Dining' }).name,
+      description: 'Already categorized',
+    });
+
+    const result = ports(testDb).list(query({ category: 'Uncategorized' }), CONTEXT);
+
+    expect(result.transactions.map((value) => value.id)).toEqual([
+      project('transaction', uncategorized.id),
+    ]);
+  });
+
+  it('filters and orders by the canonical effective reporting date', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db, { memberId: null });
+    const movedIntoJuly = insertTransaction(testDb.db, account.id, {
+      date: '2026-06-30',
+      effectiveDate: '2026-07-10',
+      processedDate: '2026-06-30',
+      description: 'Moved into July',
+    });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-07-10',
+      effectiveDate: '2026-06-30',
+      processedDate: '2026-07-10',
+      description: 'Moved out of July',
+    });
+
+    const result = ports(testDb).list(
+      query({ startDate: '2026-07-01', endDate: '2026-07-31' }),
+      CONTEXT,
+    );
+
+    expect(result.transactions.map((transaction) => transaction.id)).toEqual([
+      project('transaction', movedIntoJuly.id),
+    ]);
+  });
+
   it('excludes future installment rows before limiting and hides future detail', () => {
     const testDb = database();
     const account = insertAccount(testDb.db, { memberId: null });

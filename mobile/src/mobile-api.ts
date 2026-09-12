@@ -5,11 +5,26 @@ import type { PairingCredential } from './security/pairing-credential-store';
 type JsonObject = Record<string, unknown>;
 
 export type ActivityFilter = 'all' | 'review' | 'pending' | 'credits';
+export type TransactionQuery = {
+  limit?: number;
+  q?: string;
+  category?: string;
+  filter?: ActivityFilter;
+  startDate?: string;
+  endDate?: string;
+  accountId?: string;
+  status?: 'posted' | 'pending';
+  direction?: 'debit' | 'credit';
+  needsReview?: boolean;
+  includeExcluded?: boolean;
+  cursor?: string;
+};
 
 export type TransactionPage = {
   financialDate: string;
   transactions: Transaction[];
   hasMore: boolean;
+  nextCursor: string | null;
 };
 
 export type PairingProgress = 'requesting' | 'awaiting-approval' | 'exchanging';
@@ -140,10 +155,12 @@ export async function fetchHomeData(
   credential: PairingCredential,
   signal?: AbortSignal,
   since?: string | null,
+  month?: string,
 ): Promise<HomeData> {
-  const overviewPath = since
-    ? `/api/mobile/v1/overview?since=${encodeURIComponent(since)}`
-    : '/api/mobile/v1/overview';
+  const overviewParams = new URLSearchParams();
+  if (since) overviewParams.set('since', since);
+  if (month) overviewParams.set('month', month);
+  const overviewPath = `/api/mobile/v1/overview${overviewParams.size ? `?${overviewParams}` : ''}`;
   const [bootstrapValue, overviewValue] = await Promise.all([
     authorizedGet(credential, '/api/mobile/v1/bootstrap', signal),
     authorizedGet(credential, overviewPath, signal),
@@ -155,7 +172,8 @@ export async function fetchHomeData(
   const data = object(root.data, 'bootstrap');
   const meta = object(root.meta, 'response metadata');
   const overview = object(overviewRoot.data, 'overview');
-  const financialDate = date(meta.financialDate, 'financial date');
+  const period = object(overview.period, 'overview period');
+  date(meta.financialDate, 'financial date');
   const generatedAt = text(meta.generatedAt, 'generation time');
   const primaryCurrencyCode = text(overview.currencyCode, 'primary currency');
   const cashflow = object(overview.cashflow, 'cashflow');
@@ -167,8 +185,14 @@ export async function fetchHomeData(
   const budgets = Array.isArray(overview.budgets) ? overview.budgets : [];
   const primaryBudget = budgets[0] ? object(budgets[0], 'budget') : null;
   const accounts = Array.isArray(data.accounts) ? data.accounts : [];
-  const month = new Intl.DateTimeFormat('en', { month: 'long' }).format(
-    new Date(`${financialDate}T12:00:00Z`),
+  const categoryLabels = new Map(
+    (Array.isArray(overview.categories) ? overview.categories : []).map((raw) => {
+      const category = object(raw, 'category');
+      return [
+        text(category.name, 'category name'),
+        text(category.label, 'category label'),
+      ] as const;
+    }),
   );
   const statusLabels: Record<string, string> = {
     on_track: 'On track',
@@ -179,8 +203,19 @@ export async function fetchHomeData(
   };
 
   return {
-    currentDate: financialDate,
-    month,
+    currentDate: date(period.endDate, 'overview end date'),
+    monthKey: text(period.month, 'overview month'),
+    month: new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
+      new Date(`${text(period.month, 'overview month')}-01T12:00:00Z`),
+    ),
+    availableMonths: (Array.isArray(overview.availableMonths) ? overview.availableMonths : []).map(
+      (value) => {
+        const candidate = text(value, 'available month');
+        if (!/^\d{4}-\d{2}$/.test(candidate))
+          throw new Error('The Mac returned an invalid available month.');
+        return candidate;
+      },
+    ),
     currencyCode: primaryCurrencyCode,
     spent: spending.value,
     income: income.value,
@@ -232,9 +267,10 @@ export async function fetchHomeData(
     }),
     merchants: (Array.isArray(overview.merchants) ? overview.merchants : []).map((raw) => {
       const merchant = object(raw, 'merchant');
+      const category = text(merchant.category, 'merchant category');
       return {
         name: text(merchant.name, 'merchant name'),
-        category: text(merchant.category, 'merchant category'),
+        category: categoryLabels.get(category) ?? category,
         current: money(merchant.current).value,
         previous: money(merchant.previous).value,
         count: Number(merchant.transactionCount),
@@ -266,6 +302,14 @@ export async function fetchHomeData(
       return {
         account: `${text(account.displayName, 'account name')} · ${mask}`,
         ...state,
+      };
+    }),
+    accounts: accounts.map((raw) => {
+      const account = object(raw, 'account');
+      const mask = text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '');
+      return {
+        id: text(account.id, 'account ID'),
+        label: `${text(account.displayName, 'account name')} · ${mask}`,
       };
     }),
   };
@@ -329,6 +373,7 @@ function mapTransaction(value: unknown): Transaction {
     amount: signedAmount,
     currencyCode: amount.currencyCode,
     category: category ? text(category.label, 'transaction category') : 'Uncategorized',
+    accountId: text(account.id, 'transaction account ID'),
     account: `${text(account.displayName, 'account name')} · ${text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '')}`,
     pending: status === 'pending',
     needsReview: boolean(item.needsReview, 'review state'),
@@ -339,51 +384,75 @@ function mapTransaction(value: unknown): Transaction {
   };
 }
 
-export async function fetchTransactions(
+export async function fetchTransactionPage(
   credential: PairingCredential,
-  query: { q?: string; category?: string; filter: ActivityFilter; startDate?: string },
+  query: TransactionQuery,
   signal?: AbortSignal,
 ): Promise<TransactionPage> {
   const params = new URLSearchParams({ limit: '50' });
   if (query.startDate) params.set('startDate', query.startDate);
+  if (query.endDate) params.set('endDate', query.endDate);
   if (query.q?.trim()) params.set('q', query.q.trim());
+  if (query.limit) params.set('limit', String(query.limit));
   if (query.category?.trim()) params.set('category', query.category.trim());
+  if (query.accountId) params.set('accountId', query.accountId);
+  if (query.status) params.set('status', query.status);
+  if (query.direction) params.set('direction', query.direction);
+  if (query.needsReview !== undefined) params.set('needsReview', String(query.needsReview));
+  if (query.includeExcluded) params.set('includeExcluded', 'true');
   if (query.filter === 'review') params.set('needsReview', 'true');
   if (query.filter === 'review') params.set('includeExcluded', 'true');
   if (query.filter === 'pending') params.set('status', 'pending');
   if (query.filter === 'credits') params.set('direction', 'credit');
+  if (query.cursor) params.set('cursor', query.cursor);
+  const root = object(
+    await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
+    'transactions',
+  );
+  verifyServer(root, credential);
+  const data = object(root.data, 'transactions');
+  const page = object(data.page, 'transaction page');
+  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid transactions.');
+  const hasMore = boolean(page.hasMore, 'transaction page');
+  const nextCursor =
+    page.nextCursor === null || page.nextCursor === undefined
+      ? null
+      : text(page.nextCursor, 'transaction cursor');
+  if (hasMore !== (nextCursor !== null))
+    throw new Error('The Mac returned invalid transaction paging data.');
+  return {
+    financialDate: date(data.financialDate, 'financial date'),
+    transactions: data.transactions.map((item) => mapTransaction(item)),
+    hasMore,
+    nextCursor,
+  };
+}
+
+export async function fetchTransactions(
+  credential: PairingCredential,
+  query: TransactionQuery,
+  signal?: AbortSignal,
+): Promise<TransactionPage> {
   const transactions: Transaction[] = [];
   const seenCursors = new Set<string>();
   let financialDate: string;
-  let cursor: string | null = null;
+  let cursor: string | null = query.cursor ?? null;
 
   do {
-    if (cursor) params.set('cursor', cursor);
-    const root = object(
-      await authorizedGet(credential, `/api/mobile/v1/transactions?${params.toString()}`, signal),
-      'transactions',
+    const page = await fetchTransactionPage(
+      credential,
+      { ...query, cursor: cursor ?? undefined },
+      signal,
     );
-    verifyServer(root, credential);
-    const data = object(root.data, 'transactions');
-    const page = object(data.page, 'transaction page');
-    if (!Array.isArray(data.transactions))
-      throw new Error('The Mac returned invalid transactions.');
-    const hasMore = boolean(page.hasMore, 'transaction page');
-    const nextCursor =
-      page.nextCursor === null || page.nextCursor === undefined
-        ? null
-        : text(page.nextCursor, 'transaction cursor');
-    if (hasMore !== (nextCursor !== null))
-      throw new Error('The Mac returned invalid transaction paging data.');
-    if (nextCursor && seenCursors.has(nextCursor))
+    if (page.nextCursor && seenCursors.has(page.nextCursor))
       throw new Error('The Mac returned repeated transaction paging data.');
-    if (nextCursor) seenCursors.add(nextCursor);
-    financialDate = date(data.financialDate, 'financial date');
-    transactions.push(...data.transactions.map((item) => mapTransaction(item)));
-    cursor = nextCursor;
+    if (page.nextCursor) seenCursors.add(page.nextCursor);
+    financialDate = page.financialDate;
+    transactions.push(...page.transactions);
+    cursor = page.nextCursor;
   } while (cursor);
 
-  return { financialDate, transactions, hasMore: false };
+  return { financialDate, transactions, hasMore: false, nextCursor: null };
 }
 
 export async function fetchTransactionDetail(

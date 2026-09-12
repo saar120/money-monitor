@@ -1,21 +1,32 @@
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
 import {
-  Animated,
   FlatList,
   Keyboard,
   KeyboardAvoidingView,
   Modal,
-  PanResponder,
   Platform,
   Pressable,
   StyleSheet,
   Text,
   TextInput,
+  useWindowDimensions,
   View,
 } from 'react-native';
+import Animated, {
+  cancelAnimation,
+  runOnJS,
+  useAnimatedStyle,
+  useReducedMotion,
+  useSharedValue,
+  withSpring,
+  withTiming,
+} from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppColors } from './theme';
+
+const sheetSpring = { damping: 28, stiffness: 300, mass: 0.82 };
 
 const categorySymbols: Record<string, SFSymbol> = {
   Dining: 'fork.knife',
@@ -57,63 +68,89 @@ export function CategoryPickerSheet({
 }) {
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
+  const { height } = useWindowDimensions();
+  const reduceMotion = useReducedMotion();
   const [query, setQuery] = useState('');
-  const translateY = useRef(new Animated.Value(600)).current;
+  const hiddenOffset = Math.max(height * 0.6, 440);
+  const translateY = useSharedValue(hiddenOffset);
+  const backdropOpacity = useSharedValue(0);
+  const closing = useSharedValue(false);
   const visibleCategories = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return categories.filter((category) => category.toLocaleLowerCase().includes(normalized));
   }, [categories, query]);
 
   useEffect(() => {
-    if (visible) {
-      translateY.setValue(600);
-      Animated.spring(translateY, {
-        toValue: 0,
-        damping: 28,
-        stiffness: 300,
-        mass: 0.82,
-        useNativeDriver: true,
-      }).start();
-    } else {
+    if (!visible) {
       setQuery('');
+      translateY.value = hiddenOffset;
+      backdropOpacity.value = 0;
+      closing.value = false;
     }
     return () => Keyboard.dismiss();
-  }, [translateY, visible]);
+  }, [backdropOpacity, closing, hiddenOffset, translateY, visible]);
 
-  const close = useCallback(() => {
-    Keyboard.dismiss();
-    Animated.timing(translateY, {
-      toValue: 600,
-      duration: 180,
-      useNativeDriver: true,
-    }).start(onClose);
-  }, [onClose, translateY]);
+  const present = useCallback(() => {
+    cancelAnimation(translateY);
+    cancelAnimation(backdropOpacity);
+    closing.value = false;
+    translateY.value = reduceMotion ? 0 : hiddenOffset;
+    backdropOpacity.value = reduceMotion ? 1 : 0;
+    if (!reduceMotion) {
+      translateY.value = withSpring(0, sheetSpring);
+      backdropOpacity.value = withTiming(1, { duration: 180 });
+    }
+  }, [backdropOpacity, closing, hiddenOffset, reduceMotion, translateY]);
 
-  const panResponder = useMemo(
+  const dismiss = useCallback(
+    (completion: () => void) => {
+      if (closing.value) return;
+      closing.value = true;
+      Keyboard.dismiss();
+      if (reduceMotion) {
+        translateY.value = hiddenOffset;
+        backdropOpacity.value = 0;
+        completion();
+        return;
+      }
+      backdropOpacity.value = withTiming(0, { duration: 140 });
+      translateY.value = withTiming(hiddenOffset, { duration: 180 }, () => {
+        runOnJS(completion)();
+      });
+    },
+    [backdropOpacity, closing, hiddenOffset, reduceMotion, translateY],
+  );
+  const close = useCallback(() => dismiss(onClose), [dismiss, onClose]);
+
+  const panGesture = useMemo(
     () =>
-      PanResponder.create({
-        onMoveShouldSetPanResponder: (_, gesture) => gesture.dy > 6,
-        onPanResponderMove: (_, gesture) => translateY.setValue(Math.max(0, gesture.dy)),
-        onPanResponderRelease: (_, gesture) => {
-          if (gesture.dy > 72 || gesture.vy > 0.9) close();
-          else
-            Animated.spring(translateY, {
-              toValue: 0,
-              damping: 28,
-              stiffness: 300,
-              mass: 0.82,
-              useNativeDriver: true,
-            }).start();
-        },
-      }),
+      Gesture.Pan()
+        .activeOffsetY(6)
+        .failOffsetX([-24, 24])
+        .onUpdate((event) => {
+          translateY.value = Math.max(0, event.translationY);
+        })
+        .onEnd((event) => {
+          if (event.translationY > 72 || event.velocityY > 900) runOnJS(close)();
+          else translateY.value = withSpring(0, sheetSpring);
+        }),
     [close, translateY],
   );
+
+  const sheetStyle = useAnimatedStyle(() => ({
+    transform: [{ translateY: translateY.value }],
+  }));
+  const backdropStyle = useAnimatedStyle(() => ({
+    opacity:
+      backdropOpacity.value * (1 - Math.min(Math.max(translateY.value / hiddenOffset, 0), 1)),
+  }));
 
   return (
     <Modal
       animationType="none"
       onDismiss={() => Keyboard.dismiss()}
       onRequestClose={close}
+      onShow={present}
       presentationStyle="overFullScreen"
       transparent
       visible={visible}
@@ -122,21 +159,30 @@ export function CategoryPickerSheet({
         behavior={Platform.OS === 'ios' ? 'padding' : undefined}
         style={styles.overlay}
       >
-        <Pressable onPress={close} style={styles.backdrop} />
+        <Animated.View style={[styles.backdrop, backdropStyle]}>
+          <Pressable
+            accessibilityElementsHidden
+            importantForAccessibility="no-hide-descendants"
+            onPress={close}
+            style={StyleSheet.absoluteFill}
+          />
+        </Animated.View>
         <Animated.View
           style={[
             styles.sheet,
             {
               backgroundColor: colors.background,
               paddingBottom: Math.max(insets.bottom, 12),
-              transform: [{ translateY }],
             },
+            sheetStyle,
           ]}
           testID="category-picker-sheet"
         >
-          <View {...panResponder.panHandlers} style={styles.grabberArea}>
-            <View style={[styles.grabber, { backgroundColor: colors.tertiary }]} />
-          </View>
+          <GestureDetector gesture={panGesture}>
+            <View style={styles.grabberArea}>
+              <View style={[styles.grabber, { backgroundColor: colors.tertiary }]} />
+            </View>
+          </GestureDetector>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" onPress={close} style={styles.headerButton}>
               <Text style={[styles.cancel, { color: colors.accent }]}>Cancel</Text>
@@ -188,9 +234,10 @@ export function CategoryPickerSheet({
               const isSelected = selected === item;
               return (
                 <Pressable
+                  accessibilityRole="button"
+                  accessibilityState={{ selected: isSelected }}
                   onPress={() => {
-                    Keyboard.dismiss();
-                    onSelect(item);
+                    dismiss(() => onSelect(item));
                   }}
                   style={({ pressed }) => [
                     styles.option,

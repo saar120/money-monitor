@@ -3,26 +3,31 @@ import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { GlassSegmentedControl } from '@/GlassSegmentedControl';
-import { useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import { MonthPicker } from '@/MonthPicker';
+import { useMoneyData, useOverviewMonth } from '@/MoneyData';
+import {
+  formatMoney,
+  formatSpendingChange,
+  formatUnsignedMoney,
+  overviewCashFlow,
+  spendingTotal,
+} from '@/money';
 import type { CashflowMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
-
-type Range = '1' | '3' | '6';
 
 export default function ExploreScreen() {
   const colors = useAppColors();
   const money = useMoneyData();
-  const { home, status } = money;
-  const [range, setRange] = useState<Range>('6');
+  const selected = useOverviewMonth();
+  const { status } = money;
+  const home = selected.overview;
   const [history, setHistory] = useState<CashflowMonth[]>([]);
 
   useEffect(() => {
     if (status !== 'ready' || !home) return;
     let current = true;
     void money
-      .loadCashflowHistory()
+      .loadCashflowHistory(selected.month)
       .then((value) => {
         if (current) setHistory(value);
       })
@@ -32,7 +37,7 @@ export default function ExploreScreen() {
     return () => {
       current = false;
     };
-  }, [home, money, status]);
+  }, [home?.monthKey, money.loadCashflowHistory, selected.month, status]);
 
   if (status !== 'ready' || !home) return <ConnectionState />;
 
@@ -42,7 +47,7 @@ export default function ExploreScreen() {
     income: home.income,
     spending: home.spent,
   };
-  const series = (history.length ? history : [currentPoint]).slice(-Number(range));
+  const series = history.length ? history : [currentPoint];
   const previousPoint = history.at(-2);
   const cashFlow = overviewCashFlow(home.income, home.spent);
   const previousCashFlow = previousPoint
@@ -71,32 +76,23 @@ export default function ExploreScreen() {
         Every insight opens the transactions behind it
       </Text>
 
-      <View style={styles.rangeSpacing}>
-        <GlassSegmentedControl
-          onChange={setRange}
-          options={[
-            { label: '1M', value: '1' },
-            { label: '3M', value: '3' },
-            { label: '6M', value: '6' },
-          ]}
-          testID="explore-range"
-          value={range}
-        />
-      </View>
-
       <View style={[styles.hero, { borderColor: colors.separator }]}>
-        <View style={styles.summaryRow}>
-          <Text style={[styles.summaryLabel, { color: colors.secondary }]}>
-            {home.month} cash flow
-          </Text>
-          <Text
-            allowFontScaling={false}
-            style={[styles.cashFlow, { color: cashFlow >= 0 ? colors.positive : colors.danger }]}
-            testID="explore-cashflow"
-          >
-            {formatMoney(cashFlow, home.currencyCode)}
-          </Text>
+        <View style={styles.summaryHeader}>
+          <Text style={[styles.summaryLabel, { color: colors.text }]}>Cash flow</Text>
+          <MonthPicker
+            month={selected.month}
+            months={selected.months}
+            onSelect={selected.selectMonth}
+            testID="explore-month-picker"
+          />
         </View>
+        <Text
+          allowFontScaling={false}
+          style={[styles.cashFlow, { color: cashFlow >= 0 ? colors.positive : colors.danger }]}
+          testID="explore-cashflow"
+        >
+          {formatMoney(cashFlow, home.currencyCode)}
+        </Text>
         <Text style={[styles.summaryNote, { color: colors.secondary }]}>
           {cashFlowDelta === null
             ? `Posted income minus spending · through day ${day}`
@@ -160,11 +156,15 @@ export default function ExploreScreen() {
         {categoryChanges.length ? (
           categoryChanges.map((category) => {
             const delta = category.spent - category.previous;
+            const total = spendingTotal(category.spent, home.currencyCode);
             return (
               <Pressable
                 key={category.name}
                 onPress={() =>
-                  router.push({ pathname: '/category/[name]', params: { name: category.name } })
+                  router.push({
+                    pathname: '/category/[name]',
+                    params: { name: category.name, month: home.monthKey },
+                  })
                 }
                 style={({ pressed }) => [
                   styles.driverRow,
@@ -183,7 +183,7 @@ export default function ExploreScreen() {
                     {category.name}
                   </Text>
                   <Text style={[styles.driverMeta, { color: colors.secondary }]}>
-                    {formatUnsignedMoney(category.spent, home.currencyCode)} now
+                    {total.amount} {total.label.toLowerCase()}
                   </Text>
                 </View>
                 <Text
@@ -193,7 +193,7 @@ export default function ExploreScreen() {
                     { color: delta > 0 ? colors.warning : colors.positive },
                   ]}
                 >
-                  {formatMoney(delta, home.currencyCode)}
+                  {formatSpendingChange(delta, home.currencyCode)}
                 </Text>
                 <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} />
               </Pressable>
@@ -207,7 +207,10 @@ export default function ExploreScreen() {
       {leading ? (
         <Pressable
           onPress={() =>
-            router.push({ pathname: '/category/[name]', params: { name: leading.name } })
+            router.push({
+              pathname: '/category/[name]',
+              params: { name: leading.name, month: home.monthKey },
+            })
           }
           style={({ pressed }) => [
             styles.insight,
@@ -221,7 +224,7 @@ export default function ExploreScreen() {
             <Text style={styles.insightTitle}>{leading.name} moved most</Text>
             <Text style={styles.insightText}>
               {formatUnsignedMoney(Math.abs(leading.spent - leading.previous), home.currencyCode)}{' '}
-              {leading.spent >= leading.previous ? 'more' : 'less'} than last month.
+              {leading.spent >= leading.previous ? 'more' : 'less'} spent than last month.
             </Text>
           </View>
           <SymbolView name="chevron.right" size={13} tintColor="#FFFFFF" />
@@ -237,7 +240,10 @@ export default function ExploreScreen() {
               <Pressable
                 key={`${merchant.category}-${merchant.name}`}
                 onPress={() =>
-                  router.push({ pathname: '/merchant/[name]', params: { name: merchant.name } })
+                  router.push({
+                    pathname: '/merchant/[name]',
+                    params: { name: merchant.name, month: home.monthKey },
+                  })
                 }
                 style={[styles.merchantRow, { borderBottomColor: colors.separator }]}
               >
@@ -257,7 +263,7 @@ export default function ExploreScreen() {
                     { color: delta > 0 ? colors.warning : colors.positive },
                   ]}
                 >
-                  {formatMoney(delta, home.currencyCode)}
+                  {formatSpendingChange(delta, home.currencyCode)}
                 </Text>
                 <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} />
               </Pressable>
@@ -325,25 +331,29 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   subtitle: { marginTop: 2, fontSize: 14, lineHeight: 19 },
-  rangeSpacing: { marginTop: 22 },
   hero: {
     marginTop: 20,
     paddingVertical: 20,
     borderTopWidth: StyleSheet.hairlineWidth,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  summaryRow: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  summaryLabel: { fontSize: 14, fontWeight: '500' },
+  summaryHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  summaryLabel: { fontSize: 17, lineHeight: 22, fontWeight: '600' },
   cashFlow: {
-    marginLeft: 16,
-    fontSize: 30,
-    lineHeight: 35,
+    marginTop: 12,
+    fontSize: 38,
+    lineHeight: 43,
     fontWeight: '700',
     letterSpacing: -1.25,
     fontVariant: ['tabular-nums'],
   },
-  summaryNote: { marginTop: 4, textAlign: 'right', fontSize: 12.5, lineHeight: 17 },
-  chart: { height: 184, marginTop: 16, justifyContent: 'flex-end' },
+  summaryNote: { marginTop: 4, fontSize: 12.5, lineHeight: 17 },
+  chart: { height: 184, marginTop: 20, justifyContent: 'flex-end' },
   grid: { ...StyleSheet.absoluteFill, justifyContent: 'space-between', paddingBottom: 22 },
   gridLine: { height: StyleSheet.hairlineWidth },
   months: { height: 174, flexDirection: 'row', alignItems: 'flex-end', gap: 10 },
