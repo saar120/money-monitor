@@ -468,12 +468,44 @@ export const fixtureScenarios: Record<FixtureScenarioName, FixtureScenario> = {
   'category-shift': {
     ...normal,
     name: 'category-shift',
-    categories: normal.categories.map((category) =>
-      category.name === 'Dining' ? { ...category, spent: 4120, previous: 1540 } : category,
-    ),
-    merchants: normal.merchants.map((merchant) =>
-      merchant.category === 'Dining' ? { ...merchant, current: merchant.current * 2 } : merchant,
-    ),
+    categories: [
+      ...normal.categories.map((category) =>
+        category.name === 'Dining' ? { ...category, spent: 4120, previous: 1540 } : category,
+      ),
+      { name: 'Other', spent: -2480.1, previous: 30.57, budget: null, color: '#52799A' },
+    ],
+    merchants: [
+      ...normal.merchants.map((merchant) =>
+        merchant.category === 'Dining' ? { ...merchant, current: merchant.current * 2 } : merchant,
+      ),
+      { name: 'Friend repayment', category: 'Other', current: -2500, previous: 0, count: 1 },
+      { name: 'CashCal', category: 'Other', current: 19.9, previous: 30.57, count: 1 },
+    ],
+    transactions: [
+      ...normal.transactions,
+      {
+        id: 'txn-friend-repayment',
+        occurredAt: '2026-09-06T12:00:00+03:00',
+        merchant: 'Friend repayment',
+        amount: 2500,
+        category: 'Other',
+        account: 'One Zero · 4421',
+        owner: 'Saar',
+        included: true,
+        effectiveDate: '2026-09-06',
+      },
+      {
+        id: 'txn-cashcal',
+        occurredAt: '2026-09-06T11:00:00+03:00',
+        merchant: 'CashCal',
+        amount: -19.9,
+        category: 'Other',
+        account: 'CashCal · 4185',
+        owner: 'Saar',
+        included: true,
+        effectiveDate: '2026-09-06',
+      },
+    ],
   },
   'slower-spending': {
     ...normal,

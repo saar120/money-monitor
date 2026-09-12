@@ -147,7 +147,6 @@ export default function ActivityScreen() {
                       borderColor: selected ? colors.accent : colors.glassBorder,
                       shadowColor: selected ? colors.accent : colors.glassShadow,
                       opacity: pressed ? 0.76 : 1,
-                      transform: [{ scale: pressed ? 0.94 : 1 }],
                     },
                   ]}
                 >

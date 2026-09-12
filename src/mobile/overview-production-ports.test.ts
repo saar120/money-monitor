@@ -94,6 +94,43 @@ describe('mobile overview projection', () => {
     });
   });
 
+  it('nets categorized credits against category spending', async () => {
+    const testDb = createTestDb();
+    databases.push(testDb);
+    const account = insertAccount(testDb.db);
+    insertCategory(testDb.db, { name: 'holiday', label: 'Holiday' });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-09-03',
+      processedDate: '2026-09-03',
+      chargedAmount: -2868.72,
+      category: 'holiday',
+      description: 'Trip payments',
+    });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-09-10',
+      processedDate: '2026-09-10',
+      chargedAmount: 1045.29,
+      category: 'holiday',
+      description: 'Friends paid me back',
+    });
+
+    const provide = createMobileOverviewProvider({
+      db: testDb.db,
+      readNetWorth: () => ({ total: 0, assetsTotal: 0, liabilitiesTotal: 0 }),
+      readNetWorthHistory: async () => [],
+    });
+    const result = await provide(
+      {},
+      { generatedAt: '2026-09-12T10:00:00.000Z', financialDate: '2026-09-12' },
+    );
+
+    expect(result.categories.find((category) => category.name === 'holiday')).toMatchObject({
+      current: { value: '1823.43' },
+      delta: { value: '1823.43' },
+    });
+    expect(result.merchants.filter((merchant) => merchant.category === 'Holiday')).toHaveLength(2);
+  });
+
   it('produces a safe public envelope for decimal ratios and numeric merchant references', async () => {
     const testDb = createTestDb();
     databases.push(testDb);

@@ -243,7 +243,10 @@ export default function ReviewScreen() {
                 allowFontScaling={false}
                 minimumFontScale={0.7}
                 numberOfLines={1}
-                style={[styles.amount, { color: current.amount > 0 ? colors.positive : colors.text }]}
+                style={[
+                  styles.amount,
+                  { color: current.amount > 0 ? colors.positive : colors.text },
+                ]}
               >
                 {formatMoney(current.amount, current.currencyCode ?? home?.currencyCode, true)}
               </Text>
@@ -315,7 +318,6 @@ export default function ReviewScreen() {
                   {
                     backgroundColor: colors.accent,
                     opacity: saving ? 0.5 : pressed ? 0.76 : 1,
-                    transform: [{ scale: pressed ? 0.94 : 1 }],
                   },
                 ]}
               >

@@ -70,7 +70,7 @@ function categoryNames(value: string) {
 }
 
 export function createMobileOverviewProvider(options: MobileOverviewPortsOptions) {
-  function expenseRows(startDate: string, endDate: string) {
+  function periodRows(startDate: string, endDate: string) {
     return options.db
       .select({
         date: schema.transactions.reportingDate,
@@ -84,7 +84,6 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
           gte(schema.transactions.reportingDate, startDate),
           lte(schema.transactions.reportingDate, endDate),
           eq(schema.transactions.ignored, false),
-          sql`${schema.transactions.chargedAmount} < 0`,
         ),
       )
       .all();
@@ -100,15 +99,21 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
     const previous = monthRange(previousMonth(requestedMonth), context.financialDate);
     previous.endDate = `${previous.startDate.slice(0, 7)}-${String(Math.min(range.elapsedDays, previous.daysInMonth)).padStart(2, '0')}`;
 
-    const [currentExpenses, previousExpenses, netWorth, netWorthHistory] = await Promise.all([
-      Promise.resolve(expenseRows(range.startDate, range.endDate)),
-      Promise.resolve(expenseRows(previous.startDate, previous.endDate)),
+    const [currentRows, previousRows, netWorth, netWorthHistory] = await Promise.all([
+      Promise.resolve(periodRows(range.startDate, range.endDate)),
+      Promise.resolve(periodRows(previous.startDate, previous.endDate)),
       options.readNetWorth(),
       options.readNetWorthHistory(
         `${Number(requestedMonth.slice(0, 4)) - 1}-${requestedMonth.slice(5)}-01`,
         range.endDate,
       ),
     ]);
+    const currentExpenses = currentRows.filter((row) => row.amount < 0);
+    const previousExpenses = previousRows.filter((row) => row.amount < 0);
+    const categoryRows = (rows: typeof currentRows) =>
+      rows.filter((row) => row.category !== 'income' && (row.amount < 0 || row.category !== null));
+    const currentCategoryRows = categoryRows(currentRows);
+    const previousCategoryRows = categoryRows(previousRows);
 
     const income =
       options.db
@@ -137,16 +142,17 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
         .all()
         .map((category) => [category.name, category] as const),
     );
-    const categoryTotals = (rows: typeof currentExpenses) => {
+    const categoryLabel = (name: string) => categoryMeta.get(name)?.label ?? name;
+    const categoryTotals = (rows: typeof currentCategoryRows) => {
       const totals = new Map<string, number>();
       for (const row of rows) {
         const category = row.category ?? 'Uncategorized';
-        totals.set(category, (totals.get(category) ?? 0) + Math.abs(row.amount));
+        totals.set(category, (totals.get(category) ?? 0) - row.amount);
       }
       return totals;
     };
-    const currentCategories = categoryTotals(currentExpenses);
-    const previousCategories = categoryTotals(previousExpenses);
+    const currentCategories = categoryTotals(currentCategoryRows);
+    const previousCategories = categoryTotals(previousCategoryRows);
     const categories = [...new Set([...currentCategories.keys(), ...previousCategories.keys()])]
       .map((name) => {
         const current = currentCategories.get(name) ?? 0;
@@ -161,10 +167,10 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
           delta: money(current - previousValue),
         };
       })
-      .sort((a, b) => Number(b.current.value) - Number(a.current.value))
+      .sort((a, b) => Math.abs(Number(b.current.value)) - Math.abs(Number(a.current.value)))
       .slice(0, 30);
 
-    const merchantTotals = (rows: typeof currentExpenses) => {
+    const merchantTotals = (rows: typeof currentCategoryRows) => {
       const totals = new Map<string, { amount: number; category: string; count: number }>();
       for (const row of rows) {
         const name = normalizeMerchant(row.description) || 'Transaction';
@@ -173,14 +179,14 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
           category: row.category ?? 'Uncategorized',
           count: 0,
         };
-        existing.amount += Math.abs(row.amount);
+        existing.amount -= row.amount;
         existing.count += 1;
         totals.set(name, existing);
       }
       return totals;
     };
-    const currentMerchants = merchantTotals(currentExpenses);
-    const previousMerchants = merchantTotals(previousExpenses);
+    const currentMerchants = merchantTotals(currentCategoryRows);
+    const previousMerchants = merchantTotals(previousCategoryRows);
     const merchants = [...new Set([...currentMerchants.keys(), ...previousMerchants.keys()])]
       .map((name) => {
         const current = currentMerchants.get(name);
@@ -190,7 +196,7 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
         return {
           name: boundedMobileText(name, 'Merchant', 160),
           category: boundedMobileText(
-            current?.category ?? previousValue?.category ?? 'Uncategorized',
+            categoryLabel(current?.category ?? previousValue?.category ?? 'Uncategorized'),
             'Category',
             80,
           ),
