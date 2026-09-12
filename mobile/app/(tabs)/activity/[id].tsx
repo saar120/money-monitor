@@ -228,10 +228,17 @@ function DatePickerRow({
       <View
         style={[
           styles.detailRowBody,
+          styles.dateRowBody,
           { borderBottomColor: colors.separator, borderBottomWidth: StyleSheet.hairlineWidth },
         ]}
       >
-        <Text maxFontSizeMultiplier={1.5} style={[styles.detailLabel, { color: colors.text }]}>
+        <Text
+          adjustsFontSizeToFit
+          maxFontSizeMultiplier={1.5}
+          minimumFontScale={0.85}
+          numberOfLines={1}
+          style={[styles.detailLabel, styles.dateLabel, { color: colors.text }]}
+        >
           Effective date
         </Text>
         {saving ? (
@@ -394,6 +401,8 @@ const styles = StyleSheet.create({
   },
   detailLabel: { flex: 0.42, fontSize: 15 },
   detailValue: { flex: 0.58, fontSize: 15, textAlign: 'right', writingDirection: 'ltr' },
+  dateRowBody: { gap: 8 },
+  dateLabel: { flex: 1 },
   dateSaving: { flex: 1, fontSize: 15, textAlign: 'right' },
   disabled: { opacity: 0.55 },
   saveError: { marginTop: 12, paddingHorizontal: 16, fontSize: 13, lineHeight: 18 },
