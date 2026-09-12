@@ -5,6 +5,18 @@ import type { PairingCredential } from './security/pairing-credential-store';
 type JsonObject = Record<string, unknown>;
 
 export type ActivityFilter = 'all' | 'review' | 'pending' | 'credits';
+export type TransactionQuery = {
+  q?: string;
+  category?: string;
+  filter?: ActivityFilter;
+  startDate?: string;
+  endDate?: string;
+  accountId?: string;
+  status?: 'posted' | 'pending';
+  direction?: 'debit' | 'credit';
+  needsReview?: boolean;
+  includeExcluded?: boolean;
+};
 
 export type TransactionPage = {
   financialDate: string;
@@ -140,10 +152,12 @@ export async function fetchHomeData(
   credential: PairingCredential,
   signal?: AbortSignal,
   since?: string | null,
+  month?: string,
 ): Promise<HomeData> {
-  const overviewPath = since
-    ? `/api/mobile/v1/overview?since=${encodeURIComponent(since)}`
-    : '/api/mobile/v1/overview';
+  const overviewParams = new URLSearchParams();
+  if (since) overviewParams.set('since', since);
+  if (month) overviewParams.set('month', month);
+  const overviewPath = `/api/mobile/v1/overview${overviewParams.size ? `?${overviewParams}` : ''}`;
   const [bootstrapValue, overviewValue] = await Promise.all([
     authorizedGet(credential, '/api/mobile/v1/bootstrap', signal),
     authorizedGet(credential, overviewPath, signal),
@@ -155,7 +169,8 @@ export async function fetchHomeData(
   const data = object(root.data, 'bootstrap');
   const meta = object(root.meta, 'response metadata');
   const overview = object(overviewRoot.data, 'overview');
-  const financialDate = date(meta.financialDate, 'financial date');
+  const period = object(overview.period, 'overview period');
+  date(meta.financialDate, 'financial date');
   const generatedAt = text(meta.generatedAt, 'generation time');
   const primaryCurrencyCode = text(overview.currencyCode, 'primary currency');
   const cashflow = object(overview.cashflow, 'cashflow');
@@ -176,9 +191,6 @@ export async function fetchHomeData(
       ] as const;
     }),
   );
-  const month = new Intl.DateTimeFormat('en', { month: 'long' }).format(
-    new Date(`${financialDate}T12:00:00Z`),
-  );
   const statusLabels: Record<string, string> = {
     on_track: 'On track',
     watch: 'Watch spending',
@@ -188,8 +200,19 @@ export async function fetchHomeData(
   };
 
   return {
-    currentDate: financialDate,
-    month,
+    currentDate: date(period.endDate, 'overview end date'),
+    monthKey: text(period.month, 'overview month'),
+    month: new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
+      new Date(`${text(period.month, 'overview month')}-01T12:00:00Z`),
+    ),
+    availableMonths: (Array.isArray(overview.availableMonths) ? overview.availableMonths : []).map(
+      (value) => {
+        const candidate = text(value, 'available month');
+        if (!/^\d{4}-\d{2}$/.test(candidate))
+          throw new Error('The Mac returned an invalid available month.');
+        return candidate;
+      },
+    ),
     currencyCode: primaryCurrencyCode,
     spent: spending.value,
     income: income.value,
@@ -339,6 +362,7 @@ function mapTransaction(value: unknown): Transaction {
     amount: signedAmount,
     currencyCode: amount.currencyCode,
     category: category ? text(category.label, 'transaction category') : 'Uncategorized',
+    accountId: text(account.id, 'transaction account ID'),
     account: `${text(account.displayName, 'account name')} · ${text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '')}`,
     pending: status === 'pending',
     needsReview: boolean(item.needsReview, 'review state'),
@@ -351,13 +375,19 @@ function mapTransaction(value: unknown): Transaction {
 
 export async function fetchTransactions(
   credential: PairingCredential,
-  query: { q?: string; category?: string; filter: ActivityFilter; startDate?: string },
+  query: TransactionQuery,
   signal?: AbortSignal,
 ): Promise<TransactionPage> {
   const params = new URLSearchParams({ limit: '50' });
   if (query.startDate) params.set('startDate', query.startDate);
+  if (query.endDate) params.set('endDate', query.endDate);
   if (query.q?.trim()) params.set('q', query.q.trim());
   if (query.category?.trim()) params.set('category', query.category.trim());
+  if (query.accountId) params.set('accountId', query.accountId);
+  if (query.status) params.set('status', query.status);
+  if (query.direction) params.set('direction', query.direction);
+  if (query.needsReview !== undefined) params.set('needsReview', String(query.needsReview));
+  if (query.includeExcluded) params.set('includeExcluded', 'true');
   if (query.filter === 'review') params.set('needsReview', 'true');
   if (query.filter === 'review') params.set('includeExcluded', 'true');
   if (query.filter === 'pending') params.set('status', 'pending');

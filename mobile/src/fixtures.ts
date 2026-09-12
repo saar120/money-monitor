@@ -18,6 +18,7 @@ export type Transaction = {
   amount: number;
   category: string;
   account: string;
+  accountId?: string;
   pending?: boolean;
   needsReview?: boolean;
   owner: string;
@@ -60,7 +61,9 @@ type Freshness = {
 
 export type HomeData = {
   currentDate: string;
+  monthKey: string;
   month: string;
+  availableMonths: string[];
   currencyCode: string;
   spent: number;
   income: number;
@@ -256,7 +259,9 @@ const normalTransactions: Transaction[] = [
 const normal: FixtureScenario = {
   name: 'normal',
   currentDate: '2026-09-07',
+  monthKey: '2026-09',
   month: 'September',
+  availableMonths: ['2026-09', '2026-08'],
   currencyCode: 'ILS',
   spent: 18920,
   income: 27000,

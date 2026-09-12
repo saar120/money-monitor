@@ -1,4 +1,4 @@
-import { and, eq, gte, lte, sql } from 'drizzle-orm';
+import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 import {
@@ -99,6 +99,7 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
     const previous = monthRange(previousMonth(requestedMonth), context.financialDate);
     previous.endDate = `${previous.startDate.slice(0, 7)}-${String(Math.min(range.elapsedDays, previous.daysInMonth)).padStart(2, '0')}`;
 
+    const monthExpression = sql<string>`substr(${schema.transactions.reportingDate}, 1, 7)`;
     const [currentRows, previousRows, netWorth, netWorthHistory] = await Promise.all([
       Promise.resolve(periodRows(range.startDate, range.endDate)),
       Promise.resolve(periodRows(previous.startDate, previous.endDate)),
@@ -295,6 +296,14 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
     return {
       financialDate: context.financialDate,
       currencyCode: 'ILS',
+      availableMonths: options.db
+        .select({ month: monthExpression })
+        .from(schema.transactions)
+        .where(lte(schema.transactions.reportingDate, context.financialDate))
+        .groupBy(monthExpression)
+        .orderBy(desc(monthExpression))
+        .all()
+        .map((row) => row.month),
       period: {
         month: requestedMonth,
         label: new Intl.DateTimeFormat('en', {

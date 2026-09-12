@@ -318,6 +318,32 @@ describe('production mobile transaction ports', () => {
     ).toEqual([]);
   });
 
+  it('filters and orders by the canonical effective reporting date', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db, { memberId: null });
+    const movedIntoJuly = insertTransaction(testDb.db, account.id, {
+      date: '2026-06-30',
+      effectiveDate: '2026-07-10',
+      processedDate: '2026-06-30',
+      description: 'Moved into July',
+    });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-07-10',
+      effectiveDate: '2026-06-30',
+      processedDate: '2026-07-10',
+      description: 'Moved out of July',
+    });
+
+    const result = ports(testDb).list(
+      query({ startDate: '2026-07-01', endDate: '2026-07-31' }),
+      CONTEXT,
+    );
+
+    expect(result.transactions.map((transaction) => transaction.id)).toEqual([
+      project('transaction', movedIntoJuly.id),
+    ]);
+  });
+
   it('excludes future installment rows before limiting and hides future detail', () => {
     const testDb = database();
     const account = insertAccount(testDb.db, { memberId: null });

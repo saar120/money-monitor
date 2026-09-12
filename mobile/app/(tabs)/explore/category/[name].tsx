@@ -1,16 +1,23 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
+import { useMemo } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { useActivityTransactions, useMoneyData } from '@/MoneyData';
+import { useActivityTransactions, useMoneyData, useOverviewMonth } from '@/MoneyData';
 import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
 import { useAppColors } from '@/theme';
 
 export default function CategoryScreen() {
   const colors = useAppColors();
-  const { name } = useLocalSearchParams<{ name: string }>();
-  const { home, status } = useMoneyData();
-  const { transactions } = useActivityTransactions('', 'all', name);
+  const { name, month } = useLocalSearchParams<{ name: string; month?: string }>();
+  const { status } = useMoneyData();
+  const selected = useOverviewMonth(month);
+  const home = selected.overview;
+  const criteria = useMemo(
+    () => ({ category: name, startDate: `${selected.month}-01`, endDate: home?.currentDate }),
+    [home?.currentDate, name, selected.month],
+  );
+  const { transactions } = useActivityTransactions('', 'all', criteria);
   const category = home?.categories.find((item) => item.name === name);
   if (status !== 'ready' || !home) return <ConnectionState />;
   if (!category)
@@ -49,7 +56,7 @@ export default function CategoryScreen() {
           {total.amount}
         </Text>
         <Text style={[styles.totalLabel, { color: colors.secondary }]}>
-          {total.label} this month
+          {total.label} in {home.month}
         </Text>
         <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
           {delta === 0
@@ -71,7 +78,7 @@ export default function CategoryScreen() {
                 onPress={() =>
                   router.push({
                     pathname: '/merchant/[name]',
-                    params: { name: merchant.name },
+                    params: { name: merchant.name, month: home.monthKey },
                   })
                 }
                 style={[styles.row, { borderBottomColor: colors.separator }]}

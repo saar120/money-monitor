@@ -57,6 +57,7 @@ export const mobileOverviewQuerySchema = z
 export const mobileOverviewDataSchema = z.object({
   financialDate: bootstrapFinancialDateSchema,
   currencyCode: bootstrapCurrencyCodeSchema,
+  availableMonths: z.array(z.string().regex(/^\d{4}-\d{2}$/)).max(600),
   period: periodSchema,
   cashflow: z.object({
     spending: bootstrapMoneySchema,

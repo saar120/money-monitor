@@ -205,7 +205,7 @@ Corners are continuous and concentric: 10-point selected range lenses inside 14-
 
 ### Spending Chart
 
-The chart is the Blue Ledger signature. Home places current and prior posted spending inside a cobalt shell. Explore requests the existing month-scoped overview endpoint for up to six months and plots the Mac-provided posted income and spending totals as grouped bars. Values and comparisons come from the overview contract; the phone does not extrapolate future points.
+The chart is the Blue Ledger signature. Home swipes between two equal cards: a cobalt current-versus-prior spending curve that reveals exact daily values under a finger, and a category donut whose slices and legend open the selected month’s category drilldown. Home and Explore each own an independent month picker populated only by months present on the Mac. Explore plots up to six available months ending at its selected month. Values and comparisons come from the overview contract; the phone does not extrapolate future points.
 
 ## Do's and Don'ts
 

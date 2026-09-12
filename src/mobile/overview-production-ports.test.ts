@@ -79,6 +79,7 @@ describe('mobile overview projection', () => {
       paceDelta: { value: '80.00' },
       spendingVsIncomePercent: 30,
     });
+    expect(result.availableMonths).toEqual(['2026-09', '2026-08']);
     expect(result.categories[0]).toMatchObject({
       label: 'Dining',
       current: { value: '300.00' },

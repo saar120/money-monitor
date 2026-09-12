@@ -18,6 +18,14 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     data: {
       financialDate: '2026-03-08',
       currencyCode: 'ILS',
+      availableMonths: ['2026-03', '2026-02'],
+      period: {
+        month: '2026-03',
+        label: 'March 2026',
+        startDate: '2026-03-01',
+        endDate: '2026-03-08',
+        elapsedPercent: 26,
+      },
       cashflow: {
         spending: { value: '4560.30', currencyCode: 'ILS' },
         income: { value: '12000.00', currencyCode: 'ILS' },
@@ -88,6 +96,8 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
       token: 'T'.repeat(43),
     });
     assert.equal(home.spent, 4560.3);
+    assert.equal(home.monthKey, '2026-03');
+    assert.deepEqual(home.availableMonths, ['2026-03', '2026-02']);
     assert.equal(home.available, 4439.7);
     assert.equal(home.netWorth, 128430.27);
     assert.equal(home.freshness[0]?.account, 'Everyday Checking · 4321');
@@ -167,7 +177,7 @@ test('completes the Mac approval flow and returns the device credential', async 
   }
 });
 
-test('loads the full review inbox while keeping normal activity month-scoped', async () => {
+test('maps the complete Activity filter set onto the transaction query', async () => {
   const paths: string[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input) => {
@@ -195,6 +205,12 @@ test('loads the full review inbox while keeping normal activity month-scoped', a
     await fetchTransactions(credential, {
       filter: 'all',
       startDate: '2026-09-01',
+      endDate: '2026-09-08',
+      accountId: 'account_public',
+      status: 'posted',
+      direction: 'debit',
+      needsReview: false,
+      includeExcluded: true,
     });
 
     const review = new URL(paths[0]!);
@@ -202,6 +218,12 @@ test('loads the full review inbox while keeping normal activity month-scoped', a
     assert.equal(review.searchParams.get('needsReview'), 'true');
     assert.equal(review.searchParams.has('startDate'), false);
     assert.equal(activity.searchParams.get('startDate'), '2026-09-01');
+    assert.equal(activity.searchParams.get('endDate'), '2026-09-08');
+    assert.equal(activity.searchParams.get('accountId'), 'account_public');
+    assert.equal(activity.searchParams.get('status'), 'posted');
+    assert.equal(activity.searchParams.get('direction'), 'debit');
+    assert.equal(activity.searchParams.get('needsReview'), 'false');
+    assert.equal(activity.searchParams.get('includeExcluded'), 'true');
   } finally {
     globalThis.fetch = originalFetch;
   }

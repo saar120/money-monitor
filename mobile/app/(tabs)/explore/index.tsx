@@ -3,8 +3,8 @@ import { SymbolView } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { GlassSegmentedControl } from '@/GlassSegmentedControl';
-import { useMoneyData } from '@/MoneyData';
+import { MonthPicker } from '@/MonthPicker';
+import { useMoneyData, useOverviewMonth } from '@/MoneyData';
 import {
   formatMoney,
   formatSpendingChange,
@@ -15,20 +15,19 @@ import {
 import type { CashflowMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
-type Range = '1' | '3' | '6';
-
 export default function ExploreScreen() {
   const colors = useAppColors();
   const money = useMoneyData();
-  const { home, status } = money;
-  const [range, setRange] = useState<Range>('6');
+  const selected = useOverviewMonth();
+  const { status } = money;
+  const home = selected.overview;
   const [history, setHistory] = useState<CashflowMonth[]>([]);
 
   useEffect(() => {
     if (status !== 'ready' || !home) return;
     let current = true;
     void money
-      .loadCashflowHistory()
+      .loadCashflowHistory(selected.month)
       .then((value) => {
         if (current) setHistory(value);
       })
@@ -38,7 +37,7 @@ export default function ExploreScreen() {
     return () => {
       current = false;
     };
-  }, [home, money, status]);
+  }, [home?.monthKey, money.loadCashflowHistory, selected.month, status]);
 
   if (status !== 'ready' || !home) return <ConnectionState />;
 
@@ -48,7 +47,7 @@ export default function ExploreScreen() {
     income: home.income,
     spending: home.spent,
   };
-  const series = (history.length ? history : [currentPoint]).slice(-Number(range));
+  const series = history.length ? history : [currentPoint];
   const previousPoint = history.at(-2);
   const cashFlow = overviewCashFlow(home.income, home.spent);
   const previousCashFlow = previousPoint
@@ -77,16 +76,12 @@ export default function ExploreScreen() {
         Every insight opens the transactions behind it
       </Text>
 
-      <View style={styles.rangeSpacing}>
-        <GlassSegmentedControl
-          onChange={setRange}
-          options={[
-            { label: '1M', value: '1' },
-            { label: '3M', value: '3' },
-            { label: '6M', value: '6' },
-          ]}
-          testID="explore-range"
-          value={range}
+      <View style={[styles.monthPicker, { borderBottomColor: colors.separator }]}>
+        <MonthPicker
+          month={selected.month}
+          months={selected.months}
+          onSelect={selected.selectMonth}
+          testID="explore-month-picker"
         />
       </View>
 
@@ -171,7 +166,10 @@ export default function ExploreScreen() {
               <Pressable
                 key={category.name}
                 onPress={() =>
-                  router.push({ pathname: '/category/[name]', params: { name: category.name } })
+                  router.push({
+                    pathname: '/category/[name]',
+                    params: { name: category.name, month: home.monthKey },
+                  })
                 }
                 style={({ pressed }) => [
                   styles.driverRow,
@@ -214,7 +212,10 @@ export default function ExploreScreen() {
       {leading ? (
         <Pressable
           onPress={() =>
-            router.push({ pathname: '/category/[name]', params: { name: leading.name } })
+            router.push({
+              pathname: '/category/[name]',
+              params: { name: leading.name, month: home.monthKey },
+            })
           }
           style={({ pressed }) => [
             styles.insight,
@@ -244,7 +245,10 @@ export default function ExploreScreen() {
               <Pressable
                 key={`${merchant.category}-${merchant.name}`}
                 onPress={() =>
-                  router.push({ pathname: '/merchant/[name]', params: { name: merchant.name } })
+                  router.push({
+                    pathname: '/merchant/[name]',
+                    params: { name: merchant.name, month: home.monthKey },
+                  })
                 }
                 style={[styles.merchantRow, { borderBottomColor: colors.separator }]}
               >
@@ -332,7 +336,12 @@ function LegendItem({ color, label }: { color: string; label: string }) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   subtitle: { marginTop: 2, fontSize: 14, lineHeight: 19 },
-  rangeSpacing: { marginTop: 22 },
+  monthPicker: {
+    marginTop: 10,
+    minHeight: 52,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+    justifyContent: 'center',
+  },
   hero: {
     marginTop: 20,
     paddingVertical: 20,

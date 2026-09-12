@@ -1,32 +1,32 @@
-import { Area, CartesianChart, Line } from 'victory-native';
+import { Circle } from '@shopify/react-native-skia';
+import { Area, CartesianChart, Line, Pie, PolarChart, useChartPressState } from 'victory-native';
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useState } from 'react';
+import { useCallback, useEffect, useMemo, useState } from 'react';
+import { Gesture, GestureDetector } from 'react-native-gesture-handler';
+import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { useMoneyData } from '@/MoneyData';
-import {
-  formatMoney,
-  formatSpendingChange,
-  formatUnsignedMoney,
-  overviewCashFlow,
-  spendingTotal,
-} from '@/money';
+import { MonthPicker } from '@/MonthPicker';
+import { useMoneyData, useOverviewMonth } from '@/MoneyData';
+import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import type { HomeData } from '@/fixtures';
 import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
-  const { error, home, status, reload } = useMoneyData();
+  const money = useMoneyData();
+  const selected = useOverviewMonth();
+  const { error, status, reload } = money;
+  const home = selected.overview;
   const [refreshing, setRefreshing] = useState(false);
   if (status !== 'ready' || !home) return <ConnectionState />;
 
-  const paceDelta = home.spent - home.previousSpent;
   const primaryBudget = home.budgets[0] ?? null;
   const staleAccounts = home.freshness.filter((account) => account.state === 'stale');
   const attentionBudgets = home.budgets.filter((budget) => budget.status !== 'on_track');
-  const topCategories = [...home.categories].sort((a, b) => b.spent - a.spent).slice(0, 4);
   const cashFlow = overviewCashFlow(home.income, home.spent);
   const refresh = async () => {
     setRefreshing(true);
@@ -53,17 +53,16 @@ export default function HomeScreen() {
       }
     >
       <View style={styles.contextRow}>
-        <View>
+        <View style={styles.monthContext}>
           <Text maxFontSizeMultiplier={1.25} style={[styles.greeting, { color: colors.secondary }]}>
             Good morning
           </Text>
-          <Text
-            maxFontSizeMultiplier={1.25}
-            numberOfLines={1}
-            style={[styles.period, { color: colors.text }]}
-          >
-            {home.month} · day {Number(home.currentDate.slice(8, 10))}
-          </Text>
+          <MonthPicker
+            month={selected.month}
+            months={selected.months}
+            onSelect={selected.selectMonth}
+            testID="home-month-picker"
+          />
         </View>
         <Text
           maxFontSizeMultiplier={1.25}
@@ -89,18 +88,19 @@ export default function HomeScreen() {
           numberOfLines={1}
           style={[styles.heroValue, { color: colors.text }]}
         >
-          {formatUnsignedMoney(home.available ?? home.spent, home.currencyCode)}
+          {formatUnsignedMoney(home.spent, home.currencyCode)}
         </Text>
         <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
-          {home.available === null ? 'spent this month' : 'left in plan'}
+          spent this month
         </Text>
       </View>
 
-      <SpendingHero
+      <ChartCarousel
+        categories={home.categories}
         colors={colors}
         currencyCode={home.currencyCode}
         currentDate={home.currentDate}
-        paceDelta={paceDelta}
+        month={home.monthKey}
         spent={home.spent}
         trend={home.trend}
       />
@@ -220,80 +220,6 @@ export default function HomeScreen() {
         </View>
       )}
 
-      <SectionHeader
-        title="Where it went"
-        action="Explore"
-        onPress={() => router.push('/(tabs)/explore')}
-        colors={colors}
-      />
-      <View style={styles.categoryList} testID="category-spending">
-        {topCategories.length ? (
-          topCategories.map((category) => {
-            const delta = category.spent - category.previous;
-            const share = home.spent > 0 ? Math.max(0, category.spent / home.spent) : 0;
-            const total = spendingTotal(category.spent, home.currencyCode);
-            return (
-              <Pressable
-                accessibilityHint={`Opens ${category.name} spending details`}
-                accessibilityRole="button"
-                key={category.name}
-                onPress={() =>
-                  router.push({
-                    pathname: '/category/[name]',
-                    params: { name: category.name },
-                  })
-                }
-                style={styles.categoryRow}
-              >
-                <View style={styles.categoryTop}>
-                  <Text
-                    maxFontSizeMultiplier={1.5}
-                    numberOfLines={1}
-                    style={[styles.categoryName, { color: colors.text }]}
-                  >
-                    {category.name}
-                  </Text>
-                  <Text
-                    adjustsFontSizeToFit
-                    allowFontScaling={false}
-                    minimumFontScale={0.8}
-                    numberOfLines={1}
-                    style={[styles.categoryAmount, { color: colors.text }]}
-                  >
-                    {total.amount} {total.label.toLowerCase()}
-                  </Text>
-                </View>
-                <View style={styles.categoryBottom}>
-                  <View style={[styles.shareTrack, { backgroundColor: colors.separator }]}>
-                    <View
-                      style={[
-                        styles.shareFill,
-                        { width: `${Math.min(share, 1) * 100}%`, backgroundColor: category.color },
-                      ]}
-                    />
-                  </View>
-                  <Text
-                    allowFontScaling={false}
-                    style={[
-                      styles.categoryDelta,
-                      { color: delta > 0 ? colors.warning : colors.secondary },
-                    ]}
-                  >
-                    {delta === 0
-                      ? 'No change'
-                      : `${formatSpendingChange(delta, home.currencyCode)} than last month`}
-                  </Text>
-                </View>
-              </Pressable>
-            );
-          })
-        ) : (
-          <Text style={[styles.emptyText, { color: colors.secondary }]}>
-            No spending to show yet.
-          </Text>
-        )}
-      </View>
-
       <Pressable
         accessibilityHint="Opens net worth details"
         accessibilityRole="button"
@@ -332,23 +258,112 @@ export default function HomeScreen() {
   );
 }
 
-function SpendingHero({
+function ChartCarousel({
+  categories,
   colors,
   currencyCode,
   currentDate,
-  paceDelta,
+  month,
+  spent,
+  trend,
+}: {
+  categories: HomeData['categories'];
+  colors: AppColors;
+  currencyCode: string;
+  currentDate: string;
+  month: string;
+  spent: number;
+  trend: Array<{ day: number; current: number; previous: number }>;
+}) {
+  const [width, setWidth] = useState(0);
+  const [page, setPage] = useState(0);
+  return (
+    <View
+      onLayout={(event) => setWidth(Math.round(event.nativeEvent.layout.width))}
+      testID="home-chart-carousel"
+    >
+      {width ? (
+        <ScrollView
+          horizontal
+          bounces={false}
+          decelerationRate="fast"
+          onMomentumScrollEnd={(event) =>
+            setPage(Math.round(event.nativeEvent.contentOffset.x / width))
+          }
+          pagingEnabled
+          showsHorizontalScrollIndicator={false}
+        >
+          <View style={{ width }}>
+            <SpendingTrendCard
+              colors={colors}
+              currencyCode={currencyCode}
+              currentDate={currentDate}
+              spent={spent}
+              trend={trend}
+            />
+          </View>
+          <View style={{ width }}>
+            <CategoryDonutCard
+              categories={categories}
+              colors={colors}
+              currencyCode={currencyCode}
+              month={month}
+              spent={spent}
+            />
+          </View>
+        </ScrollView>
+      ) : null}
+      <View style={styles.carouselFooter}>
+        <Text style={[styles.carouselLabel, { color: colors.secondary }]}>
+          {page === 0 ? 'Spending pace · hold and slide' : 'Categories · tap to drill down'}
+        </Text>
+        <View style={styles.pageDots}>
+          {[0, 1].map((index) => (
+            <View
+              key={index}
+              style={[
+                styles.pageDot,
+                { backgroundColor: index === page ? colors.accent : colors.separator },
+              ]}
+            />
+          ))}
+        </View>
+      </View>
+    </View>
+  );
+}
+
+function SpendingTrendCard({
+  colors,
+  currencyCode,
+  currentDate,
   spent,
   trend,
 }: {
   colors: AppColors;
   currencyCode: string;
   currentDate: string;
-  paceDelta: number;
   spent: number;
   trend: Array<{ day: number; current: number; previous: number }>;
 }) {
   const day = Number(currentDate.slice(8, 10));
   const max = Math.max(1, ...trend.flatMap((point) => [point.current, point.previous]));
+  const { state, isActive } = useChartPressState({
+    x: trend.at(-1)?.day ?? day,
+    y: { current: trend.at(-1)?.current ?? spent, previous: trend.at(-1)?.previous ?? 0 },
+  });
+  const [selectedIndex, setSelectedIndex] = useState(Math.max(0, trend.length - 1));
+
+  useEffect(() => setSelectedIndex(Math.max(0, trend.length - 1)), [trend]);
+  useAnimatedReaction(
+    () => state.matchedIndex.value,
+    (index, previous) => {
+      if (index >= 0 && index !== previous) runOnJS(setSelectedIndex)(index);
+    },
+  );
+
+  const selected = trend[selectedIndex] ?? { day, current: spent, previous: spent };
+  const delta = selected.current - selected.previous;
   return (
     <View
       style={[styles.spendingHero, { backgroundColor: colors.chart, shadowColor: colors.chart }]}
@@ -369,6 +384,8 @@ function SpendingHero({
         </View>
         {trend.length ? (
           <CartesianChart
+            chartPressConfig={{ pan: { activateAfterLongPress: 80 } }}
+            chartPressState={state}
             data={trend}
             domain={{ y: [0, max * 1.08] }}
             padding={{ top: 14, bottom: 8, left: 2, right: 2 }}
@@ -396,6 +413,14 @@ function SpendingHero({
                   points={points.current}
                   strokeWidth={2.8}
                 />
+                {isActive ? (
+                  <Circle
+                    color="#FFFFFF"
+                    cx={state.x.position}
+                    cy={state.y.current.position}
+                    r={4.5}
+                  />
+                ) : null}
               </>
             )}
           </CartesianChart>
@@ -412,26 +437,143 @@ function SpendingHero({
       <View style={styles.chartFooter}>
         <View style={styles.chartMetricRow}>
           <Text allowFontScaling={false} style={styles.chartMetricStrong}>
-            {formatUnsignedMoney(spent, currencyCode)}
-          </Text>
-          <Text allowFontScaling={false} style={styles.chartMetric}>
-            {' '}
-            spent
+            Day {selected.day} · {formatUnsignedMoney(selected.current, currencyCode)}
           </Text>
         </View>
         <Text allowFontScaling={false} style={styles.chartMetric}>
-          {paceDelta === 0 ? (
-            'Right in line with last month'
-          ) : (
-            <>
-              <Text style={styles.chartMetricStrong}>
-                {formatUnsignedMoney(Math.abs(paceDelta), currencyCode)}
-              </Text>{' '}
-              {paceDelta < 0 ? 'slower' : 'higher'} than last month’s pace
-            </>
-          )}
+          {delta === 0
+            ? 'In line with last month'
+            : `${formatUnsignedMoney(Math.abs(delta), currencyCode)} ${delta < 0 ? 'slower' : 'higher'} than last month’s pace`}
         </Text>
       </View>
+    </View>
+  );
+}
+
+function CategoryDonutCard({
+  categories,
+  colors,
+  currencyCode,
+  month,
+  spent,
+}: {
+  categories: HomeData['categories'];
+  colors: AppColors;
+  currencyCode: string;
+  month: string;
+  spent: number;
+}) {
+  const data = useMemo(
+    () =>
+      [...categories].filter((category) => category.spent > 0).sort((a, b) => b.spent - a.spent),
+    [categories],
+  );
+  const categoryTotal = useMemo(
+    () => data.reduce((sum, category) => sum + category.spent, 0),
+    [data],
+  );
+  const [chartSize, setChartSize] = useState(0);
+  const openAt = useCallback(
+    (x: number, y: number) => {
+      const center = chartSize / 2;
+      const distance = Math.hypot(x - center, y - center);
+      if (distance < chartSize * 0.32 || distance > chartSize * 0.5) return;
+      const angle = (Math.atan2(y - center, x - center) * 180) / Math.PI;
+      const position = (angle + 450) % 360;
+      let end = 0;
+      const category = data.find((item) => {
+        end += (item.spent / categoryTotal) * 360;
+        return position <= end;
+      });
+      if (category)
+        router.push({
+          pathname: '/category/[name]',
+          params: { name: category.name, month },
+        });
+    },
+    [categoryTotal, chartSize, data, month],
+  );
+  const tap = useMemo(
+    () =>
+      Gesture.Tap().onEnd((event, success) => {
+        if (success) runOnJS(openAt)(event.x, event.y);
+      }),
+    [openAt],
+  );
+
+  return (
+    <View
+      accessibilityLabel={`Where it went. ${data.map((item) => `${item.name}, ${formatUnsignedMoney(item.spent, currencyCode)}`).join('. ')}`}
+      style={[styles.donutCard, { backgroundColor: colors.surface }]}
+      testID="home-category-donut"
+    >
+      <View style={styles.donutHeading}>
+        <Text style={[styles.donutTitle, { color: colors.text }]}>Where it went</Text>
+        <Text style={[styles.donutTotal, { color: colors.secondary }]}>
+          {formatUnsignedMoney(spent, currencyCode)} total
+        </Text>
+      </View>
+      {data.length ? (
+        <View style={styles.donutContent}>
+          <GestureDetector gesture={tap}>
+            <View
+              onLayout={(event) => setChartSize(event.nativeEvent.layout.width)}
+              style={styles.donutChart}
+            >
+              <PolarChart data={data} colorKey="color" labelKey="name" valueKey="spent">
+                <Pie.Chart innerRadius="66%" startAngle={-90} />
+              </PolarChart>
+              <View pointerEvents="none" style={styles.donutCenter}>
+                <Text
+                  allowFontScaling={false}
+                  style={[styles.donutCenterValue, { color: colors.text }]}
+                >
+                  {Math.round((data[0]!.spent / categoryTotal) * 100)}%
+                </Text>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.donutCenterLabel, { color: colors.secondary }]}
+                >
+                  {data[0]!.name}
+                </Text>
+              </View>
+            </View>
+          </GestureDetector>
+          <View style={styles.donutLegend}>
+            {data.slice(0, 4).map((category) => (
+              <Pressable
+                accessibilityRole="button"
+                key={category.name}
+                onPress={() =>
+                  router.push({
+                    pathname: '/category/[name]',
+                    params: { name: category.name, month },
+                  })
+                }
+                style={({ pressed }) => [styles.donutLegendRow, { opacity: pressed ? 0.62 : 1 }]}
+                testID={`home-donut-category-${category.name}`}
+              >
+                <View style={[styles.donutLegendDot, { backgroundColor: category.color }]} />
+                <Text numberOfLines={1} style={[styles.donutLegendName, { color: colors.text }]}>
+                  {category.name}
+                </Text>
+                <Text
+                  allowFontScaling={false}
+                  style={[styles.donutLegendAmount, { color: colors.secondary }]}
+                >
+                  {formatUnsignedMoney(category.spent, currencyCode)}
+                </Text>
+              </Pressable>
+            ))}
+          </View>
+        </View>
+      ) : (
+        <View style={styles.noChart}>
+          <Text style={[styles.emptyText, { color: colors.secondary }]}>
+            No spending to show yet.
+          </Text>
+        </View>
+      )}
     </View>
   );
 }
@@ -579,39 +721,6 @@ function AttentionRow({
   );
 }
 
-function SectionHeader({
-  title,
-  action,
-  onPress,
-  colors,
-}: {
-  title: string;
-  action: string;
-  onPress: () => void;
-  colors: AppColors;
-}) {
-  return (
-    <View style={styles.sectionHeader}>
-      <Text
-        maxFontSizeMultiplier={1.25}
-        numberOfLines={1}
-        style={[styles.sectionTitle, { color: colors.text }]}
-      >
-        {title}
-      </Text>
-      <Pressable accessibilityRole="button" onPress={onPress} hitSlop={8}>
-        <Text
-          maxFontSizeMultiplier={1.25}
-          numberOfLines={1}
-          style={[styles.sectionAction, { color: colors.accent }]}
-        >
-          {action}
-        </Text>
-      </Pressable>
-    </View>
-  );
-}
-
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   contextRow: {
@@ -620,8 +729,8 @@ const styles = StyleSheet.create({
     alignItems: 'baseline',
     marginTop: 8,
   },
+  monthContext: { flex: 1, minWidth: 0 },
   greeting: { fontSize: 14, lineHeight: 20 },
-  period: { fontSize: 15, lineHeight: 21, fontWeight: '600' },
   freshness: { maxWidth: '56%', fontSize: 13, textAlign: 'right' },
   hero: { paddingTop: 29, paddingBottom: 22 },
   heroValue: {
@@ -639,6 +748,7 @@ const styles = StyleSheet.create({
     letterSpacing: -0.45,
   },
   spendingHero: {
+    height: 292,
     overflow: 'hidden',
     borderRadius: 25,
     paddingTop: 17,
@@ -696,6 +806,50 @@ const styles = StyleSheet.create({
   chartMetricRow: { flexDirection: 'row', alignItems: 'baseline' },
   chartMetric: { color: 'rgba(255,255,255,0.74)', fontSize: 11 },
   chartMetricStrong: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
+  carouselFooter: {
+    minHeight: 34,
+    paddingHorizontal: 4,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+  },
+  carouselLabel: { fontSize: 11.5, fontWeight: '500' },
+  pageDots: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  pageDot: { width: 6, height: 6, borderRadius: 3 },
+  donutCard: { height: 292, borderRadius: 25, padding: 17, overflow: 'hidden' },
+  donutHeading: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
+  donutTitle: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
+  donutTotal: { fontSize: 12.5, lineHeight: 18, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  donutContent: { flex: 1, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  donutChart: { width: 156, height: 156 },
+  donutCenter: {
+    ...StyleSheet.absoluteFill,
+    alignItems: 'center',
+    justifyContent: 'center',
+    paddingHorizontal: 38,
+  },
+  donutCenterValue: {
+    fontSize: 24,
+    lineHeight: 28,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
+  donutCenterLabel: { marginTop: 1, maxWidth: 76, fontSize: 10.5, lineHeight: 14 },
+  donutLegend: { flex: 1, minWidth: 0 },
+  donutLegendRow: { minHeight: 44, flexDirection: 'row', alignItems: 'center', gap: 7 },
+  donutLegendDot: { width: 8, height: 8, borderRadius: 4 },
+  donutLegendName: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 17, fontWeight: '600' },
+  donutLegendAmount: {
+    fontSize: 11.5,
+    lineHeight: 16,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   cashflowRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
@@ -745,25 +899,7 @@ const styles = StyleSheet.create({
   attentionDetail: { marginTop: 2, fontSize: 13, lineHeight: 18 },
   caughtUp: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 54, marginTop: 24 },
   caughtUpText: { fontSize: 14 },
-  sectionHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    alignItems: 'center',
-    marginTop: 36,
-    marginBottom: 12,
-  },
-  sectionTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700', letterSpacing: -0.35 },
-  sectionAction: { minHeight: 44, paddingTop: 12, fontSize: 14, fontWeight: '600' },
-  categoryList: { gap: 18 },
   emptyText: { fontSize: 14, lineHeight: 20 },
-  categoryRow: { minHeight: 52 },
-  categoryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  categoryName: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 16, fontWeight: '600' },
-  categoryAmount: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
-  categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 7 },
-  shareTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
-  shareFill: { height: '100%', borderRadius: 2 },
-  categoryDelta: { width: 164, fontSize: 12, textAlign: 'right', fontVariant: ['tabular-nums'] },
   netWorthRow: {
     minHeight: 82,
     marginTop: 34,

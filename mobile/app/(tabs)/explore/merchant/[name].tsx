@@ -1,15 +1,22 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { useMemo } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { useActivityTransactions, useMoneyData } from '@/MoneyData';
+import { useActivityTransactions, useMoneyData, useOverviewMonth } from '@/MoneyData';
 import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
 import { useAppColors } from '@/theme';
 
 export default function MerchantScreen() {
   const colors = useAppColors();
-  const { name } = useLocalSearchParams<{ name: string }>();
-  const { home, status } = useMoneyData();
-  const { transactions, loading, error } = useActivityTransactions(name ?? '', 'all');
+  const { name, month } = useLocalSearchParams<{ name: string; month?: string }>();
+  const { status } = useMoneyData();
+  const selected = useOverviewMonth(month);
+  const home = selected.overview;
+  const criteria = useMemo(
+    () => ({ startDate: `${selected.month}-01`, endDate: home?.currentDate }),
+    [home?.currentDate, selected.month],
+  );
+  const { transactions, loading, error } = useActivityTransactions(name ?? '', 'all', criteria);
   const merchant = home?.merchants.find((item) => item.name === name);
   if (status !== 'ready' || !home) return <ConnectionState />;
   const delta = merchant ? merchant.current - merchant.previous : null;
@@ -35,7 +42,7 @@ export default function MerchantScreen() {
               {total!.amount}
             </Text>
             <Text style={[styles.totalLabel, { color: colors.secondary }]}>
-              {total!.label} this month
+              {total!.label} in {home.month}
             </Text>
             <Text
               style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.positive }]}
