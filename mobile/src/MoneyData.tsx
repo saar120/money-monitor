@@ -25,6 +25,7 @@ import {
 import { readPairingCredential, type PairingCredential } from './security/pairing-credential-store';
 
 type MoneyDataStatus = 'loading' | 'unpaired' | 'ready' | 'error';
+type ReviewOptions = { categories: string[]; owners: string[] };
 
 type MoneyDataContextValue = {
   source: 'fixture' | 'live';
@@ -36,7 +37,7 @@ type MoneyDataContextValue = {
   reload: () => Promise<void>;
   fixtureTransactions: Transaction[];
   saveTransaction: (id: string, update: TransactionUpdate) => Promise<Transaction>;
-  loadReviewOptions: () => Promise<{ categories: string[]; owners: string[] }>;
+  loadReviewOptions: () => Promise<ReviewOptions>;
   loadCashflowHistory: () => Promise<CashflowMonth[]>;
 };
 
@@ -82,8 +83,10 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
   );
   const hasHome = useRef(home !== null);
   const fixtureReloads = useRef(0);
+  const reviewOptionsRequest = useRef<Promise<ReviewOptions> | null>(null);
 
   const reload = useCallback(async () => {
+    reviewOptionsRequest.current = null;
     if (fixture) {
       const delay = fixtureReloads.current > 0 ? getFixtureRefreshDelay() : 0;
       fixtureReloads.current += 1;
@@ -155,21 +158,18 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       }
       if (!credential) throw new Error('Pair with your Mac to update transactions.');
       const next = await updateTransaction(credential, id, update);
-      setRevision((value) => value + 1);
-      setHome((value) =>
-        update.reviewed && value
-          ? { ...value, reviewCount: Math.max(0, value.reviewCount - 1) }
-          : value,
-      );
+      await reload();
       return next;
     },
-    [credential, fixture, fixtureTransactions],
+    [credential, fixture, fixtureTransactions, reload],
   );
 
-  const loadReviewOptions = useCallback(async () => {
+  const loadReviewOptions = useCallback(() => {
+    if (reviewOptionsRequest.current) return reviewOptionsRequest.current;
+    let request: Promise<ReviewOptions>;
     if (fixture) {
       const scenario = getFixtureScenario();
-      return {
+      request = Promise.resolve({
         categories: [
           ...new Set([
             ...FIXTURE_REVIEW_CATEGORIES,
@@ -183,11 +183,24 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
             'Unassigned',
           ]),
         ].sort(),
-      };
+      });
+    } else {
+      if (!credential)
+        return Promise.reject(new Error('Pair with your Mac to review transactions.'));
+      request = fetchReviewOptions(credential);
     }
-    if (!credential) throw new Error('Pair with your Mac to review transactions.');
-    return fetchReviewOptions(credential);
+    const cachedRequest = request.catch((caught) => {
+      if (reviewOptionsRequest.current === cachedRequest) reviewOptionsRequest.current = null;
+      throw caught;
+    });
+    reviewOptionsRequest.current = cachedRequest;
+    return cachedRequest;
   }, [credential, fixture]);
+
+  useEffect(() => {
+    if (status !== 'ready') return;
+    void loadReviewOptions().catch(() => undefined);
+  }, [loadReviewOptions, revision, status]);
 
   const loadCashflowHistory = useCallback(async () => {
     const currentHome = home ?? getFixtureScenario();

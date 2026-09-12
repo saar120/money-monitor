@@ -5,7 +5,13 @@ import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import {
+  formatMoney,
+  formatSpendingChange,
+  formatUnsignedMoney,
+  overviewCashFlow,
+  spendingTotal,
+} from '@/money';
 import type { CashflowMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -160,6 +166,7 @@ export default function ExploreScreen() {
         {categoryChanges.length ? (
           categoryChanges.map((category) => {
             const delta = category.spent - category.previous;
+            const total = spendingTotal(category.spent, home.currencyCode);
             return (
               <Pressable
                 key={category.name}
@@ -183,7 +190,7 @@ export default function ExploreScreen() {
                     {category.name}
                   </Text>
                   <Text style={[styles.driverMeta, { color: colors.secondary }]}>
-                    {formatUnsignedMoney(category.spent, home.currencyCode)} now
+                    {total.amount} {total.label.toLowerCase()}
                   </Text>
                 </View>
                 <Text
@@ -193,7 +200,7 @@ export default function ExploreScreen() {
                     { color: delta > 0 ? colors.warning : colors.positive },
                   ]}
                 >
-                  {formatMoney(delta, home.currencyCode)}
+                  {formatSpendingChange(delta, home.currencyCode)}
                 </Text>
                 <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} />
               </Pressable>
@@ -221,7 +228,7 @@ export default function ExploreScreen() {
             <Text style={styles.insightTitle}>{leading.name} moved most</Text>
             <Text style={styles.insightText}>
               {formatUnsignedMoney(Math.abs(leading.spent - leading.previous), home.currencyCode)}{' '}
-              {leading.spent >= leading.previous ? 'more' : 'less'} than last month.
+              {leading.spent >= leading.previous ? 'more' : 'less'} spent than last month.
             </Text>
           </View>
           <SymbolView name="chevron.right" size={13} tintColor="#FFFFFF" />
@@ -257,7 +264,7 @@ export default function ExploreScreen() {
                     { color: delta > 0 ? colors.warning : colors.positive },
                   ]}
                 >
-                  {formatMoney(delta, home.currencyCode)}
+                  {formatSpendingChange(delta, home.currencyCode)}
                 </Text>
                 <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} />
               </Pressable>

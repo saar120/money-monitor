@@ -6,7 +6,13 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import {
+  formatMoney,
+  formatSpendingChange,
+  formatUnsignedMoney,
+  overviewCashFlow,
+  spendingTotal,
+} from '@/money';
 import { useAppColors, type AppColors } from '@/theme';
 
 export default function HomeScreen() {
@@ -224,7 +230,8 @@ export default function HomeScreen() {
         {topCategories.length ? (
           topCategories.map((category) => {
             const delta = category.spent - category.previous;
-            const share = home.spent > 0 ? category.spent / home.spent : 0;
+            const share = home.spent > 0 ? Math.max(0, category.spent / home.spent) : 0;
+            const total = spendingTotal(category.spent, home.currencyCode);
             return (
               <Pressable
                 accessibilityHint={`Opens ${category.name} spending details`}
@@ -253,7 +260,7 @@ export default function HomeScreen() {
                     numberOfLines={1}
                     style={[styles.categoryAmount, { color: colors.text }]}
                   >
-                    {formatUnsignedMoney(category.spent, home.currencyCode)}
+                    {total.amount} {total.label.toLowerCase()}
                   </Text>
                 </View>
                 <View style={styles.categoryBottom}>
@@ -274,7 +281,7 @@ export default function HomeScreen() {
                   >
                     {delta === 0
                       ? 'No change'
-                      : `${delta > 0 ? '+' : '−'}${formatUnsignedMoney(Math.abs(delta), home.currencyCode)} vs last month`}
+                      : `${formatSpendingChange(delta, home.currencyCode)} than last month`}
                   </Text>
                 </View>
               </Pressable>

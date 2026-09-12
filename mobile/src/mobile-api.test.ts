@@ -32,8 +32,26 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
           previous: { value: '5000.00', currencyCode: 'ILS' },
         },
       ],
-      categories: [],
-      merchants: [],
+      categories: [
+        {
+          name: 'other',
+          label: 'Other',
+          color: '#52799A',
+          current: { value: '-2480.10', currencyCode: 'ILS' },
+          previous: { value: '30.57', currencyCode: 'ILS' },
+          delta: { value: '-2510.67', currencyCode: 'ILS' },
+        },
+      ],
+      merchants: [
+        {
+          name: 'Friend repayment',
+          category: 'other',
+          current: { value: '-2500.00', currencyCode: 'ILS' },
+          previous: { value: '0.00', currencyCode: 'ILS' },
+          delta: { value: '-2500.00', currencyCode: 'ILS' },
+          transactionCount: 1,
+        },
+      ],
       budgets: [
         {
           name: 'Monthly',
@@ -73,6 +91,7 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     assert.equal(home.available, 4439.7);
     assert.equal(home.netWorth, 128430.27);
     assert.equal(home.freshness[0]?.account, 'Everyday Checking · 4321');
+    assert.equal(home.merchants[0]?.category, 'Other');
   } finally {
     globalThis.fetch = originalFetch;
   }

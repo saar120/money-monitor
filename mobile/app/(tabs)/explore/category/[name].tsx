@@ -3,7 +3,7 @@ import { SymbolView } from 'expo-symbols';
 import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney } from '@/money';
+import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
 import { useAppColors } from '@/theme';
 
 export default function CategoryScreen() {
@@ -28,6 +28,7 @@ export default function CategoryScreen() {
   const matching = transactions
     .filter((transaction) => transaction.category === category.name)
     .slice(0, 12);
+  const total = spendingTotal(category.spent, home.currencyCode);
 
   return (
     <>
@@ -45,18 +46,22 @@ export default function CategoryScreen() {
           numberOfLines={1}
           style={[styles.amount, { color: colors.text }]}
         >
-          {formatUnsignedMoney(category.spent, home.currencyCode)}
+          {total.amount}
+        </Text>
+        <Text style={[styles.totalLabel, { color: colors.secondary }]}>
+          {total.label} this month
         </Text>
         <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
           {delta === 0
             ? 'Unchanged from last month'
-            : `${formatMoney(delta, home.currencyCode)} compared with this point last month`}
+            : `${formatSpendingChange(delta, home.currencyCode)} than this point last month`}
         </Text>
 
         <Text style={[styles.title, { color: colors.text }]}>What caused the change?</Text>
         {merchants.length ? (
           merchants.map((merchant) => {
             const merchantDelta = merchant.current - merchant.previous;
+            const merchantTotal = spendingTotal(merchant.current, home.currencyCode);
             return (
               <Pressable
                 accessibilityHint={`Opens ${merchant.name} merchant details`}
@@ -83,7 +88,7 @@ export default function CategoryScreen() {
                     maxFontSizeMultiplier={1.4}
                     style={[styles.rowMeta, { color: colors.secondary }]}
                   >
-                    {formatUnsignedMoney(merchant.current, home.currencyCode)} · {merchant.count}{' '}
+                    {merchantTotal.amount} {merchantTotal.label.toLowerCase()} · {merchant.count}{' '}
                     transaction{merchant.count === 1 ? '' : 's'}
                   </Text>
                 </View>
@@ -95,7 +100,7 @@ export default function CategoryScreen() {
                       { color: merchantDelta > 0 ? colors.warning : colors.positive },
                     ]}
                   >
-                    {formatMoney(merchantDelta, home.currencyCode)}
+                    {formatSpendingChange(merchantDelta, home.currencyCode)}
                   </Text>
                   <SymbolView name="chevron.right" size={11} tintColor={colors.tertiary} />
                 </View>
@@ -120,7 +125,7 @@ export default function CategoryScreen() {
                 { color: merchantRemainder > 0 ? colors.warning : colors.positive },
               ]}
             >
-              {formatMoney(merchantRemainder, home.currencyCode)}
+              {formatSpendingChange(merchantRemainder, home.currencyCode)}
             </Text>
           </View>
         ) : null}
@@ -175,7 +180,8 @@ const styles = StyleSheet.create({
     letterSpacing: -1.4,
     fontVariant: ['tabular-nums'],
   },
-  summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
+  totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  summary: { marginTop: 5, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   title: { marginTop: 36, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: {
     minHeight: 64,

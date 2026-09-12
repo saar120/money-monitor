@@ -167,6 +167,15 @@ export async function fetchHomeData(
   const budgets = Array.isArray(overview.budgets) ? overview.budgets : [];
   const primaryBudget = budgets[0] ? object(budgets[0], 'budget') : null;
   const accounts = Array.isArray(data.accounts) ? data.accounts : [];
+  const categoryLabels = new Map(
+    (Array.isArray(overview.categories) ? overview.categories : []).map((raw) => {
+      const category = object(raw, 'category');
+      return [
+        text(category.name, 'category name'),
+        text(category.label, 'category label'),
+      ] as const;
+    }),
+  );
   const month = new Intl.DateTimeFormat('en', { month: 'long' }).format(
     new Date(`${financialDate}T12:00:00Z`),
   );
@@ -232,9 +241,10 @@ export async function fetchHomeData(
     }),
     merchants: (Array.isArray(overview.merchants) ? overview.merchants : []).map((raw) => {
       const merchant = object(raw, 'merchant');
+      const category = text(merchant.category, 'merchant category');
       return {
         name: text(merchant.name, 'merchant name'),
-        category: text(merchant.category, 'merchant category'),
+        category: categoryLabels.get(category) ?? category,
         current: money(merchant.current).value,
         previous: money(merchant.previous).value,
         count: Number(merchant.transactionCount),

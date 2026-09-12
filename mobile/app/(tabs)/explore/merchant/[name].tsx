@@ -1,18 +1,19 @@
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney } from '@/money';
+import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
 import { useAppColors } from '@/theme';
 
 export default function MerchantScreen() {
   const colors = useAppColors();
   const { name } = useLocalSearchParams<{ name: string }>();
   const { home, status } = useMoneyData();
-  const { transactions } = useActivityTransactions(name ?? '', 'all');
+  const { transactions, loading, error } = useActivityTransactions(name ?? '', 'all');
   const merchant = home?.merchants.find((item) => item.name === name);
   if (status !== 'ready' || !home) return <ConnectionState />;
   const delta = merchant ? merchant.current - merchant.previous : null;
+  const total = merchant ? spendingTotal(merchant.current, home.currencyCode) : null;
   return (
     <>
       <Stack.Screen options={{ title: name ?? 'Merchant' }} />
@@ -31,12 +32,17 @@ export default function MerchantScreen() {
               numberOfLines={1}
               style={[styles.amount, { color: colors.text }]}
             >
-              {formatUnsignedMoney(merchant.current, home.currencyCode)}
+              {total!.amount}
+            </Text>
+            <Text style={[styles.totalLabel, { color: colors.secondary }]}>
+              {total!.label} this month
             </Text>
             <Text
               style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.positive }]}
             >
-              {formatMoney(delta!, home.currencyCode)} compared with last month
+              {delta === 0
+                ? 'Unchanged from last month'
+                : `${formatSpendingChange(delta!, home.currencyCode)} than last month`}
             </Text>
             <Text style={[styles.meta, { color: colors.secondary }]}>
               {merchant.category} · {merchant.count} transaction{merchant.count === 1 ? '' : 's'}
@@ -44,7 +50,11 @@ export default function MerchantScreen() {
           </>
         ) : null}
         <Text style={[styles.title, { color: colors.text }]}>Transactions</Text>
-        {transactions.length ? (
+        {loading ? (
+          <ActivityIndicator color={colors.accent} style={styles.loading} />
+        ) : error ? (
+          <Text style={[styles.empty, { color: colors.danger }]}>{error}</Text>
+        ) : transactions.length ? (
           transactions.map((transaction) => (
             <Pressable
               accessibilityHint="Opens transaction details"
@@ -102,7 +112,8 @@ const styles = StyleSheet.create({
     letterSpacing: -1.4,
     fontVariant: ['tabular-nums'],
   },
-  summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
+  totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
+  summary: { marginTop: 5, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   meta: { marginTop: 5, fontSize: 13 },
   title: { marginTop: 36, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: {
@@ -117,4 +128,5 @@ const styles = StyleSheet.create({
   rowMeta: { marginTop: 3, fontSize: 12.5, writingDirection: 'ltr' },
   rowAmount: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   empty: { marginTop: 10, fontSize: 14 },
+  loading: { alignSelf: 'flex-start', marginTop: 14 },
 });
