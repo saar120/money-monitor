@@ -90,3 +90,9 @@ export function niceChartMaximum(value: number, divisions = 4): number {
   const niceStep = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
   return niceStep * magnitude * divisions;
 }
+
+export function formatCompactNumber(value: number): string {
+  if (value === 0) return '0';
+  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
+  return String(Math.round(value));
+}

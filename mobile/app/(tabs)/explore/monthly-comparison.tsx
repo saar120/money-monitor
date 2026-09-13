@@ -5,7 +5,12 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
-import { formatUnsignedMoney, monthlyCategoryNames, niceChartMaximum } from '@/money';
+import {
+  formatCompactNumber,
+  formatUnsignedMoney,
+  monthlyCategoryNames,
+  niceChartMaximum,
+} from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -75,7 +80,9 @@ function MonthlyComparison({
 
       <View style={styles.summary}>
         <View>
-          <Text style={[styles.label, { color: colors.secondary }]}>{monthTitle(selected.month)}</Text>
+          <Text style={[styles.label, { color: colors.secondary }]}>
+            {monthTitle(selected.month)}
+          </Text>
           <Text allowFontScaling={false} style={[styles.total, { color: colors.text }]}>
             {formatUnsignedMoney(selected.spending, selected.currencyCode)}
           </Text>
@@ -91,7 +98,7 @@ function MonthlyComparison({
               allowFontScaling={false}
               style={[styles.axisLabel, { color: colors.tertiary }]}
             >
-              {compactNumber(tick)}
+              {formatCompactNumber(tick)}
             </Text>
           ))}
         </View>
@@ -157,9 +164,7 @@ function MonthlyComparison({
       <View style={[styles.categoryList, { backgroundColor: colors.surface }]}>
         {visibleCategories.map((category, index) => {
           const percent =
-            selected.spending > 0
-              ? Math.round((category.spent / selected.spending) * 100)
-              : 0;
+            selected.spending > 0 ? Math.round((category.spent / selected.spending) * 100) : 0;
           return (
             <Pressable
               accessibilityHint={`Opens ${category.name} merchants and transactions`}
@@ -217,12 +222,6 @@ function monthTitle(month: string) {
   return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
     new Date(`${month}-01T12:00:00Z`),
   );
-}
-
-function compactNumber(value: number) {
-  if (value === 0) return '0';
-  if (value >= 1_000) return `${Math.round(value / 1_000)}K`;
-  return String(Math.round(value));
 }
 
 const styles = StyleSheet.create({

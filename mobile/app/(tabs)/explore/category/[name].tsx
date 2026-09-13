@@ -6,7 +6,14 @@ import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatSpendingChange, formatUnsignedMoney, spendingTotal } from '@/money';
+import {
+  formatCompactNumber,
+  formatMoney,
+  formatSpendingChange,
+  formatUnsignedMoney,
+  niceChartMaximum,
+  spendingTotal,
+} from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -94,6 +101,8 @@ function CategoryContent({
     total: item.categories.find((candidate) => candidate.name === name)?.spent ?? 0,
   }));
   const chartMaximum = Math.max(1, ...history.map((item) => item.total));
+  const axisMaximum = niceChartMaximum(chartMaximum, 3);
+  const ticks = Array.from({ length: 4 }, (_, index) => axisMaximum - (axisMaximum / 3) * index);
   const total = spendingTotal(category.spent, snapshot.currencyCode);
   const average = history.reduce((sum, item) => sum + item.total, 0) / Math.max(history.length, 1);
   const highestIndex = history.reduce(
@@ -165,46 +174,62 @@ function CategoryContent({
       </View>
 
       <View style={styles.chart} accessibilityLabel={`${name} spending trend for ${range} months`}>
-        <View pointerEvents="none" style={styles.chartGuides}>
-          {[0, 1, 2, 3].map((line) => (
-            <View key={line} style={[styles.chartGuide, { backgroundColor: colors.separator }]} />
+        <View style={styles.chartAxis}>
+          {ticks.map((tick) => (
+            <Text
+              allowFontScaling={false}
+              key={tick}
+              style={[styles.chartAxisLabel, { color: colors.tertiary }]}
+            >
+              {formatCompactNumber(tick)}
+            </Text>
           ))}
         </View>
-        <View style={styles.chartBars}>
-          {historyMonths.map((item, index) => {
-            const selected = item.month === snapshot.month;
-            const value = history[index]!.total;
-            return (
-              <Pressable
-                accessibilityLabel={`${item.label}, ${formatUnsignedMoney(value, snapshot.currencyCode)}`}
-                accessibilityRole="button"
-                accessibilityState={{ selected }}
-                key={item.month}
-                onPress={() => setMonth(item.month)}
-                style={({ pressed }) => [styles.chartGroup, { opacity: pressed ? 0.68 : 1 }]}
-                testID={`category-bar-${item.month}`}
-              >
-                <View style={styles.chartTrack}>
-                  <View
-                    style={[
-                      styles.chartBar,
-                      {
-                        backgroundColor: category.color,
-                        height: Math.max(5, (value / chartMaximum) * 136),
-                        opacity: selected ? 1 : 0.38,
-                      },
-                    ]}
-                  />
-                </View>
-                <Text
-                  numberOfLines={1}
-                  style={[styles.chartLabel, { color: selected ? colors.text : colors.secondary }]}
+        <View style={styles.chartPlot}>
+          <View pointerEvents="none" style={styles.chartGuides}>
+            {ticks.map((tick) => (
+              <View key={tick} style={[styles.chartGuide, { backgroundColor: colors.separator }]} />
+            ))}
+          </View>
+          <View style={styles.chartBars}>
+            {historyMonths.map((item, index) => {
+              const selected = item.month === snapshot.month;
+              const value = history[index]!.total;
+              return (
+                <Pressable
+                  accessibilityLabel={`${item.label}, ${formatUnsignedMoney(value, snapshot.currencyCode)}`}
+                  accessibilityRole="button"
+                  accessibilityState={{ selected }}
+                  key={item.month}
+                  onPress={() => setMonth(item.month)}
+                  style={({ pressed }) => [styles.chartGroup, { opacity: pressed ? 0.68 : 1 }]}
+                  testID={`category-bar-${item.month}`}
                 >
-                  {item.label}
-                </Text>
-              </Pressable>
-            );
-          })}
+                  <View style={styles.chartTrack}>
+                    <View
+                      style={[
+                        styles.chartBar,
+                        {
+                          backgroundColor: category.color,
+                          height: Math.max(5, (value / axisMaximum) * 136),
+                          opacity: selected ? 1 : 0.38,
+                        },
+                      ]}
+                    />
+                  </View>
+                  <Text
+                    numberOfLines={1}
+                    style={[
+                      styles.chartLabel,
+                      { color: selected ? colors.text : colors.secondary },
+                    ]}
+                  >
+                    {item.label}
+                  </Text>
+                </Pressable>
+              );
+            })}
+          </View>
         </View>
       </View>
 
@@ -385,17 +410,26 @@ const styles = StyleSheet.create({
   totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   rangeRow: { marginTop: 22, alignItems: 'center' },
-  chart: { height: 166, marginTop: 18, paddingHorizontal: 8 },
+  chart: { height: 166, marginTop: 18, flexDirection: 'row', gap: 9 },
+  chartAxis: { width: 28, height: 142, justifyContent: 'space-between', alignItems: 'flex-end' },
+  chartAxisLabel: { fontSize: 9.5, lineHeight: 11, fontVariant: ['tabular-nums'] },
+  chartPlot: { flex: 1, height: 166 },
   chartGuides: {
     position: 'absolute',
     top: 0,
-    right: 8,
+    right: 0,
     bottom: 24,
-    left: 8,
+    left: 0,
     justifyContent: 'space-between',
   },
   chartGuide: { width: '100%', height: StyleSheet.hairlineWidth },
-  chartBars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  chartBars: {
+    flex: 1,
+    paddingHorizontal: 8,
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 8,
+  },
   chartGroup: {
     flex: 1,
     minWidth: 0,

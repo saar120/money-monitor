@@ -49,6 +49,7 @@ name: Explore cards open month-aware drill-downs
 - tapOn:
     id: monthly-category-Dining
 - assertVisible: 'Monthly average'
+- assertVisible: '6K'
 - tapOn:
     id: category-bar-2026-05
 - assertVisible: 'May 2026'
