@@ -54,6 +54,16 @@ export function overviewCashFlow(income: number, spending: number): number {
   return Math.round((income - spending + Number.EPSILON) * 100) / 100;
 }
 
+export function cashFlowSummary(months: ReadonlyArray<{ income: number; spending: number }>) {
+  const income = months.reduce((sum, month) => sum + month.income, 0);
+  const spending = months.reduce((sum, month) => sum + month.spending, 0);
+  const total = overviewCashFlow(income, spending);
+  const average = months.length
+    ? Math.round((total / months.length + Number.EPSILON) * 100) / 100
+    : 0;
+  return { average, income, spending, total };
+}
+
 export function monthlyCategoryNames(
   months: ReadonlyArray<{ categories: ReadonlyArray<{ name: string; spent: number }> }>,
   limit = 6,
@@ -65,7 +75,9 @@ export function monthlyCategoryNames(
     }
   }
   return [...totals]
-    .sort(([leftName, left], [rightName, right]) => right - left || leftName.localeCompare(rightName))
+    .sort(
+      ([leftName, left], [rightName, right]) => right - left || leftName.localeCompare(rightName),
+    )
     .slice(0, limit)
     .map(([name]) => name);
 }

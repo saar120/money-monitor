@@ -1,4 +1,3 @@
-import { Bar, CartesianChart } from 'victory-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
@@ -49,6 +48,7 @@ function CategoryContent({
   const [month, setMonth] = useState(
     months.some((item) => item.month === initialMonth) ? initialMonth! : fallback.month,
   );
+  const [windowEndMonth, setWindowEndMonth] = useState(month);
   const snapshot = months.find((item) => item.month === month) ?? fallback;
   const category = snapshot.categories.find((item) => item.name === name);
   const criteria = useMemo(
@@ -84,16 +84,16 @@ function CategoryContent({
   const matching = transactions
     .filter((transaction) => transaction.category === category.name)
     .slice(0, 12);
-  const selectedIndex = months.findIndex((item) => item.month === snapshot.month);
+  const selectedIndex = months.findIndex((item) => item.month === windowEndMonth);
   const historyMonths = months.slice(
     Math.max(0, selectedIndex - Number(range) + 1),
     selectedIndex + 1,
   );
-  const history = historyMonths
-    .map((item, index) => ({
-      index,
-      total: item.categories.find((candidate) => candidate.name === name)?.spent ?? 0,
-    }));
+  const history = historyMonths.map((item) => ({
+    month: item.month,
+    total: item.categories.find((candidate) => candidate.name === name)?.spent ?? 0,
+  }));
+  const chartMaximum = Math.max(1, ...history.map((item) => item.total));
   const total = spendingTotal(category.spent, snapshot.currencyCode);
   const average = history.reduce((sum, item) => sum + item.total, 0) / Math.max(history.length, 1);
   const highestIndex = history.reduce(
@@ -125,7 +125,10 @@ function CategoryContent({
         <MonthPicker
           month={snapshot.month}
           months={months.map((item) => item.month)}
-          onSelect={setMonth}
+          onSelect={(selectedMonth) => {
+            setMonth(selectedMonth);
+            setWindowEndMonth(selectedMonth);
+          }}
           testID="category-month-picker"
         />
       </View>
@@ -161,53 +164,48 @@ function CategoryContent({
         />
       </View>
 
-      <View
-        style={styles.chart}
-        accessibilityLabel={`${name} spending trend for ${range} months`}
-      >
+      <View style={styles.chart} accessibilityLabel={`${name} spending trend for ${range} months`}>
         <View pointerEvents="none" style={styles.chartGuides}>
           {[0, 1, 2, 3].map((line) => (
             <View key={line} style={[styles.chartGuide, { backgroundColor: colors.separator }]} />
           ))}
         </View>
-        <CartesianChart
-          data={history}
-          xKey="index"
-          yKeys={['total']}
-          domainPadding={{ top: 18, bottom: 8 }}
-        >
-          {({ points, chartBounds }) => (
-            <>
-              <Bar
-                points={points.total}
-                chartBounds={chartBounds}
-                color={category.color}
-                innerPadding={0.55}
-                opacity={0.38}
-                roundedCorners={{ topLeft: 4, topRight: 4 }}
-              />
-              <Bar
-                points={points.total.slice(-1)}
-                chartBounds={chartBounds}
-                barCount={history.length}
-                color={category.color}
-                innerPadding={0.55}
-                roundedCorners={{ topLeft: 4, topRight: 4 }}
-              />
-            </>
-          )}
-        </CartesianChart>
-      </View>
-      <View style={styles.chartLabels}>
-        {historyMonths.map((item) => (
-          <Text
-            key={item.month}
-            numberOfLines={1}
-            style={[styles.chartLabel, { color: colors.secondary }]}
-          >
-            {item.label}
-          </Text>
-        ))}
+        <View style={styles.chartBars}>
+          {historyMonths.map((item, index) => {
+            const selected = item.month === snapshot.month;
+            const value = history[index]!.total;
+            return (
+              <Pressable
+                accessibilityLabel={`${item.label}, ${formatUnsignedMoney(value, snapshot.currencyCode)}`}
+                accessibilityRole="button"
+                accessibilityState={{ selected }}
+                key={item.month}
+                onPress={() => setMonth(item.month)}
+                style={({ pressed }) => [styles.chartGroup, { opacity: pressed ? 0.68 : 1 }]}
+                testID={`category-bar-${item.month}`}
+              >
+                <View style={styles.chartTrack}>
+                  <View
+                    style={[
+                      styles.chartBar,
+                      {
+                        backgroundColor: category.color,
+                        height: Math.max(5, (value / chartMaximum) * 136),
+                        opacity: selected ? 1 : 0.38,
+                      },
+                    ]}
+                  />
+                </View>
+                <Text
+                  numberOfLines={1}
+                  style={[styles.chartLabel, { color: selected ? colors.text : colors.secondary }]}
+                >
+                  {item.label}
+                </Text>
+              </Pressable>
+            );
+          })}
+        </View>
       </View>
 
       <View style={[styles.stats, { backgroundColor: colors.surfaceSoft }]}>
@@ -343,11 +341,16 @@ function StatRow({ label, last = false, value }: { label: string; last?: boolean
     <View
       style={[
         styles.statRow,
-        { borderBottomColor: colors.separator, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth },
+        {
+          borderBottomColor: colors.separator,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+        },
       ]}
     >
       <Text style={[styles.statLabel, { color: colors.secondary }]}>{label}</Text>
-      <Text allowFontScaling={false} style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+      <Text allowFontScaling={false} style={[styles.statValue, { color: colors.text }]}>
+        {value}
+      </Text>
     </View>
   );
 }
@@ -362,7 +365,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   navigatorMissing: { alignSelf: 'stretch', marginTop: 20 },
-  contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   identity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
   identityMark: { width: 10, height: 36, borderRadius: 5 },
   identityName: { flex: 1, minWidth: 0, fontSize: 17, lineHeight: 22, fontWeight: '700' },
@@ -377,15 +385,43 @@ const styles = StyleSheet.create({
   totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   rangeRow: { marginTop: 22, alignItems: 'center' },
-  chart: { height: 158, marginTop: 18 },
-  chartGuides: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
+  chart: { height: 166, marginTop: 18, paddingHorizontal: 8 },
+  chartGuides: {
+    position: 'absolute',
+    top: 0,
+    right: 8,
+    bottom: 24,
+    left: 8,
+    justifyContent: 'space-between',
+  },
   chartGuide: { width: '100%', height: StyleSheet.hairlineWidth },
-  chartLabels: { flexDirection: 'row' },
-  chartLabel: { flex: 1, textAlign: 'center', fontSize: 10.5 },
+  chartBars: { flex: 1, flexDirection: 'row', alignItems: 'flex-end', gap: 8 },
+  chartGroup: {
+    flex: 1,
+    minWidth: 0,
+    height: 166,
+    alignItems: 'center',
+    justifyContent: 'flex-end',
+  },
+  chartTrack: { width: '100%', height: 142, alignItems: 'center', justifyContent: 'flex-end' },
+  chartBar: { width: '62%', minWidth: 10, maxWidth: 38, borderRadius: 5 },
+  chartLabel: { marginTop: 6, textAlign: 'center', fontSize: 10.5, fontWeight: '600' },
   stats: { marginTop: 20, paddingHorizontal: 14, borderRadius: 16 },
-  statRow: { minHeight: 45, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  statRow: {
+    minHeight: 45,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
   statLabel: { fontSize: 12.5 },
-  statValue: { flexShrink: 1, textAlign: 'right', fontSize: 12.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  statValue: {
+    flexShrink: 1,
+    textAlign: 'right',
+    fontSize: 12.5,
+    fontWeight: '600',
+    fontVariant: ['tabular-nums'],
+  },
   title: { marginTop: 34, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: {
     minHeight: 64,

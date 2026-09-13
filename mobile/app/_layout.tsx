@@ -1,6 +1,14 @@
 import 'react-native-gesture-handler';
 import * as ScreenCapture from 'expo-screen-capture';
-import { DarkTheme, DefaultTheme, Stack, ThemeProvider, useGlobalSearchParams } from 'expo-router';
+import * as SecureStore from 'expo-secure-store';
+import {
+  DarkTheme,
+  DefaultTheme,
+  Stack,
+  ThemeProvider,
+  useGlobalSearchParams,
+  usePathname,
+} from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
 import { Settings, useColorScheme } from 'react-native';
@@ -8,6 +16,7 @@ import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthGate } from '@/security/AuthGate';
 import { selectFixtureScenario } from '@/fixture-selection';
 import { MoneyDataProvider } from '@/MoneyData';
+import { LAST_ROOT_TAB_KEY, rootTabFromPath } from '@/navigation-state';
 import { useAppColors } from '@/theme';
 
 export default function RootLayout() {
@@ -44,6 +53,7 @@ export default function RootLayout() {
       >
         <AuthGate previewLocked={previewLocked}>
           <MoneyDataProvider>
+            <NavigationPersistence />
             <Stack
               screenOptions={{
                 contentStyle: { backgroundColor: colors.background },
@@ -75,4 +85,15 @@ export default function RootLayout() {
       </ThemeProvider>
     </GestureHandlerRootView>
   );
+}
+
+function NavigationPersistence() {
+  const pathname = usePathname();
+
+  useEffect(() => {
+    const tab = rootTabFromPath(pathname);
+    if (tab) void SecureStore.setItemAsync(LAST_ROOT_TAB_KEY, tab).catch(() => undefined);
+  }, [pathname]);
+
+  return null;
 }

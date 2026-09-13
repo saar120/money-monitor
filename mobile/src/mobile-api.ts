@@ -9,6 +9,7 @@ export type TransactionQuery = {
   limit?: number;
   q?: string;
   category?: string;
+  categories?: string[];
   filter?: ActivityFilter;
   startDate?: string;
   endDate?: string;
@@ -262,6 +263,7 @@ export async function fetchHomeData(
       const budget = object(raw, 'budget');
       return {
         name: text(budget.name, 'budget name'),
+        categoryNames: categoryNamesOrLegacy(budget.categoryNames),
         spent: money(budget.spent).value,
         limit: money(budget.limit).value,
         remaining: money(budget.remaining).value,
@@ -366,6 +368,7 @@ export async function fetchExploreMonth(
       const budget = object(raw, 'budget');
       return {
         name: text(budget.name, 'budget name'),
+        categoryNames: categoryNamesOrLegacy(budget.categoryNames),
         spent: money(budget.spent).value,
         limit: money(budget.limit).value,
         remaining: money(budget.remaining).value,
@@ -458,6 +461,9 @@ export async function fetchTransactionPage(
   if (query.q?.trim()) params.set('q', query.q.trim());
   if (query.limit) params.set('limit', String(query.limit));
   if (query.category?.trim()) params.set('category', query.category.trim());
+  for (const category of query.categories ?? []) {
+    if (category.trim()) params.append('categories', category.trim());
+  }
   if (query.accountId) params.set('accountId', query.accountId);
   if (query.status) params.set('status', query.status);
   if (query.direction) params.set('direction', query.direction);
@@ -489,6 +495,12 @@ export async function fetchTransactionPage(
     hasMore,
     nextCursor,
   };
+}
+
+function categoryNamesOrLegacy(value: unknown): string[] | null {
+  if (value === undefined) return null;
+  if (!Array.isArray(value)) throw new Error('The Mac returned invalid budget categories.');
+  return value.map((category) => text(category, 'budget category'));
 }
 
 export async function fetchTransactions(

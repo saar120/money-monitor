@@ -3,7 +3,7 @@ import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import { cashFlowSummary, formatMoney, formatUnsignedMoney, overviewCashFlow } from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -38,6 +38,8 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
   const previousNet = previous ? overviewCashFlow(previous.income, previous.spending) : null;
   const delta = previousNet === null ? null : net - previousNet;
   const max = Math.max(1, ...series.flatMap((month) => [month.income, month.spending]));
+  const summary = cashFlowSummary(series);
+  const rangeLabel = `${series.length}-month`;
 
   return (
     <>
@@ -115,6 +117,7 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
         <Legend color={colors.blueSoft} label="Posted spending" />
       </View>
       <View style={[styles.rule, { backgroundColor: colors.separator }]} />
+      <Text style={[styles.sectionLabel, { color: colors.secondary }]}>Selected month</Text>
       <View style={styles.breakdown}>
         <Value label="Income" value={formatUnsignedMoney(selected.income, selected.currencyCode)} />
         <Value
@@ -122,7 +125,68 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
           value={formatUnsignedMoney(selected.spending, selected.currencyCode)}
         />
       </View>
+
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{rangeLabel} summary</Text>
+      <View style={[styles.summaryCard, { backgroundColor: colors.surfaceSoft }]}>
+        <SummaryRow
+          label="Net cash flow"
+          testID="cash-flow-range-total"
+          value={formatMoney(summary.total, selected.currencyCode)}
+          valueColor={summary.total >= 0 ? colors.positive : colors.danger}
+        />
+        <SummaryRow
+          label="Monthly average"
+          testID="cash-flow-range-average"
+          value={formatMoney(summary.average, selected.currencyCode)}
+          valueColor={summary.average >= 0 ? colors.positive : colors.danger}
+        />
+        <SummaryRow
+          label="Total income"
+          value={formatUnsignedMoney(summary.income, selected.currencyCode)}
+        />
+        <SummaryRow
+          label="Total spending"
+          value={formatUnsignedMoney(summary.spending, selected.currencyCode)}
+          last
+        />
+      </View>
     </>
+  );
+}
+
+function SummaryRow({
+  label,
+  last = false,
+  testID,
+  value,
+  valueColor,
+}: {
+  label: string;
+  last?: boolean;
+  testID?: string;
+  value: string;
+  valueColor?: string;
+}) {
+  const colors = useAppColors();
+  return (
+    <View
+      style={[
+        styles.summaryRow,
+        {
+          borderBottomColor: colors.separator,
+          borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth,
+        },
+      ]}
+      testID={testID}
+    >
+      <Text style={[styles.summaryLabel, { color: colors.secondary }]}>{label}</Text>
+      <Text
+        allowFontScaling={false}
+        style={[styles.summaryValue, { color: valueColor ?? colors.text }]}
+      >
+        {value}
+      </Text>
+    </View>
   );
 }
 
@@ -189,8 +253,38 @@ const styles = StyleSheet.create({
   legendText: { fontSize: 11.5 },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 30 },
   breakdown: { flexDirection: 'row', justifyContent: 'space-between' },
+  sectionLabel: {
+    marginBottom: 12,
+    fontSize: 12,
+    fontWeight: '600',
+    textTransform: 'uppercase',
+    letterSpacing: 0.5,
+  },
   valueLabel: { fontSize: 13 },
   value: { marginTop: 5, fontSize: 20, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  sectionTitle: {
+    marginTop: 32,
+    marginBottom: 12,
+    fontSize: 21,
+    lineHeight: 27,
+    fontWeight: '700',
+  },
+  summaryCard: { paddingHorizontal: 14, borderRadius: 16 },
+  summaryRow: {
+    minHeight: 48,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 16,
+  },
+  summaryLabel: { fontSize: 13 },
+  summaryValue: {
+    flexShrink: 1,
+    textAlign: 'right',
+    fontSize: 14,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
   loading: { minHeight: 260, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
 });

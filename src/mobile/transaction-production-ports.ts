@@ -1,4 +1,4 @@
-import { and, desc, eq, gt, gte, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
+import { and, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 import { MobileBootstrapSectionReadError } from './bootstrap-adapter.js';
@@ -230,14 +230,21 @@ export function createProductionMobileTransactionPorts(
       }
       conditions.push(eq(schema.transactions.accountId, accountId));
     }
-    if (query.category) {
+    const selectedCategories = query.categories ?? (query.category ? [query.category] : []);
+    if (selectedCategories.length > 0) {
+      const namedCategories = selectedCategories.filter((name) => name !== 'Uncategorized');
       conditions.push(
-        query.category === 'Uncategorized'
-          ? isNull(schema.transactions.category)
-          : (or(
-              eq(schema.transactions.category, query.category),
-              eq(schema.categories.label, query.category),
-            ) as SQL),
+        or(
+          ...(selectedCategories.includes('Uncategorized')
+            ? [isNull(schema.transactions.category)]
+            : []),
+          ...(namedCategories.length > 0
+            ? [
+                inArray(schema.transactions.category, namedCategories),
+                inArray(schema.categories.label, namedCategories),
+              ]
+            : []),
+        ) as SQL,
       );
     }
     if (query.q) {

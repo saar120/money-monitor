@@ -53,6 +53,7 @@ export type ActivityCriteria = {
   startDate?: string;
   endDate?: string;
   category?: string;
+  categories?: string[];
   account?: string;
   accountId?: string;
   owner?: string;
@@ -526,6 +527,7 @@ export function useActivityTransactions(
         (!criteria.startDate || date >= criteria.startDate) &&
         (!criteria.endDate || date <= criteria.endDate) &&
         (!criteria.category || transaction.category === criteria.category) &&
+        (!criteria.categories?.length || criteria.categories.includes(transaction.category)) &&
         (!criteria.account || transaction.account === criteria.account) &&
         (!criteria.owner || transaction.owner === criteria.owner) &&
         (!criteria.status || (criteria.status === 'pending') === Boolean(transaction.pending)) &&
@@ -679,6 +681,7 @@ function activityTransactionQuery(
     limit: 50,
     q: query,
     category: criteria.category,
+    categories: criteria.categories,
     filter,
     startDate: criteria.startDate,
     endDate: criteria.endDate,

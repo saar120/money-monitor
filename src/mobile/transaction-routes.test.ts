@@ -113,6 +113,8 @@ describe('protected mobile transaction routes', () => {
       includeExcluded: 'false',
       limit: '20',
     });
+    query.append('categories', 'Groceries');
+    query.append('categories', 'Dining');
     const response = await app.inject({
       method: 'GET',
       url: `/api/mobile/v1/transactions?${query.toString()}`,
@@ -138,6 +140,7 @@ describe('protected mobile transaction routes', () => {
     expect(list).toHaveBeenCalledWith(
       {
         q: 'Market רמי',
+        categories: ['Dining', 'Groceries'],
         includeExcluded: false,
         limit: 20,
       },

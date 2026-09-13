@@ -41,6 +41,9 @@ const normalizedQuerySchema = z
   .string()
   .transform((value) => value.normalize('NFKC').trim().replace(/\s+/gu, ' '))
   .pipe(z.string().min(1).max(100));
+const normalizedQueryListSchema = z
+  .union([normalizedQuerySchema, z.array(normalizedQuerySchema).min(1).max(30)])
+  .transform((value) => [...new Set(typeof value === 'string' ? [value] : value)].sort());
 
 export const mobileTransactionDirectionSchema = z.enum(['debit', 'credit', 'unknown']);
 export const mobileTransactionStatusSchema = z.enum(['posted', 'pending', 'unknown']);
@@ -58,6 +61,7 @@ export const mobileTransactionQuerySchema = z
     includeExcluded: queryBooleanSchema().default(false),
     accountId: accountIdSchema.optional(),
     category: normalizedQuerySchema.optional(),
+    categories: normalizedQueryListSchema.optional(),
   })
   .strict()
   .superRefine((query, context) => {
@@ -66,6 +70,13 @@ export const mobileTransactionQuerySchema = z
         code: 'custom',
         path: ['endDate'],
         message: 'End date cannot precede start date',
+      });
+    }
+    if (query.category && query.categories) {
+      context.addIssue({
+        code: 'custom',
+        path: ['categories'],
+        message: 'Use either category or categories',
       });
     }
   });

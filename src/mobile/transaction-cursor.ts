@@ -72,6 +72,7 @@ export function canonicalTransactionFilterFingerprint(query: MobileTransactionQu
     includeExcluded: query.includeExcluded,
     accountId: query.accountId ?? null,
     category: query.category ?? null,
+    categories: query.categories ?? null,
     sort: 'date_desc_id_desc',
   });
   return createHash('sha256').update(canonical, 'utf8').digest('hex');

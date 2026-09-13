@@ -71,6 +71,15 @@ describe('mobile transaction query contract', () => {
       limit: 30,
       includeExcluded: false,
     });
+    expect(
+      mobileTransactionQuerySchema.parse({
+        categories: ['  Ｇｒｏｃｅｒｉｅｓ  ', 'Dining', 'Dining'],
+      }),
+    ).toEqual({
+      categories: ['Dining', 'Groceries'],
+      limit: 30,
+      includeExcluded: false,
+    });
   });
 
   it.each([
@@ -78,6 +87,8 @@ describe('mobile transaction query contract', () => {
     { limit: '51' },
     { startDate: '2026-02-30' },
     { startDate: '2026-07-20', endDate: '2026-07-01' },
+    { category: 'Dining', categories: ['Dining'] },
+    { categories: [] },
     { accountId: 'account_42' },
     { unexpected: 'field' },
   ])('rejects invalid or unrecognized query input %#', (input) => {

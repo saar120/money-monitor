@@ -37,6 +37,7 @@ type CategorySpend = {
 
 export type BudgetProgress = {
   name: string;
+  categoryNames: string[] | null;
   spent: number;
   limit: number;
   remaining: number;
@@ -286,6 +287,7 @@ const normal: FixtureScenario = {
   budgets: [
     {
       name: 'Monthly spending',
+      categoryNames: [],
       spent: 18920,
       limit: 60000,
       remaining: 41080,
@@ -295,6 +297,7 @@ const normal: FixtureScenario = {
     },
     {
       name: 'Dining',
+      categoryNames: ['Dining'],
       spent: 2160,
       limit: 7000,
       remaining: 4840,
@@ -357,6 +360,7 @@ const needsAttention: FixtureScenario = {
   budgets: [
     {
       name: 'Monthly spending',
+      categoryNames: [],
       spent: 26840,
       limit: 24200,
       remaining: -2640,
@@ -366,6 +370,7 @@ const needsAttention: FixtureScenario = {
     },
     {
       name: 'Dining',
+      categoryNames: ['Dining'],
       spent: 3610,
       limit: 2400,
       remaining: -1210,
@@ -415,6 +420,7 @@ const lightData: FixtureScenario = {
   budgets: [
     {
       name: 'Monthly spending',
+      categoryNames: [],
       spent: 627,
       limit: 7200,
       remaining: 6573,

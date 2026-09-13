@@ -42,6 +42,9 @@ describe('mobile transaction cursor', () => {
     expect(canonicalTransactionFilterFingerprint(query({ direction: 'debit' }))).not.toBe(base);
     expect(canonicalTransactionFilterFingerprint(query({ q: 'Other' }))).not.toBe(base);
     expect(canonicalTransactionFilterFingerprint(query({ category: 'Dining' }))).not.toBe(base);
+    expect(
+      canonicalTransactionFilterFingerprint(query({ categories: ['Dining', 'Groceries'] })),
+    ).not.toBe(base);
 
     const codec = createMobileTransactionCursorCodec(KEY);
     const cursor = codec.encode(

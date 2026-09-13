@@ -49,6 +49,9 @@ name: Explore cards open month-aware drill-downs
 - tapOn:
     id: monthly-category-Dining
 - assertVisible: 'Monthly average'
+- tapOn:
+    id: category-bar-2026-05
+- assertVisible: 'May 2026'
 - swipe:
     start: 3%, 50%
     end: 90%, 50%
@@ -77,10 +80,14 @@ name: Explore cards open month-aware drill-downs
     id: explore-card-cash-flow
 - assertVisible:
     id: cash-flow-total
-- swipe:
-    start: 3%, 50%
-    end: 90%, 50%
-    duration: 500
+- assertVisible:
+    id: cash-flow-range-total
+- assertVisible:
+    id: cash-flow-range-average
+- stopApp
+- launchApp
+- assertVisible:
+    id: explore-screen
 - scrollUntilVisible:
     element:
       id: explore-card-net-worth

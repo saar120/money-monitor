@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  cashFlowSummary,
   formatSpendingChange,
   monthlyCategoryNames,
   overviewCashFlow,
@@ -9,6 +10,22 @@ import {
 
 test('cash flow reconciles Mac-provided posted income and spending', () => {
   assert.equal(overviewCashFlow(32_512.84, 18_920), 13_592.84);
+});
+
+test('cash flow summarizes the full selected time span', () => {
+  assert.deepEqual(
+    cashFlowSummary([
+      { income: 12_000, spending: 8_000 },
+      { income: 10_000, spending: 9_000 },
+      { income: 14_000, spending: 8_000 },
+    ]),
+    {
+      average: 3_666.67,
+      income: 36_000,
+      spending: 25_000,
+      total: 11_000,
+    },
+  );
 });
 
 test('spending totals explain whether money was spent or received', () => {

@@ -23,7 +23,11 @@ export default function BudgetsScreen() {
       contentInsetAdjustmentBehavior="automatic"
       testID="budgets-screen"
     >
-      {months.length ? <BudgetList initialMonth={month} months={months} /> : <Loading loading={loading} />}
+      {months.length ? (
+        <BudgetList initialMonth={month} months={months} />
+      ) : (
+        <Loading loading={loading} />
+      )}
     </ScrollView>
   );
 }
@@ -38,7 +42,9 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
   return (
     <>
       <View style={styles.contextRow}>
-        <Text style={[styles.contextLabel, { color: colors.secondary }]}>Tap a budget for transactions</Text>
+        <Text style={[styles.contextLabel, { color: colors.secondary }]}>
+          Tap a budget for transactions
+        </Text>
         <MonthPicker
           month={selected.month}
           months={months.map((item) => item.month)}
@@ -59,9 +65,6 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                   ? colors.warning
                   : colors.positive;
             const isExpanded = expanded === budget.name;
-            const category = selected.categories.some((item) => item.name === budget.name)
-              ? budget.name
-              : undefined;
             return (
               <View key={budget.name}>
                 <Pressable
@@ -128,11 +131,19 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                   </Text>
                 </Pressable>
                 {isExpanded ? (
-                  <BudgetTransactions
-                    category={category}
-                    currencyCode={selected.currencyCode}
-                    month={selected.month}
-                  />
+                  budget.categoryNames === null ? (
+                    <View style={[styles.transactions, { backgroundColor: colors.surfaceSoft }]}>
+                      <Text style={[styles.noTransactions, { color: colors.secondary }]}>
+                        Update Money Monitor on your Mac to load this budget’s transactions.
+                      </Text>
+                    </View>
+                  ) : (
+                    <BudgetTransactions
+                      categories={budget.categoryNames}
+                      currencyCode={selected.currencyCode}
+                      month={selected.month}
+                    />
+                  )
                 ) : null}
               </View>
             );
@@ -151,11 +162,11 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
 }
 
 function BudgetTransactions({
-  category,
+  categories,
   currencyCode,
   month,
 }: {
-  category?: string;
+  categories: string[];
   currencyCode: string;
   month: string;
 }) {
@@ -163,12 +174,12 @@ function BudgetTransactions({
   const reduceMotion = useReducedMotion();
   const criteria = useMemo(
     () => ({
-      ...(category ? { category } : {}),
+      ...(categories.length ? { categories } : {}),
       direction: 'debit' as const,
       startDate: `${month}-01`,
       endDate: endOfMonth(month),
     }),
-    [category, month],
+    [categories, month],
   );
   const { loading, transactions } = useActivityTransactions('', 'all', criteria);
   const visible = transactions.filter((item) => item.included).slice(0, 8);
@@ -179,7 +190,9 @@ function BudgetTransactions({
       style={[styles.transactions, { backgroundColor: colors.surfaceSoft }]}
     >
       <Text style={[styles.transactionsTitle, { color: colors.text }]}>Transactions</Text>
-      {loading ? <ActivityIndicator color={colors.accent} style={styles.transactionLoader} /> : null}
+      {loading ? (
+        <ActivityIndicator color={colors.accent} style={styles.transactionLoader} />
+      ) : null}
       {!loading && !visible.length ? (
         <Text style={[styles.noTransactions, { color: colors.secondary }]}>
           No matching transactions this month.
@@ -241,7 +254,12 @@ function Loading({ loading }: { loading: boolean }) {
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   contextLabel: { flex: 1, fontSize: 12.5, lineHeight: 18 },
   list: { marginTop: 16 },
   row: { paddingVertical: 22, borderBottomWidth: StyleSheet.hairlineWidth },

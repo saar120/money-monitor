@@ -65,6 +65,7 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
       budgets: [
         {
           name: 'Monthly',
+          categoryNames: ['other', 'fees'],
           spent: { value: '4560.30', currencyCode: 'ILS' },
           limit: { value: '9000.00', currencyCode: 'ILS' },
           remaining: { value: '4439.70', currencyCode: 'ILS' },
@@ -114,6 +115,7 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     assert.equal(home.merchants[0]?.category, 'Other');
     assert.equal(explore.categories[0]?.name, 'Other');
     assert.equal(explore.merchants[0]?.category, 'Other');
+    assert.deepEqual(explore.budgets[0]?.categoryNames, ['other', 'fees']);
   } finally {
     globalThis.fetch = originalFetch;
   }
@@ -223,6 +225,7 @@ test('maps the complete Activity filter set onto the transaction query', async (
       direction: 'debit',
       needsReview: false,
       includeExcluded: true,
+      categories: ['Dining', 'Groceries'],
     });
 
     const review = new URL(paths[0]!);
@@ -236,6 +239,7 @@ test('maps the complete Activity filter set onto the transaction query', async (
     assert.equal(activity.searchParams.get('direction'), 'debit');
     assert.equal(activity.searchParams.get('needsReview'), 'false');
     assert.equal(activity.searchParams.get('includeExcluded'), 'true');
+    assert.deepEqual(activity.searchParams.getAll('categories'), ['Dining', 'Groceries']);
   } finally {
     globalThis.fetch = originalFetch;
   }
