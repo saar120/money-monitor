@@ -10,6 +10,7 @@ export default ({ config }) => {
     icon: './assets/icon-demo.png',
     ios: {
       ...config.ios,
+      appleTeamId: 'CVP2NVLKL4',
       icon: './assets/icon-demo.png',
       bundleIdentifier: 'com.saaramrani.moneymonitor.demo',
     },
