@@ -41,11 +41,17 @@ The final source-versus-implementation comparison and focused Categories compari
 
 ### Pass 5 — Explore hierarchy and interactive analytics refinement
 
-The supplied mockup and the updated Explore hub, Category, Monthly spending, and expanded Budget states were reviewed in one same-call image batch. Explore now has one dominant monthly summary and one grouped drill-down surface instead of an uneven card grid. Category follows the reference reading order while retaining Blue Ledger styling: identity and embedded month control, amount and share, comparison, compact range control, line/area trend, monthly average/high/low calculations, merchants, then transactions.
+The supplied mockup and the updated Explore hub, Category, Monthly spending, and expanded Budget states were reviewed in one same-call image batch. Explore now has one dominant monthly summary and one grouped drill-down surface instead of an uneven card grid. Category follows the reference reading order while retaining Blue Ledger styling: identity and embedded month control, amount and share, comparison, compact range control, monthly bar trend, monthly average/high/low calculations, merchants, then transactions.
 
 The first simulator render exposed gray bands behind both charts because guide rows were incorrectly allowed to flex. They were replaced with hairline guides and the screens were rebuilt. The final Monthly chart uses a calm 0–25K labeled scale, narrow translucent stacks, percentages, aligned values, and category drill-down affordances. A simulator interaction check selected April after September and confirmed the stack geometry remained unchanged; only selection emphasis and detail values changed. Budgets were also exercised in Simulator: tapping Monthly spending expanded its included debit transactions, and each row retained the existing transaction-detail route.
 
 The final light and dusk captures preserve contrast, tab clearance, native back navigation, Dynamic Type behavior, semantic status colors, and the compact glass selection language. No actionable P0, P1, or P2 visual defects remain.
+
+### Pass 6 — Category chart correction
+
+The Category detail reference and implementation were compared again after device feedback identified the trend visualization mismatch. The line/area chart was replaced with the reference's six-column monthly bar chart, with quiet historical bars, a fully emphasized selected month, and one aligned month label per bar. The average, highest, and lowest calculations remain directly beneath the chart as in the mockup.
+
+The corrected iPhone 17 Pro Simulator capture was inspected beside the supplied mockup at the same six-month state. Typography, spacing, semantic category color, range control, chart hierarchy, statistics, and merchant drill-down remain consistent with Blue Ledger. No actionable P0, P1, or P2 visual defects remain.
 
 ## Evidence
 
@@ -115,3 +121,5 @@ The final light and dusk captures preserve contrast, tab clearance, native back 
 - Explore refinement mobile tests: 17/17 passed, including the stable monthly category-stack regression.
 - Explore refinement native iOS Release build: passed on iPhone 17 Pro Simulator, iOS 26.5, with 0 errors.
 - Manual Simulator interaction checks: monthly bar selection stability passed; budget expansion and transaction drill-down rendering passed.
+- Category bar correction TypeScript and 17/17 mobile tests: passed.
+- Category bar correction native iOS Release build and Simulator visual comparison: passed.

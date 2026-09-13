@@ -1,4 +1,4 @@
-import { Area, CartesianChart, Line } from 'victory-native';
+import { Bar, CartesianChart } from 'victory-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
@@ -178,28 +178,36 @@ function CategoryContent({
         >
           {({ points, chartBounds }) => (
             <>
-              <Area
+              <Bar
                 points={points.total}
-                y0={chartBounds.bottom}
+                chartBounds={chartBounds}
                 color={category.color}
-                curveType="natural"
-                opacity={0.1}
+                innerPadding={0.55}
+                opacity={0.38}
+                roundedCorners={{ topLeft: 4, topRight: 4 }}
               />
-              <Line
-                points={points.total}
+              <Bar
+                points={points.total.slice(-1)}
+                chartBounds={chartBounds}
+                barCount={history.length}
                 color={category.color}
-                curveType="natural"
-                strokeWidth={2.5}
+                innerPadding={0.55}
+                roundedCorners={{ topLeft: 4, topRight: 4 }}
               />
             </>
           )}
         </CartesianChart>
       </View>
       <View style={styles.chartLabels}>
-        <Text style={[styles.chartLabel, { color: colors.secondary }]}>
-          {historyMonths[0]?.label ?? snapshot.label}
-        </Text>
-        <Text style={[styles.chartLabel, { color: colors.secondary }]}>{snapshot.label}</Text>
+        {historyMonths.map((item) => (
+          <Text
+            key={item.month}
+            numberOfLines={1}
+            style={[styles.chartLabel, { color: colors.secondary }]}
+          >
+            {item.label}
+          </Text>
+        ))}
       </View>
 
       <View style={[styles.stats, { backgroundColor: colors.surfaceSoft }]}>
@@ -372,8 +380,8 @@ const styles = StyleSheet.create({
   chart: { height: 158, marginTop: 18 },
   chartGuides: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
   chartGuide: { width: '100%', height: StyleSheet.hairlineWidth },
-  chartLabels: { flexDirection: 'row', justifyContent: 'space-between' },
-  chartLabel: { fontSize: 11.5 },
+  chartLabels: { flexDirection: 'row' },
+  chartLabel: { flex: 1, textAlign: 'center', fontSize: 10.5 },
   stats: { marginTop: 20, paddingHorizontal: 14, borderRadius: 16 },
   statRow: { minHeight: 45, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
   statLabel: { fontSize: 12.5 },
