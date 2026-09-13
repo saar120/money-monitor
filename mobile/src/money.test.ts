@@ -1,6 +1,7 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
+  categoryTransactions,
   cashFlowSummary,
   formatCompactNumber,
   formatSpendingChange,
@@ -8,6 +9,16 @@ import {
   overviewCashFlow,
   spendingTotal,
 } from './money.ts';
+
+test('category drill-down keeps every transaction in the selected month', () => {
+  const transactions = Array.from({ length: 13 }, (_, index) => ({
+    category: 'Groceries',
+    merchant: index === 12 ? 'אושר עד' : `Grocer ${index + 1}`,
+  }));
+
+  assert.equal(categoryTransactions(transactions, 'Groceries').length, 13);
+  assert.equal(categoryTransactions(transactions, 'Groceries').at(-1)?.merchant, 'אושר עד');
+});
 
 test('cash flow reconciles Mac-provided posted income and spending', () => {
   assert.equal(overviewCashFlow(32_512.84, 18_920), 13_592.84);

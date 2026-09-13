@@ -7,6 +7,7 @@ import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
 import {
+  categoryTransactions,
   formatCompactNumber,
   formatMoney,
   formatSpendingChange,
@@ -88,9 +89,7 @@ function CategoryContent({
     .sort((a, b) => b.current - b.previous - (a.current - a.previous));
   const merchantRemainder =
     delta - merchants.reduce((total, merchant) => total + merchant.current - merchant.previous, 0);
-  const matching = transactions
-    .filter((transaction) => transaction.category === category.name)
-    .slice(0, 12);
+  const matching = categoryTransactions(transactions, category.name);
   const selectedIndex = months.findIndex((item) => item.month === windowEndMonth);
   const historyMonths = months.slice(
     Math.max(0, selectedIndex - Number(range) + 1),

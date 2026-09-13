@@ -82,6 +82,13 @@ export function monthlyCategoryNames(
     .map(([name]) => name);
 }
 
+export function categoryTransactions<T extends { category: string }>(
+  transactions: ReadonlyArray<T>,
+  category: string,
+): T[] {
+  return transactions.filter((transaction) => transaction.category === category);
+}
+
 export function niceChartMaximum(value: number, divisions = 4): number {
   if (value <= 0) return divisions;
   const roughStep = value / divisions;
