@@ -3,6 +3,7 @@ import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
   completePairing,
+  fetchExploreMonth,
   fetchHomeData,
   fetchTransactionPage,
   fetchTransactions,
@@ -85,17 +86,22 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
     meta: { server: { id: '11111111-1111-4111-8111-111111111111' } },
   };
   globalThis.fetch = async (input) =>
-    new Response(String(input).endsWith('/overview') ? JSON.stringify(overview) : fixture, {
-      status: 200,
-      headers: { 'Content-Type': 'application/json' },
-    });
+    new Response(
+      new URL(String(input)).pathname.endsWith('/overview') ? JSON.stringify(overview) : fixture,
+      {
+        status: 200,
+        headers: { 'Content-Type': 'application/json' },
+      },
+    );
 
   try {
-    const home = await fetchHomeData({
+    const credential = {
       serverId: '11111111-1111-4111-8111-111111111111',
       baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
       token: 'T'.repeat(43),
-    });
+    };
+    const home = await fetchHomeData(credential);
+    const explore = await fetchExploreMonth(credential, '2026-03');
     assert.equal(home.spent, 4560.3);
     assert.equal(home.monthKey, '2026-03');
     assert.deepEqual(home.availableMonths, ['2026-03', '2026-02']);
@@ -106,6 +112,8 @@ test('maps the server canonical bootstrap fixture into the live Home model', asy
       { id: 'account_checking_01', label: 'Everyday Checking · 4321' },
     ]);
     assert.equal(home.merchants[0]?.category, 'Other');
+    assert.equal(explore.categories[0]?.name, 'Other');
+    assert.equal(explore.merchants[0]?.category, 'Other');
   } finally {
     globalThis.fetch = originalFetch;
   }

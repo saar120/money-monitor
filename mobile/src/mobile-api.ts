@@ -28,12 +28,17 @@ export type TransactionPage = {
 };
 
 export type PairingProgress = 'requesting' | 'awaiting-approval' | 'exchanging';
-export type CashflowMonth = {
+export type ExploreMonth = {
   month: string;
   label: string;
+  currencyCode: string;
   income: number;
   spending: number;
+  categories: HomeData['categories'];
+  budgets: HomeData['budgets'];
+  merchants: HomeData['merchants'];
 };
+export type CashflowMonth = Pick<ExploreMonth, 'month' | 'label' | 'income' | 'spending'>;
 export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
 > & { reviewed?: true };
@@ -315,12 +320,12 @@ export async function fetchHomeData(
   };
 }
 
-export async function fetchCashflowMonth(
+export async function fetchExploreMonth(
   credential: PairingCredential,
   month: string,
   signal?: AbortSignal,
-): Promise<CashflowMonth> {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid cash-flow month.');
+): Promise<ExploreMonth> {
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid overview month.');
   const value = await authorizedGet(
     credential,
     `/api/mobile/v1/overview?month=${encodeURIComponent(month)}`,
@@ -331,11 +336,69 @@ export async function fetchCashflowMonth(
   const overview = object(root.data, 'overview');
   const period = object(overview.period, 'overview period');
   const cashflow = object(overview.cashflow, 'cashflow');
+  const budgets = Array.isArray(overview.budgets) ? overview.budgets : [];
+  const categoryLabels = new Map(
+    (Array.isArray(overview.categories) ? overview.categories : []).map((raw) => {
+      const category = object(raw, 'category');
+      return [
+        text(category.name, 'category name'),
+        text(category.label, 'category label'),
+      ] as const;
+    }),
+  );
   return {
     month: text(period.month, 'overview month'),
     label: text(period.label, 'overview month label').slice(0, 3),
+    currencyCode: text(overview.currencyCode, 'primary currency'),
     income: money(cashflow.income).value,
     spending: money(cashflow.spending).value,
+    categories: (Array.isArray(overview.categories) ? overview.categories : []).map((raw) => {
+      const category = object(raw, 'category');
+      return {
+        name: text(category.label, 'category label'),
+        spent: money(category.current).value,
+        previous: money(category.previous).value,
+        budget: null,
+        color: typeof category.color === 'string' ? category.color : '#52799A',
+      };
+    }),
+    budgets: budgets.map((raw) => {
+      const budget = object(raw, 'budget');
+      return {
+        name: text(budget.name, 'budget name'),
+        spent: money(budget.spent).value,
+        limit: money(budget.limit).value,
+        remaining: money(budget.remaining).value,
+        usedPercent: Number(budget.usedPercent),
+        elapsedPercent: Number(budget.elapsedPercent),
+        status: text(budget.status, 'budget status') as HomeData['budgets'][number]['status'],
+      };
+    }),
+    merchants: (Array.isArray(overview.merchants) ? overview.merchants : []).map((raw) => {
+      const merchant = object(raw, 'merchant');
+      const category = text(merchant.category, 'merchant category');
+      return {
+        name: text(merchant.name, 'merchant name'),
+        category: categoryLabels.get(category) ?? category,
+        current: money(merchant.current).value,
+        previous: money(merchant.previous).value,
+        count: Number(merchant.transactionCount),
+      };
+    }),
+  };
+}
+
+export async function fetchCashflowMonth(
+  credential: PairingCredential,
+  month: string,
+  signal?: AbortSignal,
+): Promise<CashflowMonth> {
+  const snapshot = await fetchExploreMonth(credential, month, signal);
+  return {
+    month: snapshot.month,
+    label: snapshot.label,
+    income: snapshot.income,
+    spending: snapshot.spending,
   };
 }
 

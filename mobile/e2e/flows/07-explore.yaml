@@ -1,5 +1,5 @@
 appId: com.saaramrani.moneymonitor.mobile
-name: Explore explains category and merchant changes
+name: Explore cards open month-aware drill-downs
 ---
 - launchApp:
     clearState: true
@@ -7,17 +7,18 @@ name: Explore explains category and merchant changes
       MM_FIXTURE_SCENARIO: category-shift
 - tapOn: 'Explore, tab, 3 of 3'
 - assertVisible:
-    id: explore-cashflow
+    id: explore-card-categories
 - assertVisible:
-    id: cashflow-chart
-- assertVisible: 'What changed'
-- scrollUntilVisible:
-    element:
-      id: explore-category-Dining
-    direction: DOWN
+    id: explore-card-monthly
 - tapOn:
-    id: explore-category-Dining
-- assertVisible: 'What caused the change?'
+    id: explore-card-categories
+- assertVisible:
+    id: categories-screen
+- tapOn: 'Previous month'
+- tapOn: 'Next month'
+- tapOn:
+    id: category-row-Dining
+- assertVisible: 'Top merchants'
 - tapOn:
     id: category-merchant-Wolt
 - assertVisible: 'Transactions'
@@ -25,20 +26,53 @@ name: Explore explains category and merchant changes
     start: 3%, 50%
     end: 90%, 50%
     duration: 500
-- assertVisible: 'What caused the change?'
+- assertVisible: 'Top merchants'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertVisible:
+    id: categories-screen
 - swipe:
     start: 3%, 50%
     end: 90%, 50%
     duration: 500
 - assertVisible:
     id: explore-screen
+- tapOn:
+    id: explore-card-monthly
+- assertVisible:
+    id: monthly-comparison-screen
+- tapOn: '1Y'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- tapOn:
+    id: explore-card-budgets
+- assertVisible:
+    id: budgets-screen
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
 - scrollUntilVisible:
     element:
-      id: explore-category-Other
+      id: explore-card-cash-flow
     direction: DOWN
 - tapOn:
-    id: explore-category-Other
-- assertVisible: '₪2,480'
-- assertVisible: 'Net received this month'
-- assertVisible: '₪2,511 less spent than this point last month'
-- assertVisible: 'Friend repayment'
+    id: explore-card-cash-flow
+- assertVisible:
+    id: cash-flow-total
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- scrollUntilVisible:
+    element:
+      id: explore-card-net-worth
+    direction: DOWN
+- tapOn:
+    id: explore-card-net-worth
+- assertVisible:
+    id: net-worth-detail

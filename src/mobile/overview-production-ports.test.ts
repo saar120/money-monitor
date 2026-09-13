@@ -85,6 +85,7 @@ describe('mobile overview projection', () => {
       current: { value: '300.00' },
       delta: { value: '80.00' },
     });
+    expect(result.merchants[0]).toMatchObject({ category: 'Dining', name: 'Wolt' });
     expect(result.budgets[0]).toMatchObject({ name: 'Dining', remaining: { value: '500.00' } });
     expect(result.reviewCount).toBe(2);
     expect(result.sinceLastVisit).toMatchObject({ transactions: 1, spent: { value: '300.00' } });
