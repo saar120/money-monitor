@@ -1,12 +1,13 @@
-import { CartesianChart, Line } from 'victory-native';
+import { Area, CartesianChart, Line } from 'victory-native';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { MonthNavigator } from '@/MonthNavigator';
+import { GlassSegmentedControl } from '@/GlassSegmentedControl';
+import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
+import { formatMoney, formatSpendingChange, formatUnsignedMoney, spendingTotal } from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -18,7 +19,7 @@ export default function CategoryScreen() {
   if (status !== 'ready' || !home) return <ConnectionState />;
   return (
     <>
-      <Stack.Screen options={{ title: name ?? 'Category' }} />
+      <Stack.Screen options={{ title: '' }} />
       {months.length ? (
         <CategoryContent initialMonth={month} months={months} name={name} />
       ) : (
@@ -44,6 +45,7 @@ function CategoryContent({
 }) {
   const colors = useAppColors();
   const fallback = months.at(-1)!;
+  const [range, setRange] = useState<'3' | '6' | '12'>('6');
   const [month, setMonth] = useState(
     months.some((item) => item.month === initialMonth) ? initialMonth! : fallback.month,
   );
@@ -63,7 +65,11 @@ function CategoryContent({
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
         <Text style={{ color: colors.text }}>No {name} spending in this month.</Text>
         <View style={styles.navigatorMissing}>
-          <MonthNavigator months={months} onChange={setMonth} value={snapshot.month} />
+          <MonthPicker
+            month={snapshot.month}
+            months={months.map((item) => item.month)}
+            onSelect={setMonth}
+          />
         </View>
       </View>
     );
@@ -79,13 +85,28 @@ function CategoryContent({
     .filter((transaction) => transaction.category === category.name)
     .slice(0, 12);
   const selectedIndex = months.findIndex((item) => item.month === snapshot.month);
-  const history = months
-    .slice(Math.max(0, selectedIndex - 5), selectedIndex + 1)
+  const historyMonths = months.slice(
+    Math.max(0, selectedIndex - Number(range) + 1),
+    selectedIndex + 1,
+  );
+  const history = historyMonths
     .map((item, index) => ({
       index,
       total: item.categories.find((candidate) => candidate.name === name)?.spent ?? 0,
     }));
   const total = spendingTotal(category.spent, snapshot.currencyCode);
+  const average = history.reduce((sum, item) => sum + item.total, 0) / Math.max(history.length, 1);
+  const highestIndex = history.reduce(
+    (best, item, index) => (item.total > history[best]!.total ? index : best),
+    0,
+  );
+  const lowestIndex = history.reduce(
+    (best, item, index) => (item.total < history[best]!.total ? index : best),
+    0,
+  );
+  const percentOfSpending = snapshot.spending
+    ? Math.round((category.spent / snapshot.spending) * 100)
+    : 0;
 
   return (
     <ScrollView
@@ -94,7 +115,20 @@ function CategoryContent({
       contentInsetAdjustmentBehavior="automatic"
       testID="category-detail"
     >
-      <MonthNavigator months={months} onChange={setMonth} value={snapshot.month} />
+      <View style={styles.contextRow}>
+        <View style={styles.identity}>
+          <View style={[styles.identityMark, { backgroundColor: category.color }]} />
+          <Text numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
+            {name}
+          </Text>
+        </View>
+        <MonthPicker
+          month={snapshot.month}
+          months={months.map((item) => item.month)}
+          onSelect={setMonth}
+          testID="category-month-picker"
+        />
+      </View>
       <Text
         adjustsFontSizeToFit
         allowFontScaling={false}
@@ -104,33 +138,84 @@ function CategoryContent({
       >
         {total.amount}
       </Text>
-      <Text style={[styles.totalLabel, { color: colors.secondary }]}>{total.label}</Text>
+      <Text style={[styles.totalLabel, { color: colors.secondary }]}>
+        {percentOfSpending}% of total spending · {total.label.toLowerCase()}
+      </Text>
       <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
         {delta === 0
           ? 'Unchanged from last month'
           : `${formatSpendingChange(delta, snapshot.currencyCode)} than last month`}
       </Text>
 
-      <View style={styles.chart} accessibilityLabel={`${name} spending trend for six months`}>
+      <View style={styles.rangeRow}>
+        <GlassSegmentedControl
+          compact
+          onChange={setRange}
+          options={[
+            { label: '3M', value: '3' },
+            { label: '6M', value: '6' },
+            { label: '1Y', value: '12' },
+          ]}
+          testID="category-range"
+          value={range}
+        />
+      </View>
+
+      <View
+        style={styles.chart}
+        accessibilityLabel={`${name} spending trend for ${range} months`}
+      >
+        <View pointerEvents="none" style={styles.chartGuides}>
+          {[0, 1, 2, 3].map((line) => (
+            <View key={line} style={[styles.chartGuide, { backgroundColor: colors.separator }]} />
+          ))}
+        </View>
         <CartesianChart
           data={history}
           xKey="index"
           yKeys={['total']}
           domainPadding={{ top: 18, bottom: 8 }}
         >
-          {({ points }) => (
-            <Line
-              points={points.total}
-              color={category.color}
-              curveType="natural"
-              strokeWidth={3}
-            />
+          {({ points, chartBounds }) => (
+            <>
+              <Area
+                points={points.total}
+                y0={chartBounds.bottom}
+                color={category.color}
+                curveType="natural"
+                opacity={0.1}
+              />
+              <Line
+                points={points.total}
+                color={category.color}
+                curveType="natural"
+                strokeWidth={2.5}
+              />
+            </>
           )}
         </CartesianChart>
       </View>
       <View style={styles.chartLabels}>
-        <Text style={[styles.chartLabel, { color: colors.secondary }]}>6 months ago</Text>
+        <Text style={[styles.chartLabel, { color: colors.secondary }]}>
+          {historyMonths[0]?.label ?? snapshot.label}
+        </Text>
         <Text style={[styles.chartLabel, { color: colors.secondary }]}>{snapshot.label}</Text>
+      </View>
+
+      <View style={[styles.stats, { backgroundColor: colors.surfaceSoft }]}>
+        <StatRow
+          label="Monthly average"
+          value={formatUnsignedMoney(average, snapshot.currencyCode)}
+        />
+        <StatRow
+          label="Highest month"
+          value={`${formatUnsignedMoney(history[highestIndex]!.total, snapshot.currencyCode)} (${historyMonths[highestIndex]!.label})`}
+        />
+        <StatRow
+          label="Lowest month"
+          value={`${formatUnsignedMoney(history[lowestIndex]!.total, snapshot.currencyCode)} (${historyMonths[lowestIndex]!.label})`}
+          last
+        />
       </View>
 
       <Text style={[styles.title, { color: colors.text }]}>Top merchants</Text>
@@ -244,6 +329,21 @@ function CategoryContent({
   );
 }
 
+function StatRow({ label, last = false, value }: { label: string; last?: boolean; value: string }) {
+  const colors = useAppColors();
+  return (
+    <View
+      style={[
+        styles.statRow,
+        { borderBottomColor: colors.separator, borderBottomWidth: last ? 0 : StyleSheet.hairlineWidth },
+      ]}
+    >
+      <Text style={[styles.statLabel, { color: colors.secondary }]}>{label}</Text>
+      <Text allowFontScaling={false} style={[styles.statValue, { color: colors.text }]}>{value}</Text>
+    </View>
+  );
+}
+
 function endOfMonth(month: string) {
   const [year, monthNumber] = month.split('-').map(Number);
   const day = new Date(Date.UTC(year, monthNumber, 0)).getUTCDate();
@@ -254,8 +354,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
   navigatorMissing: { alignSelf: 'stretch', marginTop: 20 },
+  contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  identity: { flex: 1, minWidth: 0, flexDirection: 'row', alignItems: 'center', gap: 9 },
+  identityMark: { width: 10, height: 36, borderRadius: 5 },
+  identityName: { flex: 1, minWidth: 0, fontSize: 17, lineHeight: 22, fontWeight: '700' },
   amount: {
-    marginTop: 24,
+    marginTop: 22,
     fontSize: 42,
     lineHeight: 49,
     fontWeight: '700',
@@ -264,9 +368,16 @@ const styles = StyleSheet.create({
   },
   totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
-  chart: { height: 150, marginTop: 24 },
+  rangeRow: { marginTop: 22, alignItems: 'center' },
+  chart: { height: 158, marginTop: 18 },
+  chartGuides: { ...StyleSheet.absoluteFill, justifyContent: 'space-between' },
+  chartGuide: { width: '100%', height: StyleSheet.hairlineWidth },
   chartLabels: { flexDirection: 'row', justifyContent: 'space-between' },
   chartLabel: { fontSize: 11.5 },
+  stats: { marginTop: 20, paddingHorizontal: 14, borderRadius: 16 },
+  statRow: { minHeight: 45, flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 16 },
+  statLabel: { fontSize: 12.5 },
+  statValue: { flexShrink: 1, textAlign: 'right', fontSize: 12.5, fontWeight: '600', fontVariant: ['tabular-nums'] },
   title: { marginTop: 34, marginBottom: 8, fontSize: 21, lineHeight: 27, fontWeight: '700' },
   row: {
     minHeight: 64,

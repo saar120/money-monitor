@@ -39,6 +39,14 @@ The first simulator comparison exposed two P2 issues. Monthly category names cou
 
 The final source-versus-implementation comparison and focused Categories comparison were inspected at the same captured input state (`category-shift`, September 2026). Light, dusk, and XXL states were also inspected independently. No actionable P0, P1, or P2 visual defects remain.
 
+### Pass 5 — Explore hierarchy and interactive analytics refinement
+
+The supplied mockup and the updated Explore hub, Category, Monthly spending, and expanded Budget states were reviewed in one same-call image batch. Explore now has one dominant monthly summary and one grouped drill-down surface instead of an uneven card grid. Category follows the reference reading order while retaining Blue Ledger styling: identity and embedded month control, amount and share, comparison, compact range control, line/area trend, monthly average/high/low calculations, merchants, then transactions.
+
+The first simulator render exposed gray bands behind both charts because guide rows were incorrectly allowed to flex. They were replaced with hairline guides and the screens were rebuilt. The final Monthly chart uses a calm 0–25K labeled scale, narrow translucent stacks, percentages, aligned values, and category drill-down affordances. A simulator interaction check selected April after September and confirmed the stack geometry remained unchanged; only selection emphasis and detail values changed. Budgets were also exercised in Simulator: tapping Monthly spending expanded its included debit transactions, and each row retained the existing transaction-detail route.
+
+The final light and dusk captures preserve contrast, tab clearance, native back navigation, Dynamic Type behavior, semantic status colors, and the compact glass selection language. No actionable P0, P1, or P2 visual defects remain.
+
 ## Evidence
 
 | State                | Evidence                                                    |
@@ -67,6 +75,11 @@ The final source-versus-implementation comparison and focused Categories compari
 | Merchant detail      | `docs/screenshots/explore-revamp-merchant-detail-light.png` |
 | Full comparison      | `docs/screenshots/explore-revamp-full-comparison.png`       |
 | Focused comparison   | `docs/screenshots/explore-revamp-categories-comparison.png` |
+| Refined Explore hub  | `docs/screenshots/explore-polish-hub-light.png`             |
+| Refined hub, dusk    | `docs/screenshots/explore-polish-hub-dark.png`              |
+| Refined Category     | `docs/screenshots/explore-polish-category-light.png`        |
+| Refined Monthly      | `docs/screenshots/explore-polish-monthly-light.png`         |
+| Budget transactions  | `docs/screenshots/explore-polish-budgets-transactions-light.png` |
 
 ## Intentional production divergences
 
@@ -98,3 +111,7 @@ The final source-versus-implementation comparison and focused Categories compari
 - Explore revamp native iOS Release build: passed on iPhone 17 Pro Simulator, iOS 26.5, with 0 errors.
 - All seven requested analytical surfaces were opened against deterministic mock data and captured in Simulator; light, dusk, and XXL Dynamic Type checks passed.
 - `e2e/flows/07-explore.yaml` covers the new hub and drill-down path. Maestro was not installed on this host, so this updated flow was not executed in the final pass.
+- Explore refinement TypeScript: passed.
+- Explore refinement mobile tests: 17/17 passed, including the stable monthly category-stack regression.
+- Explore refinement native iOS Release build: passed on iPhone 17 Pro Simulator, iOS 26.5, with 0 errors.
+- Manual Simulator interaction checks: monthly bar selection stability passed; budget expansion and transaction drill-down rendering passed.

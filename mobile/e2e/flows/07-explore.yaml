@@ -43,6 +43,16 @@ name: Explore cards open month-aware drill-downs
     id: explore-card-monthly
 - assertVisible:
     id: monthly-comparison-screen
+- tapOn:
+    id: monthly-bar-2026-04
+- assertVisible: 'April 2026'
+- tapOn:
+    id: monthly-category-Dining
+- assertVisible: 'Monthly average'
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
 - tapOn: '1Y'
 - swipe:
     start: 3%, 50%
@@ -52,6 +62,9 @@ name: Explore cards open month-aware drill-downs
     id: explore-card-budgets
 - assertVisible:
     id: budgets-screen
+- tapOn:
+    id: budget-row-Dining
+- assertVisible: 'Transactions'
 - swipe:
     start: 3%, 50%
     end: 90%, 50%

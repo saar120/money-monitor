@@ -53,3 +53,28 @@ export function formatSpendingChange(value: number, currencyCode = 'ILS'): strin
 export function overviewCashFlow(income: number, spending: number): number {
   return Math.round((income - spending + Number.EPSILON) * 100) / 100;
 }
+
+export function monthlyCategoryNames(
+  months: ReadonlyArray<{ categories: ReadonlyArray<{ name: string; spent: number }> }>,
+  limit = 6,
+): string[] {
+  const totals = new Map<string, number>();
+  for (const month of months) {
+    for (const category of month.categories) {
+      totals.set(category.name, (totals.get(category.name) ?? 0) + Math.max(0, category.spent));
+    }
+  }
+  return [...totals]
+    .sort(([leftName, left], [rightName, right]) => right - left || leftName.localeCompare(rightName))
+    .slice(0, limit)
+    .map(([name]) => name);
+}
+
+export function niceChartMaximum(value: number, divisions = 4): number {
+  if (value <= 0) return divisions;
+  const roughStep = value / divisions;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const niceStep = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return niceStep * magnitude * divisions;
+}

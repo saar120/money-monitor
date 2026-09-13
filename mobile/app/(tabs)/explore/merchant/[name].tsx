@@ -2,7 +2,7 @@ import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { MonthNavigator } from '@/MonthNavigator';
+import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
 import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
@@ -61,7 +61,14 @@ function MerchantContent({
       contentInsetAdjustmentBehavior="automatic"
       testID="merchant-detail"
     >
-      <MonthNavigator months={months} onChange={setMonth} value={snapshot.month} />
+      <View style={styles.monthRow}>
+        <MonthPicker
+          month={snapshot.month}
+          months={months.map((item) => item.month)}
+          onSelect={setMonth}
+          testID="merchant-month-picker"
+        />
+      </View>
       {merchant ? (
         <>
           <Text
@@ -146,6 +153,7 @@ function endOfMonth(month: string) {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   loading: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 20 },
+  monthRow: { alignItems: 'flex-end' },
   amount: {
     marginTop: 24,
     fontSize: 42,

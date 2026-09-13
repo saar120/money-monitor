@@ -1,4 +1,4 @@
-import { router } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
@@ -11,7 +11,7 @@ import {
   View,
 } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
-import { MonthNavigator } from '@/MonthNavigator';
+import { MonthPicker } from '@/MonthPicker';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
 import { formatMoney, formatUnsignedMoney } from '@/money';
 import { Sparkline } from '@/Sparkline';
@@ -19,10 +19,11 @@ import { useAppColors } from '@/theme';
 
 export default function CategoriesScreen() {
   const colors = useAppColors();
+  const { month } = useLocalSearchParams<{ month?: string }>();
   const { home, status } = useMoneyData();
   const { months, loading } = useExploreHistory();
-  const currentMonth = months.at(-1);
-  const selected = months.find((month) => month.month === currentMonth?.month) ?? currentMonth;
+  const currentMonth = months.find((item) => item.month === month) ?? months.at(-1);
+  const selected = months.find((item) => item.month === currentMonth?.month) ?? currentMonth;
   if (status !== 'ready' || !home) return <ConnectionState />;
 
   return (
@@ -66,10 +67,17 @@ function CategoryList({
   const categories = [...snapshot.categories].sort((a, b) => b.spent - a.spent);
   return (
     <>
-      <MonthNavigator months={months} onChange={setSelected} value={snapshot.month} />
-      <Text maxFontSizeMultiplier={1.45} style={[styles.note, { color: colors.secondary }]}>
-        Tap a category to see the merchants and transactions behind it.
-      </Text>
+      <View style={styles.contextRow}>
+        <Text maxFontSizeMultiplier={1.3} style={[styles.contextLabel, { color: colors.secondary }]}>
+          {categories.length} active categories
+        </Text>
+        <MonthPicker
+          month={snapshot.month}
+          months={months.map((item) => item.month)}
+          onSelect={setSelected}
+          testID="categories-month-picker"
+        />
+      </View>
       <View style={styles.list}>
         {categories.map((category) => {
           const delta = category.spent - category.previous;
@@ -130,8 +138,9 @@ function CategoryList({
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  note: { width: '100%', marginTop: 16, fontSize: 13, lineHeight: 18 },
-  list: { marginTop: 14 },
+  contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  contextLabel: { flex: 1, fontSize: 13, lineHeight: 18 },
+  list: { marginTop: 18 },
   row: {
     minHeight: 76,
     borderBottomWidth: StyleSheet.hairlineWidth,

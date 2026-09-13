@@ -12,11 +12,13 @@ import { useAppColors } from './theme';
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 export function GlassSegmentedControl<T extends string>({
+  compact = false,
   onChange,
   options,
   testID,
   value,
 }: {
+  compact?: boolean;
   onChange: (value: T) => void;
   options: ReadonlyArray<{ label: string; value: T }>;
   testID?: string;
@@ -50,6 +52,7 @@ export function GlassSegmentedControl<T extends string>({
       onLayout={(event) => setWidth(event.nativeEvent.layout.width)}
       style={[
         styles.control,
+        compact && styles.compact,
         {
           backgroundColor: colors.glass,
           borderColor: colors.glassBorder,
@@ -104,6 +107,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.1,
     shadowRadius: 10,
   },
+  compact: { width: 252, alignSelf: 'center' },
   lens: {
     position: 'absolute',
     top: 4,

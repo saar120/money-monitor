@@ -42,6 +42,7 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
   return (
     <>
       <GlassSegmentedControl
+        compact
         onChange={setRange}
         options={[
           { label: '3M', value: '3' },

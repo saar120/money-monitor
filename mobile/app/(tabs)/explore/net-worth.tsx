@@ -51,6 +51,7 @@ export default function NetWorthScreen() {
       ) : null}
       <View style={styles.rangeSpacing}>
         <GlassSegmentedControl
+          compact
           onChange={setRange}
           options={[
             { label: '3M', value: '3' },
