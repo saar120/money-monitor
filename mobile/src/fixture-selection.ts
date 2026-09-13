@@ -1,7 +1,11 @@
+import Constants from 'expo-constants';
 import { Settings } from 'react-native';
 import { fixtureScenarios, type FixtureScenario, type FixtureScenarioName } from './fixtures';
 
-const launchScenario = Settings.get('MM_FIXTURE_SCENARIO') as string | undefined;
+const configuredScenario = Constants.expoConfig?.extra?.fixtureScenario;
+const launchScenario =
+  (typeof configuredScenario === 'string' ? configuredScenario : undefined) ||
+  (Settings.get('MM_FIXTURE_SCENARIO') as string | undefined);
 const launchRefreshDelay = Number(Settings.get('MM_FIXTURE_REFRESH_DELAY_MS')) || 0;
 let fixtureMode = Boolean(launchScenario && launchScenario in fixtureScenarios);
 
