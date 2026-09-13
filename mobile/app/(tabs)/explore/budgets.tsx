@@ -181,8 +181,9 @@ function BudgetTransactions({
     }),
     [categories, month],
   );
-  const { loading, transactions } = useActivityTransactions('', 'all', criteria);
-  const visible = transactions.filter((item) => item.included).slice(0, 8);
+  const { error, hasMore, loadMore, loading, loadingMore, transactions } =
+    useActivityTransactions('', 'all', criteria, true);
+  const visible = transactions.filter((item) => item.included);
 
   return (
     <Animated.View
@@ -193,7 +194,10 @@ function BudgetTransactions({
       {loading ? (
         <ActivityIndicator color={colors.accent} style={styles.transactionLoader} />
       ) : null}
-      {!loading && !visible.length ? (
+      {!loading && error ? (
+        <Text style={[styles.noTransactions, { color: colors.danger }]}>{error}</Text>
+      ) : null}
+      {!loading && !error && !visible.length ? (
         <Text style={[styles.noTransactions, { color: colors.secondary }]}>
           No matching transactions this month.
         </Text>
@@ -230,6 +234,20 @@ function BudgetTransactions({
           <SymbolView name="chevron.right" size={9} tintColor={colors.tertiary} />
         </Pressable>
       ))}
+      {hasMore && visible.length ? (
+        <Pressable
+          accessibilityRole="button"
+          disabled={loadingMore}
+          onPress={loadMore}
+          style={({ pressed }) => [styles.loadMore, { opacity: pressed ? 0.62 : 1 }]}
+        >
+          {loadingMore ? (
+            <ActivityIndicator color={colors.accent} />
+          ) : (
+            <Text style={[styles.loadMoreText, { color: colors.accent }]}>Load more</Text>
+          )}
+        </Pressable>
+      ) : null}
     </Animated.View>
   );
 }
@@ -305,6 +323,8 @@ const styles = StyleSheet.create({
     fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
+  loadMore: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
+  loadMoreText: { fontSize: 13, lineHeight: 18, fontWeight: '700' },
   empty: { marginTop: 24, padding: 20, borderRadius: 18 },
   emptyTitle: { fontSize: 17, fontWeight: '700' },
   emptyText: { marginTop: 5, fontSize: 13, lineHeight: 18 },

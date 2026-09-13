@@ -9,6 +9,7 @@ import {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { activityRequestState } from './activity-request-state';
 import { getFixtureRefreshDelay, getFixtureScenario, isFixtureMode } from './fixture-selection';
 import { FIXTURE_REVIEW_CATEGORIES, type HomeData, type Transaction } from './fixtures';
 import {
@@ -657,6 +658,14 @@ export function useActivityTransactions(
     requestKey,
   ]);
 
+  const requestState = activityRequestState({
+    source: money.source,
+    loading,
+    resultKey,
+    requestKey,
+    error,
+  });
+
   return {
     transactions:
       money.source === 'fixture'
@@ -664,7 +673,7 @@ export function useActivityTransactions(
         : resultKey === requestKey
           ? transactions
           : [],
-    loading: money.source === 'live' && (loading || resultKey !== requestKey),
+    loading: requestState === 'loading',
     loadingMore: money.source === 'live' && loadingMore,
     error,
     hasMore: money.source === 'live' && nextCursor !== null,
