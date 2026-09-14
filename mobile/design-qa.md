@@ -31,6 +31,28 @@ The first production pass was re-audited after Saar's device feedback. Explore s
 
 The final pass replaces Explore with the approved cash-flow composition, backed by six calls to the existing month-scoped overview contract. Shared category, merchant, transaction, and net-worth destinations now live on the root stack; Activity and Explore regression flows verify that two consecutive native back swipes restore the exact originating screen rather than changing tabs. The date editor is the compact system control, the searchable 20-category selector is a 55%-height draggable sheet, and Expo Router native tabs provide the iOS Liquid Glass bar and on-scroll minimization. Detail headers use a minimal chevron so no route-group implementation name is exposed.
 
+### Pass 4 — Explore card hub and analytical drill-downs
+
+The supplied seven-screen finance mockup (`1-Photo-1.jpg`, 1200 × 1280) was reviewed beside the final iPhone 17 Pro implementation (1206 × 2622). The mockup's information architecture—not its unrelated visual system—was the source of truth: a compact Explore hub now opens Categories, Monthly spending, Budgets, Cash flow, and Net worth, and Categories continues into category and merchant detail. Blue Ledger's porcelain/dusk surfaces, cobalt interaction color, native navigation, SF Symbols, type hierarchy, and floating native tab material remain intact.
+
+The first simulator comparison exposed two P2 issues. Monthly category names could collide with amounts, and XXL Dynamic Type expanded the previous route title into the native back control. Category rows and month navigation were also denser than needed at XXL. The final pass gives labels explicit shrink/truncation behavior, uses icon-only native back controls, stacks hub cards at large font scales, and removes nonessential sparklines at XXL while keeping every value and drill-down target available.
+
+The final source-versus-implementation comparison and focused Categories comparison were inspected at the same captured input state (`category-shift`, September 2026). Light, dusk, and XXL states were also inspected independently. No actionable P0, P1, or P2 visual defects remain.
+
+### Pass 5 — Explore hierarchy and interactive analytics refinement
+
+The supplied mockup and the updated Explore hub, Category, Monthly spending, and expanded Budget states were reviewed in one same-call image batch. Explore now has one dominant monthly summary and one grouped drill-down surface instead of an uneven card grid. Category follows the reference reading order while retaining Blue Ledger styling: identity and embedded month control, amount and share, comparison, compact range control, monthly bar trend, monthly average/high/low calculations, merchants, then transactions.
+
+The first simulator render exposed gray bands behind both charts because guide rows were incorrectly allowed to flex. They were replaced with hairline guides and the screens were rebuilt. The final Monthly chart uses a calm 0–25K labeled scale, narrow translucent stacks, percentages, aligned values, and category drill-down affordances. A simulator interaction check selected April after September and confirmed the stack geometry remained unchanged; only selection emphasis and detail values changed. Budgets were also exercised in Simulator: tapping Monthly spending expanded its included debit transactions, and each row retained the existing transaction-detail route.
+
+The final light and dusk captures preserve contrast, tab clearance, native back navigation, Dynamic Type behavior, semantic status colors, and the compact glass selection language. No actionable P0, P1, or P2 visual defects remain.
+
+### Pass 6 — Category chart correction
+
+The Category detail reference and implementation were compared again after device feedback identified the trend visualization mismatch. The line/area chart was replaced with the reference's six-column monthly bar chart, with quiet historical bars, a fully emphasized selected month, and one aligned month label per bar. The average, highest, and lowest calculations remain directly beneath the chart as in the mockup.
+
+The corrected iPhone 17 Pro Simulator capture was inspected beside the supplied mockup at the same six-month state. Typography, spacing, semantic category color, range control, chart hierarchy, statistics, and merchant drill-down remain consistent with Blue Ledger. No actionable P0, P1, or P2 visual defects remain.
+
 ## Evidence
 
 | State                | Evidence                                                    |
@@ -48,6 +70,22 @@ The final pass replaces Explore with the approved cash-flow composition, backed 
 | Category drill-down  | `docs/screenshots/blue-ledger/category-drilldown-light.png` |
 | Empty state          | `docs/screenshots/blue-ledger/activity-empty-light.png`     |
 | Tab and range motion | `docs/screenshots/blue-ledger/tab-range-lens-motion.mp4`    |
+| Explore hub, light   | `docs/screenshots/explore-revamp-hub-light.png`             |
+| Explore hub, dusk    | `docs/screenshots/explore-revamp-hub-dark.png`              |
+| Categories           | `docs/screenshots/explore-revamp-categories-light.png`      |
+| Categories, XXL      | `docs/screenshots/explore-revamp-categories-xxl.png`        |
+| Monthly spending     | `docs/screenshots/explore-revamp-monthly-light.png`         |
+| Budgets              | `docs/screenshots/explore-revamp-budgets-light.png`         |
+| Cash flow            | `docs/screenshots/explore-revamp-cash-flow-light.png`       |
+| Category detail      | `docs/screenshots/explore-revamp-category-detail-light.png` |
+| Merchant detail      | `docs/screenshots/explore-revamp-merchant-detail-light.png` |
+| Full comparison      | `docs/screenshots/explore-revamp-full-comparison.png`       |
+| Focused comparison   | `docs/screenshots/explore-revamp-categories-comparison.png` |
+| Refined Explore hub  | `docs/screenshots/explore-polish-hub-light.png`             |
+| Refined hub, dusk    | `docs/screenshots/explore-polish-hub-dark.png`              |
+| Refined Category     | `docs/screenshots/explore-polish-category-light.png`        |
+| Refined Monthly      | `docs/screenshots/explore-polish-monthly-light.png`         |
+| Budget transactions  | `docs/screenshots/explore-polish-budgets-transactions-light.png` |
 
 ## Intentional production divergences
 
@@ -58,6 +96,8 @@ The final pass replaces Explore with the approved cash-flow composition, backed 
 - Net worth remains in production because its account/valuation-backed contract is authoritative even though the ledger-only prototype excluded it.
 - The root tab transition and bar geometry use Apple's current native behavior instead of duplicating the prototype's exact custom spring. The Explore/net-worth segmented lenses retain the approved spring constants.
 - Existing platform accessibility semantics were preserved for navigation and automation. Per Saar's follow-up, no separate accessibility-polish audit was performed.
+- The supplied mockup's central add button, additional tabs, and generic category palette were not copied because the production app already has a smaller native three-tab structure and an established data-driven category palette.
+- Month switching reuses the existing month-scoped overview contract. Multi-month charts compose those responses on-device, avoiding a speculative aggregate endpoint.
 
 ## Verification record
 
@@ -71,3 +111,15 @@ The final pass replaces Explore with the approved cash-flow composition, backed 
 - Runtime scan: no React Native JS exception, unhandled error, invariant violation, or RedBox entries. Simulator-only XCTest, focus, and unavailable-haptics warnings were observed during automation.
 - Signed physical-device Release build: passed for `arm64` with bundle identifier `com.saaramrani.moneymonitor.mobile` and team `CVP2NVLKL4`.
 - Physical device: Release app installed and launched successfully on the paired iPhone 17 Pro running iOS 27.0; CoreDevice verified `Money Monitor` 1.0.0 (`com.saaramrani.moneymonitor.mobile`, build 1).
+- Explore revamp TypeScript and changed-file ESLint: passed.
+- Explore revamp mobile tests: 13/13 passed.
+- Explore production-port tests: 2/2 passed; the complete mobile backend suite passed 53/53 during backend-agent verification.
+- Explore revamp native iOS Release build: passed on iPhone 17 Pro Simulator, iOS 26.5, with 0 errors.
+- All seven requested analytical surfaces were opened against deterministic mock data and captured in Simulator; light, dusk, and XXL Dynamic Type checks passed.
+- `e2e/flows/07-explore.yaml` covers the new hub and drill-down path. Maestro was not installed on this host, so this updated flow was not executed in the final pass.
+- Explore refinement TypeScript: passed.
+- Explore refinement mobile tests: 17/17 passed, including the stable monthly category-stack regression.
+- Explore refinement native iOS Release build: passed on iPhone 17 Pro Simulator, iOS 26.5, with 0 errors.
+- Manual Simulator interaction checks: monthly bar selection stability passed; budget expansion and transaction drill-down rendering passed.
+- Category bar correction TypeScript and 17/17 mobile tests: passed.
+- Category bar correction native iOS Release build and Simulator visual comparison: passed.

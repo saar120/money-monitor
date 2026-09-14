@@ -318,6 +318,35 @@ describe('production mobile transaction ports', () => {
     ).toEqual([]);
   });
 
+  it('filters transactions using every category assigned to a budget', () => {
+    const testDb = database();
+    const account = insertAccount(testDb.db, { memberId: null });
+    const dining = insertCategory(testDb.db, { name: 'dining', label: 'Dining' });
+    const groceries = insertCategory(testDb.db, { name: 'groceries', label: 'Groceries' });
+    const housing = insertCategory(testDb.db, { name: 'housing-extra', label: 'Housing extra' });
+    const expected = [dining, groceries].map((category) =>
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-07-10',
+        processedDate: '2026-07-10',
+        category: category.name,
+      }),
+    );
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-07-10',
+      processedDate: '2026-07-10',
+      category: housing.name,
+    });
+
+    const result = ports(testDb).list(
+      query({ categories: [dining.name, groceries.name], direction: 'debit' }),
+      CONTEXT,
+    );
+
+    expect(result.transactions.map((transaction) => transaction.id).sort()).toEqual(
+      expected.map((transaction) => project('transaction', transaction.id)).sort(),
+    );
+  });
+
   it('filters uncategorized transactions by their mobile display label', () => {
     const testDb = database();
     const account = insertAccount(testDb.db, { memberId: null });

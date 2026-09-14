@@ -9,10 +9,12 @@ import {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { activityRequestState } from './activity-request-state';
 import { getFixtureRefreshDelay, getFixtureScenario, isFixtureMode } from './fixture-selection';
 import { FIXTURE_REVIEW_CATEGORIES, type HomeData, type Transaction } from './fixtures';
 import {
   fetchCashflowMonth,
+  fetchExploreMonth,
   fetchHomeData,
   fetchReviewOptions,
   fetchTransactionDetail,
@@ -21,6 +23,7 @@ import {
   updateTransaction,
   type ActivityFilter,
   type CashflowMonth,
+  type ExploreMonth,
   type TransactionUpdate,
 } from './mobile-api';
 import { readPairingCredential, type PairingCredential } from './security/pairing-credential-store';
@@ -41,6 +44,7 @@ type MoneyDataContextValue = {
   loadReviewOptions: () => Promise<ReviewOptions>;
   loadOverviewMonth: (month: string) => Promise<HomeData>;
   loadCashflowHistory: (endingMonth?: string) => Promise<CashflowMonth[]>;
+  loadExploreHistory: (count?: number) => Promise<ExploreMonth[]>;
 };
 
 const MoneyDataContext = createContext<MoneyDataContextValue | null>(null);
@@ -50,6 +54,7 @@ export type ActivityCriteria = {
   startDate?: string;
   endDate?: string;
   category?: string;
+  categories?: string[];
   account?: string;
   accountId?: string;
   owner?: string;
@@ -118,6 +123,63 @@ function fixtureOverview(home: HomeData, month: string): HomeData {
     })),
     sinceLastVisit: null,
   };
+}
+
+function fixtureExploreHistory(home: HomeData, count: number): ExploreMonth[] {
+  const months = recentMonths(home.currentDate, count);
+  const last = months.length - 1;
+  const valueAt = (current: number, previous: number, index: number) =>
+    index === last
+      ? current
+      : index === last - 1
+        ? previous
+        : Math.round(previous * (0.84 + ((index * 7) % 9) * 0.035));
+
+  return months.map((month, index) => {
+    const spending = valueAt(home.spent, home.previousSpent, index);
+    const factor = home.spent > 0 ? spending / home.spent : 1;
+    return {
+      month,
+      label: new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(
+        new Date(`${month}-01T12:00:00Z`),
+      ),
+      currencyCode: home.currencyCode,
+      income: valueAt(home.income, Math.round(home.income * 0.98), index),
+      spending,
+      categories: home.categories.map((category) => ({
+        ...category,
+        spent: valueAt(category.spent, category.previous, index),
+        previous:
+          index > 0
+            ? valueAt(category.spent, category.previous, index - 1)
+            : Math.round(category.previous * 0.94),
+      })),
+      budgets: home.budgets.map((budget) => {
+        const spent = Math.round(budget.spent * factor);
+        const usedPercent = budget.limit > 0 ? Math.round((spent / budget.limit) * 100) : 0;
+        return {
+          ...budget,
+          spent,
+          remaining: budget.limit - spent,
+          usedPercent,
+          status:
+            spent > budget.limit
+              ? ('over_budget' as const)
+              : usedPercent > budget.elapsedPercent + 10
+                ? ('watch' as const)
+                : ('on_track' as const),
+        };
+      }),
+      merchants: home.merchants.map((merchant) => ({
+        ...merchant,
+        current: valueAt(merchant.current, merchant.previous, index),
+        previous:
+          index > 0
+            ? valueAt(merchant.current, merchant.previous, index - 1)
+            : Math.round(merchant.previous * 0.94),
+      })),
+    };
+  });
 }
 
 export function MoneyDataProvider({ children }: { children: ReactNode }) {
@@ -299,6 +361,21 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     [credential, fixture, home, loadOverviewMonth],
   );
 
+  const loadExploreHistory = useCallback(
+    async (count = 12) => {
+      const currentHome = home ?? getFixtureScenario();
+      if (fixture) return fixtureExploreHistory(currentHome, count);
+      if (!credential) throw new Error('Pair with your Mac to explore cash flow.');
+      const months = (
+        currentHome.availableMonths.length ? currentHome.availableMonths : [currentHome.monthKey]
+      )
+        .slice(0, count)
+        .reverse();
+      return Promise.all(months.map((month) => fetchExploreMonth(credential, month)));
+    },
+    [credential, fixture, home],
+  );
+
   const value = useMemo(
     () => ({
       source: fixture ? ('fixture' as const) : ('live' as const),
@@ -313,6 +390,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       loadReviewOptions,
       loadOverviewMonth,
       loadCashflowHistory,
+      loadExploreHistory,
     }),
     [
       credential,
@@ -323,6 +401,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       loadReviewOptions,
       loadOverviewMonth,
       loadCashflowHistory,
+      loadExploreHistory,
       reload,
       revision,
       saveTransaction,
@@ -385,6 +464,34 @@ export function useMoneyData(): MoneyDataContextValue {
   return value;
 }
 
+export function useExploreHistory(count = 12) {
+  const money = useMoneyData();
+  const [months, setMonths] = useState<ExploreMonth[]>([]);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (money.status !== 'ready' || !money.home) return;
+    let current = true;
+    setLoading(true);
+    void money
+      .loadExploreHistory(count)
+      .then((value) => {
+        if (current) setMonths(value);
+      })
+      .catch(() => {
+        if (current) setMonths([]);
+      })
+      .finally(() => {
+        if (current) setLoading(false);
+      });
+    return () => {
+      current = false;
+    };
+  }, [count, money]);
+
+  return { months, loading };
+}
+
 export function useActivityTransactions(
   query: string,
   filter: ActivityFilter = 'all',
@@ -421,6 +528,7 @@ export function useActivityTransactions(
         (!criteria.startDate || date >= criteria.startDate) &&
         (!criteria.endDate || date <= criteria.endDate) &&
         (!criteria.category || transaction.category === criteria.category) &&
+        (!criteria.categories?.length || criteria.categories.includes(transaction.category)) &&
         (!criteria.account || transaction.account === criteria.account) &&
         (!criteria.owner || transaction.owner === criteria.owner) &&
         (!criteria.status || (criteria.status === 'pending') === Boolean(transaction.pending)) &&
@@ -550,6 +658,14 @@ export function useActivityTransactions(
     requestKey,
   ]);
 
+  const requestState = activityRequestState({
+    source: money.source,
+    loading,
+    resultKey,
+    requestKey,
+    error,
+  });
+
   return {
     transactions:
       money.source === 'fixture'
@@ -557,7 +673,7 @@ export function useActivityTransactions(
         : resultKey === requestKey
           ? transactions
           : [],
-    loading: money.source === 'live' && (loading || resultKey !== requestKey),
+    loading: requestState === 'loading',
     loadingMore: money.source === 'live' && loadingMore,
     error,
     hasMore: money.source === 'live' && nextCursor !== null,
@@ -574,6 +690,7 @@ function activityTransactionQuery(
     limit: 50,
     q: query,
     category: criteria.category,
+    categories: criteria.categories,
     filter,
     startDate: criteria.startDate,
     endDate: criteria.endDate,

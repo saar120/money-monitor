@@ -36,6 +36,7 @@ const merchantSchema = z.object({
 
 const budgetSchema = z.object({
   name: z.string().min(1).max(80),
+  categoryNames: z.array(z.string().min(1).max(80)).max(30),
   spent: bootstrapMoneySchema,
   limit: bootstrapMoneySchema,
   remaining: bootstrapMoneySchema,

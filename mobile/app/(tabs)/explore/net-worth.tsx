@@ -11,14 +11,14 @@ export default function NetWorthScreen() {
   const colors = useAppColors();
   const chart = chartColors(useColorScheme() === 'dark');
   const { home, status } = useMoneyData();
-  const [range, setRange] = useState<'3' | '6' | 'all'>('all');
+  const [range, setRange] = useState<'3' | '6' | '12'>('12');
   if (status !== 'ready' || !home) return <ConnectionState />;
   const allHistory = home.netWorthHistory.map((point, index) => ({
     index,
     total: point.total,
     date: point.date,
   }));
-  const history = range === 'all' ? allHistory : allHistory.slice(-Number(range));
+  const history = allHistory.slice(-Number(range));
   const assets = home.assets ?? home.netWorth;
   const liabilities = home.liabilities ?? 0;
   const compositionTotal = Math.max(assets + liabilities, 1);
@@ -51,11 +51,12 @@ export default function NetWorthScreen() {
       ) : null}
       <View style={styles.rangeSpacing}>
         <GlassSegmentedControl
+          compact
           onChange={setRange}
           options={[
             { label: '3M', value: '3' },
             { label: '6M', value: '6' },
-            { label: 'All', value: 'all' },
+            { label: '1Y', value: '12' },
           ]}
           testID="net-worth-range"
           value={range}

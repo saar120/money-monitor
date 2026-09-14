@@ -239,6 +239,7 @@ export function createMobileOverviewProvider(options: MobileOverviewPortsOptions
         const usedPercent = budget.amount > 0 ? (spent / budget.amount) * 100 : 0;
         return {
           name: boundedMobileText(budget.name, 'Budget', 80),
+          categoryNames: names.map((name) => boundedMobileText(name, 'Category', 80)),
           spent: money(spent),
           limit: money(budget.amount),
           remaining: money(budget.amount - spent),
