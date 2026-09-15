@@ -1,17 +1,16 @@
 #!/usr/bin/env node
 import dotenv from 'dotenv';
+import { resolve, dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
-import { dirname, join } from 'node:path';
+import { McpServer } from '@modelcontextprotocol/server';
+import { serveStdio, type StdioServerHandle } from '@modelcontextprotocol/server/stdio';
+import { z } from 'zod';
 
-// Load .env from project root before any app module reads process.env.
-// Claude Desktop doesn't set cwd, so dotenv/config (which uses cwd) won't find .env.
-const __dirname = dirname(fileURLToPath(import.meta.url));
-dotenv.config({ path: join(__dirname, '..', '.env') });
+// Claude/Codex may launch this from any working directory.
+const modulePath = fileURLToPath(import.meta.url);
+dotenv.config({ path: join(dirname(modulePath), '..', '.env'), quiet: true });
 
-// Dynamic imports — must come AFTER dotenv.config() so config.ts sees the env vars.
-const { McpServer } = await import('@modelcontextprotocol/sdk/server/mcp.js');
-const { StdioServerTransport } = await import('@modelcontextprotocol/sdk/server/stdio.js');
-const { z } = await import('zod');
+// App imports must follow dotenv and, in Electron, safe-storage registration.
 const {
   queryTransactions,
   getSpendingSummary,
@@ -24,8 +23,8 @@ const {
   addCategory,
   getCategoryRules,
   updateCategoryRules,
+  getLatestScrapeTransactions,
 } = await import('./ai/tools.js');
-
 const {
   getNetWorth,
   getAssetDetails,
@@ -36,632 +35,503 @@ const {
   recordMovement,
   manageLiability,
 } = await import('./ai/asset-tools.js');
-
+const { getBudgetProgress, manageBudget } = await import('./ai/budget-tools.js');
+const { getAlertSettings, updateAlertSettingsFromTool } = await import('./ai/alert-tools.js');
+const { listMembers } = await import('./services/members.js');
+const { listOwnershipRules } = await import('./services/ownership.js');
 const { ASSET_TYPES, LIQUIDITY_TYPES, HOLDING_TYPES, MOVEMENT_TYPES, LIABILITY_TYPES } =
   await import('./shared/types.js');
 
-const server = new McpServer({
-  name: 'money-monitor-mcp-server',
-  version: '1.0.0',
-});
+export type McpAccessMode = 'read-only' | 'read-write';
 
-// ── Read-only tools ─────────────────────────────────────────────────────────────
+const READ_ONLY = {
+  readOnlyHint: true,
+  destructiveHint: false,
+  idempotentHint: true,
+  openWorldHint: false,
+} as const;
 
-server.registerTool(
-  'query_transactions',
-  {
-    title: 'Query Transactions',
-    description:
-      'Search and filter financial transactions. Supports date ranges, categories, amount ranges, ' +
-      'full-text search across description/memo, account filtering, and status filtering. ' +
-      'Date ranges use reportingDate (effectiveDate when set, otherwise the bank date). ' +
-      'Returns matched transactions with total count. All amounts are in ILS.',
-    inputSchema: {
-      account_id: z.number().optional().describe('Filter by account ID'),
-      start_date: z.string().optional().describe('Start date (ISO, e.g. "2026-01-01")'),
-      end_date: z.string().optional().describe('End date (ISO, e.g. "2026-01-31")'),
-      category: z.string().optional().describe('Filter by category name'),
-      status: z.enum(['completed', 'pending']).optional().describe('Transaction status'),
-      min_amount: z.number().optional().describe('Minimum charged amount'),
-      max_amount: z.number().optional().describe('Maximum charged amount'),
-      search: z.string().optional().describe('Full-text search in description and memo'),
-      needs_review: z
-        .boolean()
-        .optional()
-        .describe('Filter by review status (true = needs review, false = reviewed)'),
-      limit: z.number().optional().describe('Max results (default 50, max 200)'),
-    },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: queryTransactions(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+const WRITE = {
+  readOnlyHint: false,
+  destructiveHint: false,
+  idempotentHint: false,
+  openWorldHint: false,
+} as const;
 
-server.registerTool(
-  'get_spending_summary',
-  {
-    title: 'Get Spending Summary',
-    description:
-      'Get aggregated spending totals by reporting date, grouped by category, month, or account. ' +
-      'Ignored transactions are excluded. Useful for understanding spending patterns and breakdowns.',
-    inputSchema: {
-      group_by: z
-        .enum(['category', 'month', 'account'])
-        .optional()
-        .describe('How to group results (default: category)'),
-      account_id: z.number().optional().describe('Filter by account ID'),
-      start_date: z.string().optional().describe('Start date (ISO)'),
-      end_date: z.string().optional().describe('End date (ISO)'),
-    },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: getSpendingSummary(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+function result(operation: () => string | Promise<string>) {
+  return Promise.resolve()
+    .then(operation)
+    .then((text) => ({ content: [{ type: 'text' as const, text }] }))
+    .catch((error: unknown) => ({
+      isError: true,
+      content: [{ type: 'text' as const, text: `Error: ${(error as Error).message}` }],
+    }));
+}
 
-server.registerTool(
-  'get_account_balances',
-  {
-    title: 'Get Account Balances',
-    description:
-      'List all configured bank/credit-card accounts with their display names, last scrape time, ' +
-      'total transaction count, and total spending. Use this to discover available accounts.',
-    inputSchema: {},
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async () => {
-    try {
-      return { content: [{ type: 'text', text: getAccountBalances() }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+export function resolveMcpAccessMode(
+  args = process.argv.slice(2),
+  envValue = process.env.MONEY_MONITOR_MCP_ACCESS,
+): McpAccessMode {
+  const inline = args.find((arg) => arg.startsWith('--mcp-access='))?.split('=', 2)[1];
+  const flagIndex = args.indexOf('--mcp-access');
+  const separate = flagIndex >= 0 ? args[flagIndex + 1] : undefined;
+  const raw = inline ?? separate ?? envValue ?? 'read-only';
 
-server.registerTool(
-  'compare_periods',
-  {
-    title: 'Compare Spending Periods',
-    description:
-      'Compare spending between two date ranges side-by-side. Returns per-category breakdown ' +
-      'with totals, transaction counts, and percentage change. Great for month-over-month comparisons.',
-    inputSchema: {
-      period1_start: z.string().describe('Start date of first period (ISO, e.g. "2026-01-01")'),
-      period1_end: z.string().describe('End date of first period (ISO, e.g. "2026-01-31")'),
-      period2_start: z.string().describe('Start date of second period (ISO, e.g. "2026-02-01")'),
-      period2_end: z.string().describe('End date of second period (ISO, e.g. "2026-02-28")'),
-      account_id: z.number().optional().describe('Filter by account ID'),
-    },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: comparePeriods(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+  if (raw === 'read-only' || raw === 'read-write') return raw;
+  throw new Error(`Invalid MCP access mode "${raw}". Use read-only or read-write.`);
+}
 
-server.registerTool(
-  'get_spending_trends',
-  {
-    title: 'Get Spending Trends',
-    description:
-      'Analyze spending trends over multiple months. Returns monthly totals, trend direction ' +
-      '(increasing/decreasing/stable), averages, min/max months, and month-over-month changes.',
-    inputSchema: {
-      months: z.number().optional().describe('Number of months to analyze (default 6, max 24)'),
-      category: z.string().optional().describe('Filter to a specific category'),
-      account_id: z.number().optional().describe('Filter by account ID'),
+export function buildMoneyMonitorMcpServer(accessMode: McpAccessMode = 'read-only'): McpServer {
+  const server = new McpServer(
+    { name: 'money-monitor', version: '0.6.0' },
+    {
+      instructions:
+        `Money Monitor provides private local finance data in ILS. Access is ${accessMode}. ` +
+        'Use ISO dates (YYYY-MM-DD). Discover accounts and household members before filtering by IDs. ' +
+        'Ignored transactions are excluded from spending analytics. In read-write mode, explain and confirm material mutations with the user before calling write tools.',
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: getSpendingTrends(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+  );
 
-server.registerTool(
-  'detect_recurring_transactions',
-  {
-    title: 'Detect Recurring Transactions',
-    description:
-      'Find subscriptions, memberships, and recurring bills by analyzing transaction history. ' +
-      'Returns merchant name, average amount, frequency (weekly/monthly/quarterly/etc.), ' +
-      'estimated annual cost, and next expected charge date.',
-    inputSchema: {
-      months_back: z
-        .number()
-        .optional()
-        .describe('Months of history to analyze (default 6, max 12)'),
-      min_occurrences: z
-        .number()
-        .optional()
-        .describe('Minimum times a charge must repeat (default 2)'),
+  server.registerTool(
+    'query_transactions',
+    {
+      title: 'Query Transactions',
+      description:
+        'Search financial transactions by account, reporting date, category, amount, text, review status, or household owner. Reporting date uses effectiveDate when set, otherwise the bank date. Returns newest matches first; amounts are in ILS.',
+      inputSchema: z.object({
+        account_id: z.number().optional().describe('Account ID from get_account_balances'),
+        start_date: z.string().optional().describe('Reporting-period start (YYYY-MM-DD)'),
+        end_date: z.string().optional().describe('Reporting-period end (YYYY-MM-DD)'),
+        category: z.string().optional().describe('Category machine name'),
+        status: z.enum(['completed', 'pending']).optional(),
+        min_amount: z.number().optional().describe('Minimum charged amount'),
+        max_amount: z.number().optional().describe('Maximum charged amount'),
+        search: z.string().optional().describe('Search description and memo'),
+        needs_review: z.boolean().optional(),
+        owner_type: z.enum(['member', 'shared', 'unassigned']).optional(),
+        owner_member_id: z.number().optional().describe('Required with owner_type=member'),
+        limit: z.number().int().min(1).max(200).optional().describe('Default 50, maximum 200'),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: detectRecurringTransactions(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => queryTransactions(args)),
+  );
 
-server.registerTool(
-  'get_top_merchants',
-  {
-    title: 'Get Top Merchants',
-    description:
-      'Rank merchants/payees by total spending, transaction frequency, or average amount. ' +
-      'Returns merchant name, total spent, count, average/min/max amounts, and most common category.',
-    inputSchema: {
-      start_date: z.string().optional().describe('Start date (ISO)'),
-      end_date: z.string().optional().describe('End date (ISO)'),
-      sort_by: z
-        .enum(['total', 'count', 'average'])
-        .optional()
-        .describe('Sort by total spending (default), count, or average'),
-      limit: z.number().optional().describe('Number of top merchants (default 15, max 50)'),
-      category: z.string().optional().describe('Filter to a specific category'),
-      account_id: z.number().optional().describe('Filter by account ID'),
+  server.registerTool(
+    'get_spending_summary',
+    {
+      title: 'Get Spending Summary',
+      description:
+        'Aggregate spending by reporting date, grouped by category, month, account, or expense owner. Ignored transactions are excluded.',
+      inputSchema: z.object({
+        group_by: z.enum(['category', 'month', 'account', 'expense-owner']).optional(),
+        account_id: z.number().optional(),
+        start_date: z.string().optional().describe('Start date (YYYY-MM-DD)'),
+        end_date: z.string().optional().describe('End date (YYYY-MM-DD)'),
+        owner_type: z.enum(['member', 'shared', 'unassigned']).optional(),
+        owner_member_id: z.number().optional().describe('Required with owner_type=member'),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: getTopMerchants(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getSpendingSummary(args)),
+  );
 
-// ── Write tool ──────────────────────────────────────────────────────────────────
+  server.registerTool(
+    'get_account_balances',
+    {
+      title: 'Get Account Balances',
+      description:
+        'List configured accounts, household owner, latest scrape time, transaction count, and total spending.',
+      inputSchema: z.object({}),
+      annotations: READ_ONLY,
+    },
+    () => result(() => getAccountBalances()),
+  );
 
-server.registerTool(
-  'categorize_transaction',
-  {
-    title: 'Categorize Transaction',
-    description:
-      'Assign a category to a transaction by ID. Provide a confidence score (0-1). ' +
-      'Transactions with confidence < 0.8 are flagged for manual review.',
-    inputSchema: {
-      transaction_id: z.number().describe('The transaction ID'),
-      category: z
-        .string()
-        .describe('Category to assign (use get_spending_summary to see available categories)'),
-      confidence: z.number().min(0).max(1).describe('Confidence level 0.0-1.0'),
-      review_reason: z.string().optional().describe('Reason if confidence is low (<0.8)'),
+  server.registerTool(
+    'get_household_context',
+    {
+      title: 'Get Household Context',
+      description:
+        'List household members and ownership rules. Use this to discover member IDs and understand how transactions are assigned as personal, shared, or unassigned.',
+      inputSchema: z.object({ include_inactive: z.boolean().optional().describe('Default false') }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: categorizeTransaction(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    ({ include_inactive }) =>
+      result(() =>
+        JSON.stringify({
+          members: listMembers(include_inactive ?? false),
+          ownershipRules: listOwnershipRules(),
+        }),
+      ),
+  );
 
-server.registerTool(
-  'add_category',
-  {
-    title: 'Add Category',
-    description:
-      'Create a new spending category. Requires a unique machine-friendly name (lowercase, dashes/underscores) ' +
-      'and a human-readable label. Optionally set a color and categorization rules for the AI.',
-    inputSchema: {
-      name: z
-        .string()
-        .regex(/^[a-z0-9][a-z0-9_-]*$/)
-        .describe('Unique machine name (lowercase, dashes/underscores, e.g. "groceries")'),
-      label: z.string().describe('Human-readable display name (e.g. "Groceries & Food")'),
-      color: z.string().optional().describe('Hex color code (e.g. "#4CAF50")'),
-      rules: z
-        .string()
-        .optional()
-        .describe('Categorization hints for the AI (e.g. "Supermarkets, markets, food delivery")'),
+  server.registerTool(
+    'compare_periods',
+    {
+      title: 'Compare Spending Periods',
+      description:
+        'Compare category spending between two date ranges, including totals, counts, and percentage changes.',
+      inputSchema: z.object({
+        period1_start: z.string().describe('First period start (YYYY-MM-DD)'),
+        period1_end: z.string().describe('First period end (YYYY-MM-DD)'),
+        period2_start: z.string().describe('Second period start (YYYY-MM-DD)'),
+        period2_end: z.string().describe('Second period end (YYYY-MM-DD)'),
+        account_id: z.number().optional(),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: addCategory(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => comparePeriods(args)),
+  );
 
-server.registerTool(
-  'get_category_rules',
-  {
-    title: 'Get Category Rules',
-    description:
-      'Get the current categorization rules for one or all categories. ' +
-      'Use this BEFORE updating rules to understand what already exists.',
-    inputSchema: {
-      category_name: z
-        .string()
-        .optional()
-        .describe(
-          'Machine name of a specific category (e.g. "groceries"). Omit for all categories.',
-        ),
+  server.registerTool(
+    'get_spending_trends',
+    {
+      title: 'Get Spending Trends',
+      description:
+        'Analyze monthly spending direction, averages, extremes, and month-over-month changes.',
+      inputSchema: z.object({
+        months: z.number().int().min(1).max(24).optional().describe('Default 6'),
+        category: z.string().optional(),
+        account_id: z.number().optional(),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: getCategoryRules(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getSpendingTrends(args)),
+  );
 
-server.registerTool(
-  'update_category_rules',
-  {
-    title: 'Update Category Rules',
-    description:
-      'Update the categorization rules/hints for an existing category. ' +
-      'IMPORTANT: Always call get_category_rules first to see existing rules before updating. ' +
-      'Rules guide AI auto-categorization (e.g. "Supermarkets, markets, food delivery").',
-    inputSchema: {
-      category_name: z
-        .string()
-        .describe('Machine name of the category to update (e.g. "groceries", "eating-out")'),
-      rules: z
-        .string()
-        .describe(
-          'New categorization rules/hints (e.g. "Supermarkets, grocery stores, food delivery apps")',
-        ),
+  server.registerTool(
+    'detect_recurring_transactions',
+    {
+      title: 'Detect Recurring Transactions',
+      description:
+        'Detect subscriptions and recurring bills, including frequency, annual cost, and next expected charge.',
+      inputSchema: z.object({
+        months_back: z.number().int().min(1).max(12).optional().describe('Default 6'),
+        min_occurrences: z.number().int().min(2).optional().describe('Default 2'),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: updateCategoryRules(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => detectRecurringTransactions(args)),
+  );
 
-// ── Net Worth & Asset tools ──────────────────────────────────────────────────────
+  server.registerTool(
+    'get_top_merchants',
+    {
+      title: 'Get Top Merchants',
+      description:
+        'Rank merchants by total spending, transaction count, or average amount for an optional period, category, or account.',
+      inputSchema: z.object({
+        start_date: z.string().optional(),
+        end_date: z.string().optional(),
+        sort_by: z.enum(['total', 'count', 'average']).optional(),
+        limit: z.number().int().min(1).max(50).optional(),
+        category: z.string().optional(),
+        account_id: z.number().optional(),
+      }),
+      annotations: READ_ONLY,
+    },
+    (args) => result(() => getTopMerchants(args)),
+  );
 
-server.registerTool(
-  'get_net_worth',
-  {
-    title: 'Get Net Worth',
-    description:
-      'Get a complete net worth summary: bank balances, investment assets (with P&L), ' +
-      'liabilities, and totals (total, liquid). Use for financial overview questions.',
-    inputSchema: {},
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
+  server.registerTool(
+    'get_category_rules',
+    {
+      title: 'Get Category Rules',
+      description: 'Get categorization rules for one category or all categories.',
+      inputSchema: z.object({ category_name: z.string().optional() }),
+      annotations: READ_ONLY,
     },
-  },
-  async () => {
-    try {
-      return { content: [{ type: 'text', text: await getNetWorth() }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getCategoryRules(args)),
+  );
 
-server.registerTool(
-  'get_asset_details',
-  {
-    title: 'Get Asset Details',
-    description:
-      'Get detailed info about a specific asset: holdings, P&L, and optionally movements and value history. ' +
-      'Search by name (fuzzy match) or ID.',
-    inputSchema: {
-      asset_id: z.number().optional().describe('Asset ID'),
-      asset_name: z.string().optional().describe('Asset name (case-insensitive fuzzy match)'),
-      include_movements: z
-        .boolean()
-        .optional()
-        .describe('Include recent movements (default false)'),
-      include_snapshots: z.boolean().optional().describe('Include value history (default false)'),
+  server.registerTool(
+    'get_latest_scrape_transactions',
+    {
+      title: 'Get Latest Scrape Transactions',
+      description:
+        'Get the newest transactions and per-account outcome from the most recently finished scrape session.',
+      inputSchema: z.object({}),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await getAssetDetails(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    () => result(() => getLatestScrapeTransactions()),
+  );
 
-server.registerTool(
-  'get_liabilities',
-  {
-    title: 'Get Liabilities',
-    description:
-      'List all liabilities (loans, mortgages, credit lines) with current balances in ILS.',
-    inputSchema: {
-      include_inactive: z
-        .boolean()
-        .optional()
-        .describe('Include deactivated liabilities (default false)'),
+  server.registerTool(
+    'get_net_worth',
+    {
+      title: 'Get Net Worth',
+      description:
+        'Get bank balances, investments with profit/loss, liabilities, total net worth, and liquid net worth.',
+      inputSchema: z.object({}),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await getLiabilities(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    () => result(() => getNetWorth()),
+  );
 
-server.registerTool(
-  'get_net_worth_history',
-  {
-    title: 'Get Net Worth History',
-    description:
-      'Get historical net worth trends over time with breakdown by banks, assets, and liabilities. ' +
-      'Supports daily, weekly, or monthly granularity.',
-    inputSchema: {
-      start_date: z.string().optional().describe('Start date (ISO). Defaults to 1 year ago.'),
-      end_date: z.string().optional().describe('End date (ISO). Defaults to today.'),
-      granularity: z
-        .enum(['daily', 'weekly', 'monthly'])
-        .optional()
-        .describe('Data point frequency (default: monthly)'),
+  server.registerTool(
+    'get_asset_details',
+    {
+      title: 'Get Asset Details',
+      description:
+        'Get an asset and its holdings, profit/loss, and optional movements and value snapshots.',
+      inputSchema: z.object({
+        asset_id: z.number().optional(),
+        asset_name: z.string().optional().describe('Case-insensitive fuzzy name'),
+        include_movements: z.boolean().optional(),
+        include_snapshots: z.boolean().optional(),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: true,
-      destructiveHint: false,
-      idempotentHint: true,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await getNetWorthHistory(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getAssetDetails(args)),
+  );
 
-server.registerTool(
-  'manage_asset',
-  {
-    title: 'Manage Asset',
-    description:
-      'Create, update, or modify assets. Actions: create, update, update_value, record_rent.',
-    inputSchema: {
-      action: z
-        .enum(['create', 'update', 'update_value', 'record_rent'])
-        .describe('Action to perform'),
-      name: z.string().optional(),
-      type: z.enum(ASSET_TYPES).optional(),
-      institution: z.string().optional(),
-      currency: z.string().optional(),
-      liquidity: z.enum(LIQUIDITY_TYPES).optional(),
-      initial_value: z.number().optional(),
-      initial_cost_basis: z.number().optional(),
-      notes: z.string().optional(),
-      asset_id: z.number().optional(),
-      current_value: z.number().optional(),
-      contribution: z.number().optional(),
-      date: z.string().optional(),
-      amount: z.number().optional(),
+  server.registerTool(
+    'get_liabilities',
+    {
+      title: 'Get Liabilities',
+      description: 'List liabilities and their current balances in ILS.',
+      inputSchema: z.object({ include_inactive: z.boolean().optional() }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await manageAsset(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getLiabilities(args)),
+  );
 
-server.registerTool(
-  'manage_holding',
-  {
-    title: 'Manage Holding',
-    description:
-      'Create, update, or delete individual holdings within an asset (stocks, ETFs, crypto coins, cash).',
-    inputSchema: {
-      action: z.enum(['create', 'update', 'delete']).describe('Action to perform'),
-      asset_id: z.number().optional(),
-      name: z.string().optional(),
-      type: z.enum(HOLDING_TYPES).optional(),
-      currency: z.string().optional(),
-      quantity: z.number().optional(),
-      cost_basis: z.number().optional(),
-      last_price: z.number().optional(),
-      notes: z.string().optional(),
-      holding_id: z.number().optional(),
+  server.registerTool(
+    'get_net_worth_history',
+    {
+      title: 'Get Net Worth History',
+      description:
+        'Get historical net worth with bank, asset, and liability breakdown at daily, weekly, or monthly granularity.',
+      inputSchema: z.object({
+        start_date: z.string().optional(),
+        end_date: z.string().optional(),
+        granularity: z.enum(['daily', 'weekly', 'monthly']).optional(),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await manageHolding(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getNetWorthHistory(args)),
+  );
 
-server.registerTool(
-  'record_movement',
-  {
-    title: 'Record Movement',
-    description:
-      'Record a financial movement (buy, sell, deposit, withdrawal, dividend) on a brokerage or crypto asset.',
-    inputSchema: {
-      asset_id: z.number().describe('Asset ID'),
-      holding_id: z.number().optional().describe('Holding ID (required for buy/sell)'),
-      type: z.enum(MOVEMENT_TYPES).describe('Movement type'),
-      quantity: z.number().describe('Amount'),
-      currency: z.string().describe('Currency code'),
-      price_per_unit: z.number().optional(),
-      source_amount: z.number().optional(),
-      source_currency: z.string().optional(),
-      date: z.string().describe('Date (ISO)'),
-      notes: z.string().optional(),
+  server.registerTool(
+    'get_budget_progress',
+    {
+      title: 'Get Budget Progress',
+      description:
+        'Get spent, remaining, percentage used, and over-budget status for one or all active budgets. Supports historical periods and yearly monthly breakdowns.',
+      inputSchema: z.object({
+        budget_id: z.number().optional(),
+        monthly_view: z.boolean().optional(),
+        reference_date: z.string().optional().describe('Date selecting the month or year'),
+      }),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
-    },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await recordMovement(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => getBudgetProgress(args)),
+  );
 
-server.registerTool(
-  'manage_liability',
-  {
-    title: 'Manage Liability',
-    description: 'Create, update, or deactivate liabilities (loans, mortgages, credit lines).',
-    inputSchema: {
-      action: z.enum(['create', 'update', 'deactivate']).describe('Action to perform'),
-      name: z.string().optional(),
-      type: z.enum(LIABILITY_TYPES).optional(),
-      currency: z.string().optional(),
-      original_amount: z.number().optional(),
-      current_balance: z.number().optional(),
-      interest_rate: z.number().optional(),
-      start_date: z.string().optional(),
-      notes: z.string().optional(),
-      liability_id: z.number().optional(),
+  server.registerTool(
+    'get_alert_settings',
+    {
+      title: 'Get Alert Settings',
+      description: 'View the current Telegram spending and scrape alert configuration.',
+      inputSchema: z.object({}),
+      annotations: READ_ONLY,
     },
-    annotations: {
-      readOnlyHint: false,
-      destructiveHint: false,
-      idempotentHint: false,
-      openWorldHint: false,
+    () => result(() => getAlertSettings()),
+  );
+
+  if (accessMode === 'read-only') return server;
+
+  server.registerTool(
+    'categorize_transaction',
+    {
+      title: 'Categorize Transaction',
+      description:
+        'Assign a category to a transaction. Confidence below 0.8 flags it for manual review.',
+      inputSchema: z.object({
+        transaction_id: z.number(),
+        category: z.string(),
+        confidence: z.number().min(0).max(1),
+        review_reason: z.string().optional(),
+      }),
+      annotations: { ...WRITE, idempotentHint: true },
     },
-  },
-  async (args) => {
-    try {
-      return { content: [{ type: 'text', text: await manageLiability(args) }] };
-    } catch (e) {
-      return { isError: true, content: [{ type: 'text', text: `Error: ${(e as Error).message}` }] };
-    }
-  },
-);
+    (args) => result(() => categorizeTransaction(args)),
+  );
 
-// ── Start server ────────────────────────────────────────────────────────────────
+  server.registerTool(
+    'add_category',
+    {
+      title: 'Add Category',
+      description: 'Create a spending category with optional color and AI categorization rules.',
+      inputSchema: z.object({
+        name: z.string().regex(/^[a-z0-9][a-z0-9_-]*$/),
+        label: z.string(),
+        color: z.string().optional(),
+        rules: z.string().optional(),
+      }),
+      annotations: WRITE,
+    },
+    (args) => result(() => addCategory(args)),
+  );
 
-const transport = new StdioServerTransport();
-await server.connect(transport);
-console.error('Money Monitor MCP server running via stdio');
+  server.registerTool(
+    'update_category_rules',
+    {
+      title: 'Update Category Rules',
+      description:
+        'Replace the AI categorization hints for a category. Read the current rules first.',
+      inputSchema: z.object({ category_name: z.string(), rules: z.string() }),
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    (args) => result(() => updateCategoryRules(args)),
+  );
+
+  server.registerTool(
+    'manage_asset',
+    {
+      title: 'Manage Asset',
+      description: 'Create or update an asset, update its value, or record rent.',
+      inputSchema: z.object({
+        action: z.enum(['create', 'update', 'update_value', 'record_rent']),
+        name: z.string().optional(),
+        type: z.enum(ASSET_TYPES).optional(),
+        institution: z.string().optional(),
+        currency: z.string().optional(),
+        liquidity: z.enum(LIQUIDITY_TYPES).optional(),
+        initial_value: z.number().optional(),
+        initial_cost_basis: z.number().optional(),
+        notes: z.string().optional(),
+        asset_id: z.number().optional(),
+        current_value: z.number().optional(),
+        contribution: z.number().optional(),
+        date: z.string().optional(),
+        amount: z.number().optional(),
+      }),
+      annotations: WRITE,
+    },
+    (args) => result(() => manageAsset(args)),
+  );
+
+  server.registerTool(
+    'manage_holding',
+    {
+      title: 'Manage Holding',
+      description: 'Create, update, or delete a holding inside an investment asset.',
+      inputSchema: z.object({
+        action: z.enum(['create', 'update', 'delete']),
+        asset_id: z.number().optional(),
+        name: z.string().optional(),
+        type: z.enum(HOLDING_TYPES).optional(),
+        currency: z.string().optional(),
+        quantity: z.number().optional(),
+        cost_basis: z.number().optional(),
+        last_price: z.number().optional(),
+        notes: z.string().optional(),
+        holding_id: z.number().optional(),
+      }),
+      annotations: { ...WRITE, destructiveHint: true },
+    },
+    (args) => result(() => manageHolding(args)),
+  );
+
+  server.registerTool(
+    'record_movement',
+    {
+      title: 'Record Movement',
+      description: 'Record a buy, sell, deposit, withdrawal, or dividend on an asset.',
+      inputSchema: z.object({
+        asset_id: z.number(),
+        holding_id: z.number().optional(),
+        type: z.enum(MOVEMENT_TYPES),
+        quantity: z.number(),
+        currency: z.string(),
+        price_per_unit: z.number().optional(),
+        source_amount: z.number().optional(),
+        source_currency: z.string().optional(),
+        date: z.string(),
+        notes: z.string().optional(),
+      }),
+      annotations: WRITE,
+    },
+    (args) => result(() => recordMovement(args)),
+  );
+
+  server.registerTool(
+    'manage_liability',
+    {
+      title: 'Manage Liability',
+      description: 'Create, update, or deactivate a loan, mortgage, or credit line.',
+      inputSchema: z.object({
+        action: z.enum(['create', 'update', 'deactivate']),
+        name: z.string().optional(),
+        type: z.enum(LIABILITY_TYPES).optional(),
+        currency: z.string().optional(),
+        original_amount: z.number().optional(),
+        current_balance: z.number().optional(),
+        interest_rate: z.number().optional(),
+        start_date: z.string().optional(),
+        notes: z.string().optional(),
+        liability_id: z.number().optional(),
+      }),
+      annotations: WRITE,
+    },
+    (args) => result(() => manageLiability(args)),
+  );
+
+  server.registerTool(
+    'manage_budget',
+    {
+      title: 'Manage Budget',
+      description: 'Create, update, or permanently delete a spending budget.',
+      inputSchema: z.object({
+        action: z.enum(['create', 'update', 'delete']),
+        budget_id: z.number().optional(),
+        name: z.string().optional(),
+        amount: z.number().positive().optional(),
+        period: z.enum(['monthly', 'yearly']).optional(),
+        category_names: z.array(z.string()).min(1).optional(),
+        alert_threshold: z.number().min(0).max(100).optional(),
+        alert_enabled: z.boolean().optional(),
+        color: z.string().optional(),
+        is_active: z.boolean().optional(),
+      }),
+      annotations: { ...WRITE, destructiveHint: true },
+    },
+    (args) => result(() => manageBudget(args)),
+  );
+
+  server.registerTool(
+    'update_alert_settings',
+    {
+      title: 'Update Alert Settings',
+      description: 'Update Telegram spending, scrape-error, or monthly-summary alerts.',
+      inputSchema: z.object({
+        enabled: z.boolean().optional(),
+        large_charge_threshold: z.number().positive().optional(),
+        unusual_spending_percent: z.number().positive().optional(),
+        monthly_summary_enabled: z.boolean().optional(),
+        monthly_summary_day: z.number().int().min(1).max(28).optional(),
+        report_scrape_errors: z.boolean().optional(),
+      }),
+      annotations: { ...WRITE, idempotentHint: true },
+    },
+    (args) => result(() => updateAlertSettingsFromTool(args)),
+  );
+
+  return server;
+}
+
+export function startMoneyMonitorMcpServer(
+  accessMode: McpAccessMode = resolveMcpAccessMode(),
+): StdioServerHandle {
+  const handle = serveStdio(() => buildMoneyMonitorMcpServer(accessMode), {
+    onerror: (error) => console.error('[MCP]', error),
+  });
+  console.error(`Money Monitor MCP server running via stdio (${accessMode})`);
+  return handle;
+}
+
+if (process.argv[1] && resolve(process.argv[1]) === resolve(modulePath)) {
+  startMoneyMonitorMcpServer();
+}

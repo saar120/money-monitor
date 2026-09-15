@@ -36,13 +36,19 @@ jobs:
       - name: Build and package
         run: npm run electron:prebuild && npx electron-builder --mac --publish never
 
+      - name: Verify packaged MCP
+        run: |
+          MCP_COMMAND="$(find release -type f -path '*/Money Monitor.app/Contents/Resources/money-monitor-mcp' -print -quit)"
+          test -n "$MCP_COMMAND"
+          node scripts/smoke-test-packaged-mcp.mjs "$MCP_COMMAND"
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.zip
-            dist/*.blockmap
-            dist/latest-mac.yml
+            release/*.zip
+            release/*.blockmap
+            release/latest-mac.yml
           fail_on_unmatched_files: true
           generate_release_notes: true
           prerelease: ${{ contains(github.ref_name, '-alpha') || contains(github.ref_name, '-beta') || contains(github.ref_name, '-rc') }}
@@ -77,7 +83,7 @@ jobs:
         uses: softprops/action-gh-release@v2
         with:
           files: |
-            dist/*.exe
-            dist/*.blockmap
-            dist/latest.yml
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
           fail_on_unmatched_files: true

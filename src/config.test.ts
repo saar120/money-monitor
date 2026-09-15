@@ -1,4 +1,8 @@
 import { describe, it, expect, beforeEach } from 'vitest';
+import { spawnSync } from 'node:child_process';
+import { mkdtempSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 
 // Ensure required env var is set before importing the real module
 process.env.CREDENTIALS_MASTER_KEY =
@@ -49,6 +53,39 @@ describe('Electron config environment loading', () => {
     applyConfigFileToEnvironment({ API_TOKEN: 'stored-token' }, environment);
 
     expect(environment.API_TOKEN).toBe('session-token');
+  });
+
+  it('does not replace encrypted secrets when launched as the MCP helper', () => {
+    const dataDir = mkdtempSync(join(tmpdir(), 'money-monitor-mcp-config-'));
+    const configPath = join(dataDir, 'config.json');
+    const stored = {
+      CREDENTIALS_MASTER_KEY: 'enc:unavailable-without-electron-safe-storage',
+      MOBILE_PUBLIC_ID_KEY: 'enc:also-unavailable-without-electron-safe-storage',
+      MOBILE_SERVER_ID: '9f94db6d-27de-49aa-8e34-0e3d8fda818f',
+    };
+    writeFileSync(configPath, JSON.stringify(stored));
+
+    const { CREDENTIALS_MASTER_KEY: _masterKey, ...environment } = process.env;
+    const child = spawnSync(
+      process.execPath,
+      ['--import', 'tsx', '-e', "import('./src/config.ts')"],
+      {
+        cwd: process.cwd(),
+        env: {
+          ...environment,
+          MONEY_MONITOR_DATA_DIR: dataDir,
+          MONEY_MONITOR_MCP_MODE: '1',
+        },
+        encoding: 'utf8',
+      },
+    );
+
+    try {
+      expect(child.status, child.stderr).toBe(0);
+      expect(JSON.parse(readFileSync(configPath, 'utf8'))).toEqual(stored);
+    } finally {
+      rmSync(dataDir, { recursive: true, force: true });
+    }
   });
 });
 

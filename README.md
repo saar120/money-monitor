@@ -10,7 +10,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 - **Net Worth Tracking** — Track assets (brokerage accounts, crypto, real estate), liabilities (loans, mortgages), and view historical net worth trends with multi-currency support
 - **Interactive Dashboard** — Real-time charts, spending breakdowns, transaction search, insights, and account management
 - **Telegram Bot** — Chat with your AI advisor on the go, upload receipts for scanning, and receive spending alerts
-- **MCP Server** — Expose your financial data to Claude Desktop and other MCP-compatible clients (19 tools)
+- **MCP Server** — Expose your financial data to ChatGPT desktop, Codex, Claude Code, and other MCP clients (16 read tools, 25 with writes enabled)
 - **Alerts** — Get notified about large charges, unusual spending, scrape errors, and monthly summaries via Telegram
 - **Scheduled Scraping** — Configurable cron-based background scraping with live progress via SSE
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
@@ -170,7 +170,41 @@ The production build serves the dashboard as static files through Fastify, so on
 
 ## MCP Server
 
-Money Monitor exposes an MCP server for use with Claude Desktop and other MCP-compatible clients. Add it to your Claude Desktop config:
+Money Monitor exposes its live local app data over stdio using MCP protocol revision 2026-07-28, with compatibility for older MCP clients. The server is started on demand by the client; the Money Monitor window does not need to stay open.
+
+The installed macOS app is the recommended entry point because it automatically uses the app's current database:
+
+```text
+/Applications/Money Monitor.app/Contents/Resources/money-monitor-mcp
+```
+
+Access is read-only by default (16 tools). To enable all 25 tools, including categorization and budget, asset, liability, and alert updates, add `--mcp-access=read-write`.
+
+### ChatGPT desktop and Codex
+
+ChatGPT desktop, the Codex app/CLI, and the Codex IDE extension share MCP configuration. In ChatGPT desktop, open **Settings → MCP Servers → Add server**, choose **STDIO**, then use the command above. Or add this to `~/.codex/config.toml`:
+
+```toml
+[mcp_servers.money-monitor]
+command = "/Applications/Money Monitor.app/Contents/Resources/money-monitor-mcp"
+```
+
+Restart the client and use `/mcp` to verify the connection. ChatGPT on the web cannot run this local stdio server; use the macOS desktop app.
+
+### Claude Code
+
+Add it for every project with:
+
+```bash
+claude mcp add --transport stdio --scope user money-monitor -- \
+  "/Applications/Money Monitor.app/Contents/Resources/money-monitor-mcp"
+```
+
+For read-write access, append `--mcp-access=read-write` to the command.
+
+### Development checkout
+
+To run from source instead of the installed app:
 
 ```json
 {
@@ -184,7 +218,7 @@ Money Monitor exposes an MCP server for use with Claude Desktop and other MCP-co
 }
 ```
 
-This gives Claude access to 19 tools: query transactions, get spending summaries, compare periods, manage assets/liabilities, track net worth, and more.
+The source command uses the checkout's configured data directory. Prefer the installed app command when you want the same live database as the desktop app.
 
 ## Telegram Bot
 

@@ -1,0 +1,11 @@
+#!/bin/sh
+set -eu
+
+contents_dir=$(CDPATH= cd -- "$(dirname -- "$0")/.." && pwd)
+
+export ELECTRON_RUN_AS_NODE=1
+export MONEY_MONITOR_MCP_MODE=1
+export MONEY_MONITOR_DATA_DIR="${MONEY_MONITOR_DATA_DIR:-$HOME/Library/Application Support/Money Monitor}"
+
+exec "$contents_dir/MacOS/Money Monitor" \
+  "$contents_dir/Resources/app.asar/dist/mcp-server.js" "$@"

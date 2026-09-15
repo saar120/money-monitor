@@ -9,11 +9,23 @@ const cwd = join(__dirname, '..', 'node_modules', 'better-sqlite3');
 
 console.log(`Rebuilding better-sqlite3 for Electron ${target}...`);
 
-execFileSync('npx', [
-  'node-gyp', 'rebuild',
-  '--runtime=electron',
-  `--target=${target}`,
-  '--dist-url=https://electronjs.org/headers',
-], { cwd, stdio: 'inherit', shell: true });
+const env = { ...process.env };
+if (process.platform === 'darwin' && !env.SDKROOT) {
+  env.SDKROOT = execFileSync('xcrun', ['--sdk', 'macosx', '--show-sdk-path'], {
+    encoding: 'utf8',
+  }).trim();
+}
+
+execFileSync(
+  'npx',
+  [
+    'node-gyp',
+    'rebuild',
+    '--runtime=electron',
+    `--target=${target}`,
+    '--dist-url=https://electronjs.org/headers',
+  ],
+  { cwd, env, stdio: 'inherit', shell: process.platform === 'win32' },
+);
 
 console.log('Rebuild complete.');

@@ -60,6 +60,9 @@
     "appId": "com.money-monitor.app",
     "productName": "Money Monitor",
     "icon": "electron/icons/icon",
+    "directories": {
+      "output": "release"
+    },
     "mac": {
       "target": "zip",
       "icon": "electron/icons/icon.icns",
@@ -76,12 +79,18 @@
       "icon": "electron/icons/icon-256.png"
     },
     "files": [
-      "dist/**/*",
+      "dist/**/*.js",
+      "dist/db/migrations/**/*",
       "dashboard/dist/**/*",
       "electron/**/*.js",
       "electron/**/*.mjs",
-      "electron/icons/**/*",
-      "node_modules/**/*"
+      "electron/icons/**/*"
+    ],
+    "extraResources": [
+      {
+        "from": "scripts/money-monitor-mcp",
+        "to": "money-monitor-mcp"
+      }
     ],
     "asar": true,
     "asarUnpack": [
@@ -99,7 +108,7 @@
     "@earendil-works/pi-ai": "0.80.6",
     "@fastify/cors": "^11.2.0",
     "@fastify/static": "^9.0.0",
-    "@modelcontextprotocol/sdk": "^1.27.1",
+    "@modelcontextprotocol/server": "^2.0.0",
     "@puppeteer/browsers": "^2.3.0",
     "better-sqlite3": "^12.6.2",
     "cron-parser": "^5.5.0",
@@ -119,6 +128,7 @@
     "@commitlint/cli": "^20.4.3",
     "@commitlint/config-conventional": "^20.4.3",
     "@eslint/js": "^10.0.1",
+    "@modelcontextprotocol/client": "^2.0.0",
     "@types/better-sqlite3": "^7.6.13",
     "@types/node": "^25.3.0",
     "@types/node-cron": "^3.0.11",

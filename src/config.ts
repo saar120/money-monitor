@@ -11,6 +11,7 @@ import {
 import { hardenOwnerOnlyFile } from './user-data-permissions.js';
 
 export const isElectronMode = !!process.env.MONEY_MONITOR_DATA_DIR;
+const isMcpMode = process.env.MONEY_MONITOR_MCP_MODE === '1';
 
 // ── Keys whose values are secrets (encrypted at rest, redacted in API responses) ─
 export const SECRET_KEYS = new Set([
@@ -159,10 +160,12 @@ export function applyConfigFileToEnvironment(
       try {
         plain = decryptSecret(value);
       } catch (err) {
-        console.error(
-          `[Config] Failed to decrypt ${key}:`,
-          err instanceof Error ? err.message : err,
-        );
+        if (!isMcpMode) {
+          console.error(
+            `[Config] Failed to decrypt ${key}:`,
+            err instanceof Error ? err.message : err,
+          );
+        }
         continue; // skip corrupted value
       }
     }
@@ -188,19 +191,20 @@ if (!isElectronMode) {
   // Auto-generate CREDENTIALS_MASTER_KEY if not set (first launch)
   if (!process.env.CREDENTIALS_MASTER_KEY) {
     const key = randomBytes(32).toString('hex');
+    // The MCP helper cannot access Electron safeStorage and never scrapes.
     process.env.CREDENTIALS_MASTER_KEY = key;
-    saveConfigFile({ CREDENTIALS_MASTER_KEY: key });
+    if (!isMcpMode) saveConfigFile({ CREDENTIALS_MASTER_KEY: key });
   }
   // Persist a non-secret server identity independently of process ports and
   // app versions. Pairing profiles use this to detect a different Mac/source.
-  if (!process.env.MOBILE_SERVER_ID) {
+  if (!isMcpMode && !process.env.MOBILE_SERVER_ID) {
     const serverId = randomUUID();
     process.env.MOBILE_SERVER_ID = serverId;
     saveConfigFile({ MOBILE_SERVER_ID: serverId });
   }
   // Separate pseudonymization from both the desktop bearer token and the bank
   // credential key. Rotating either must not change public mobile identifiers.
-  if (!process.env.MOBILE_PUBLIC_ID_KEY) {
+  if (!isMcpMode && !process.env.MOBILE_PUBLIC_ID_KEY) {
     const publicIdKey = randomBytes(32).toString('base64url');
     process.env.MOBILE_PUBLIC_ID_KEY = publicIdKey;
     saveConfigFile({ MOBILE_PUBLIC_ID_KEY: publicIdKey });
