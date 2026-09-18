@@ -7,8 +7,10 @@ import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
 import {
   formatCompactNumber,
+  formatMoney,
   formatUnsignedMoney,
   monthlyCategoryNames,
+  monthlyCategorySpending,
   niceChartMaximum,
 } from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
@@ -55,9 +57,10 @@ function MonthlyComparison({
   );
   const selected = series.find((item) => item.month === selectedMonth) ?? fallback;
   const categoryNames = monthlyCategoryNames(series);
-  const axisMax = niceChartMaximum(Math.max(...series.map((item) => item.spending)), 5);
+  const axisMax = niceChartMaximum(Math.max(...series.map(monthlyCategorySpending)), 5);
   const ticks = Array.from({ length: 6 }, (_, index) => axisMax - (axisMax / 5) * index);
-  const visibleCategories = selected.categories.slice(0, 8);
+  const visibleCategories = selected.categories.filter((category) => category.spent !== 0);
+  const selectedCategorySpending = monthlyCategorySpending(selected);
 
   return (
     <>
@@ -90,7 +93,10 @@ function MonthlyComparison({
         <Text style={[styles.summaryNote, { color: colors.secondary }]}>posted spending</Text>
       </View>
 
-      <View style={styles.chart} accessibilityLabel="Monthly spending mix chart">
+      <View
+        style={styles.chart}
+        accessibilityLabel="Monthly net category spending chart, net receipts excluded"
+      >
         <View style={styles.axis}>
           {ticks.map((tick) => (
             <Text
@@ -108,14 +114,15 @@ function MonthlyComparison({
               <View key={tick} style={[styles.guide, { backgroundColor: colors.separator }]} />
             ))}
           </View>
-          <View style={styles.bars}>
+          <View style={[styles.bars, range === '12' && { gap: 0 }]}>
             {series.map((item) => {
-              const total = Math.max(1, item.spending);
+              const total = monthlyCategorySpending(item);
               const selectedBar = selected.month === item.month;
               return (
                 <Pressable
-                  accessibilityLabel={`${monthTitle(item.month)}, ${formatUnsignedMoney(item.spending, item.currencyCode)}`}
+                  accessibilityLabel={`${monthTitle(item.month)}, ${formatUnsignedMoney(total, item.currencyCode)} net category spending`}
                   accessibilityRole="button"
+                  accessibilityState={{ selected: selectedBar }}
                   key={item.month}
                   onPress={() => setSelectedMonth(item.month)}
                   style={styles.month}
@@ -125,9 +132,7 @@ function MonthlyComparison({
                     style={[
                       styles.bar,
                       {
-                        height: Math.max(6, (item.spending / axisMax) * 164),
-                        backgroundColor: colors.separator,
-                        opacity: selectedBar ? 0.82 : 0.48,
+                        height: (total / axisMax) * 168,
                       },
                     ]}
                   >
@@ -139,13 +144,16 @@ function MonthlyComparison({
                           key={name}
                           style={{
                             backgroundColor: category.color,
-                            height: `${Math.max(2, (category.spent / total) * 100)}%`,
+                            height: `${(category.spent / total) * 100}%`,
+                            flexShrink: 0,
                           }}
                         />
                       );
                     })}
                   </View>
                   <Text
+                    allowFontScaling={false}
+                    numberOfLines={1}
                     style={[
                       styles.monthLabel,
                       { color: selectedBar ? colors.text : colors.secondary },
@@ -159,12 +167,17 @@ function MonthlyComparison({
           </View>
         </View>
       </View>
+      <Text style={[styles.chartNote, { color: colors.secondary }]}>
+        Net category spending. Net receipts are excluded from the chart and listed below.
+      </Text>
 
       <Text style={[styles.sectionTitle, { color: colors.text }]}>Where it went</Text>
       <View style={[styles.categoryList, { backgroundColor: colors.surface }]}>
         {visibleCategories.map((category, index) => {
           const percent =
-            selected.spending > 0 ? Math.round((category.spent / selected.spending) * 100) : 0;
+            selectedCategorySpending > 0
+              ? Math.round((category.spent / selectedCategorySpending) * 100)
+              : 0;
           return (
             <Pressable
               accessibilityHint={`Opens ${category.name} merchants and transactions`}
@@ -188,14 +201,23 @@ function MonthlyComparison({
               testID={`monthly-category-${category.name}`}
             >
               <View style={[styles.dot, { backgroundColor: category.color }]} />
-              <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
-                {category.name}
-              </Text>
+              <View style={styles.categoryName}>
+                <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
+                  {category.name}
+                </Text>
+                {category.spent < 0 ? (
+                  <Text style={[styles.creditLabel, { color: colors.secondary }]}>
+                    Net received
+                  </Text>
+                ) : null}
+              </View>
               <Text allowFontScaling={false} style={[styles.percent, { color: colors.secondary }]}>
-                {percent}%
+                {category.spent > 0 ? `${percent}%` : '—'}
               </Text>
               <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
-                {formatUnsignedMoney(category.spent, selected.currencyCode)}
+                {category.spent < 0
+                  ? formatMoney(category.spent, selected.currencyCode)
+                  : formatUnsignedMoney(category.spent, selected.currencyCode)}
               </Text>
               <SymbolView name="chevron.right" size={10} tintColor={colors.tertiary} />
             </Pressable>
@@ -260,13 +282,13 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 0,
     right: 0,
-    bottom: 0,
+    height: 168,
     left: 0,
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 9,
   },
-  month: { flex: 1, height: 202, alignItems: 'center', justifyContent: 'flex-end' },
+  month: { flex: 1, height: 168, alignItems: 'center', justifyContent: 'flex-end' },
   bar: {
     width: '54%',
     maxWidth: 24,
@@ -275,7 +297,17 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
     justifyContent: 'flex-end',
   },
-  monthLabel: { marginTop: 8, fontSize: 10.5, fontWeight: '600' },
+  monthLabel: {
+    position: 'absolute',
+    top: 168,
+    marginTop: 8,
+    width: 30,
+    textAlign: 'center',
+    fontSize: 10.5,
+    lineHeight: 13,
+    fontWeight: '600',
+  },
+  chartNote: { fontSize: 12, lineHeight: 17 },
   sectionTitle: {
     marginTop: 30,
     marginBottom: 10,
@@ -287,7 +319,9 @@ const styles = StyleSheet.create({
   categoryList: { borderRadius: 16, paddingHorizontal: 14, overflow: 'hidden' },
   row: { minHeight: 56, flexDirection: 'row', alignItems: 'center', gap: 9 },
   dot: { width: 9, height: 9, borderRadius: 5 },
-  name: { flex: 1, minWidth: 0, fontSize: 15, fontWeight: '600' },
+  categoryName: { flex: 1, minWidth: 0 },
+  name: { fontSize: 15, fontWeight: '600' },
+  creditLabel: { marginTop: 2, fontSize: 11, lineHeight: 15 },
   percent: { width: 35, textAlign: 'right', fontSize: 12.5, fontVariant: ['tabular-nums'] },
   amount: {
     minWidth: 72,

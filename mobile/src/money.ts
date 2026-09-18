@@ -66,7 +66,6 @@ export function cashFlowSummary(months: ReadonlyArray<{ income: number; spending
 
 export function monthlyCategoryNames(
   months: ReadonlyArray<{ categories: ReadonlyArray<{ name: string; spent: number }> }>,
-  limit = 6,
 ): string[] {
   const totals = new Map<string, number>();
   for (const month of months) {
@@ -78,8 +77,13 @@ export function monthlyCategoryNames(
     .sort(
       ([leftName, left], [rightName, right]) => right - left || leftName.localeCompare(rightName),
     )
-    .slice(0, limit)
     .map(([name]) => name);
+}
+
+export function monthlyCategorySpending(month: {
+  categories: ReadonlyArray<{ spent: number }>;
+}): number {
+  return month.categories.reduce((total, category) => total + Math.max(0, category.spent), 0);
 }
 
 export function categoryTransactions<T extends { category: string }>(
