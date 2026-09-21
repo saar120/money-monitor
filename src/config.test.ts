@@ -32,6 +32,13 @@ describe('mobile access defaults', () => {
   });
 });
 
+describe('categorization configuration', () => {
+  it('defaults to the LLM provider and treats the TypeSafe key as a secret', () => {
+    expect(config.CATEGORIZATION_PROVIDER).toBe('llm');
+    expect(SECRET_KEYS.has('TYPESAFE_API_KEY')).toBe(true);
+  });
+});
+
 describe('Electron config environment loading', () => {
   it('loads only schema-known keys without changing unknown config values', () => {
     const raw = {
