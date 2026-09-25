@@ -14,7 +14,25 @@ npm run ios
 
 This app uses native Expo modules, so Face ID, secure storage, app-switcher protection, and the camera should be evaluated in a development build rather than Expo Go.
 
-For physical-device builds, use Xcode 26.6 until Expo's generated iOS shell adopts the `UIScene` lifecycle required by the iOS 27 SDK. Xcode 27 beta builds of Expo SDK 57 terminate before React starts; the same app built with the iOS 26.5 SDK runs on iOS 27.
+Physical-device builds support Xcode 27 through Expo SDK 57's official `ios.enableSceneSupport` build property. Clean prebuilds generate the required scene manifest and use Expo's scene delegate.
+
+## Product and architecture
+
+Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remains authoritative for financial data, calculations, scraping, AI, credentials, and administration; the phone consumes its authenticated mobile API and stores only its device credential in the iOS Keychain.
+
+- **Home** gives a five-second view of spending, income, pace, budgets, and attention items.
+- **Activity** provides searchable, filterable transactions and opens the focused Review workflow.
+- **Explore** follows changes through categories, merchants, transactions, cash flow, budgets, and net worth.
+- `MoneyDataProvider` owns pairing state, shared overview data, fixture selection, and invalidation after review actions. Feature screens call typed API helpers directly; there is no app-wide state framework or client-side financial calculation layer.
+
+## UI rules
+
+- Use semantic roles from `src/theme.ts`; do not add screen-local canvas or surface colors.
+- Cobalt indicates interaction or chart focus. Green, amber, and red are reserved for financial or operational meaning.
+- Keep one leading financial statement per viewport, align monetary values, and use tabular numerals.
+- Prefer native navigation, sheets, controls, Dynamic Type, VoiceOver semantics, and 44-point targets.
+- Reserve Liquid Glass for navigation and compact selection controls—not ordinary content cards.
+- Preserve server-defined inclusion, date, owner, pending, transfer, and currency semantics.
 
 ## Deterministic E2E
 
@@ -58,5 +76,3 @@ npm run typecheck
 npm test
 npx expo-doctor
 ```
-
-The current product model and Blue Ledger visual rules are recorded in [`PRODUCT.md`](./PRODUCT.md) and [`DESIGN.md`](./DESIGN.md). Reviewed iPhone 17 Pro captures live in [`docs/screenshots/blue-ledger`](./docs/screenshots/blue-ledger); the repeatable capture flows are `e2e/capture-blue-ledger-light.yaml` and `e2e/capture-blue-ledger-dark.yaml`. The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).
