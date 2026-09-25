@@ -4,7 +4,7 @@
 
 Home, Activity, transaction detail, native search, filters, dark mode, mixed Hebrew/English content, iOS tab navigation, secure storage, authentication gate, app-switcher protection, and QR scanning were implemented in the permanent `mobile/` app. The Release simulator build succeeds. TypeScript and QR parser tests pass. Expo Doctor passes 21/21 checks. The deterministic Maestro suite covers both primary features, every tab, a needs-attention scenario, and the real secure-storage lifecycle.
 
-A physical iPhone exposed an upstream build-toolchain constraint: an Expo SDK 57 app linked with Xcode 27 beta traps before React starts because the generated native shell does not yet adopt the `UIScene` lifecycle required by the iOS 27 SDK. Building the unchanged app with Xcode 26.6/iOS 26.5 and installing it with Xcode-beta's device tools fixed the launch; the exact device process remained alive across repeated checks. No speculative `SceneDelegate` patch was added. Track Expo/React Native's scene-lifecycle support before Xcode 27 becomes mandatory.
+A physical iPhone exposed an upstream build-toolchain constraint: an Expo SDK 57 app linked with Xcode 27 traps before React starts unless it adopts the required `UIScene` lifecycle. The app now uses Expo 57.0.23+'s official `ios.enableSceneSupport` build property; regular and demo Release builds both work with Xcode 27.
 
 `npm audit --omit=dev` currently reports moderate advisories in Expo Router's query-string dependency and Expo's build tooling. npm proposes incompatible SDK downgrades rather than a valid patch, so no forced audit rewrite was applied; track these with Expo SDK updates.
 
@@ -23,7 +23,7 @@ The final camera handoff could not be completed in this run: the available simul
 
 | Foundation | Disposition | Evidence / follow-up |
 | --- | --- | --- |
-| Expo + TypeScript | Keep with small follow-up | Release build, typecheck, and Expo Doctor pass; use Xcode 26.6 until the Expo shell supports Xcode 27's required `UIScene` lifecycle. |
+| Expo + TypeScript | Keep with small follow-up | Release build and typecheck pass; remove `ios.enableSceneSupport` after upgrading to SDK 58, where scene support is the default. |
 | Expo Router tabs/stacks | Keep as-is | All routes are reachable through E2E. |
 | Home/Activity feature-local code | Keep as-is | Direct, readable screens with no state framework. |
 | Typed fixture scenarios | Keep as-is | Same UI supports normal and needs-attention launches. |

@@ -14,7 +14,7 @@ npm run ios
 
 This app uses native Expo modules, so Face ID, secure storage, app-switcher protection, and the camera should be evaluated in a development build rather than Expo Go.
 
-For physical-device builds, use Xcode 26.6 until Expo's generated iOS shell adopts the `UIScene` lifecycle required by the iOS 27 SDK. Xcode 27 beta builds of Expo SDK 57 terminate before React starts; the same app built with the iOS 26.5 SDK runs on iOS 27.
+Physical-device builds support Xcode 27 through Expo SDK 57's official `ios.enableSceneSupport` build property. Clean prebuilds generate the required scene manifest and use Expo's scene delegate.
 
 ## Deterministic E2E
 
