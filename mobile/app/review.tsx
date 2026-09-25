@@ -1,7 +1,7 @@
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
 import { t } from '@/localization';
-import { ownerLabel } from '@/translations';
+import { categoryLabel, ownerLabel } from '@/translations';
 import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -259,7 +259,7 @@ export default function ReviewScreen() {
                 <Field
                   symbol="tag"
                   label={t('category')}
-                  value={current.category}
+                  value={categoryLabel(current.category)}
                   colors={colors}
                   disabled={saving}
                   onPress={() => setPicker('category')}

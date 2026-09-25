@@ -1,42 +1,12 @@
 import Constants from 'expo-constants';
 import { Settings } from 'react-native';
 import {
-  FIXTURE_REVIEW_CATEGORIES,
   fixtureScenarios,
   type FixtureScenario,
   type FixtureScenarioName,
 } from './fixtures';
 import { currentLanguage } from './locale-state';
-import { t } from './translations';
-
-const hebrewCategories = {
-  Dining: 'מסעדות',
-  Groceries: 'מצרכים',
-  Housing: 'דיור',
-  Transport: 'תחבורה',
-  Travel: 'נסיעות',
-  Shopping: 'קניות',
-  Health: 'בריאות',
-  Subscriptions: 'מינויים',
-  Utilities: 'חשבונות',
-  Entertainment: 'בידור',
-  Education: 'חינוך',
-  Personal: 'אישי',
-  Gifts: 'מתנות',
-  Insurance: 'ביטוח',
-  Taxes: 'מסים',
-  Pets: 'חיות מחמד',
-  Fees: 'עמלות',
-  Transfer: 'העברות',
-  Income: 'הכנסות',
-  Other: 'אחר',
-} satisfies Record<(typeof FIXTURE_REVIEW_CATEGORIES)[number], string>;
-
-export function fixtureCategoryName(name: string): string {
-  return currentLanguage() === 'he'
-    ? (hebrewCategories[name as keyof typeof hebrewCategories] ?? name)
-    : name;
-}
+import { fixtureCategoryName, t } from './translations';
 
 function fixtureFreshnessDetail(detail: string): string {
   const labels: Record<string, string> = {

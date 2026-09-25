@@ -1,4 +1,5 @@
 import { DirectionalChevron } from '@/DirectionalChevron';
+import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
@@ -94,7 +95,7 @@ function CategoryList({
           return (
             <Pressable
               accessibilityHint={t('opensDetailsForMonth', {
-                name: category.name,
+                name: categoryLabel(category.name),
                 month: formatMonthShort(snapshot.month),
               })}
               accessibilityRole="button"
@@ -114,7 +115,7 @@ function CategoryList({
               <View style={[styles.mark, { backgroundColor: category.color }]} />
               <View style={styles.copy}>
                 <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
-                  {category.name}
+                  {categoryLabel(category.name)}
                 </Text>
                 <Text
                   allowFontScaling={false}

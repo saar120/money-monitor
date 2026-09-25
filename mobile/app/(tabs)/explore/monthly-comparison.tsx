@@ -1,4 +1,5 @@
 import { DirectionalChevron } from '@/DirectionalChevron';
+import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { currentLocale, formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
@@ -188,7 +189,9 @@ function MonthlyComparison({
               : 0;
           return (
             <Pressable
-              accessibilityHint={t('opensCategoryMerchants', { name: category.name })}
+              accessibilityHint={t('opensCategoryMerchants', {
+                name: categoryLabel(category.name),
+              })}
               accessibilityRole="button"
               key={category.name}
               onPress={() =>
@@ -211,7 +214,7 @@ function MonthlyComparison({
               <View style={[styles.dot, { backgroundColor: category.color }]} />
               <View style={styles.categoryName}>
                 <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
-                  {category.name}
+                  {categoryLabel(category.name)}
                 </Text>
                 {category.spent < 0 ? (
                   <Text style={[styles.creditLabel, { color: colors.secondary }]}>

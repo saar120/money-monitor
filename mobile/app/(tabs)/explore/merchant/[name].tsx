@@ -1,4 +1,5 @@
 import { t } from '@/localization';
+import { categoryLabel } from '@/translations';
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
@@ -90,7 +91,7 @@ function MerchantContent({
               : formatSpendingComparison(delta!, snapshot.currencyCode)}
           </Text>
           <Text style={[styles.meta, { color: colors.secondary }]}>
-            {merchant.category} · {t('transactionCount', { count: merchant.count })}
+            {categoryLabel(merchant.category)} · {t('transactionCount', { count: merchant.count })}
           </Text>
         </>
       ) : (

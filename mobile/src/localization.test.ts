@@ -9,7 +9,15 @@ import {
   formatMonthShort,
   setActiveLanguage,
 } from './locale-state.ts';
-import { english, hebrew, ownerLabel, t } from './translations.ts';
+import {
+  categoryLabel,
+  english,
+  fixtureCategoryKey,
+  fixtureCategoryName,
+  hebrew,
+  ownerLabel,
+  t,
+} from './translations.ts';
 import {
   formatMoney,
   formatSpendingChange,
@@ -50,6 +58,15 @@ test('reserved owner labels change with language without changing their values',
   assert.equal(ownerLabel('Saar'), 'Saar');
   setActiveLanguage('en');
   assert.equal(ownerLabel('Shared'), 'Shared');
+});
+
+test('category labels stay separate from filter and demo color keys', () => {
+  setActiveLanguage('he');
+  assert.equal(categoryLabel('Uncategorized'), t('uncategorized'));
+  assert.equal(categoryLabel('Groceries'), 'Groceries');
+  assert.equal(fixtureCategoryKey(fixtureCategoryName('Groceries')), 'Groceries');
+  setActiveLanguage('en');
+  assert.equal(categoryLabel('Uncategorized'), 'Uncategorized');
 });
 
 test('language switching applies plural forms and financial formatting', () => {

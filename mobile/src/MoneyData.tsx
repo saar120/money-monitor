@@ -1,4 +1,4 @@
-import { t } from './translations';
+import { fixtureCategoryName, t } from './translations';
 import { currentLocale } from './locale-state';
 import {
   createContext,
@@ -13,7 +13,6 @@ import {
 import * as SecureStore from 'expo-secure-store';
 import { activityRequestState } from './activity-request-state';
 import {
-  fixtureCategoryName,
   getFixtureRefreshDelay,
   getFixtureScenario,
   isFixtureMode,

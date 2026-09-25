@@ -323,7 +323,7 @@ test('loads one transaction page for paginated Activity', async () => {
   }
 });
 
-test('Hebrew owner choices keep canonical values through filtering and review saves', async () => {
+test('Hebrew transaction filters and review saves keep canonical API values', async () => {
   const credential = {
     serverId: '11111111-1111-4111-8111-111111111111',
     baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
@@ -336,13 +336,14 @@ test('Hebrew owner choices keep canonical values through filtering and review sa
     amount: { value: '12.00', currencyCode: 'ILS' },
     direction: 'debit',
     status: 'posted',
-    category: { id: 'category_1', label: 'Groceries' },
+    category: null,
     account: { id: 'account_1', displayName: 'Checking', identifierMask: '•••• 1234' },
     owner: { kind: 'shared', displayName: null },
     needsReview: false,
     excludedFromReports: false,
   };
   const updates: unknown[] = [];
+  const requests: string[] = [];
   const originalFetch = globalThis.fetch;
   globalThis.fetch = async (input, init) => {
     const url = String(input);
@@ -350,6 +351,7 @@ test('Hebrew owner choices keep canonical values through filtering and review sa
       updates.push(JSON.parse(String(init.body)));
       return Response.json({ data: { transaction }, meta: { server: { id: credential.serverId } } });
     }
+    requests.push(url);
     const data = url.endsWith('/review-options')
       ? { categories: ['Groceries'], owners: ['Shared', 'Unassigned', 'Saar'] }
       : { financialDate: '2026-09-08', transactions: [transaction], page: { hasMore: false } };
@@ -364,6 +366,9 @@ test('Hebrew owner choices keep canonical values through filtering and review sa
     assert.equal(options.owners.includes(page.transactions[0]!.owner), true);
     assert.equal(ownerLabel(page.transactions[0]!.owner), t('shared'));
     assert.equal(ownerLabel(options.owners[1]!), t('unassigned'));
+    assert.equal(page.transactions[0]?.category, 'Uncategorized');
+    await fetchTransactionPage(credential, { category: page.transactions[0]!.category });
+    assert.equal(new URL(requests.at(-1)!).searchParams.get('category'), 'Uncategorized');
     await updateTransaction(credential, transaction.id, { owner: options.owners[0] });
     assert.deepEqual(updates, [{ owner: 'Shared' }]);
   } finally {

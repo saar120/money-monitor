@@ -1,5 +1,6 @@
 import { I18n } from 'i18n-js';
 import { currentLanguage } from './locale-state.ts';
+import type { FIXTURE_REVIEW_CATEGORIES } from './fixtures.ts';
 
 const english = {
   home: 'Home',
@@ -995,4 +996,45 @@ export function ownerLabel(owner: string): string {
   if (owner === 'Unassigned') return t('unassigned');
   if (owner === 'Unknown') return t('unknown');
   return owner;
+}
+
+export function categoryLabel(category: string): string {
+  return category === 'Uncategorized' ? t('uncategorized') : category;
+}
+
+const hebrewFixtureCategories = {
+  Dining: 'מסעדות',
+  Groceries: 'מצרכים',
+  Housing: 'דיור',
+  Transport: 'תחבורה',
+  Travel: 'נסיעות',
+  Shopping: 'קניות',
+  Health: 'בריאות',
+  Subscriptions: 'מינויים',
+  Utilities: 'חשבונות',
+  Entertainment: 'בידור',
+  Education: 'חינוך',
+  Personal: 'אישי',
+  Gifts: 'מתנות',
+  Insurance: 'ביטוח',
+  Taxes: 'מסים',
+  Pets: 'חיות מחמד',
+  Fees: 'עמלות',
+  Transfer: 'העברות',
+  Income: 'הכנסות',
+  Other: 'אחר',
+} satisfies Record<(typeof FIXTURE_REVIEW_CATEGORIES)[number], string>;
+
+const fixtureCategoryKeys: Record<string, string> = Object.fromEntries(
+  Object.entries(hebrewFixtureCategories).map(([key, label]) => [label, key]),
+);
+
+export function fixtureCategoryName(name: string): string {
+  return currentLanguage() === 'he'
+    ? (hebrewFixtureCategories[name as keyof typeof hebrewFixtureCategories] ?? name)
+    : name;
+}
+
+export function fixtureCategoryKey(name: string): string {
+  return fixtureCategoryKeys[name] ?? name;
 }

@@ -1,6 +1,6 @@
 import { DirectionalChevron } from './DirectionalChevron';
 import { t, useLanguage } from './localization';
-import { ownerLabel } from './translations';
+import { categoryLabel, ownerLabel } from './translations';
 import { currentLocale } from './locale-state';
 import { Text } from './LocalizedText';
 import DateTimePicker from '@react-native-community/datetimepicker';
@@ -152,7 +152,7 @@ export function ActivityFiltersSheet({
                   icon="tag"
                   label={t('category')}
                   onPress={() => setPicker('category')}
-                  value={draft.category ?? t('all')}
+                  value={draft.category ? categoryLabel(draft.category) : t('all')}
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
                 <FilterRow
@@ -497,7 +497,7 @@ function choiceFor(
       category: {
         title: t('category'),
         selected: draft.category,
-        options: [all, ...categories.map((value) => ({ label: value, value }))],
+        options: [all, ...categories.map((value) => ({ label: categoryLabel(value), value }))],
       },
       account: {
         title: t('account'),

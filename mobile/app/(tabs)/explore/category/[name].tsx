@@ -1,4 +1,5 @@
 import { DirectionalChevron } from '@/DirectionalChevron';
+import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { currentLocale, formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
@@ -75,7 +76,9 @@ function CategoryContent({
   if (!category) {
     return (
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>{t('noCategorySpending', { name })}</Text>
+        <Text style={{ color: colors.text }}>
+          {t('noCategorySpending', { name: categoryLabel(name) })}
+        </Text>
         <View style={styles.navigatorMissing}>
           <MonthPicker
             month={snapshot.month}
@@ -131,7 +134,7 @@ function CategoryContent({
         <View style={styles.identity}>
           <View style={[styles.identityMark, { backgroundColor: category.color }]} />
           <Text numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
-            {name}
+            {categoryLabel(name)}
           </Text>
         </View>
         <MonthPicker
@@ -178,7 +181,10 @@ function CategoryContent({
 
       <View
         style={styles.chart}
-        accessibilityLabel={t('spendingTrendMonths', { name, count: range })}
+        accessibilityLabel={t('spendingTrendMonths', {
+          name: categoryLabel(name),
+          count: range,
+        })}
       >
         <View style={styles.chartAxis}>
           {ticks.map((tick) => (

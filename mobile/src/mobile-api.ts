@@ -480,7 +480,7 @@ function mapTransaction(value: unknown): Transaction {
     merchant: text(item.displayName, 'transaction name'),
     amount: signedAmount,
     currencyCode: amount.currencyCode,
-    category: category ? text(category.label, 'transaction category') : t('uncategorized'),
+    category: category ? text(category.label, 'transaction category') : 'Uncategorized',
     accountId: text(account.id, 'transaction account ID'),
     account: `${text(account.displayName, 'account name')} · ${text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '')}`,
     pending: status === 'pending',

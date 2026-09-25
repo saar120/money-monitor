@@ -1,4 +1,5 @@
 import { DirectionalChevron } from '@/DirectionalChevron';
+import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { Text } from '@/LocalizedText';
 import { Circle } from '@shopify/react-native-skia';
@@ -265,7 +266,9 @@ export default function HomeScreen() {
             const total = spendingTotal(category.spent, home.currencyCode);
             return (
               <Pressable
-                accessibilityHint={t('opensSpendingDetails', { name: category.name })}
+                accessibilityHint={t('opensSpendingDetails', {
+                  name: categoryLabel(category.name),
+                })}
                 accessibilityRole="button"
                 key={category.name}
                 onPress={() =>
@@ -279,7 +282,7 @@ export default function HomeScreen() {
               >
                 <View style={styles.categoryTop}>
                   <Text numberOfLines={1} style={[styles.categoryName, { color: colors.text }]}>
-                    {category.name}
+                    {categoryLabel(category.name)}
                   </Text>
                   <Text
                     allowFontScaling={false}

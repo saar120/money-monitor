@@ -1,5 +1,5 @@
 import { t } from '@/localization';
-import { ownerLabel } from '@/translations';
+import { categoryLabel, ownerLabel } from '@/translations';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
@@ -170,7 +170,7 @@ export default function TransactionDetailScreen() {
         <View style={[styles.group, { backgroundColor: colors.surface }]}>
           <DetailRow
             label={t('category')}
-            value={saving === 'category' ? 'Saving…' : transaction.category}
+            value={saving === 'category' ? t('saving') : categoryLabel(transaction.category)}
             symbol="tag"
             disabled={saving !== null}
             onPress={() => void chooseCategory()}

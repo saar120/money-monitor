@@ -1,4 +1,5 @@
 import { t, useLanguage } from './localization';
+import { categoryLabel } from './translations';
 import { Text } from './LocalizedText';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useCallback, useEffect, useMemo, useState } from 'react';
@@ -79,7 +80,11 @@ export function CategoryPickerSheet({
   const closing = useSharedValue(false);
   const visibleCategories = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
-    return categories.filter((category) => category.toLocaleLowerCase().includes(normalized));
+    return categories.filter(
+      (category) =>
+        category.toLocaleLowerCase().includes(normalized) ||
+        categoryLabel(category).toLocaleLowerCase().includes(normalized),
+    );
   }, [categories, query]);
 
   useEffect(() => {
@@ -274,7 +279,7 @@ export function CategoryPickerSheet({
                       { color: isSelected ? colors.accent : colors.text },
                     ]}
                   >
-                    {item}
+                    {categoryLabel(item)}
                   </Text>
                   {isSelected ? (
                     <SymbolView name="checkmark.circle.fill" size={14} tintColor={colors.accent} />

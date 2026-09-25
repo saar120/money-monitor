@@ -21,6 +21,7 @@ import { useActivityTransactions, useMoneyData, type ActivityCriteria } from '@/
 import { formatMoney } from '@/money';
 import type { Transaction } from '@/fixtures';
 import { categoryMarkColor, useAppColors } from '@/theme';
+import { categoryLabel, fixtureCategoryKey } from '@/translations';
 
 export default function ActivityScreen() {
   const colors = useAppColors();
@@ -308,7 +309,7 @@ function TransactionRow({
       accessibilityLabel={[
         transaction.merchant,
         formatMoney(transaction.amount, transaction.currencyCode, true),
-        transaction.category,
+        categoryLabel(transaction.category),
         transaction.account,
         transaction.pending ? t('pending') : '',
         transaction.needsReview ? t('needsReview') : '',
@@ -326,7 +327,13 @@ function TransactionRow({
       <View
         style={[
           styles.merchantMark,
-          { backgroundColor: categoryMarkColor(transaction.category, isDark, colors.surfaceSoft) },
+          {
+            backgroundColor: categoryMarkColor(
+              fixtureCategoryKey(transaction.category),
+              isDark,
+              colors.surfaceSoft,
+            ),
+          },
         ]}
       >
         <Text allowFontScaling={false} style={[styles.merchantInitial, { color: colors.text }]}>
@@ -366,7 +373,7 @@ function TransactionRow({
             numberOfLines={1}
             style={[styles.metadata, { color: colors.secondary }]}
           >
-            {transaction.category} · {transaction.account}
+            {categoryLabel(transaction.category)} · {transaction.account}
           </Text>
           <View style={styles.flags}>
             {transaction.pending ? (
