@@ -1,3 +1,5 @@
+import { fixtureCategoryName, t } from './translations';
+import { currentLocale } from './locale-state';
 import {
   createContext,
   useCallback,
@@ -10,7 +12,11 @@ import {
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
 import { activityRequestState } from './activity-request-state';
-import { getFixtureRefreshDelay, getFixtureScenario, isFixtureMode } from './fixture-selection';
+import {
+  getFixtureRefreshDelay,
+  getFixtureScenario,
+  isFixtureMode,
+} from './fixture-selection';
 import { FIXTURE_REVIEW_CATEGORIES, type HomeData, type Transaction } from './fixtures';
 import {
   fetchCashflowMonth,
@@ -85,7 +91,7 @@ function fixtureOverview(home: HomeData, month: string): HomeData {
     ...home,
     currentDate: `${month}-${String(lastDay).padStart(2, '0')}`,
     monthKey: month,
-    month: new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
+    month: new Intl.DateTimeFormat(currentLocale(), { month: 'long', timeZone: 'UTC' }).format(
       new Date(`${month}-01T12:00:00Z`),
     ),
     spent,
@@ -140,7 +146,7 @@ function fixtureExploreHistory(home: HomeData, count: number): ExploreMonth[] {
     const factor = home.spent > 0 ? spending / home.spent : 1;
     return {
       month,
-      label: new Intl.DateTimeFormat('en', { month: 'short', timeZone: 'UTC' }).format(
+      label: new Intl.DateTimeFormat(currentLocale(), { month: 'short', timeZone: 'UTC' }).format(
         new Date(`${month}-01T12:00:00Z`),
       ),
       currencyCode: home.currencyCode,
@@ -235,9 +241,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       setStatus('ready');
       setRevision((value) => value + 1);
     } catch (caught) {
-      setError(
-        caught instanceof Error ? caught.message : 'Money Monitor could not load your data.',
-      );
+      setError(caught instanceof Error ? caught.message : t('moneyMonitorCouldNotLoadYourData'));
       if (!isRefresh) {
         hasHome.current = false;
         setHome(null);
@@ -254,7 +258,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     async (id: string, update: TransactionUpdate) => {
       if (fixture) {
         const current = fixtureTransactions.find((transaction) => transaction.id === id);
-        if (!current) throw new Error('Transaction is no longer available.');
+        if (!current) throw new Error(t('transactionIsNoLongerAvailable'));
         const next = {
           ...current,
           ...update,
@@ -271,7 +275,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
         setRevision((value) => value + 1);
         return next;
       }
-      if (!credential) throw new Error('Pair with your Mac to update transactions.');
+      if (!credential) throw new Error(t('pairWithYourMacToUpdateTransactions'));
       const next = await updateTransaction(credential, id, update);
       await reload();
       return next;
@@ -287,7 +291,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       request = Promise.resolve({
         categories: [
           ...new Set([
-            ...FIXTURE_REVIEW_CATEGORIES,
+            ...FIXTURE_REVIEW_CATEGORIES.map(fixtureCategoryName),
             ...scenario.categories.map((category) => category.name),
           ]),
         ].sort(),
@@ -300,8 +304,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
         ].sort(),
       });
     } else {
-      if (!credential)
-        return Promise.reject(new Error('Pair with your Mac to review transactions.'));
+      if (!credential) return Promise.reject(new Error(t('pairWithYourMacToReviewTransactions')));
       request = fetchReviewOptions(credential);
     }
     const cachedRequest = request.catch((caught) => {
@@ -314,7 +317,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
 
   const loadOverviewMonth = useCallback(
     (month: string) => {
-      if (!/^\d{4}-\d{2}$/.test(month)) return Promise.reject(new Error('Invalid month.'));
+      if (!/^\d{4}-\d{2}$/.test(month)) return Promise.reject(new Error(t('invalidMonth')));
       if (home?.monthKey === month) return Promise.resolve(home);
       const cached = overviewRequests.current.get(month);
       if (cached) return cached;
@@ -322,7 +325,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
         ? Promise.resolve(fixtureOverview(getFixtureScenario(), month))
         : credential
           ? fetchHomeData(credential, undefined, null, month)
-          : Promise.reject(new Error('Pair with your Mac to load another month.'));
+          : Promise.reject(new Error(t('pairWithYourMacToLoadAnotherMonth')));
       overviewRequests.current.set(month, request);
       request.catch(() => overviewRequests.current.delete(month));
       return request;
@@ -355,7 +358,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
             spending: overview.spent,
           };
         });
-      if (!credential) throw new Error('Pair with your Mac to explore cash flow.');
+      if (!credential) throw new Error(t('pairWithYourMacToExploreCashFlow'));
       return Promise.all(months.map((month) => fetchCashflowMonth(credential, month)));
     },
     [credential, fixture, home, loadOverviewMonth],
@@ -365,7 +368,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     async (count = 12) => {
       const currentHome = home ?? getFixtureScenario();
       if (fixture) return fixtureExploreHistory(currentHome, count);
-      if (!credential) throw new Error('Pair with your Mac to explore cash flow.');
+      if (!credential) throw new Error(t('pairWithYourMacToExploreCashFlow'));
       const months = (
         currentHome.availableMonths.length ? currentHome.availableMonths : [currentHome.monthKey]
       )
@@ -438,7 +441,7 @@ export function useOverviewMonth(initialMonth?: string) {
       })
       .catch((caught) => {
         if (current)
-          setError(caught instanceof Error ? caught.message : 'This month could not be loaded.');
+          setError(caught instanceof Error ? caught.message : t('thisMonthCouldNotBeLoaded'));
       })
       .finally(() => {
         if (current) setLoading(false);
@@ -581,9 +584,7 @@ export function useActivityTransactions(
         })
         .catch((caught) => {
           if (!controller.signal.aborted) {
-            setError(
-              caught instanceof Error ? caught.message : 'Transactions could not be loaded.',
-            );
+            setError(caught instanceof Error ? caught.message : t('transactionsCouldNotBeLoaded'));
           }
         })
         .finally(() => {
@@ -638,7 +639,7 @@ export function useActivityTransactions(
       })
       .catch((caught) => {
         if (!controller.signal.aborted && activeRequestKey.current === key)
-          setError(caught instanceof Error ? caught.message : 'More transactions could not load.');
+          setError(caught instanceof Error ? caught.message : t('moreTransactionsCouldNotLoad'));
       })
       .finally(() => {
         if (moreRequest.current === controller) moreRequest.current = null;
@@ -748,7 +749,7 @@ export function useTransaction(id: string | undefined) {
       .then(setTransaction)
       .catch((caught) => {
         if (!controller.signal.aborted) {
-          setError(caught instanceof Error ? caught.message : 'Transaction could not be loaded.');
+          setError(caught instanceof Error ? caught.message : t('transactionCouldNotBeLoaded'));
         }
       })
       .finally(() => {

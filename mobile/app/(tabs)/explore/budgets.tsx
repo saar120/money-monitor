@@ -1,7 +1,11 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t } from '@/localization';
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
@@ -43,7 +47,7 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
     <>
       <View style={styles.contextRow}>
         <Text style={[styles.contextLabel, { color: colors.secondary }]}>
-          Tap a budget for transactions
+          {t('tapABudgetForTransactions')}
         </Text>
         <MonthPicker
           month={selected.month}
@@ -68,7 +72,7 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
             return (
               <View key={budget.name}>
                 <Pressable
-                  accessibilityHint="Shows the transactions counted in this budget"
+                  accessibilityHint={t('showsTheTransactionsCountedInThisBudget')}
                   accessibilityRole="button"
                   accessibilityState={{ expanded: isExpanded }}
                   onPress={() => setExpanded(isExpanded ? null : budget.name)}
@@ -82,8 +86,10 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                     <View style={styles.copy}>
                       <Text style={[styles.name, { color: colors.text }]}>{budget.name}</Text>
                       <Text style={[styles.meta, { color: colors.secondary }]}>
-                        {formatUnsignedMoney(budget.spent, selected.currencyCode)} of{' '}
-                        {formatUnsignedMoney(budget.limit, selected.currencyCode)}
+                        {t('amountOfLimit', {
+                          spent: formatUnsignedMoney(budget.spent, selected.currencyCode),
+                          limit: formatUnsignedMoney(budget.limit, selected.currencyCode),
+                        })}
                       </Text>
                     </View>
                     <View style={styles.trailing}>
@@ -101,8 +107,12 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                         />
                       </View>
                       <Text style={[styles.remaining, { color: colors.secondary }]}>
-                        {formatUnsignedMoney(Math.abs(budget.remaining), selected.currencyCode)}{' '}
-                        {budget.remaining < 0 ? 'over' : 'left'}
+                        {t(budget.remaining < 0 ? 'amountOver' : 'amountLeft', {
+                          amount: formatUnsignedMoney(
+                            Math.abs(budget.remaining),
+                            selected.currencyCode,
+                          ),
+                        })}
                       </Text>
                     </View>
                   </View>
@@ -127,14 +137,14 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                     />
                   </View>
                   <Text style={[styles.pace, { color: colors.secondary }]}>
-                    Month {Math.round(budget.elapsedPercent)}% elapsed
+                    {t('monthElapsed', { count: Math.round(budget.elapsedPercent) })}
                   </Text>
                 </Pressable>
                 {isExpanded ? (
                   budget.categoryNames === null ? (
                     <View style={[styles.transactions, { backgroundColor: colors.surfaceSoft }]}>
                       <Text style={[styles.noTransactions, { color: colors.secondary }]}>
-                        Update Money Monitor on your Mac to load this budget’s transactions.
+                        {t('updateMoneyMonitorOnYourMacToLoadThisBudgetSTransactions')}
                       </Text>
                     </View>
                   ) : (
@@ -151,9 +161,11 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
         </View>
       ) : (
         <View style={[styles.empty, { backgroundColor: colors.surfaceSoft }]}>
-          <Text style={[styles.emptyTitle, { color: colors.text }]}>No budgets for this month</Text>
+          <Text style={[styles.emptyTitle, { color: colors.text }]}>
+            {t('noBudgetsForThisMonth')}
+          </Text>
           <Text style={[styles.emptyText, { color: colors.secondary }]}>
-            Budget setup stays on your Mac.
+            {t('budgetSetupStaysOnYourMac')}
           </Text>
         </View>
       )}
@@ -181,8 +193,12 @@ function BudgetTransactions({
     }),
     [categories, month],
   );
-  const { error, hasMore, loadMore, loading, loadingMore, transactions } =
-    useActivityTransactions('', 'all', criteria, true);
+  const { error, hasMore, loadMore, loading, loadingMore, transactions } = useActivityTransactions(
+    '',
+    'all',
+    criteria,
+    true,
+  );
   const visible = transactions.filter((item) => item.included);
 
   return (
@@ -190,7 +206,7 @@ function BudgetTransactions({
       entering={reduceMotion ? undefined : FadeInDown.duration(190)}
       style={[styles.transactions, { backgroundColor: colors.surfaceSoft }]}
     >
-      <Text style={[styles.transactionsTitle, { color: colors.text }]}>Transactions</Text>
+      <Text style={[styles.transactionsTitle, { color: colors.text }]}>{t('transactions')}</Text>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={styles.transactionLoader} />
       ) : null}
@@ -199,12 +215,12 @@ function BudgetTransactions({
       ) : null}
       {!loading && !error && !visible.length ? (
         <Text style={[styles.noTransactions, { color: colors.secondary }]}>
-          No matching transactions this month.
+          {t('noMatchingTransactionsThisMonth')}
         </Text>
       ) : null}
       {visible.map((transaction, index) => (
         <Pressable
-          accessibilityHint="Opens transaction details"
+          accessibilityHint={t('opensTransactionDetails')}
           accessibilityRole="button"
           key={transaction.id}
           onPress={() => router.push(`/transaction/${transaction.id}`)}
@@ -222,7 +238,7 @@ function BudgetTransactions({
               {transaction.merchant}
             </Text>
             <Text style={[styles.transactionMeta, { color: colors.secondary }]}>
-              {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
+              {new Intl.DateTimeFormat(currentLocale(), { month: 'short', day: 'numeric' }).format(
                 new Date(transaction.occurredAt),
               )}{' '}
               · {transaction.account}
@@ -231,7 +247,7 @@ function BudgetTransactions({
           <Text allowFontScaling={false} style={[styles.transactionAmount, { color: colors.text }]}>
             {formatMoney(transaction.amount, transaction.currencyCode ?? currencyCode, true)}
           </Text>
-          <SymbolView name="chevron.right" size={9} tintColor={colors.tertiary} />
+          <DirectionalChevron direction="forward" size={9} tintColor={colors.tertiary} />
         </Pressable>
       ))}
       {hasMore && visible.length ? (
@@ -244,7 +260,7 @@ function BudgetTransactions({
           {loadingMore ? (
             <ActivityIndicator color={colors.accent} />
           ) : (
-            <Text style={[styles.loadMoreText, { color: colors.accent }]}>Load more</Text>
+            <Text style={[styles.loadMoreText, { color: colors.accent }]}>{t('loadMore')}</Text>
           )}
         </Pressable>
       ) : null}
@@ -264,7 +280,7 @@ function Loading({ loading }: { loading: boolean }) {
     <View style={styles.loading}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       <Text style={[styles.loadingText, { color: colors.secondary }]}>
-        {loading ? 'Loading budgets…' : 'Budget history is unavailable.'}
+        {loading ? t('loadingBudgets') : t('budgetHistoryIsUnavailable')}
       </Text>
     </View>
   );
@@ -314,9 +330,8 @@ const styles = StyleSheet.create({
     fontSize: 14,
     lineHeight: 19,
     fontWeight: '600',
-    writingDirection: 'ltr',
   },
-  transactionMeta: { marginTop: 2, fontSize: 11, lineHeight: 15, writingDirection: 'ltr' },
+  transactionMeta: { marginTop: 2, fontSize: 11, lineHeight: 15 },
   transactionAmount: {
     fontSize: 12.5,
     lineHeight: 17,

@@ -1,16 +1,20 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { categoryLabel } from '@/translations';
+import { t } from '@/localization';
+import { Text } from '@/LocalizedText';
 import { Circle } from '@shopify/react-native-skia';
 import { Area, CartesianChart, Line, useChartPressState } from 'victory-native';
 import { router } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useEffect, useState } from 'react';
 import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
-import { Pressable, RefreshControl, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useMoneyData, useOverviewMonth } from '@/MoneyData';
 import {
   formatMoney,
-  formatSpendingChange,
+  formatSpendingComparison,
   formatUnsignedMoney,
   overviewCashFlow,
   spendingTotal,
@@ -61,7 +65,7 @@ export default function HomeScreen() {
       <View style={styles.contextRow}>
         <View style={styles.contextCopy}>
           <Text maxFontSizeMultiplier={1.25} style={[styles.greeting, { color: colors.secondary }]}>
-            Good morning
+            {t('goodMorning')}
           </Text>
           <Text
             maxFontSizeMultiplier={1.25}
@@ -72,18 +76,28 @@ export default function HomeScreen() {
             ]}
           >
             {error
-              ? 'Couldn’t refresh · pull to retry'
+              ? t('couldnTRefreshPullToRetry')
               : staleAccounts.length
-                ? `${staleAccounts.length} account${staleAccounts.length === 1 ? '' : 's'} need attention`
-                : (home.freshness[0]?.detail ?? 'Updated on your Mac')}
+                ? t('accountsNeedAttention', { count: staleAccounts.length })
+                : (home.freshness[0]?.detail ?? t('updatedOnYourMac'))}
           </Text>
         </View>
+        <Pressable
+          accessibilityLabel={t('settings')}
+          accessibilityRole="button"
+          hitSlop={10}
+          onPress={() => router.push('/settings')}
+          style={styles.settingsButton}
+          testID="open-settings"
+        >
+          <SymbolView name="gearshape" size={20} tintColor={colors.secondary} />
+        </Pressable>
       </View>
 
       <View style={styles.hero} testID="home-primary-money">
         <View style={styles.heroHeader}>
           <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
-            Total spending
+            {t('totalSpending')}
           </Text>
           <MonthPicker
             month={selected.month}
@@ -111,7 +125,7 @@ export default function HomeScreen() {
         trend={home.trend}
       />
       <Text style={[styles.chartHint, { color: colors.secondary }]}>
-        Hold and slide to inspect daily spending
+        {t('holdAndSlideToInspectDailySpending')}
       </Text>
 
       <View style={[styles.cashflowRow, { borderBottomColor: colors.separator }]}>
@@ -120,7 +134,7 @@ export default function HomeScreen() {
             maxFontSizeMultiplier={1.25}
             style={[styles.supportLabel, { color: colors.secondary }]}
           >
-            Posted income
+            {t('postedIncome')}
           </Text>
           <Text
             allowFontScaling={false}
@@ -137,7 +151,7 @@ export default function HomeScreen() {
             numberOfLines={1}
             style={[styles.supportLabel, { color: colors.secondary }]}
           >
-            Net cash flow
+            {t('netCashFlow')}
           </Text>
           <Text
             allowFontScaling={false}
@@ -155,15 +169,15 @@ export default function HomeScreen() {
         <BudgetPace budget={primaryBudget} colors={colors} currencyCode={home.currencyCode} />
       ) : (
         <Pressable
-          accessibilityHint="Opens spending insights"
+          accessibilityHint={t('opensSpendingInsights')}
           accessibilityRole="button"
           onPress={() => router.push('/(tabs)/explore')}
           style={styles.noBudget}
           testID="no-budget-state"
         >
-          <Text style={[styles.noBudgetTitle, { color: colors.text }]}>No monthly budget</Text>
+          <Text style={[styles.noBudgetTitle, { color: colors.text }]}>{t('noMonthlyBudget')}</Text>
           <Text style={[styles.noBudgetText, { color: colors.secondary }]}>
-            Spending pace is still compared with last month.
+            {t('spendingPaceIsStillComparedWithLastMonth')}
           </Text>
         </Pressable>
       )}
@@ -179,16 +193,19 @@ export default function HomeScreen() {
           {home.sinceLastVisit?.transactions ? (
             <AttentionRow
               symbol="clock.arrow.circlepath"
-              title="Since your last visit"
-              detail={`${home.sinceLastVisit.transactions} new · ${formatUnsignedMoney(home.sinceLastVisit.spent, home.currencyCode)} spent`}
+              title={t('sinceYourLastVisit')}
+              detail={t('newSpent', {
+                count: home.sinceLastVisit.transactions,
+                amount: formatUnsignedMoney(home.sinceLastVisit.spent, home.currencyCode),
+              })}
               colors={colors}
             />
           ) : null}
           {home.reviewCount ? (
             <AttentionRow
               symbol="checkmark.circle"
-              title={`${home.reviewCount} transaction${home.reviewCount === 1 ? '' : 's'} to review`}
-              detail="Clean up your financial inbox"
+              title={t('transactionsToReview', { count: home.reviewCount })}
+              detail={t('cleanUpYourFinancialInbox')}
               colors={colors}
               onPress={() => router.push('/review')}
               testID="start-review"
@@ -197,7 +214,7 @@ export default function HomeScreen() {
           {attentionBudgets.length ? (
             <AttentionRow
               symbol="exclamationmark.triangle"
-              title={`${attentionBudgets.length} budget${attentionBudgets.length === 1 ? '' : 's'} need attention`}
+              title={t('budgetsNeedAttention', { count: attentionBudgets.length })}
               detail={attentionBudgets[0]!.name}
               colors={colors}
               tone="warning"
@@ -207,11 +224,14 @@ export default function HomeScreen() {
           {staleAccounts.length ? (
             <AttentionRow
               symbol="arrow.trianglehead.2.clockwise.rotate.90"
-              title={`${staleAccounts.length} account${staleAccounts.length === 1 ? '' : 's'} need attention`}
+              title={t('accountsNeedAttention', { count: staleAccounts.length })}
               detail={
                 staleAccounts.length === 1
                   ? staleAccounts[0]!.account
-                  : `${staleAccounts[0]!.account} and ${staleAccounts.length - 1} more`
+                  : t('nameAndMore', {
+                      name: staleAccounts[0]!.account,
+                      count: staleAccounts.length - 1,
+                    })
               }
               colors={colors}
               tone="danger"
@@ -224,15 +244,19 @@ export default function HomeScreen() {
         <View style={styles.caughtUp} testID="home-calm-state">
           <SymbolView name="checkmark.circle.fill" size={18} tintColor={colors.positive} />
           <Text style={[styles.caughtUpText, { color: colors.secondary }]}>
-            Everything looks current
+            {t('everythingLooksCurrent')}
           </Text>
         </View>
       )}
 
       <View style={styles.categorySectionHeader}>
-        <Text style={[styles.categorySectionTitle, { color: colors.text }]}>Where it went</Text>
+        <Text style={[styles.categorySectionTitle, { color: colors.text }]}>
+          {t('whereItWent')}
+        </Text>
         <Pressable accessibilityRole="button" onPress={() => router.push('/(tabs)/explore')}>
-          <Text style={[styles.categorySectionAction, { color: colors.accent }]}>Explore</Text>
+          <Text style={[styles.categorySectionAction, { color: colors.accent }]}>
+            {t('explore')}
+          </Text>
         </Pressable>
       </View>
       <View style={styles.categoryList} testID="category-spending">
@@ -242,7 +266,9 @@ export default function HomeScreen() {
             const total = spendingTotal(category.spent, home.currencyCode);
             return (
               <Pressable
-                accessibilityHint={`Opens ${category.name} spending details`}
+                accessibilityHint={t('opensSpendingDetails', {
+                  name: categoryLabel(category.name),
+                })}
                 accessibilityRole="button"
                 key={category.name}
                 onPress={() =>
@@ -256,7 +282,7 @@ export default function HomeScreen() {
               >
                 <View style={styles.categoryTop}>
                   <Text numberOfLines={1} style={[styles.categoryName, { color: colors.text }]}>
-                    {category.name}
+                    {categoryLabel(category.name)}
                   </Text>
                   <Text
                     allowFontScaling={false}
@@ -285,8 +311,8 @@ export default function HomeScreen() {
                     ]}
                   >
                     {delta === 0
-                      ? 'No change'
-                      : `${formatSpendingChange(delta, home.currencyCode)} than last month`}
+                      ? t('noChange')
+                      : formatSpendingComparison(delta, home.currencyCode)}
                   </Text>
                 </View>
               </Pressable>
@@ -294,20 +320,20 @@ export default function HomeScreen() {
           })
         ) : (
           <Text style={[styles.emptyText, { color: colors.secondary }]}>
-            No spending to show yet.
+            {t('noSpendingToShowYet')}
           </Text>
         )}
       </View>
 
       <Pressable
-        accessibilityHint="Opens net worth details"
+        accessibilityHint={t('opensNetWorthDetails')}
         accessibilityRole="button"
         onPress={() => router.push('/net-worth')}
         style={[styles.netWorthRow, { borderTopColor: colors.separator }]}
         testID="net-worth-summary"
       >
         <View style={styles.netWorthCopy}>
-          <Text style={[styles.netWorthLabel, { color: colors.secondary }]}>Net worth</Text>
+          <Text style={[styles.netWorthLabel, { color: colors.secondary }]}>{t('netWorth')}</Text>
           <Text
             adjustsFontSizeToFit
             allowFontScaling={false}
@@ -327,10 +353,10 @@ export default function HomeScreen() {
                 { color: home.netWorthChange >= 0 ? colors.positive : colors.danger },
               ]}
             >
-              {formatMoney(home.netWorthChange, home.currencyCode)} this month
+              {formatMoney(home.netWorthChange, home.currencyCode)} {t('thisMonth')}
             </Text>
           ) : null}
-          <SymbolView name="chevron.right" size={13} tintColor={colors.tertiary} />
+          <DirectionalChevron direction="forward" size={13} tintColor={colors.tertiary} />
         </View>
       </Pressable>
     </ScrollView>
@@ -374,10 +400,10 @@ function SpendingTrendCard({
       testID="home-spending-chart"
     >
       <View style={styles.chartHeading}>
-        <Text style={styles.chartTitle}>Spending through day {day}</Text>
+        <Text style={styles.chartTitle}>{t('spendingThroughDayNumber', { count: day })}</Text>
         <View style={styles.chartSource}>
           <SymbolView name="checkmark.circle" size={11} tintColor="rgba(255,255,255,0.8)" />
-          <Text style={styles.chartSourceText}>Posted only</Text>
+          <Text style={styles.chartSourceText}>{t('postedOnly')}</Text>
         </View>
       </View>
       <View style={styles.chartBody}>
@@ -430,24 +456,29 @@ function SpendingTrendCard({
           </CartesianChart>
         ) : (
           <View style={styles.noChart}>
-            <Text style={styles.noChartText}>No posted spending yet</Text>
+            <Text style={styles.noChartText}>{t('noPostedSpendingYet')}</Text>
           </View>
         )}
       </View>
       <View style={styles.chartAxis}>
-        <Text style={styles.chartAxisText}>Day 1</Text>
-        <Text style={styles.chartAxisText}>Today · {day}</Text>
+        <Text style={styles.chartAxisText}>{t('day1')}</Text>
+        <Text style={styles.chartAxisText}>{t('todayDay', { count: day })}</Text>
       </View>
       <View style={styles.chartFooter}>
         <View style={styles.chartMetricRow}>
           <Text allowFontScaling={false} style={styles.chartMetricStrong}>
-            Day {selected.day} · {formatUnsignedMoney(selected.current, currencyCode)}
+            {t('dayAmount', {
+              day: selected.day,
+              amount: formatUnsignedMoney(selected.current, currencyCode),
+            })}
           </Text>
         </View>
         <Text allowFontScaling={false} style={styles.chartMetric}>
           {delta === 0
-            ? 'In line with last month'
-            : `${formatUnsignedMoney(Math.abs(delta), currencyCode)} ${delta < 0 ? 'slower' : 'higher'} than last month’s pace`}
+            ? t('inLineWithLastMonth')
+            : t(delta < 0 ? 'slowerPace' : 'higherPace', {
+                amount: formatUnsignedMoney(Math.abs(delta), currencyCode),
+              })}
         </Text>
       </View>
     </View>
@@ -468,7 +499,11 @@ function BudgetPace({
     <View
       style={styles.budgetPace}
       accessible
-      accessibilityLabel={`${Math.round(budget.elapsedPercent)} percent of the month passed. ${Math.round(budget.usedPercent)} percent of ${budget.name} used.`}
+      accessibilityLabel={t('budgetAccessibility', {
+        elapsed: Math.round(budget.elapsedPercent),
+        used: Math.round(budget.usedPercent),
+        name: budget.name,
+      })}
       testID="budget-status"
     >
       <View style={styles.budgetHeading}>
@@ -485,18 +520,20 @@ function BudgetPace({
           style={[styles.budgetRemaining, { color: over ? colors.danger : colors.secondary }]}
         >
           {over
-            ? `${formatUnsignedMoney(Math.abs(budget.remaining), currencyCode)} over`
-            : `${formatUnsignedMoney(budget.remaining, currencyCode)} left`}
+            ? t('amountOver', {
+                amount: formatUnsignedMoney(Math.abs(budget.remaining), currencyCode),
+              })
+            : t('amountLeft', { amount: formatUnsignedMoney(budget.remaining, currencyCode) })}
         </Text>
       </View>
       <PaceLine
-        label="Month passed"
+        label={t('monthPassed')}
         value={budget.elapsedPercent}
         color={colors.secondary}
         colors={colors}
       />
       <PaceLine
-        label="Budget used"
+        label={t('budgetUsed')}
         value={budget.usedPercent}
         color={over ? colors.danger : colors.positive}
         colors={colors}
@@ -506,8 +543,10 @@ function BudgetPace({
         style={[styles.budgetInsight, { color: over ? colors.danger : colors.secondary }]}
       >
         {over
-          ? 'This budget has been crossed'
-          : `${Math.abs(Math.round(budget.usedPercent - budget.elapsedPercent))} points ${budget.usedPercent > budget.elapsedPercent ? 'ahead of' : 'behind'} the calendar`}
+          ? t('thisBudgetHasBeenCrossed')
+          : t(budget.usedPercent > budget.elapsedPercent ? 'pointsAhead' : 'pointsBehind', {
+              count: Math.abs(Math.round(budget.usedPercent - budget.elapsedPercent)),
+            })}
       </Text>
     </View>
   );
@@ -578,7 +617,9 @@ function AttentionRow({
           {detail}
         </Text>
       </View>
-      {onPress ? <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} /> : null}
+      {onPress ? (
+        <DirectionalChevron direction="forward" size={12} tintColor={colors.tertiary} />
+      ) : null}
     </>
   );
   return onPress ? (
@@ -601,8 +642,12 @@ const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 36 },
   contextRow: {
     marginTop: 8,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
   },
-  contextCopy: { minWidth: 0 },
+  contextCopy: { minWidth: 0, flex: 1 },
+  settingsButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
   greeting: { fontSize: 14, lineHeight: 20 },
   freshness: { marginTop: 1, fontSize: 12.5 },
   hero: { paddingTop: 24, paddingBottom: 20 },
@@ -656,7 +701,7 @@ const styles = StyleSheet.create({
     gap: 5,
   },
   chartSourceText: { color: 'rgba(255,255,255,0.82)', fontSize: 10.5, fontWeight: '600' },
-  chartBody: { height: 176, marginTop: 4 },
+  chartBody: { height: 176, marginTop: 4, direction: 'ltr' },
   chartGrid: {
     position: 'absolute',
     top: 22,
@@ -671,7 +716,12 @@ const styles = StyleSheet.create({
   },
   noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
   noChartText: { color: 'rgba(255,255,255,0.72)', fontSize: 13 },
-  chartAxis: { flexDirection: 'row', justifyContent: 'space-between', paddingHorizontal: 3 },
+  chartAxis: {
+    direction: 'ltr',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    paddingHorizontal: 3,
+  },
   chartAxisText: { color: 'rgba(255,255,255,0.64)', fontSize: 10.5 },
   chartFooter: {
     marginTop: 10,
@@ -703,8 +753,8 @@ const styles = StyleSheet.create({
   categorySectionAction: { minHeight: 44, paddingTop: 12, fontSize: 14, fontWeight: '600' },
   categoryList: { gap: 18 },
   categoryRow: { minHeight: 52 },
-  categoryTop: { flexDirection: 'row', alignItems: 'baseline', justifyContent: 'space-between' },
-  categoryName: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 16, fontWeight: '600' },
+  categoryTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
+  categoryName: { flex: 1, minWidth: 0, fontSize: 16, fontWeight: '600' },
   categoryAmount: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 7 },
   categoryTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
@@ -732,7 +782,7 @@ const styles = StyleSheet.create({
   budgetHeading: {
     flexDirection: 'row',
     alignItems: 'baseline',
-    justifyContent: 'space-between',
+    gap: 12,
     marginBottom: 12,
   },
   budgetTitle: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' },
@@ -754,7 +804,7 @@ const styles = StyleSheet.create({
   noBudgetText: { marginTop: 4, fontSize: 13 },
   attention: { marginTop: 28, borderRadius: 16, paddingHorizontal: 14 },
   attentionRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12 },
-  attentionText: { flex: 1, paddingVertical: 10 },
+  attentionText: { flex: 1, minWidth: 0, paddingVertical: 10 },
   attentionTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },
   attentionDetail: { marginTop: 2, fontSize: 13, lineHeight: 18 },
   caughtUp: { flexDirection: 'row', alignItems: 'center', gap: 9, minHeight: 54, marginTop: 24 },

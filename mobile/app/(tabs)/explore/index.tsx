@@ -1,10 +1,18 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t } from '@/localization';
+import { Text } from '@/LocalizedText';
 import { router, type Href } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useMoneyData, useOverviewMonth } from '@/MoneyData';
-import { formatMoney, formatSpendingChange, formatUnsignedMoney, overviewCashFlow } from '@/money';
+import {
+  formatMoney,
+  formatSpendingComparison,
+  formatUnsignedMoney,
+  overviewCashFlow,
+} from '@/money';
 import { useAppColors } from '@/theme';
 
 type ExploreRowProps = {
@@ -26,7 +34,9 @@ export default function ExploreScreen() {
 
   const primaryBudget = home.budgets[0];
   const delta = home.spent - home.previousSpent;
-  const categories = [...home.categories].filter((item) => item.spent > 0).sort((a, b) => b.spent - a.spent);
+  const categories = [...home.categories]
+    .filter((item) => item.spent > 0)
+    .sort((a, b) => b.spent - a.spent);
   const params = { month: selected.month };
 
   return (
@@ -39,7 +49,7 @@ export default function ExploreScreen() {
     >
       <View style={styles.hero} testID="explore-summary">
         <View style={styles.heroHeader}>
-          <Text style={[styles.heroLabel, { color: colors.text }]}>Total spending</Text>
+          <Text style={[styles.heroLabel, { color: colors.text }]}>{t('totalSpending')}</Text>
           <MonthPicker
             month={selected.month}
             months={selected.months}
@@ -57,9 +67,14 @@ export default function ExploreScreen() {
           {formatUnsignedMoney(home.spent, home.currencyCode)}
         </Text>
         <Text style={[styles.heroDelta, { color: delta > 0 ? colors.warning : colors.positive }]}>
-          {delta === 0 ? 'Unchanged from last month' : `${formatSpendingChange(delta, home.currencyCode)} than last month`}
+          {delta === 0
+            ? t('unchangedFromLastMonth')
+            : formatSpendingComparison(delta, home.currencyCode)}
         </Text>
-        <View style={[styles.mixTrack, { backgroundColor: colors.surfaceSoft }]} accessibilityLabel="Spending mix by category">
+        <View
+          style={[styles.mixTrack, { backgroundColor: colors.surfaceSoft }]}
+          accessibilityLabel={t('spendingMixByCategory')}
+        >
           {categories.map((category) => (
             <View
               key={category.name}
@@ -69,48 +84,48 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Explore your money</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('exploreYourMoney')}</Text>
       <View style={[styles.list, { backgroundColor: colors.surface }]}>
         <ExploreRow
-          detail="Recent shape, merchants, and transactions"
+          detail={t('recentShapeMerchantsAndTransactions')}
           href={{ pathname: '/explore/categories', params }}
           icon="list.bullet.rectangle"
           metric={`${home.categories.length}`}
           testID="explore-card-categories"
-          title="Categories"
+          title={t('categories')}
         />
         <ExploreRow
-          detail="How the spending mix changes over time"
+          detail={t('howTheSpendingMixChangesOverTime')}
           href={{ pathname: '/explore/monthly-comparison', params }}
           icon="chart.bar.xaxis"
-          metric="6M"
+          metric={t('message6M')}
           testID="explore-card-monthly"
-          title="Monthly spending"
+          title={t('monthlySpending')}
         />
         <ExploreRow
-          detail="Progress against the plans from your Mac"
+          detail={t('progressAgainstThePlansFromYourMac')}
           href={{ pathname: '/explore/budgets', params }}
           icon="gauge.with.dots.needle.50percent"
           metric={primaryBudget ? `${Math.round(primaryBudget.usedPercent)}%` : '—'}
           testID="explore-card-budgets"
-          title="Budgets"
+          title={t('budgets')}
         />
         <ExploreRow
-          detail="Posted income compared with spending"
+          detail={t('postedIncomeComparedWithSpending')}
           href="/explore/cash-flow"
           icon="arrow.up.arrow.down"
           metric={formatMoney(overviewCashFlow(home.income, home.spent), home.currencyCode)}
           testID="explore-card-cash-flow"
-          title="Cash flow"
+          title={t('cashFlow')}
         />
         <ExploreRow
-          detail="Balance history and asset composition"
+          detail={t('balanceHistoryAndAssetComposition')}
           href="/net-worth"
           icon="chart.xyaxis.line"
           last
           metric={formatUnsignedMoney(home.netWorth, home.currencyCode)}
           testID="explore-card-net-worth"
-          title="Net worth"
+          title={t('netWorth')}
         />
       </View>
     </ScrollView>
@@ -138,13 +153,21 @@ function ExploreRow({ detail, href, icon, last = false, metric, testID, title }:
         <SymbolView name={icon as never} size={17} tintColor={colors.accent} />
       </View>
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>{title}</Text>
-        <Text numberOfLines={1} style={[styles.rowDetail, { color: colors.secondary }]}>{detail}</Text>
+        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
+          {title}
+        </Text>
+        <Text numberOfLines={1} style={[styles.rowDetail, { color: colors.secondary }]}>
+          {detail}
+        </Text>
       </View>
-      <Text allowFontScaling={false} numberOfLines={1} style={[styles.metric, { color: colors.text }]}>
+      <Text
+        allowFontScaling={false}
+        numberOfLines={1}
+        style={[styles.metric, { color: colors.text }]}
+      >
         {metric}
       </Text>
-      <SymbolView name="chevron.right" size={10} tintColor={colors.tertiary} />
+      <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
     </Pressable>
   );
 }
@@ -152,7 +175,12 @@ function ExploreRow({ detail, href, icon, last = false, metric, testID, title }:
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
   hero: { marginTop: 4 },
-  heroHeader: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  heroHeader: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   heroLabel: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   heroValue: {
     marginTop: 18,
@@ -163,13 +191,33 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   heroDelta: { marginTop: 4, fontSize: 13, lineHeight: 18, fontWeight: '600' },
-  mixTrack: { height: 9, marginTop: 20, borderRadius: 5, overflow: 'hidden', flexDirection: 'row', gap: 1 },
-  sectionTitle: { marginTop: 36, marginBottom: 10, fontSize: 21, lineHeight: 27, fontWeight: '700', letterSpacing: -0.35 },
+  mixTrack: {
+    height: 9,
+    marginTop: 20,
+    borderRadius: 5,
+    overflow: 'hidden',
+    flexDirection: 'row',
+    gap: 1,
+  },
+  sectionTitle: {
+    marginTop: 36,
+    marginBottom: 10,
+    fontSize: 21,
+    lineHeight: 27,
+    fontWeight: '700',
+    letterSpacing: -0.35,
+  },
   list: { borderRadius: 18, paddingHorizontal: 14, overflow: 'hidden' },
   row: { minHeight: 75, flexDirection: 'row', alignItems: 'center', gap: 11 },
   icon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, minWidth: 0 },
   rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
   rowDetail: { marginTop: 3, fontSize: 11.5, lineHeight: 16 },
-  metric: { maxWidth: 88, textAlign: 'right', fontSize: 13.5, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  metric: {
+    maxWidth: 88,
+    textAlign: 'right',
+    fontSize: 13.5,
+    fontWeight: '700',
+    fontVariant: ['tabular-nums'],
+  },
 });

@@ -1,3 +1,4 @@
+import { t } from '../translations.ts';
 import * as SecureStore from 'expo-secure-store';
 
 export type PairingCredential = {
@@ -35,7 +36,7 @@ function isValidCredential(value: unknown): value is PairingCredential {
 }
 
 export async function storePairingCredential(credential: PairingCredential): Promise<void> {
-  if (!isValidCredential(credential)) throw new Error('The pairing credential is invalid.');
+  if (!isValidCredential(credential)) throw new Error(t('thePairingCredentialIsInvalid'));
   await SecureStore.setItemAsync(KEY, JSON.stringify(credential), OPTIONS);
 }
 
@@ -45,7 +46,7 @@ export async function readPairingCredential(): Promise<PairingCredential | null>
 
   const value: unknown = JSON.parse(stored);
   if (!isValidCredential(value)) {
-    throw new Error('The stored pairing credential is invalid.');
+    throw new Error(t('theStoredPairingCredentialIsInvalid'));
   }
   return value;
 }

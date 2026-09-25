@@ -1,3 +1,4 @@
+import { t } from '../translations.ts';
 export type PairingQrPayload = {
   kind: 'money-monitor-pairing';
   version: 1;
@@ -17,11 +18,11 @@ export function parsePairingQr(raw: string): PairingQrPayload {
   try {
     value = JSON.parse(raw);
   } catch {
-    throw new Error('This is not a Money Monitor pairing code.');
+    throw new Error(t('thisIsNotAMoneyMonitorPairingCode'));
   }
 
   if (!value || typeof value !== 'object') {
-    throw new Error('This is not a Money Monitor pairing code.');
+    throw new Error(t('thisIsNotAMoneyMonitorPairingCode'));
   }
 
   const candidate = value as Record<string, unknown>;
@@ -40,14 +41,14 @@ export function parsePairingQr(raw: string): PairingQrPayload {
     !Number.isFinite(Date.parse(candidate.expiresAt)) ||
     typeof candidate.baseURL !== 'string'
   ) {
-    throw new Error('This pairing code is invalid or unsupported.');
+    throw new Error(t('thisPairingCodeIsInvalidOrUnsupported'));
   }
 
   let baseURL: URL;
   try {
     baseURL = new URL(candidate.baseURL);
   } catch {
-    throw new Error('This pairing code contains an invalid server address.');
+    throw new Error(t('thisPairingCodeContainsAnInvalidServerAddress'));
   }
   if (
     baseURL.protocol !== 'https:' ||
@@ -56,7 +57,7 @@ export function parsePairingQr(raw: string): PairingQrPayload {
     baseURL.search ||
     baseURL.hash
   ) {
-    throw new Error('The Money Monitor server must use private HTTPS.');
+    throw new Error(t('theMoneyMonitorServerMustUsePrivateHTTPS'));
   }
 
   return {

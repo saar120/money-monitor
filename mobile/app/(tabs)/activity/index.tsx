@@ -1,3 +1,7 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t, useLanguage } from '@/localization';
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useMemo, useRef, useState } from 'react';
@@ -7,7 +11,6 @@ import {
   RefreshControl,
   SectionList,
   StyleSheet,
-  Text,
   TextInput,
   useColorScheme,
   View,
@@ -18,9 +21,11 @@ import { useActivityTransactions, useMoneyData, type ActivityCriteria } from '@/
 import { formatMoney } from '@/money';
 import type { Transaction } from '@/fixtures';
 import { categoryMarkColor, useAppColors } from '@/theme';
+import { categoryLabel, fixtureCategoryKey } from '@/translations';
 
 export default function ActivityScreen() {
   const colors = useAppColors();
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const [criteria, setCriteria] = useState<ActivityCriteria>({ inclusion: 'all' });
   const [filtersVisible, setFiltersVisible] = useState(false);
@@ -106,19 +111,26 @@ export default function ActivityScreen() {
               <SymbolView name="magnifyingglass" size={16} tintColor={colors.tertiary} />
               <TextInput
                 ref={searchBar}
-                accessibilityLabel="Merchant, category, or account"
+                accessibilityLabel={t('merchantCategoryOrAccount')}
                 clearButtonMode="while-editing"
                 onChangeText={setQuery}
-                placeholder="Merchant, category, or account"
+                placeholder={t('merchantCategoryOrAccount')}
                 placeholderTextColor={colors.tertiary}
                 returnKeyType="search"
-                style={[styles.searchInput, { color: colors.text }]}
+                style={[
+                  styles.searchInput,
+                  {
+                    color: colors.text,
+                    textAlign: language === 'he' ? 'right' : 'left',
+                    writingDirection: language === 'he' ? 'rtl' : 'ltr',
+                  },
+                ]}
                 value={query}
               />
             </View>
             {money.home.reviewCount > 0 ? (
               <Pressable
-                accessibilityHint="Opens the review queue"
+                accessibilityHint={t('opensTheReviewQueue')}
                 accessibilityRole="button"
                 onPress={() => router.push('/review')}
                 testID="activity-start-review"
@@ -129,27 +141,27 @@ export default function ActivityScreen() {
                 </View>
                 <View style={styles.reviewBannerText}>
                   <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
-                    {money.home.reviewCount} to review
+                    {t('reviewCount', { count: money.home.reviewCount })}
                   </Text>
                   <Text style={[styles.reviewBannerDetail, { color: colors.secondary }]}>
-                    Open your financial inbox
+                    {t('openYourFinancialInbox')}
                   </Text>
                 </View>
-                <SymbolView name="chevron.right" size={12} tintColor={colors.accent} />
+                <DirectionalChevron direction="forward" size={12} tintColor={colors.accent} />
               </Pressable>
             ) : null}
             {money.error ? (
               <Text style={[styles.refreshError, { color: colors.danger }]}>
-                Couldn’t refresh · pull to retry
+                {t('couldnTRefreshPullToRetry')}
               </Text>
             ) : null}
             <View style={styles.filterBar}>
               <Text style={[styles.summary, { color: colors.secondary }]}>
-                {transactions.length}
-                {result.hasMore ? '+' : ''} transactions ·{' '}
+                {t('transactionCount', { count: transactions.length })}
+                {result.hasMore ? '+' : ''}{' '}
                 {criteria.startDate || criteria.endDate
-                  ? `${criteria.startDate ?? 'first'}–${criteria.endDate ?? 'today'}`
-                  : 'all dates'}
+                  ? `${criteria.startDate ?? t('first')}–${criteria.endDate ?? t('today3')}`
+                  : t('allDates')}
               </Text>
               <Pressable
                 accessibilityRole="button"
@@ -179,7 +191,7 @@ export default function ActivityScreen() {
                       { color: advancedFilters ? colors.accent : colors.secondary },
                     ]}
                   >
-                    Filters{advancedFilters ? ` · ${advancedFilters}` : ''}
+                    {advancedFilters ? t('filtersCount', { count: advancedFilters }) : t('filters')}
                   </Text>
                 </View>
               </Pressable>
@@ -229,20 +241,20 @@ export default function ActivityScreen() {
             {result.loading ? <ActivityIndicator color={colors.accent} /> : null}
             <Text style={[styles.emptyTitle, { color: colors.text }]}>
               {result.loading
-                ? 'Loading activity'
+                ? t('loadingActivity')
                 : result.error
-                  ? 'Couldn’t load activity'
+                  ? t('couldnTLoadActivity')
                   : isUnfiltered
-                    ? 'No transactions yet'
-                    : 'No matching transactions'}
+                    ? t('noTransactionsYet')
+                    : t('noMatchingTransactions')}
             </Text>
             <Text style={[styles.emptyText, { color: colors.secondary }]}>
               {result.error ??
                 (result.loading
-                  ? 'Reading transactions from your Mac.'
+                  ? t('readingTransactionsFromYourMac')
                   : isUnfiltered
-                    ? 'New activity will appear after your Mac syncs.'
-                    : 'Clear search or choose another filter.')}
+                    ? t('newActivityWillAppearAfterYourMacSyncs')
+                    : t('clearSearchOrChooseAnotherFilter'))}
             </Text>
           </View>
         }
@@ -255,7 +267,9 @@ export default function ActivityScreen() {
               onPress={() => result.loadMore()}
               style={({ pressed }) => [styles.retryMore, { opacity: pressed ? 0.62 : 1 }]}
             >
-              <Text style={[styles.retryMoreText, { color: colors.accent }]}>Try loading more</Text>
+              <Text style={[styles.retryMoreText, { color: colors.accent }]}>
+                {t('tryLoadingMore')}
+              </Text>
             </Pressable>
           ) : null
         }
@@ -295,14 +309,14 @@ function TransactionRow({
       accessibilityLabel={[
         transaction.merchant,
         formatMoney(transaction.amount, transaction.currencyCode, true),
-        transaction.category,
+        categoryLabel(transaction.category),
         transaction.account,
-        transaction.pending ? 'Pending' : '',
-        transaction.needsReview ? 'Needs review' : '',
+        transaction.pending ? t('pending') : '',
+        transaction.needsReview ? t('needsReview') : '',
       ]
         .filter(Boolean)
         .join(', ')}
-      accessibilityHint="Opens transaction details"
+      accessibilityHint={t('opensTransactionDetails')}
       onPress={onPress}
       testID={`transaction-${transaction.id}`}
       style={({ pressed }) => [
@@ -313,7 +327,13 @@ function TransactionRow({
       <View
         style={[
           styles.merchantMark,
-          { backgroundColor: categoryMarkColor(transaction.category, isDark, colors.surfaceSoft) },
+          {
+            backgroundColor: categoryMarkColor(
+              fixtureCategoryKey(transaction.category),
+              isDark,
+              colors.surfaceSoft,
+            ),
+          },
         ]}
       >
         <Text allowFontScaling={false} style={[styles.merchantInitial, { color: colors.text }]}>
@@ -353,14 +373,14 @@ function TransactionRow({
             numberOfLines={1}
             style={[styles.metadata, { color: colors.secondary }]}
           >
-            {transaction.category} · {transaction.account}
+            {categoryLabel(transaction.category)} · {transaction.account}
           </Text>
           <View style={styles.flags}>
             {transaction.pending ? (
-              <Flag label="Pending" color={colors.warning} background={colors.warningSoft} />
+              <Flag label={t('pending')} color={colors.warning} background={colors.warningSoft} />
             ) : null}
             {transaction.needsReview ? (
-              <Flag label="Review" color={colors.danger} background={colors.dangerSoft} />
+              <Flag label={t('review')} color={colors.danger} background={colors.dangerSoft} />
             ) : null}
           </View>
         </View>
@@ -406,11 +426,11 @@ function groupTransactions(transactions: Transaction[], currentDate: string) {
 }
 
 function dayLabel(day: string, currentDate: string) {
-  if (day === currentDate) return 'Today';
+  if (day === currentDate) return t('today');
   const previous = new Date(`${currentDate}T12:00:00Z`);
   previous.setUTCDate(previous.getUTCDate() - 1);
-  if (day === previous.toISOString().slice(0, 10)) return 'Yesterday';
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
+  if (day === previous.toISOString().slice(0, 10)) return t('yesterday');
+  return new Intl.DateTimeFormat(currentLocale(), { month: 'short', day: 'numeric' }).format(
     new Date(`${day}T12:00:00Z`),
   );
 }
@@ -503,7 +523,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
-  merchant: { flex: 1, fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
+  merchant: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 21, fontWeight: '600' },
   amount: {
     minWidth: 116,
     flexShrink: 0,
@@ -514,7 +534,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   rowBottom: { minHeight: 22, flexDirection: 'row', alignItems: 'center', marginTop: 2, gap: 8 },
-  metadata: { flex: 1, fontSize: 12.5, writingDirection: 'ltr' },
+  metadata: { flex: 1, minWidth: 0, fontSize: 12.5 },
   flags: { flexDirection: 'row', gap: 5 },
   flag: {
     height: 20,

@@ -1,6 +1,11 @@
+import { DirectionalChevron } from './DirectionalChevron';
+import { t, useLanguage } from './localization';
+import { categoryLabel, ownerLabel } from './translations';
+import { currentLocale } from './locale-state';
+import { Text } from './LocalizedText';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -8,7 +13,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   TextInput,
   View,
 } from 'react-native';
@@ -117,12 +121,12 @@ export function ActivityFiltersSheet({
               onClose={onClose}
             />
             <ScrollView contentContainerStyle={styles.content} showsVerticalScrollIndicator={false}>
-              <SectionLabel label="Date range" colors={colors} />
+              <SectionLabel label={t('dateRange')} colors={colors} />
               <View style={[styles.group, { backgroundColor: colors.surface }]}>
                 <DateFilterRow
                   colors={colors}
                   currentDate={currentDate}
-                  label="From"
+                  label={t('from')}
                   onChange={(startDate) => setDraft((current) => ({ ...current, startDate }))}
                   value={draft.startDate}
                 />
@@ -130,85 +134,85 @@ export function ActivityFiltersSheet({
                 <DateFilterRow
                   colors={colors}
                   currentDate={currentDate}
-                  label="To"
+                  label={t('to')}
                   onChange={(endDate) => setDraft((current) => ({ ...current, endDate }))}
                   value={draft.endDate}
                 />
               </View>
               {!datesValid ? (
                 <Text style={[styles.error, { color: colors.danger }]}>
-                  The start date must be before the end date.
+                  {t('theStartDateMustBeBeforeTheEndDate')}
                 </Text>
               ) : null}
 
-              <SectionLabel label="Transaction" colors={colors} />
+              <SectionLabel label={t('transaction')} colors={colors} />
               <View style={[styles.group, { backgroundColor: colors.surface }]}>
                 <FilterRow
                   colors={colors}
                   icon="tag"
-                  label="Category"
+                  label={t('category')}
                   onPress={() => setPicker('category')}
-                  value={draft.category ?? 'All'}
+                  value={draft.category ? categoryLabel(draft.category) : t('all')}
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
                 <FilterRow
                   colors={colors}
                   icon="creditcard"
-                  label="Account"
+                  label={t('account')}
                   onPress={() => setPicker('account')}
-                  value={draft.account ?? 'All'}
+                  value={draft.account ?? t('all')}
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
                 <FilterRow
                   colors={colors}
                   icon="person.2"
-                  label="Owner"
+                  label={t('owner')}
                   onPress={() => setPicker('owner')}
-                  value={draft.owner ?? 'All'}
+                  value={draft.owner ? ownerLabel(draft.owner) : t('all')}
                 />
               </View>
 
-              <SectionLabel label="State" colors={colors} />
+              <SectionLabel label={t('state')} colors={colors} />
               <View style={[styles.group, { backgroundColor: colors.surface }]}>
                 <FilterRow
                   colors={colors}
                   icon="clock"
-                  label="Status"
+                  label={t('status')}
                   onPress={() => setPicker('status')}
                   value={
                     draft.status === 'pending'
-                      ? 'Pending'
+                      ? t('pending')
                       : draft.status === 'posted'
-                        ? 'Posted'
-                        : 'All'
+                        ? t('posted')
+                        : t('all')
                   }
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
                 <FilterRow
                   colors={colors}
                   icon="arrow.left.arrow.right"
-                  label="Money flow"
+                  label={t('moneyFlow')}
                   onPress={() => setPicker('direction')}
                   value={
                     draft.direction === 'debit'
-                      ? 'Expenses'
+                      ? t('expenses')
                       : draft.direction === 'credit'
-                        ? 'Credits'
-                        : 'All'
+                        ? t('credits')
+                        : t('all')
                   }
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
                 <FilterRow
                   colors={colors}
                   icon="doc.text"
-                  label="Reports"
+                  label={t('reports')}
                   onPress={() => setPicker('inclusion')}
                   value={
                     draft.inclusion === 'included'
-                      ? 'Included'
+                      ? t('included')
                       : draft.inclusion === 'excluded'
-                        ? 'Excluded'
-                        : 'All'
+                        ? t('excluded')
+                        : t('all')
                   }
                 />
                 <View style={[styles.divider, { backgroundColor: colors.separator }]} />
@@ -217,10 +221,12 @@ export function ActivityFiltersSheet({
                     <View style={[styles.rowIcon, { backgroundColor: colors.accentSoft }]}>
                       <SymbolView name="checkmark.circle" size={15} tintColor={colors.accent} />
                     </View>
-                    <Text style={[styles.rowLabel, { color: colors.text }]}>Needs review</Text>
+                    <Text style={[styles.rowLabel, { color: colors.text }]}>
+                      {t('needsReview')}
+                    </Text>
                   </View>
                   <Switch
-                    accessibilityLabel="Needs review only"
+                    accessibilityLabel={t('needsReviewOnly')}
                     onValueChange={(needsReview) =>
                       setDraft((current) => ({
                         ...current,
@@ -240,7 +246,9 @@ export function ActivityFiltersSheet({
                 style={({ pressed }) => [styles.reset, { opacity: pressed ? 0.62 : 1 }]}
                 testID="activity-reset-filters"
               >
-                <Text style={[styles.resetText, { color: colors.danger }]}>Reset all filters</Text>
+                <Text style={[styles.resetText, { color: colors.danger }]}>
+                  {t('resetAllFilters')}
+                </Text>
               </Pressable>
             </ScrollView>
           </>
@@ -264,9 +272,9 @@ function SheetHeader({
   return (
     <View style={[styles.header, { borderBottomColor: colors.separator }]}>
       <Pressable accessibilityRole="button" onPress={onClose} style={styles.headerButton}>
-        <Text style={[styles.headerAction, { color: colors.accent }]}>Cancel</Text>
+        <Text style={[styles.headerAction, { color: colors.accent }]}>{t('cancel')}</Text>
       </Pressable>
-      <Text style={[styles.title, { color: colors.text }]}>Filter activity</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('filterActivity')}</Text>
       <Pressable
         accessibilityRole="button"
         disabled={!datesValid}
@@ -280,7 +288,7 @@ function SheetHeader({
             { color: datesValid ? colors.accent : colors.tertiary },
           ]}
         >
-          Done
+          {t('done')}
         </Text>
       </Pressable>
     </View>
@@ -323,7 +331,7 @@ function FilterRow({
         <Text numberOfLines={1} style={[styles.rowValue, { color: colors.secondary }]}>
           {value}
         </Text>
-        <SymbolView name="chevron.right" size={11} tintColor={colors.tertiary} />
+        <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
       </View>
     </Pressable>
   );
@@ -353,6 +361,7 @@ function DateFilterRow({
       {value ? (
         <View style={styles.dateControl}>
           <DateTimePicker
+            locale={currentLocale()}
             display="compact"
             maximumDate={dateFromValue(currentDate)}
             mode="date"
@@ -362,7 +371,7 @@ function DateFilterRow({
             value={dateFromValue(value)}
           />
           <Pressable
-            accessibilityLabel={`Clear ${label.toLocaleLowerCase()} date`}
+            accessibilityLabel={t('clearDate', { field: label })}
             accessibilityRole="button"
             hitSlop={6}
             onPress={() => onChange(undefined)}
@@ -377,7 +386,7 @@ function DateFilterRow({
           onPress={() => onChange(currentDate)}
           style={styles.chooseDate}
         >
-          <Text style={[styles.chooseDateText, { color: colors.accent }]}>Choose</Text>
+          <Text style={[styles.chooseDateText, { color: colors.accent }]}>{t('choose')}</Text>
         </Pressable>
       )}
     </View>
@@ -399,21 +408,20 @@ function ChoiceList({
   selected?: string;
   title: string;
 }) {
+  const { language } = useLanguage();
   const [query, setQuery] = useState('');
   const searchable = options.length > 10;
-  const visibleOptions = useMemo(() => {
-    const normalized = query.trim().toLocaleLowerCase();
-    return normalized
-      ? options.filter((option) => option.label.toLocaleLowerCase().includes(normalized))
-      : options;
-  }, [options, query]);
+  const normalized = query.trim().toLocaleLowerCase();
+  const visibleOptions = normalized
+    ? options.filter((option) => option.label.toLocaleLowerCase().includes(normalized))
+    : options;
 
   return (
     <>
       <View style={[styles.header, { borderBottomColor: colors.separator }]}>
         <Pressable accessibilityRole="button" onPress={onBack} style={styles.backButton}>
-          <SymbolView name="chevron.left" size={13} tintColor={colors.accent} />
-          <Text style={[styles.headerAction, { color: colors.accent }]}>Filters</Text>
+          <DirectionalChevron direction="back" size={13} tintColor={colors.accent} />
+          <Text style={[styles.headerAction, { color: colors.accent }]}>{t('filters')}</Text>
         </Pressable>
         <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
         <View style={styles.headerButton} />
@@ -426,9 +434,16 @@ function ChoiceList({
             autoCorrect={false}
             clearButtonMode="while-editing"
             onChangeText={setQuery}
-            placeholder={`Search ${title.toLocaleLowerCase()}`}
+            placeholder={t('searchField', { field: title })}
             placeholderTextColor={colors.tertiary}
-            style={[styles.searchInput, { color: colors.text }]}
+            style={[
+              styles.searchInput,
+              {
+                color: colors.text,
+                textAlign: language === 'he' ? 'right' : 'left',
+                writingDirection: language === 'he' ? 'rtl' : 'ltr',
+              },
+            ]}
             value={query}
           />
         </View>
@@ -476,49 +491,49 @@ function choiceFor(
   accounts: AccountOption[],
   owners: string[],
 ) {
-  const all = { label: 'All', value: undefined };
+  const all = { label: t('all'), value: undefined };
   const choices: Record<ChoiceKey, { title: string; selected?: string; options: ChoiceOption[] }> =
     {
       category: {
-        title: 'Category',
+        title: t('category'),
         selected: draft.category,
-        options: [all, ...categories.map((value) => ({ label: value, value }))],
+        options: [all, ...categories.map((value) => ({ label: categoryLabel(value), value }))],
       },
       account: {
-        title: 'Account',
+        title: t('account'),
         selected: draft.account,
         options: [all, ...accounts.map(({ label }) => ({ label, value: label }))],
       },
       owner: {
-        title: 'Owner',
+        title: t('owner'),
         selected: draft.owner,
-        options: [all, ...owners.map((value) => ({ label: value, value }))],
+        options: [all, ...owners.map((value) => ({ label: ownerLabel(value), value }))],
       },
       status: {
-        title: 'Status',
+        title: t('status'),
         selected: draft.status,
         options: [
           all,
-          { label: 'Posted', value: 'posted' },
-          { label: 'Pending', value: 'pending' },
+          { label: t('posted'), value: 'posted' },
+          { label: t('pending'), value: 'pending' },
         ],
       },
       direction: {
-        title: 'Money flow',
+        title: t('moneyFlow'),
         selected: draft.direction,
         options: [
           all,
-          { label: 'Expenses', value: 'debit' },
-          { label: 'Credits', value: 'credit' },
+          { label: t('expenses'), value: 'debit' },
+          { label: t('credits'), value: 'credit' },
         ],
       },
       inclusion: {
-        title: 'Reports',
+        title: t('reports'),
         selected: draft.inclusion === 'all' ? undefined : draft.inclusion,
         options: [
           all,
-          { label: 'Included', value: 'included' },
-          { label: 'Excluded', value: 'excluded' },
+          { label: t('included'), value: 'included' },
+          { label: t('excluded'), value: 'excluded' },
         ],
       },
     };

@@ -1,3 +1,7 @@
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
+import { t } from '@/localization';
+import { categoryLabel, ownerLabel } from '@/translations';
 import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
@@ -10,7 +14,6 @@ import {
   ScrollView,
   StyleSheet,
   Switch,
-  Text,
   View,
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -56,9 +59,7 @@ export default function ReviewScreen() {
     void loadReviewOptions()
       .then(setOptions)
       .catch((caught) =>
-        setSaveError(
-          caught instanceof Error ? caught.message : 'Review options could not be loaded.',
-        ),
+        setSaveError(caught instanceof Error ? caught.message : t('reviewOptionsCouldNotBeLoaded')),
       );
   }, [loadReviewOptions]);
 
@@ -96,9 +97,7 @@ export default function ReviewScreen() {
         });
       }
       opacity.setValue(1);
-      setSaveError(
-        caught instanceof Error ? caught.message : 'This transaction could not be saved.',
-      );
+      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
     } finally {
       setSaving(false);
     }
@@ -121,9 +120,7 @@ export default function ReviewScreen() {
       await Haptics.selectionAsync();
     } catch (caught) {
       setOverrides((values) => ({ ...values, [transaction.id]: previous ?? {} }));
-      setSaveError(
-        caught instanceof Error ? caught.message : 'This transaction could not be saved.',
-      );
+      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
     } finally {
       setSaving(false);
     }
@@ -142,7 +139,7 @@ export default function ReviewScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Review', headerBackTitle: 'Back' }} />
+      <Stack.Screen options={{ title: t('review'), headerBackTitle: t('back') }} />
       <View
         style={[
           styles.screen,
@@ -153,10 +150,10 @@ export default function ReviewScreen() {
         <View style={styles.progressHeader}>
           <Text style={[styles.progressText, { color: colors.secondary }]}>
             {saving && !current
-              ? 'Saving changes…'
+              ? t('savingChanges')
               : remaining
-                ? `${remaining} to review`
-                : 'Inbox zero'}
+                ? t('transactionsToReview', { count: remaining })
+                : t('inboxZero')}
           </Text>
           <Text style={[styles.progressCount, { color: colors.secondary }]}>
             {reviewed}/{sessionTotal || reviewed}
@@ -174,27 +171,29 @@ export default function ReviewScreen() {
         {viewState === 'loading' ? (
           <View style={styles.center}>
             <ActivityIndicator color={colors.accent} />
-            <Text style={{ color: colors.secondary }}>Loading review queue…</Text>
+            <Text style={{ color: colors.secondary }}>{t('loadingReviewQueue')}</Text>
           </View>
         ) : viewState === 'error' ? (
           <View style={styles.caughtUp} testID="review-error">
             <SymbolView name="exclamationmark.triangle.fill" size={44} tintColor={colors.warning} />
-            <Text style={[styles.caughtUpTitle, { color: colors.text }]}>Couldn’t load review</Text>
+            <Text style={[styles.caughtUpTitle, { color: colors.text }]}>
+              {t('couldnTLoadReview')}
+            </Text>
             <Text style={[styles.caughtUpBody, { color: colors.secondary }]}>{error}</Text>
             <Pressable
               accessibilityRole="button"
               onPress={() => void reload()}
               style={[styles.doneButton, { backgroundColor: colors.accent }]}
             >
-              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>Try again</Text>
+              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>{t('tryAgain')}</Text>
             </Pressable>
           </View>
         ) : viewState === 'complete' ? (
           <View style={styles.caughtUp} testID="review-complete">
             <SymbolView name="checkmark.circle.fill" size={58} tintColor={colors.positive} />
-            <Text style={[styles.caughtUpTitle, { color: colors.text }]}>All caught up</Text>
+            <Text style={[styles.caughtUpTitle, { color: colors.text }]}>{t('allCaughtUp')}</Text>
             <Text style={[styles.caughtUpBody, { color: colors.secondary }]}>
-              Everything in your financial inbox has been reviewed.
+              {t('everythingInYourFinancialInboxHasBeenReviewed')}
             </Text>
             <Pressable
               accessibilityRole="button"
@@ -206,7 +205,7 @@ export default function ReviewScreen() {
               ]}
             >
               <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>
-                {saving ? 'Finishing…' : 'Done'}
+                {saving ? t('finishing') : t('done')}
               </Text>
             </Pressable>
           </View>
@@ -259,8 +258,8 @@ export default function ReviewScreen() {
               <View style={[styles.fields, { backgroundColor: colors.surface }]}>
                 <Field
                   symbol="tag"
-                  label="Category"
-                  value={current.category}
+                  label={t('category')}
+                  value={categoryLabel(current.category)}
                   colors={colors}
                   disabled={saving}
                   onPress={() => setPicker('category')}
@@ -268,8 +267,8 @@ export default function ReviewScreen() {
                 />
                 <Field
                   symbol="person"
-                  label="Owner"
-                  value={current.owner}
+                  label={t('owner')}
+                  value={ownerLabel(current.owner)}
                   colors={colors}
                   disabled={saving}
                   onPress={() => setPicker('owner')}
@@ -278,10 +277,10 @@ export default function ReviewScreen() {
                   <SymbolView name="chart.bar" size={18} tintColor={colors.secondary} />
                   <View style={styles.fieldText}>
                     <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                      Include in reports
+                      {t('includeInReports')}
                     </Text>
                     <Text style={[styles.fieldValue, { color: colors.secondary }]}>
-                      {current.included ? 'Included' : 'Excluded'}
+                      {current.included ? t('included') : t('excluded')}
                     </Text>
                   </View>
                   <Switch
@@ -296,7 +295,9 @@ export default function ReviewScreen() {
                 <View style={styles.fieldRow}>
                   <SymbolView name="calendar" size={18} tintColor={colors.secondary} />
                   <View style={styles.fieldText}>
-                    <Text style={[styles.fieldLabel, { color: colors.text }]}>Reporting date</Text>
+                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                      {t('reportingDate')}
+                    </Text>
                     <Text style={[styles.fieldValue, { color: colors.secondary }]}>
                       {current.effectiveDate}
                     </Text>
@@ -323,11 +324,11 @@ export default function ReviewScreen() {
               >
                 <SymbolView name="checkmark" size={17} tintColor="#FFFFFF" />
                 <Text style={[styles.primaryButtonText, { color: '#FFFFFF' }]}>
-                  {saving ? 'Saving…' : 'Looks right'}
+                  {saving ? t('saving') : t('looksRight')}
                 </Text>
               </Pressable>
               <Text style={[styles.actionHint, { color: colors.secondary }]}>
-                Changing the category confirms it automatically.
+                {t('changingTheCategoryConfirmsItAutomatically')}
               </Text>
             </View>
           </Animated.View>
@@ -345,8 +346,8 @@ export default function ReviewScreen() {
       />
       <OptionSheet
         visible={picker === 'owner'}
-        title="Choose owner"
-        options={options.owners}
+        title={t('chooseOwner')}
+        options={options.owners.map((value) => ({ value, label: ownerLabel(value) }))}
         selected={current?.owner}
         colors={colors}
         onClose={() => setPicker(null)}
@@ -405,7 +406,7 @@ function OptionSheet({
 }: {
   visible: boolean;
   title: string;
-  options: string[];
+  options: { value: string; label: string }[];
   selected?: string;
   colors: AppColors;
   onClose: () => void;
@@ -421,7 +422,7 @@ function OptionSheet({
       <View style={[styles.sheet, { backgroundColor: colors.background }]}>
         <View style={styles.sheetHeader}>
           <Pressable accessibilityRole="button" onPress={onClose} style={styles.sheetButton}>
-            <Text style={[styles.sheetButtonText, { color: colors.accent }]}>Cancel</Text>
+            <Text style={[styles.sheetButtonText, { color: colors.accent }]}>{t('cancel')}</Text>
           </Pressable>
           <Text style={[styles.sheetTitle, { color: colors.text }]}>{title}</Text>
           <View style={styles.sheetButton} />
@@ -430,13 +431,13 @@ function OptionSheet({
           {options.map((option) => (
             <Pressable
               accessibilityRole="button"
-              accessibilityState={{ selected: selected === option }}
-              key={option}
-              onPress={() => onSelect(option)}
+              accessibilityState={{ selected: selected === option.value }}
+              key={option.value}
+              onPress={() => onSelect(option.value)}
               style={[styles.option, { borderBottomColor: colors.separator }]}
             >
-              <Text style={[styles.optionText, { color: colors.text }]}>{option}</Text>
-              {selected === option ? (
+              <Text style={[styles.optionText, { color: colors.text }]}>{option.label}</Text>
+              {selected === option.value ? (
                 <SymbolView name="checkmark" size={16} tintColor={colors.accent} />
               ) : null}
             </Pressable>
@@ -453,9 +454,11 @@ function relativeDate(value: string, currentDate?: string) {
   const current = currentDate ? new Date(`${currentDate}T12:00:00Z`) : null;
   if (current) {
     current.setUTCDate(current.getUTCDate() - 1);
-    if (day === current.toISOString().slice(0, 10)) return 'Yesterday';
+    if (day === current.toISOString().slice(0, 10)) return t('yesterday');
   }
-  return new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(new Date(value));
+  return new Intl.DateTimeFormat(currentLocale(), { month: 'short', day: 'numeric' }).format(
+    new Date(value),
+  );
 }
 
 const styles = StyleSheet.create({

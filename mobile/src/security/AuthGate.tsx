@@ -1,8 +1,10 @@
+import { t } from '../localization';
+import { Text } from '../LocalizedText';
 import * as Device from 'expo-device';
 import * as LocalAuthentication from 'expo-local-authentication';
 import { SymbolView } from 'expo-symbols';
 import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react';
-import { AppState, Linking, Pressable, StyleSheet, Text, View } from 'react-native';
+import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useAppColors } from '@/theme';
 
 type GateState = 'checking' | 'locked' | 'setup-required' | 'unlocked';
@@ -17,7 +19,7 @@ export function AuthGate({
   const colors = useAppColors();
   const [state, setState] = useState<GateState>(previewLocked ? 'locked' : 'checking');
   const [hasUnlocked, setHasUnlocked] = useState(false);
-  const [message, setMessage] = useState('Financial information stays hidden until you unlock.');
+  const [message, setMessage] = useState(t('financialInformationStaysHiddenUntilYouUnlock'));
   const needsAuthenticationAfterBackground = useRef(false);
 
   const authenticate = useCallback(async () => {
@@ -35,25 +37,23 @@ export function AuthGate({
 
     if (!hardware || !enrolled) {
       setState('setup-required');
-      setMessage(
-        'Set up Face ID or device authentication in iPhone Settings to unlock Money Monitor.',
-      );
+      setMessage(t('setUpFaceIDOrDeviceAuthenticationInIPhoneSettingsToUnlockMoneyMonitor'));
       return;
     }
 
     setState('locked');
     const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: 'Unlock Money Monitor',
-      cancelLabel: 'Keep locked',
-      fallbackLabel: 'Use device passcode',
+      promptMessage: t('unlockMoneyMonitor'),
+      cancelLabel: t('keepLocked'),
+      fallbackLabel: t('useDevicePasscode'),
       disableDeviceFallback: false,
     });
     if (result.success) {
       setHasUnlocked(true);
       setState('unlocked');
-      setMessage('Financial information stays hidden until you unlock.');
+      setMessage(t('financialInformationStaysHiddenUntilYouUnlock'));
     } else {
-      setMessage('Money Monitor is still locked. Try again when you are ready.');
+      setMessage(t('moneyMonitorIsStillLockedTryAgainWhenYouAreReady'));
     }
   }, [previewLocked]);
 
@@ -89,12 +89,12 @@ export function AuthGate({
           <View style={[styles.iconWell, { backgroundColor: colors.accentSoft }]}>
             <SymbolView name="lock.shield.fill" size={34} tintColor={colors.accent} />
           </View>
-          <Text style={[styles.title, { color: colors.text }]}>Money Monitor is locked</Text>
+          <Text style={[styles.title, { color: colors.text }]}>{t('moneyMonitorIsLocked')}</Text>
           <Text style={[styles.message, { color: colors.secondary }]}>{message}</Text>
           {state === 'locked' && !previewLocked ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Unlock Money Monitor"
+              accessibilityLabel={t('unlockMoneyMonitor')}
               onPress={() => void authenticate()}
               style={({ pressed }) => [
                 styles.unlockButton,
@@ -102,13 +102,13 @@ export function AuthGate({
               ]}
             >
               <SymbolView name="faceid" size={20} tintColor="#FFFFFF" />
-              <Text style={styles.unlockLabel}>Unlock</Text>
+              <Text style={styles.unlockLabel}>{t('unlock')}</Text>
             </Pressable>
           ) : null}
           {state === 'setup-required' ? (
             <Pressable
               accessibilityRole="button"
-              accessibilityLabel="Open iPhone Settings"
+              accessibilityLabel={t('openIPhoneSettings')}
               onPress={() => void Linking.openSettings()}
               style={({ pressed }) => [
                 styles.unlockButton,
@@ -116,11 +116,11 @@ export function AuthGate({
               ]}
             >
               <SymbolView name="gearshape.fill" size={19} tintColor="#FFFFFF" />
-              <Text style={styles.unlockLabel}>Open Settings</Text>
+              <Text style={styles.unlockLabel}>{t('openSettings')}</Text>
             </Pressable>
           ) : null}
           <Text style={[styles.privacyNote, { color: colors.tertiary }]}>
-            Protected on this iPhone
+            {t('protectedOnThisIPhone')}
           </Text>
         </View>
       ) : null}
