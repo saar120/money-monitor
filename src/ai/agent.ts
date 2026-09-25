@@ -1,27 +1,12 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import { completeSimple } from '@earendil-works/pi-ai/compat';
 import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
 import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
-import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import {
-  config,
-  getBatchModelSpec,
-  getConfiguredBatchThinkingLevel,
-  getConfiguredThinkingLevel,
-} from '../config.js';
-import { applyOwnership } from '../services/ownership.js';
+import { config, getConfiguredThinkingLevel } from '../config.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
 import { db } from '../db/connection.js';
-import { transactions, categories } from '../db/schema.js';
-import {
-  buildBatchCategorizerPrompt,
-  buildFinancialAdvisorPrompt,
-  partitionCategories,
-  withMemory,
-} from './prompts.js';
+import { categories } from '../db/schema.js';
+import { buildFinancialAdvisorPrompt, partitionCategories, withMemory } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
-import { parseMeta } from '../shared/types.js';
-import type { Transaction } from '../shared/types.js';
 import {
   buildQueryTransactionsTool,
   buildGetSpendingSummaryTool,
@@ -71,37 +56,6 @@ function hasEnvApiKey(provider: string): boolean {
   };
   const vars = envMap[provider];
   return vars ? vars.some((v) => !!process.env[v]) : false;
-}
-
-function formatTransactionForPrompt(t: Transaction): string {
-  const meta = parseMeta(t.meta);
-  const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
-  const memo = t.memo ? ` | memo: ${t.memo}` : '';
-  return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${memo}${bankCat}`;
-}
-
-/** Strip markdown code fences that the model may wrap around JSON. */
-function cleanJsonResponse(text: string): string {
-  return text
-    .replace(/^```(?:json)?\n?/m, '')
-    .replace(/\n?```$/m, '')
-    .trim();
-}
-
-/** Parse the model's JSON response, validate categories, and return valid results. */
-function processCategoryResults(
-  text: string,
-  validCategories: Set<string>,
-  validIds: Set<number>,
-): Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> {
-  const clean = cleanJsonResponse(text);
-  const results: Array<{
-    id: number;
-    category: string;
-    confidence?: number;
-    reviewReason?: string;
-  }> = JSON.parse(clean);
-  return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
 }
 
 // ── Chat types ──────────────────────────────────────────────────────────────────
@@ -336,114 +290,4 @@ export async function* chat(
   }
 }
 
-// ── Batch categorization ────────────────────────────────────────────────────────
-
-/** Shared LLM call + result persistence for batch categorization. */
-async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: number }> {
-  if (txns.length === 0) return { categorized: 0 };
-
-  const catRows = getCategoriesWithRules();
-  const categoryNames = catRows.map((r) => r.name);
-  if (categoryNames.length === 0) return { categorized: 0 };
-  const ignoredCategories = new Set(catRows.filter((r) => r.ignoredFromStats).map((r) => r.name));
-
-  const validIds = new Set(txns.map((t) => t.id));
-  const validCategories = new Set(categoryNames);
-  const txnList = txns.map(formatTransactionForPrompt).join('\n');
-
-  const { model, provider } = resolveModel(getBatchModelSpec());
-  const reasoning = getConfiguredBatchThinkingLevel(model.reasoning);
-
-  // Resolve OAuth key if available
-  const oauthKey = await resolveApiKey(provider);
-
-  const response = await completeSimple(
-    model,
-    {
-      systemPrompt: buildBatchCategorizerPrompt(catRows),
-      messages: [
-        {
-          role: 'user',
-          content: `Categorize these transactions:\n${txnList}`,
-          timestamp: Date.now(),
-        },
-      ],
-    },
-    {
-      ...(oauthKey ? { apiKey: oauthKey } : {}),
-      ...(reasoning ? { reasoning } : {}),
-    },
-  );
-
-  const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-
-  let categorized = 0;
-  try {
-    for (const { id, category, confidence, reviewReason } of processCategoryResults(
-      text,
-      validCategories,
-      validIds,
-    )) {
-      const needsReview = confidence !== undefined && confidence < 0.8;
-      db.update(transactions)
-        .set({
-          category,
-          confidence: confidence ?? null,
-          needsReview,
-          reviewReason: needsReview ? (reviewReason ?? 'Low confidence categorization') : null,
-          ignored: ignoredCategories.has(category),
-        })
-        .where(eq(transactions.id, id))
-        .run();
-      categorized++;
-    }
-    if (categorized > 0) applyOwnership({ ids: txns.map((t) => t.id) });
-  } catch (err) {
-    console.error(
-      '[AI] Failed to process categorization results:',
-      err instanceof Error ? err.message : err,
-    );
-  }
-
-  return { categorized };
-}
-
-export async function batchCategorize(
-  batchSize: number = 50,
-  ids?: number[],
-): Promise<{ categorized: number }> {
-  const uncategorized =
-    ids && ids.length > 0
-      ? db
-          .select()
-          .from(transactions)
-          .where(and(isNull(transactions.category), inArray(transactions.id, ids)))
-          .all()
-      : db.select().from(transactions).where(isNull(transactions.category)).limit(batchSize).all();
-
-  return categorizeBatch(uncategorized);
-}
-
-export async function recategorize(
-  startDate?: string,
-  endDate?: string,
-): Promise<{ categorized: number }> {
-  // Categorization maintenance ranges refer to the source records' bank dates.
-  const conditions = [];
-  if (startDate) conditions.push(gte(transactions.date, startDate));
-  if (endDate) conditions.push(lte(transactions.date, endDate));
-
-  const toProcess =
-    conditions.length > 0
-      ? db
-          .select()
-          .from(transactions)
-          .where(and(...conditions))
-          .all()
-      : db.select().from(transactions).all();
-
-  return categorizeBatch(toProcess);
-}
+export { batchCategorize, recategorize } from './categorization/index.js';

@@ -23,6 +23,7 @@ export const SECRET_KEYS = new Set([
   'OPENCODE_API_KEY',
   'GEMINI_API_KEY',
   'OPENROUTER_API_KEY',
+  'TYPESAFE_API_KEY',
   'TELEGRAM_BOT_TOKEN',
   'MOBILE_PUBLIC_ID_KEY',
 ]);
@@ -119,6 +120,8 @@ const envSchema = z.object({
   AI_BATCH_PROVIDER: z.string().default(''),
   AI_BATCH_MODEL_ID: z.string().default(''),
   AI_BATCH_THINKING_LEVEL: z.enum(BATCH_THINKING_LEVELS).default('inherit'),
+  CATEGORIZATION_PROVIDER: z.enum(['llm', 'typesafe']).default('llm'),
+  TYPESAFE_API_KEY: z.string().default(''),
   OPENAI_API_KEY: z.string().default(''),
   OPENCODE_API_KEY: z.string().default(''),
   GEMINI_API_KEY: z.string().default(''),
