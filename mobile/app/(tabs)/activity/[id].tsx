@@ -1,9 +1,14 @@
+import { t } from '@/localization';
+import { ownerLabel } from '@/translations';
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData, useTransaction } from '@/MoneyData';
@@ -38,7 +43,7 @@ export default function TransactionDetailScreen() {
       <View style={[styles.missing, { backgroundColor: colors.background }]}>
         <ActivityIndicator color={colors.accent} size="large" />
         <Text style={[styles.missingBody, { color: colors.secondary }]}>
-          Loading transaction from your Mac…
+          {t('loadingTransactionFromYourMac')}
         </Text>
       </View>
     );
@@ -47,15 +52,17 @@ export default function TransactionDetailScreen() {
   if (!transaction) {
     return (
       <View style={[styles.missing, { backgroundColor: colors.background }]}>
-        <Text style={[styles.missingTitle, { color: colors.text }]}>Transaction unavailable</Text>
+        <Text style={[styles.missingTitle, { color: colors.text }]}>
+          {t('transactionUnavailable')}
+        </Text>
         <Text style={[styles.missingBody, { color: colors.secondary }]}>
-          {result.error ?? 'This transaction is no longer available.'}
+          {result.error ?? t('thisTransactionIsNoLongerAvailable')}
         </Text>
       </View>
     );
   }
 
-  const date = new Intl.DateTimeFormat('en', {
+  const date = new Intl.DateTimeFormat(currentLocale(), {
     month: 'long',
     day: 'numeric',
     year: 'numeric',
@@ -82,9 +89,7 @@ export default function TransactionDetailScreen() {
       await Haptics.selectionAsync();
     } catch (caught) {
       setEdits(previous);
-      setSaveError(
-        caught instanceof Error ? caught.message : 'This transaction could not be saved.',
-      );
+      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
     } finally {
       setSaving(null);
     }
@@ -101,7 +106,7 @@ export default function TransactionDetailScreen() {
       setCategoryVisible(true);
     } catch (caught) {
       setSaving(null);
-      setSaveError(caught instanceof Error ? caught.message : 'Categories could not be loaded.');
+      setSaveError(caught instanceof Error ? caught.message : t('categoriesCouldNotBeLoaded'));
     }
   }
 
@@ -138,11 +143,15 @@ export default function TransactionDetailScreen() {
           </Text>
           <View style={styles.flags}>
             {transaction.pending ? (
-              <DetailFlag label="Pending" color={colors.warning} background={colors.warningSoft} />
+              <DetailFlag
+                label={t('pending')}
+                color={colors.warning}
+                background={colors.warningSoft}
+              />
             ) : null}
             {transaction.needsReview ? (
               <DetailFlag
-                label="Needs review"
+                label={t('needsReview')}
                 color={colors.danger}
                 background={colors.dangerSoft}
               />
@@ -150,27 +159,27 @@ export default function TransactionDetailScreen() {
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>TRANSACTION</Text>
+        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>{t('tRANSACTION')}</Text>
         <View style={[styles.group, { backgroundColor: colors.surface }]}>
-          <DetailRow label="Date" value={date} />
-          <DetailRow label="Account" value={transaction.account} />
-          <DetailRow label="Description" value={transaction.description ?? '—'} last />
+          <DetailRow label={t('date')} value={date} />
+          <DetailRow label={t('account')} value={transaction.account} />
+          <DetailRow label={t('description')} value={transaction.description ?? '—'} last />
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>MONEY MONITOR</Text>
+        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>{t('mONEYMONITOR')}</Text>
         <View style={[styles.group, { backgroundColor: colors.surface }]}>
           <DetailRow
-            label="Category"
+            label={t('category')}
             value={saving === 'category' ? 'Saving…' : transaction.category}
             symbol="tag"
             disabled={saving !== null}
             onPress={() => void chooseCategory()}
             testID="transaction-category"
           />
-          <DetailRow label="Owner" value={transaction.owner} symbol="person" />
+          <DetailRow label={t('owner')} value={ownerLabel(transaction.owner)} symbol="person" />
           <DetailRow
-            label="Included"
-            value={transaction.included ? 'Included in reports' : 'Excluded'}
+            label={t('included')}
+            value={transaction.included ? t('includedInReports') : t('excluded')}
             symbol="checkmark.circle"
           />
           <DatePickerRow
@@ -185,8 +194,8 @@ export default function TransactionDetailScreen() {
             value={parseFinancialDate(currentEffectiveDate)}
           />
           <DetailRow
-            label="Review"
-            value={transaction.needsReview ? 'Needs review' : 'Reviewed'}
+            label={t('review')}
+            value={transaction.needsReview ? t('needsReview') : t('reviewed')}
             symbol="checkmark.seal"
             last
           />
@@ -203,7 +212,7 @@ export default function TransactionDetailScreen() {
           if (category !== currentCategory) void saveField('category', { category });
         }}
         selected={currentCategory}
-        title="Change category"
+        title={t('changeCategory')}
         visible={categoryVisible}
       />
     </>
@@ -239,12 +248,13 @@ function DatePickerRow({
           numberOfLines={1}
           style={[styles.detailLabel, styles.dateLabel, { color: colors.text }]}
         >
-          Effective date
+          {t('effectiveDate')}
         </Text>
         {saving ? (
-          <Text style={[styles.dateSaving, { color: colors.secondary }]}>Saving…</Text>
+          <Text style={[styles.dateSaving, { color: colors.secondary }]}>{t('saving')}</Text>
         ) : (
           <DateTimePicker
+            locale={currentLocale()}
             accentColor={colors.accent}
             disabled={disabled}
             display="compact"
@@ -303,7 +313,9 @@ function DetailRow({
         >
           {value}
         </Text>
-        {onPress ? <SymbolView name="chevron.right" size={12} tintColor={colors.tertiary} /> : null}
+        {onPress ? (
+          <DirectionalChevron direction="forward" size={12} tintColor={colors.tertiary} />
+        ) : null}
       </View>
     </>
   );

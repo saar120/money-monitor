@@ -1,5 +1,8 @@
+import { t, useLanguage } from '@/localization';
+import { currentLocale, formatMonthShort } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
@@ -28,6 +31,7 @@ export default function CashFlowScreen() {
 
 function CashFlowChart({ months }: { months: ExploreMonth[] }) {
   const colors = useAppColors();
+  const { language } = useLanguage();
   const [range, setRange] = useState<Range>('6');
   const [selectedMonth, setSelectedMonth] = useState(months.at(-1)!.month);
   const series = months.slice(-Number(range));
@@ -39,7 +43,7 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
   const delta = previousNet === null ? null : net - previousNet;
   const max = Math.max(1, ...series.flatMap((month) => [month.income, month.spending]));
   const summary = cashFlowSummary(series);
-  const rangeLabel = `${series.length}-month`;
+  const rangeLabel = t('monthCount', { count: series.length });
 
   return (
     <>
@@ -47,9 +51,9 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
         compact
         onChange={setRange}
         options={[
-          { label: '3M', value: '3' },
-          { label: '6M', value: '6' },
-          { label: '1Y', value: '12' },
+          { label: t('message3M'), value: '3' },
+          { label: t('message6M'), value: '6' },
+          { label: t('message1Y'), value: '12' },
         ]}
         testID="cash-flow-range"
         value={range}
@@ -65,20 +69,26 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
       </Text>
       <Text style={[styles.delta, { color: colors.secondary }]}>
         {delta === null
-          ? 'Posted income minus spending'
-          : `${formatUnsignedMoney(Math.abs(delta), selected.currencyCode)} ${delta >= 0 ? 'better' : 'worse'} than the previous month`}
+          ? t('postedIncomeMinusSpending')
+          : t(delta >= 0 ? 'betterThanPreviousMonth' : 'worseThanPreviousMonth', {
+              amount: formatUnsignedMoney(Math.abs(delta), selected.currencyCode),
+            })}
       </Text>
 
-      <View style={styles.chart} accessibilityLabel="Income and spending by month">
+      <View style={styles.chart} accessibilityLabel={t('incomeAndSpendingByMonth')}>
         {series.map((month) => (
           <Pressable
-            accessibilityLabel={`${monthTitle(month.month)}, income ${formatUnsignedMoney(month.income, month.currencyCode)}, spending ${formatUnsignedMoney(month.spending, month.currencyCode)}`}
+            accessibilityLabel={t('monthIncomeSpending', {
+              month: monthTitle(month.month),
+              income: formatUnsignedMoney(month.income, month.currencyCode),
+              spending: formatUnsignedMoney(month.spending, month.currencyCode),
+            })}
             accessibilityRole="button"
             key={month.month}
             onPress={() => setSelectedMonth(month.month)}
             style={styles.group}
           >
-            <View style={styles.pair}>
+            <View style={[styles.pair, language === 'he' && { direction: 'rtl' }]}>
               <View
                 style={[
                   styles.bar,
@@ -106,46 +116,51 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
                 { color: selected.month === month.month ? colors.text : colors.secondary },
               ]}
             >
-              {month.label}
+              {formatMonthShort(month.month)}
             </Text>
           </Pressable>
         ))}
       </View>
 
       <View style={styles.legend}>
-        <Legend color={colors.accent} label="Posted income" />
-        <Legend color={colors.blueSoft} label="Posted spending" />
+        <Legend color={colors.accent} label={t('postedIncome')} />
+        <Legend color={colors.blueSoft} label={t('postedSpending')} />
       </View>
       <View style={[styles.rule, { backgroundColor: colors.separator }]} />
-      <Text style={[styles.sectionLabel, { color: colors.secondary }]}>Selected month</Text>
+      <Text style={[styles.sectionLabel, { color: colors.secondary }]}>{t('selectedMonth')}</Text>
       <View style={styles.breakdown}>
-        <Value label="Income" value={formatUnsignedMoney(selected.income, selected.currencyCode)} />
         <Value
-          label="Spending"
+          label={t('income')}
+          value={formatUnsignedMoney(selected.income, selected.currencyCode)}
+        />
+        <Value
+          label={t('spending')}
           value={formatUnsignedMoney(selected.spending, selected.currencyCode)}
         />
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{rangeLabel} summary</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>
+        {t('rangeSummary', { range: rangeLabel })}
+      </Text>
       <View style={[styles.summaryCard, { backgroundColor: colors.surfaceSoft }]}>
         <SummaryRow
-          label="Net cash flow"
+          label={t('netCashFlow')}
           testID="cash-flow-range-total"
           value={formatMoney(summary.total, selected.currencyCode)}
           valueColor={summary.total >= 0 ? colors.positive : colors.danger}
         />
         <SummaryRow
-          label="Monthly average"
+          label={t('monthlyAverage')}
           testID="cash-flow-range-average"
           value={formatMoney(summary.average, selected.currencyCode)}
           valueColor={summary.average >= 0 ? colors.positive : colors.danger}
         />
         <SummaryRow
-          label="Total income"
+          label={t('totalIncome')}
           value={formatUnsignedMoney(summary.income, selected.currencyCode)}
         />
         <SummaryRow
-          label="Total spending"
+          label={t('totalSpending')}
           value={formatUnsignedMoney(summary.spending, selected.currencyCode)}
           last
         />
@@ -218,16 +233,18 @@ function Loading({ loading }: { loading: boolean }) {
     <View style={styles.loading}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       <Text style={[styles.loadingText, { color: colors.secondary }]}>
-        {loading ? 'Loading cash flow…' : 'Cash-flow history is unavailable.'}
+        {loading ? t('loadingCashFlow') : t('cashFlowHistoryIsUnavailable')}
       </Text>
     </View>
   );
 }
 
 function monthTitle(month: string) {
-  return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
-    new Date(`${month}-01T12:00:00Z`),
-  );
+  return new Intl.DateTimeFormat(currentLocale(), {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${month}-01T12:00:00Z`));
 }
 
 const styles = StyleSheet.create({
@@ -242,7 +259,14 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   delta: { marginTop: 6, fontSize: 13, lineHeight: 18 },
-  chart: { height: 218, marginTop: 26, flexDirection: 'row', alignItems: 'flex-end', gap: 7 },
+  chart: {
+    height: 218,
+    marginTop: 26,
+    direction: 'ltr',
+    flexDirection: 'row',
+    alignItems: 'flex-end',
+    gap: 7,
+  },
   group: { flex: 1, height: 218, alignItems: 'center', justifyContent: 'flex-end' },
   pair: { height: 172, flexDirection: 'row', alignItems: 'flex-end', gap: 3 },
   bar: { minWidth: 6, maxWidth: 16, flex: 1, borderRadius: 4 },

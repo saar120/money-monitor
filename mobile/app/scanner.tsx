@@ -1,3 +1,5 @@
+import { t } from '@/localization';
+import { Text } from '@/LocalizedText';
 import { CameraView, useCameraPermissions, type BarcodeScanningResult } from 'expo-camera';
 import * as Device from 'expo-device';
 import { router } from 'expo-router';
@@ -9,7 +11,6 @@ import {
   Linking,
   Pressable,
   StyleSheet,
-  Text,
   View,
 } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -43,7 +44,7 @@ export default function ScannerScreen() {
 
   useEffect(() => {
     if (state.kind !== 'result') return;
-    const message = state.connected ? 'Connected to Mac' : 'Could not connect to Mac';
+    const message = state.connected ? t('connectedToMac') : t('couldNotConnectToMac');
     AccessibilityInfo.announceForAccessibility(message);
   }, [state]);
 
@@ -72,7 +73,7 @@ export default function ScannerScreen() {
       if (pairingController.current?.signal.aborted) return;
       setState({
         kind: 'result',
-        error: error instanceof Error ? error.message : 'The QR code could not be read.',
+        error: error instanceof Error ? error.message : t('theQRCodeCouldNotBeRead'),
       });
     } finally {
       pairingController.current = null;
@@ -97,12 +98,12 @@ export default function ScannerScreen() {
           <SymbolView name="qrcode.viewfinder" size={36} tintColor={colors.accent} />
         </View>
         <Text style={[styles.permissionTitle, { color: colors.text }]}>
-          Scan the code on your Mac
+          {t('scanTheCodeOnYourMac')}
         </Text>
         <Text style={[styles.permissionBody, { color: colors.secondary }]}>
           {permission.canAskAgain
-            ? 'Camera access is used only to read a Money Monitor pairing QR. No image is saved.'
-            : 'Camera access is off. Enable it in Settings to scan the pairing code.'}
+            ? t('cameraAccessIsUsedOnlyToReadAMoneyMonitorPairingQRNoImageIsSaved')
+            : t('cameraAccessIsOffEnableItInSettingsToScanThePairingCode')}
         </Text>
         <Pressable
           accessibilityRole="button"
@@ -115,7 +116,7 @@ export default function ScannerScreen() {
           ]}
         >
           <Text style={styles.permissionButtonLabel}>
-            {permission.canAskAgain ? 'Allow camera' : 'Open Settings'}
+            {permission.canAskAgain ? t('allowCamera') : t('openSettings')}
           </Text>
         </Pressable>
         <Pressable
@@ -123,7 +124,7 @@ export default function ScannerScreen() {
           onPress={() => router.back()}
           style={styles.cancelButton}
         >
-          <Text style={[styles.cancelLabel, { color: colors.accent }]}>Cancel</Text>
+          <Text style={[styles.cancelLabel, { color: colors.accent }]}>{t('cancel')}</Text>
         </Pressable>
       </View>
     );
@@ -140,21 +141,21 @@ export default function ScannerScreen() {
       <View style={[styles.topBar, { paddingTop: insets.top + 7 }]}>
         <Pressable
           accessibilityRole="button"
-          accessibilityLabel="Close scanner"
+          accessibilityLabel={t('closeScanner')}
           onPress={() => router.back()}
           style={styles.closeButton}
         >
           <SymbolView name="xmark" size={17} tintColor="#FFFFFF" weight="semibold" />
         </Pressable>
-        <Text style={styles.scannerTitle}>Connect to Mac</Text>
+        <Text style={styles.scannerTitle}>{t('connectToMac')}</Text>
         <View style={styles.closeButton} />
       </View>
 
       {state.kind === 'scanning' ? (
         <View style={styles.targetArea}>
           <View style={styles.target} />
-          <Text style={styles.scanInstruction}>Hold the pairing code inside the frame</Text>
-          <Text style={styles.scanPrivacy}>The connection stays inside your Tailnet</Text>
+          <Text style={styles.scanInstruction}>{t('holdThePairingCodeInsideTheFrame')}</Text>
+          <Text style={styles.scanPrivacy}>{t('theConnectionStaysInsideYourTailnet')}</Text>
         </View>
       ) : (
         <ScanResult
@@ -185,30 +186,30 @@ function ScanResult({
   const progress = state.kind === 'working' ? state.progress : null;
   const title =
     progress === 'checking'
-      ? 'Checking your Mac'
+      ? t('checkingYourMac')
       : progress === 'requesting'
-        ? 'Requesting access'
+        ? t('requestingAccess')
         : progress === 'awaiting-approval'
-          ? 'Approve on your Mac'
+          ? t('approveOnYourMac')
           : progress === 'exchanging'
-            ? 'Finishing pairing'
+            ? t('finishingPairing')
             : connected
-              ? 'Connected to your Mac'
-              : 'Could not connect';
+              ? t('connectedToYourMac')
+              : t('couldNotConnect');
   const message =
     state.kind === 'result' && state.error
       ? state.error
       : state.kind === 'result' && state.health && !state.health.reachable
         ? state.health.message
         : connected
-          ? 'Home and Activity will now show data calculated by Money Monitor on your Mac.'
+          ? t('homeAndActivityWillNowShowDataCalculatedByMoneyMonitorOnYourMac')
           : progress === 'awaiting-approval'
-            ? 'In Money Monitor Settings, approve this iPhone before the code expires.'
+            ? t('inMoneyMonitorSettingsApproveThisIPhoneBeforeTheCodeExpires')
             : progress === 'exchanging'
-              ? 'Saving the private device credential in the iOS Keychain…'
+              ? t('savingThePrivateDeviceCredentialInTheIOSKeychain')
               : progress === 'requesting'
-                ? 'Asking Money Monitor to show an approval request…'
-                : 'Calling the Mac health endpoint over private HTTPS…';
+                ? t('askingMoneyMonitorToShowAnApprovalRequest')
+                : t('callingTheMacHealthEndpointOverPrivateHTTPS');
 
   return (
     <View
@@ -249,7 +250,7 @@ function ScanResult({
           ]}
         >
           <Text style={[styles.againLabel, { color: colors.accent }]}>
-            {connected ? 'View Home' : 'Scan another code'}
+            {connected ? t('viewHome') : t('scanAnotherCode')}
           </Text>
         </Pressable>
       ) : null}

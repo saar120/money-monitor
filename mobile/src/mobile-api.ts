@@ -1,3 +1,6 @@
+import { t, type MessageKey } from './translations.ts';
+import { currentLanguage } from './locale-state.ts';
+import { currentLocale } from './locale-state.ts';
 import type { HomeData, Transaction } from './fixtures';
 import type { PairingQrPayload } from './pairing/parse-pairing-qr';
 import type { PairingCredential } from './security/pairing-credential-store';
@@ -49,24 +52,35 @@ const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 function object(value: unknown, label: string): JsonObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`The Mac returned invalid ${label} data.`);
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidDataGeneric') : t('invalidData', { field: label }),
+    );
   }
   return value as JsonObject;
 }
 
 function text(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !value) throw new Error(`The Mac returned invalid ${label}.`);
+  if (typeof value !== 'string' || !value)
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
   return value;
 }
 
 function boolean(value: unknown, label: string): boolean {
-  if (typeof value !== 'boolean') throw new Error(`The Mac returned invalid ${label}.`);
+  if (typeof value !== 'boolean')
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
   return value;
 }
 
 function date(value: unknown, label: string): string {
   const result = text(value, label);
-  if (!FINANCIAL_DATE.test(result)) throw new Error(`The Mac returned invalid ${label}.`);
+  if (!FINANCIAL_DATE.test(result))
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
   return result;
 }
 
@@ -74,18 +88,46 @@ function money(value: unknown): { value: number; currencyCode: string } {
   const candidate = object(value, 'money');
   const decimal = text(candidate.value, 'money amount');
   const parsed = Number(decimal);
-  if (!Number.isFinite(parsed)) throw new Error('The Mac returned an invalid money amount.');
+  if (!Number.isFinite(parsed)) throw new Error(t('theMacReturnedAnInvalidMoneyAmount'));
   return { value: parsed, currencyCode: text(candidate.currencyCode, 'currency') };
 }
 
 function apiError(body: unknown, status: number): Error {
   try {
     const error = object(object(body, 'error response').error, 'error');
-    return new Error(text(error.message, 'error message'));
+    const message = text(error.message, 'error message');
+    if (currentLanguage() !== 'he') return new Error(message);
+    const key = typeof error.code === 'string' ? MOBILE_ERROR_MESSAGES[error.code] : undefined;
+    return new Error(
+      key ? t(key) : t('macRequestFailed', { code: status }),
+    );
   } catch {
-    return new Error(`The Mac request failed (${status}).`);
+    return new Error(t('macRequestFailed', { code: status }));
   }
 }
+
+const MOBILE_ERROR_MESSAGES: Record<string, MessageKey> = {
+  invalid_request: 'mobileErrorInvalidRequest',
+  validation_error: 'mobileErrorValidation',
+  authentication_required: 'mobileErrorAuthenticationRequired',
+  authentication_invalid: 'mobileErrorAuthenticationInvalid',
+  authentication_expired: 'mobileErrorAuthenticationExpired',
+  authentication_revoked: 'mobileErrorAuthenticationRevoked',
+  forbidden: 'mobileErrorForbidden',
+  capability_required: 'mobileErrorCapabilityRequired',
+  upgrade_required: 'mobileErrorUpgradeRequired',
+  pairing_invalid: 'mobileErrorPairingInvalid',
+  pairing_rejected: 'mobileErrorPairingRejected',
+  pairing_approval_required: 'mobileErrorPairingApprovalRequired',
+  pairing_replayed: 'mobileErrorPairingReplayed',
+  pairing_exchange_in_progress: 'mobileErrorPairingInProgress',
+  pairing_expired: 'mobileErrorPairingExpired',
+  route_not_found: 'mobileErrorRouteNotFound',
+  transaction_not_found: 'mobileErrorTransactionNotFound',
+  payload_too_large: 'mobileErrorPayloadTooLarge',
+  rate_limited: 'mobileErrorRateLimited',
+  internal_server_error: 'mobileErrorInternal',
+};
 
 async function requestJson(
   url: string,
@@ -104,7 +146,7 @@ async function requestJson(
     return body;
   } catch (error) {
     if (controller.signal.aborted && !externalSignal?.aborted) {
-      throw new Error('The Mac did not respond in time.', { cause: error });
+      throw new Error(t('theMacDidNotRespondInTime'), { cause: error });
     }
     throw error;
   } finally {
@@ -128,7 +170,7 @@ function verifyServer(root: JsonObject, credential: PairingCredential): void {
   const meta = object(root.meta, 'response metadata');
   const server = object(meta.server, 'server identity');
   if (text(server.id, 'server identity') !== credential.serverId) {
-    throw new Error('The responding Mac does not match the paired Mac.');
+    throw new Error(t('theRespondingMacDoesNotMatchThePairedMac'));
   }
 }
 
@@ -137,10 +179,10 @@ function freshnessDetail(
   lastSuccessfulSyncAt: unknown,
   generatedAt: string,
 ): { detail: string; state: 'fresh' | 'aging' | 'stale' } {
-  if (status === 'never_synced') return { detail: 'Never synced', state: 'stale' };
-  if (status === 'error') return { detail: 'Connection needs attention', state: 'stale' };
+  if (status === 'never_synced') return { detail: t('neverSynced'), state: 'stale' };
+  if (status === 'error') return { detail: t('connectionNeedsAttention'), state: 'stale' };
   if (typeof lastSuccessfulSyncAt !== 'string')
-    return { detail: 'Sync time unavailable', state: 'stale' };
+    return { detail: t('syncTimeUnavailable'), state: 'stale' };
 
   const ageMinutes = Math.max(
     0,
@@ -148,12 +190,12 @@ function freshnessDetail(
   );
   const detail =
     ageMinutes < 2
-      ? 'Updated just now'
+      ? t('updatedJustNow')
       : ageMinutes < 60
-        ? `Updated ${ageMinutes} min ago`
+        ? t('updatedMinutes', { count: ageMinutes })
         : ageMinutes < 1_440
-          ? `Updated ${Math.round(ageMinutes / 60)} hr ago`
-          : `Last updated ${Math.round(ageMinutes / 1_440)} days ago`;
+          ? t('updatedHours', { count: Math.round(ageMinutes / 60) })
+          : t('updatedDays', { count: Math.round(ageMinutes / 1_440) });
   return { detail, state: status === 'fresh' ? (ageMinutes < 180 ? 'fresh' : 'aging') : 'stale' };
 }
 
@@ -201,24 +243,24 @@ export async function fetchHomeData(
     }),
   );
   const statusLabels: Record<string, string> = {
-    on_track: 'On track',
-    watch: 'Watch spending',
-    over_budget: 'Over budget',
-    unavailable: 'No single budget',
-    unknown: 'Budget unavailable',
+    on_track: t('onTrack'),
+    watch: t('watchSpending'),
+    over_budget: t('overBudget'),
+    unavailable: t('noSingleBudget'),
+    unknown: t('budgetUnavailable'),
   };
 
   return {
     currentDate: date(period.endDate, 'overview end date'),
     monthKey: text(period.month, 'overview month'),
-    month: new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
+    month: new Intl.DateTimeFormat(currentLocale(), { month: 'long', timeZone: 'UTC' }).format(
       new Date(`${text(period.month, 'overview month')}-01T12:00:00Z`),
     ),
     availableMonths: (Array.isArray(overview.availableMonths) ? overview.availableMonths : []).map(
       (value) => {
         const candidate = text(value, 'available month');
         if (!/^\d{4}-\d{2}$/.test(candidate))
-          throw new Error('The Mac returned an invalid available month.');
+          throw new Error(t('theMacReturnedAnInvalidAvailableMonth'));
         return candidate;
       },
     ),
@@ -233,9 +275,9 @@ export async function fetchHomeData(
     available: primaryBudget ? money(primaryBudget.remaining).value : null,
     budget: primaryBudget ? money(primaryBudget.limit).value : null,
     budgetStatus: primaryBudget
-      ? (statusLabels[text(primaryBudget.status, 'budget status')] ?? 'Budget unavailable')
-      : 'No budget',
-    budgetNote: primaryBudget ? 'Calculated on your Mac' : 'Manage budgets on your Mac',
+      ? (statusLabels[text(primaryBudget.status, 'budget status')] ?? t('budgetUnavailable'))
+      : t('noBudget'),
+    budgetNote: primaryBudget ? t('calculatedOnYourMac') : t('manageBudgetsOnYourMac'),
     netWorth: netWorth.value,
     netWorthChange: overviewNetWorth.change === null ? null : money(overviewNetWorth.change).value,
     assets: overviewNetWorth.assets === null ? null : money(overviewNetWorth.assets).value,
@@ -327,7 +369,7 @@ export async function fetchExploreMonth(
   month: string,
   signal?: AbortSignal,
 ): Promise<ExploreMonth> {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid overview month.');
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(t('invalidOverviewMonth'));
   const value = await authorizedGet(
     credential,
     `/api/mobile/v1/overview?month=${encodeURIComponent(month)}`,
@@ -438,7 +480,7 @@ function mapTransaction(value: unknown): Transaction {
     merchant: text(item.displayName, 'transaction name'),
     amount: signedAmount,
     currencyCode: amount.currencyCode,
-    category: category ? text(category.label, 'transaction category') : 'Uncategorized',
+    category: category ? text(category.label, 'transaction category') : t('uncategorized'),
     accountId: text(account.id, 'transaction account ID'),
     account: `${text(account.displayName, 'account name')} · ${text(account.identifierMask, 'account mask').replace(/^(?:••••|\*{4})\s*/, '')}`,
     pending: status === 'pending',
@@ -481,14 +523,14 @@ export async function fetchTransactionPage(
   verifyServer(root, credential);
   const data = object(root.data, 'transactions');
   const page = object(data.page, 'transaction page');
-  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid transactions.');
+  if (!Array.isArray(data.transactions)) throw new Error(t('theMacReturnedInvalidTransactions'));
   const hasMore = boolean(page.hasMore, 'transaction page');
   const nextCursor =
     page.nextCursor === null || page.nextCursor === undefined
       ? null
       : text(page.nextCursor, 'transaction cursor');
   if (hasMore !== (nextCursor !== null))
-    throw new Error('The Mac returned invalid transaction paging data.');
+    throw new Error(t('theMacReturnedInvalidTransactionPagingData'));
   return {
     financialDate: date(data.financialDate, 'financial date'),
     transactions: data.transactions.map((item) => mapTransaction(item)),
@@ -499,7 +541,7 @@ export async function fetchTransactionPage(
 
 function categoryNamesOrLegacy(value: unknown): string[] | null {
   if (value === undefined) return null;
-  if (!Array.isArray(value)) throw new Error('The Mac returned invalid budget categories.');
+  if (!Array.isArray(value)) throw new Error(t('theMacReturnedInvalidBudgetCategories'));
   return value.map((category) => text(category, 'budget category'));
 }
 
@@ -520,7 +562,7 @@ export async function fetchTransactions(
       signal,
     );
     if (page.nextCursor && seenCursors.has(page.nextCursor))
-      throw new Error('The Mac returned repeated transaction paging data.');
+      throw new Error(t('theMacReturnedRepeatedTransactionPagingData'));
     if (page.nextCursor) seenCursors.add(page.nextCursor);
     financialDate = page.financialDate;
     transactions.push(...page.transactions);
@@ -555,7 +597,7 @@ export async function fetchReviewOptions(credential: PairingCredential, signal?:
   verifyServer(root, credential);
   const data = object(root.data, 'review options');
   if (!Array.isArray(data.categories) || !Array.isArray(data.owners))
-    throw new Error('The Mac returned invalid review options.');
+    throw new Error(t('theMacReturnedInvalidReviewOptions'));
   return {
     categories: data.categories.map((value) => text(value, 'category')),
     owners: data.owners.map((value) => text(value, 'owner')),
@@ -608,10 +650,10 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
     };
     const abort = () => {
       clearTimeout(timeout);
-      reject(new Error('Pairing was cancelled.'));
+      reject(new Error(t('pairingWasCancelled')));
     };
     if (signal?.aborted) {
-      reject(new Error('Pairing was cancelled.'));
+      reject(new Error(t('pairingWasCancelled')));
       return;
     }
     const timeout = setTimeout(finish, ms);
@@ -627,7 +669,7 @@ export async function completePairing(
   pollDelayMs?: number,
 ): Promise<PairingCredential> {
   if (Date.parse(pairing.expiresAt) <= Date.now()) {
-    throw new Error('This pairing code has expired. Create a new one on your Mac.');
+    throw new Error(t('thisPairingCodeHasExpiredCreateANewOneOnYourMac'));
   }
   onProgress('requesting');
   const startRoot = object(
@@ -653,7 +695,7 @@ export async function completePairing(
 
   while (true) {
     if (Date.parse(pairing.expiresAt) <= Date.now()) {
-      throw new Error('Pairing expired before it was approved.');
+      throw new Error(t('pairingExpiredBeforeItWasApproved'));
     }
     await wait(pollDelayMs ?? serverDelay, signal);
     const statusRoot = object(
@@ -667,8 +709,7 @@ export async function completePairing(
     );
     const status = text(object(statusRoot.data, 'pairing status').status, 'pairing status');
     if (status === 'approved') break;
-    if (status !== 'pending_approval')
-      throw new Error('The Mac returned an invalid pairing state.');
+    if (status !== 'pending_approval') throw new Error(t('theMacReturnedAnInvalidPairingState'));
   }
 
   onProgress('exchanging');
@@ -682,9 +723,9 @@ export async function completePairing(
     'pairing exchange',
   );
   const exchange = object(exchangeRoot.data, 'pairing exchange');
-  if (exchange.status !== 'claimed') throw new Error('The Mac did not issue a pairing credential.');
+  if (exchange.status !== 'claimed') throw new Error(t('theMacDidNotIssueAPairingCredential'));
   const credential = object(exchange.credential, 'pairing credential');
   const token = text(credential.token, 'pairing credential');
-  if (!TOKEN.test(token)) throw new Error('The Mac returned an invalid pairing credential.');
+  if (!TOKEN.test(token)) throw new Error(t('theMacReturnedAnInvalidPairingCredential'));
   return { serverId: pairing.serverId, baseURL: pairing.baseURL, token };
 }

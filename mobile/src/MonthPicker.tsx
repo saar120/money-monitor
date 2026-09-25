@@ -1,11 +1,14 @@
+import { currentLocale } from './locale-state';
+import { t, useLanguage } from './localization';
+import { Text } from './LocalizedText';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { SymbolView } from 'expo-symbols';
 import { useMemo } from 'react';
-import { Platform, Pressable, StyleSheet, Text, View } from 'react-native';
+import { Platform, Pressable, StyleSheet, View } from 'react-native';
 import { useAppColors } from './theme';
 
 export function formatMonthLabel(month: string, short = false) {
-  return new Intl.DateTimeFormat('en', {
+  return new Intl.DateTimeFormat(currentLocale(), {
     month: short ? 'short' : 'long',
     year: 'numeric',
     timeZone: 'UTC',
@@ -99,11 +102,15 @@ function MonthButton({
   testID?: string;
 }) {
   const colors = useAppColors();
-  const label = direction === 'left' ? 'Previous' : 'Next';
+  const { language } = useLanguage();
   return (
     <Pressable
       accessibilityLabel={
-        month ? `${label} month, ${formatMonthLabel(month)}` : `${label} month unavailable`
+        month
+          ? t(direction === 'left' ? 'previousMonthLabel' : 'nextMonthLabel', {
+              month: formatMonthLabel(month),
+            })
+          : t(direction === 'left' ? 'previousMonthUnavailable' : 'nextMonthUnavailable')
       }
       accessibilityRole="button"
       accessibilityState={{ disabled: !month }}
@@ -116,7 +123,15 @@ function MonthButton({
       testID={testID}
     >
       <SymbolView
-        name={direction === 'left' ? 'chevron.left' : 'chevron.right'}
+        name={
+          direction === 'left'
+            ? language === 'he'
+              ? 'chevron.right'
+              : 'chevron.left'
+            : language === 'he'
+              ? 'chevron.left'
+              : 'chevron.right'
+        }
         size={13}
         tintColor={colors.text}
       />

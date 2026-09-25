@@ -1,3 +1,5 @@
+import { t, useLanguage } from './localization';
+import { Text } from './LocalizedText';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
 import { useCallback, useEffect, useMemo, useState } from 'react';
 import { Gesture, GestureDetector } from 'react-native-gesture-handler';
@@ -9,7 +11,6 @@ import {
   Platform,
   Pressable,
   StyleSheet,
-  Text,
   TextInput,
   useWindowDimensions,
   View,
@@ -56,7 +57,7 @@ export function CategoryPickerSheet({
   onClose,
   onSelect,
   selected,
-  title = 'Choose category',
+  title = t('chooseCategory'),
   visible,
 }: {
   categories: string[];
@@ -67,6 +68,7 @@ export function CategoryPickerSheet({
   visible: boolean;
 }) {
   const colors = useAppColors();
+  const { language } = useLanguage();
   const insets = useSafeAreaInsets();
   const { height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
@@ -185,12 +187,12 @@ export function CategoryPickerSheet({
           </GestureDetector>
           <View style={styles.header}>
             <Pressable accessibilityRole="button" onPress={close} style={styles.headerButton}>
-              <Text style={[styles.cancel, { color: colors.accent }]}>Cancel</Text>
+              <Text style={[styles.cancel, { color: colors.accent }]}>{t('cancel')}</Text>
             </Pressable>
             <View style={styles.heading}>
               <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
               <Text style={[styles.count, { color: colors.secondary }]}>
-                {categories.length} categories
+                {t('categoryCount', { count: categories.length })}
               </Text>
             </View>
             <View style={styles.headerButton} />
@@ -211,16 +213,25 @@ export function CategoryPickerSheet({
               clearButtonMode="while-editing"
               onChangeText={setQuery}
               onSubmitEditing={() => Keyboard.dismiss()}
-              placeholder="Search categories"
+              placeholder={t('searchCategories')}
               placeholderTextColor={colors.tertiary}
               returnKeyType="done"
-              style={[styles.searchInput, { color: colors.text }]}
+              style={[
+                styles.searchInput,
+                {
+                  color: colors.text,
+                  textAlign: language === 'he' ? 'right' : 'left',
+                  writingDirection: language === 'he' ? 'rtl' : 'ltr',
+                },
+              ]}
               testID="category-search"
               value={query}
             />
           </View>
           <Text style={[styles.listLabel, { color: colors.secondary }]}>
-            {query.trim() ? `${visibleCategories.length} RESULTS` : 'ALL CATEGORIES'}
+            {query.trim()
+              ? t('resultsCount', { count: visibleCategories.length })
+              : t('aLLCATEGORIES')}
           </Text>
           <FlatList
             columnWrapperStyle={styles.columns}
@@ -275,10 +286,10 @@ export function CategoryPickerSheet({
               <View style={styles.empty}>
                 <SymbolView name="magnifyingglass" size={26} tintColor={colors.secondary} />
                 <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  No matching category
+                  {t('noMatchingCategory')}
                 </Text>
                 <Text style={[styles.emptyBody, { color: colors.secondary }]}>
-                  Try a shorter search.
+                  {t('tryAShorterSearch')}
                 </Text>
               </View>
             }

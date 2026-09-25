@@ -7,7 +7,28 @@
     "orientation": "portrait",
     "icon": "./assets/icon.png",
     "userInterfaceStyle": "automatic",
+    "locales": {
+      "en": {
+        "ios": {
+          "CFBundleDisplayName": "Money Monitor",
+          "NSCameraUsageDescription": "Allow Money Monitor to scan the pairing code shown on your Mac.",
+          "NSFaceIDUsageDescription": "Allow Money Monitor to protect your financial information with Face ID."
+        }
+      },
+      "he": {
+        "ios": {
+          "CFBundleDisplayName": "Money Monitor",
+          "NSCameraUsageDescription": "אפשרו ל-Money Monitor לסרוק את קוד הצימוד שמוצג ב-Mac.",
+          "NSFaceIDUsageDescription": "אפשרו ל-Money Monitor להגן על המידע הכספי שלכם באמצעות Face ID."
+        }
+      }
+    },
     "ios": {
+      "infoPlist": {
+        "CFBundleLocalizations": ["en", "he"],
+        "CFBundleDevelopmentRegion": "en",
+        "CFBundleAllowMixedLocalizations": true
+      },
       "icon": {
         "light": "./assets/icon.png",
         "dark": "./assets/icon-dark.png"
@@ -20,6 +41,7 @@
     },
     "plugins": [
       "expo-router",
+      ["expo-localization", { "supportedLocales": { "ios": ["en", "he"] } }],
       [
         "expo-local-authentication",
         {

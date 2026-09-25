@@ -1,6 +1,8 @@
+import { t } from './localization';
+import { Text } from './LocalizedText';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { ActivityIndicator, Pressable, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, StyleSheet, View } from 'react-native';
 import { useMoneyData } from './MoneyData';
 import { useAppColors } from './theme';
 
@@ -29,17 +31,17 @@ export function ConnectionState() {
       )}
       <Text style={[styles.title, { color: colors.text }]}>
         {loading
-          ? 'Loading from your Mac'
+          ? t('loadingFromYourMac')
           : unpaired
-            ? 'Connect your Mac'
-            : 'Couldn’t load your finances'}
+            ? t('connectYourMac')
+            : t('couldnTLoadYourFinances')}
       </Text>
       <Text style={[styles.body, { color: colors.secondary }]}>
         {loading
-          ? 'Money Monitor is reading the latest private snapshot.'
+          ? t('moneyMonitorIsReadingTheLatestPrivateSnapshot')
           : unpaired
-            ? 'Scan the pairing code in Money Monitor settings. Your data and calculations stay on the Mac.'
-            : (error ?? 'Check that Money Monitor and Tailscale are running on your Mac.')}
+            ? t('scanThePairingCodeInMoneyMonitorSettingsYourDataAndCalculationsStayOnTheMac')
+            : (error ?? t('checkThatMoneyMonitorAndTailscaleAreRunningOnYourMac'))}
       </Text>
       {!loading ? (
         <View style={styles.actions}>
@@ -51,7 +53,9 @@ export function ConnectionState() {
               { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
             ]}
           >
-            <Text style={styles.primaryLabel}>{unpaired ? 'Scan pairing code' : 'Pair again'}</Text>
+            <Text style={styles.primaryLabel}>
+              {unpaired ? t('scanPairingCode') : t('pairAgain')}
+            </Text>
           </Pressable>
           {!unpaired ? (
             <Pressable
@@ -59,9 +63,16 @@ export function ConnectionState() {
               onPress={() => void reload()}
               style={styles.secondary}
             >
-              <Text style={[styles.secondaryLabel, { color: colors.accent }]}>Try again</Text>
+              <Text style={[styles.secondaryLabel, { color: colors.accent }]}>{t('tryAgain')}</Text>
             </Pressable>
           ) : null}
+          <Pressable
+            accessibilityRole="button"
+            onPress={() => router.push('/settings')}
+            style={styles.secondary}
+          >
+            <Text style={[styles.secondaryLabel, { color: colors.accent }]}>{t('settings')}</Text>
+          </Pressable>
         </View>
       ) : null}
     </View>

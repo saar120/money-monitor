@@ -5,10 +5,14 @@ import {
   completePairing,
   fetchExploreMonth,
   fetchHomeData,
+  fetchReviewOptions,
   fetchTransactionPage,
   fetchTransactions,
+  updateTransaction,
   type PairingProgress,
 } from './mobile-api.ts';
+import { setActiveLanguage } from './locale-state.ts';
+import { ownerLabel, t } from './translations.ts';
 
 test('maps the server canonical bootstrap fixture into the live Home model', async () => {
   const fixture = readFileSync(
@@ -316,5 +320,78 @@ test('loads one transaction page for paginated Activity', async () => {
     assert.equal(page.nextCursor, 'cursor_v1_next');
   } finally {
     globalThis.fetch = originalFetch;
+  }
+});
+
+test('Hebrew owner choices keep canonical values through filtering and review saves', async () => {
+  const credential = {
+    serverId: '11111111-1111-4111-8111-111111111111',
+    baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+    token: 'T'.repeat(43),
+  };
+  const transaction = {
+    id: 'transaction_1',
+    occurredOn: '2026-09-08',
+    displayName: 'Store',
+    amount: { value: '12.00', currencyCode: 'ILS' },
+    direction: 'debit',
+    status: 'posted',
+    category: { id: 'category_1', label: 'Groceries' },
+    account: { id: 'account_1', displayName: 'Checking', identifierMask: '•••• 1234' },
+    owner: { kind: 'shared', displayName: null },
+    needsReview: false,
+    excludedFromReports: false,
+  };
+  const updates: unknown[] = [];
+  const originalFetch = globalThis.fetch;
+  globalThis.fetch = async (input, init) => {
+    const url = String(input);
+    if (init?.method === 'PATCH') {
+      updates.push(JSON.parse(String(init.body)));
+      return Response.json({ data: { transaction }, meta: { server: { id: credential.serverId } } });
+    }
+    const data = url.endsWith('/review-options')
+      ? { categories: ['Groceries'], owners: ['Shared', 'Unassigned', 'Saar'] }
+      : { financialDate: '2026-09-08', transactions: [transaction], page: { hasMore: false } };
+    return Response.json({ data, meta: { server: { id: credential.serverId } } });
+  };
+
+  setActiveLanguage('he');
+  try {
+    const page = await fetchTransactionPage(credential, { filter: 'all' });
+    const options = await fetchReviewOptions(credential);
+    assert.equal(page.transactions[0]?.owner, 'Shared');
+    assert.equal(options.owners.includes(page.transactions[0]!.owner), true);
+    assert.equal(ownerLabel(page.transactions[0]!.owner), t('shared'));
+    assert.equal(ownerLabel(options.owners[1]!), t('unassigned'));
+    await updateTransaction(credential, transaction.id, { owner: options.owners[0] });
+    assert.deepEqual(updates, [{ owner: 'Shared' }]);
+  } finally {
+    globalThis.fetch = originalFetch;
+    setActiveLanguage('en');
+  }
+});
+
+test('Hebrew Mac errors identify the failed action instead of claiming data could not load', async () => {
+  const originalFetch = globalThis.fetch;
+  const credential = {
+    serverId: '11111111-1111-4111-8111-111111111111',
+    baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+    token: 'T'.repeat(43),
+  };
+  globalThis.fetch = async () =>
+    Response.json(
+      { error: { code: 'validation_error', message: 'The request contains invalid data.' } },
+      { status: 400 },
+    );
+  setActiveLanguage('he');
+  try {
+    await assert.rejects(
+      updateTransaction(credential, 'transaction_1', { owner: 'Shared' }),
+      (error: Error) => error.message === t('mobileErrorValidation'),
+    );
+  } finally {
+    globalThis.fetch = originalFetch;
+    setActiveLanguage('en');
   }
 });

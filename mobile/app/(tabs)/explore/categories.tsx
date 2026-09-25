@@ -1,12 +1,14 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t } from '@/localization';
+import { formatMonthShort } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
 import {
   ActivityIndicator,
   Pressable,
   ScrollView,
   StyleSheet,
-  Text,
   useWindowDimensions,
   View,
 } from 'react-native';
@@ -43,7 +45,7 @@ export default function CategoriesScreen() {
         <View style={styles.loading}>
           <ActivityIndicator color={colors.accent} />
           <Text style={[styles.loadingText, { color: colors.secondary }]}>
-            {loading ? 'Loading category history…' : 'No category history available.'}
+            {loading ? t('loadingCategoryHistory') : t('noCategoryHistoryAvailable')}
           </Text>
         </View>
       )}
@@ -68,8 +70,11 @@ function CategoryList({
   return (
     <>
       <View style={styles.contextRow}>
-        <Text maxFontSizeMultiplier={1.3} style={[styles.contextLabel, { color: colors.secondary }]}>
-          {categories.length} active categories
+        <Text
+          maxFontSizeMultiplier={1.3}
+          style={[styles.contextLabel, { color: colors.secondary }]}
+        >
+          {t('activeCategoryCount', { count: categories.length })}
         </Text>
         <MonthPicker
           month={snapshot.month}
@@ -88,7 +93,10 @@ function CategoryList({
             );
           return (
             <Pressable
-              accessibilityHint={`Opens ${category.name} details for ${snapshot.label}`}
+              accessibilityHint={t('opensDetailsForMonth', {
+                name: category.name,
+                month: formatMonthShort(snapshot.month),
+              })}
               accessibilityRole="button"
               key={category.name}
               onPress={() =>
@@ -112,7 +120,7 @@ function CategoryList({
                   allowFontScaling={false}
                   style={[styles.delta, { color: delta > 0 ? colors.warning : colors.positive }]}
                 >
-                  {delta === 0 ? 'No change' : formatMoney(delta, homeCurrency)}
+                  {delta === 0 ? t('noChange') : formatMoney(delta, homeCurrency)}
                 </Text>
               </View>
               {fontScale < 1.5 ? <Sparkline color={category.color} values={values} /> : null}
@@ -124,10 +132,10 @@ function CategoryList({
                   maxFontSizeMultiplier={1.2}
                   style={[styles.previous, { color: colors.secondary }]}
                 >
-                  vs. last month
+                  {t('vsLastMonth')}
                 </Text>
               </View>
-              <SymbolView name="chevron.right" size={11} tintColor={colors.tertiary} />
+              <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
             </Pressable>
           );
         })}
@@ -138,7 +146,12 @@ function CategoryList({
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  contextRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', gap: 12 },
+  contextRow: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'space-between',
+    gap: 12,
+  },
   contextLabel: { flex: 1, fontSize: 13, lineHeight: 18 },
   list: { marginTop: 18 },
   row: {

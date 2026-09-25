@@ -1,26 +1,44 @@
-const wholeShekels = new Intl.NumberFormat('en-IL', {
-  maximumFractionDigits: 0,
-});
+import { currentLanguage, currentLocale } from './locale-state.ts';
+import { t } from './translations.ts';
 
-const preciseShekels = new Intl.NumberFormat('en-IL', {
-  minimumFractionDigits: 2,
-  maximumFractionDigits: 2,
-});
+function hebrewCurrency(value: number, currencyCode: string, precise: boolean, signed: boolean) {
+  return new Intl.NumberFormat('he-IL', {
+    style: 'currency',
+    currency: currencyCode,
+    currencyDisplay: 'narrowSymbol',
+    minimumFractionDigits: precise ? 2 : 0,
+    maximumFractionDigits: precise ? 2 : 0,
+    signDisplay: signed ? 'exceptZero' : 'never',
+  }).format(value);
+}
+
+function shekelAmount(value: number, precise: boolean) {
+  if (currentLanguage() === 'he') {
+    return hebrewCurrency(Math.abs(value), 'ILS', precise, false);
+  }
+  const number = new Intl.NumberFormat('en-IL', {
+    minimumFractionDigits: precise ? 2 : 0,
+    maximumFractionDigits: precise ? 2 : 0,
+  }).format(Math.abs(value));
+  return `₪${number}`;
+}
 
 export function formatShekels(value: number, precise = false): string {
-  const absolute = (precise ? preciseShekels : wholeShekels).format(Math.abs(value));
-  if (value > 0) return `+₪${absolute}`;
-  if (value < 0) return `−₪${absolute}`;
-  return `₪${absolute}`;
+  if (currentLanguage() === 'he') return hebrewCurrency(value, 'ILS', precise, true);
+  const absolute = shekelAmount(value, precise);
+  if (value > 0) return `+${absolute}`;
+  if (value < 0) return `−${absolute}`;
+  return absolute;
 }
 
 export function formatUnsignedShekels(value: number): string {
-  return `₪${wholeShekels.format(Math.abs(value))}`;
+  return shekelAmount(value, false);
 }
 
 export function formatMoney(value: number, currencyCode = 'ILS', precise = false): string {
   if (currencyCode === 'ILS') return formatShekels(value, precise);
-  const formatted = new Intl.NumberFormat('en', {
+  if (currentLanguage() === 'he') return hebrewCurrency(value, currencyCode, precise, true);
+  const formatted = new Intl.NumberFormat(currentLocale(), {
     style: 'currency',
     currency: currencyCode,
     currencyDisplay: 'narrowSymbol',
@@ -33,6 +51,7 @@ export function formatMoney(value: number, currencyCode = 'ILS', precise = false
 }
 
 export function formatUnsignedMoney(value: number, currencyCode = 'ILS'): string {
+  if (currentLanguage() === 'he') return hebrewCurrency(Math.abs(value), currencyCode, false, false);
   const formatted = formatMoney(Math.abs(value), currencyCode);
   return formatted.startsWith('+') ? formatted.slice(1) : formatted;
 }
@@ -40,13 +59,22 @@ export function formatUnsignedMoney(value: number, currencyCode = 'ILS'): string
 export function spendingTotal(value: number, currencyCode = 'ILS') {
   return {
     amount: formatUnsignedMoney(value, currencyCode),
-    label: value > 0 ? 'Net spent' : value < 0 ? 'Net received' : 'No net spending',
+    label: value > 0 ? t('netSpent') : value < 0 ? t('netReceived') : t('noNetSpending'),
   } as const;
 }
 
 export function formatSpendingChange(value: number, currencyCode = 'ILS'): string {
-  if (value === 0) return 'No change';
-  return `${formatUnsignedMoney(value, currencyCode)} ${value > 0 ? 'more spent' : 'less spent'}`;
+  if (value === 0) return t('noChange');
+  return t(value > 0 ? 'amountMoreSpent' : 'amountLessSpent', {
+    amount: formatUnsignedMoney(value, currencyCode),
+  });
+}
+
+export function formatSpendingComparison(value: number, currencyCode = 'ILS'): string {
+  if (value === 0) return t('unchangedFromLastMonth');
+  return t(value > 0 ? 'moreSpentThanLastMonth' : 'lessSpentThanLastMonth', {
+    amount: formatUnsignedMoney(value, currencyCode),
+  });
 }
 
 // Both inputs are Mac-calculated, posted/included overview aggregates in the same currency.

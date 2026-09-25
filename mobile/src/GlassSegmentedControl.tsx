@@ -1,12 +1,14 @@
+import { Text } from './LocalizedText';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, Text, useColorScheme } from 'react-native';
+import { Pressable, StyleSheet, useColorScheme } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
   withSpring,
 } from 'react-native-reanimated';
+import { useLanguage } from './localization';
 import { useAppColors } from './theme';
 
 const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
@@ -25,6 +27,7 @@ export function GlassSegmentedControl<T extends string>({
   value: T;
 }) {
   const colors = useAppColors();
+  const { language } = useLanguage();
   const colorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
@@ -42,7 +45,7 @@ export function GlassSegmentedControl<T extends string>({
   }, [index, reduceMotion, selectedIndex]);
 
   const lensStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: index.value * lensWidth }],
+    transform: [{ translateX: index.value * lensWidth * (language === 'he' ? -1 : 1) }],
   }));
 
   return (
@@ -112,7 +115,7 @@ const styles = StyleSheet.create({
     position: 'absolute',
     top: 4,
     bottom: 4,
-    left: 4,
+    start: 4,
     borderWidth: StyleSheet.hairlineWidth,
     borderRadius: 10,
   },

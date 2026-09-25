@@ -34,6 +34,13 @@ Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remai
 - Reserve Liquid Glass for navigation and compact selection controls—not ordinary content cards.
 - Preserve server-defined inclusion, date, owner, pending, transfer, and currency semantics.
 
+## Language
+
+Open the gear on Home (or **Settings** on the connection screen) to choose **System default**, **English**, or **עברית**. The choice is saved on the iPhone. Restart the app after switching between left-to-right and right-to-left navigation so the native tab bar and navigation controls follow the new direction. iOS permission dialogs follow the app language selected in iPhone Settings.
+
+Interface copy lives in `src/translations.ts`. Add an English and Hebrew value for each new message key, then call `t(key)` at the point of use. Pass variable values and counts as options so the two languages can use their own word order and plural forms. System language comes from `expo-localization`.
+
+
 ## Deterministic E2E
 
 Install [Maestro](https://docs.maestro.dev/getting-started/installing-maestro), then run:
@@ -44,6 +51,8 @@ npm run e2e:ios
 ```
 
 The command prebuilds iOS, creates a Release simulator build, then runs the Maestro flows in `e2e/flows` sequentially so their launch fixtures cannot share simulator state. Tests do not require Money Monitor on the Mac, Tailscale, a network connection, or credentials.
+
+`e2e/flows/11-hebrew-language.yaml` changes the app language to Hebrew, restarts it to apply native RTL navigation, and checks the Activity and Explore routes in demo mode.
 
 Maestro selects a scenario with the iOS launch argument `MM_FIXTURE_SCENARIO`. The app reads it through React Native's native Settings API; normal production launches use the paired Mac, and no fixture picker is shown. Add a typed scenario beside the existing values in `src/fixtures.ts`, then launch it from a flow like this:
 

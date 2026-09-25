@@ -1,7 +1,10 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t } from '@/localization';
+import { currentLocale, formatMonthShort } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
@@ -72,9 +75,9 @@ function MonthlyComparison({
             setSelectedMonth(months.at(-1)!.month);
           }}
           options={[
-            { label: '3M', value: '3' },
-            { label: '6M', value: '6' },
-            { label: '1Y', value: '12' },
+            { label: t('message3M'), value: '3' },
+            { label: t('message6M'), value: '6' },
+            { label: t('message1Y'), value: '12' },
           ]}
           testID="monthly-range"
           value={range}
@@ -90,12 +93,14 @@ function MonthlyComparison({
             {formatUnsignedMoney(selected.spending, selected.currencyCode)}
           </Text>
         </View>
-        <Text style={[styles.summaryNote, { color: colors.secondary }]}>posted spending</Text>
+        <Text style={[styles.summaryNote, { color: colors.secondary }]}>
+          {t('postedSpending2')}
+        </Text>
       </View>
 
       <View
         style={styles.chart}
-        accessibilityLabel="Monthly net category spending chart, net receipts excluded"
+        accessibilityLabel={t('monthlyNetCategorySpendingChartNetReceiptsExcluded')}
       >
         <View style={styles.axis}>
           {ticks.map((tick) => (
@@ -120,7 +125,10 @@ function MonthlyComparison({
               const selectedBar = selected.month === item.month;
               return (
                 <Pressable
-                  accessibilityLabel={`${monthTitle(item.month)}, ${formatUnsignedMoney(total, item.currencyCode)} net category spending`}
+                  accessibilityLabel={t('monthCategorySpending', {
+                    month: monthTitle(item.month),
+                    amount: formatUnsignedMoney(total, item.currencyCode),
+                  })}
                   accessibilityRole="button"
                   accessibilityState={{ selected: selectedBar }}
                   key={item.month}
@@ -159,7 +167,7 @@ function MonthlyComparison({
                       { color: selectedBar ? colors.text : colors.secondary },
                     ]}
                   >
-                    {item.label}
+                    {formatMonthShort(item.month)}
                   </Text>
                 </Pressable>
               );
@@ -168,10 +176,10 @@ function MonthlyComparison({
         </View>
       </View>
       <Text style={[styles.chartNote, { color: colors.secondary }]}>
-        Net category spending. Net receipts are excluded from the chart and listed below.
+        {t('netCategorySpendingNetReceiptsAreExcludedFromTheChartAndListedBelow')}
       </Text>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>Where it went</Text>
+      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('whereItWent')}</Text>
       <View style={[styles.categoryList, { backgroundColor: colors.surface }]}>
         {visibleCategories.map((category, index) => {
           const percent =
@@ -180,7 +188,7 @@ function MonthlyComparison({
               : 0;
           return (
             <Pressable
-              accessibilityHint={`Opens ${category.name} merchants and transactions`}
+              accessibilityHint={t('opensCategoryMerchants', { name: category.name })}
               accessibilityRole="button"
               key={category.name}
               onPress={() =>
@@ -207,7 +215,7 @@ function MonthlyComparison({
                 </Text>
                 {category.spent < 0 ? (
                   <Text style={[styles.creditLabel, { color: colors.secondary }]}>
-                    Net received
+                    {t('netReceived')}
                   </Text>
                 ) : null}
               </View>
@@ -219,7 +227,7 @@ function MonthlyComparison({
                   ? formatMoney(category.spent, selected.currencyCode)
                   : formatUnsignedMoney(category.spent, selected.currencyCode)}
               </Text>
-              <SymbolView name="chevron.right" size={10} tintColor={colors.tertiary} />
+              <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
             </Pressable>
           );
         })}
@@ -234,16 +242,18 @@ function Loading({ loading }: { loading: boolean }) {
     <View style={styles.loading}>
       {loading ? <ActivityIndicator color={colors.accent} /> : null}
       <Text style={[styles.loadingText, { color: colors.secondary }]}>
-        {loading ? 'Loading monthly comparison…' : 'No monthly data available.'}
+        {loading ? t('loadingMonthlyComparison') : t('noMonthlyDataAvailable')}
       </Text>
     </View>
   );
 }
 
 function monthTitle(month: string) {
-  return new Intl.DateTimeFormat('en', { month: 'long', year: 'numeric', timeZone: 'UTC' }).format(
-    new Date(`${month}-01T12:00:00Z`),
-  );
+  return new Intl.DateTimeFormat(currentLocale(), {
+    month: 'long',
+    year: 'numeric',
+    timeZone: 'UTC',
+  }).format(new Date(`${month}-01T12:00:00Z`));
 }
 
 const styles = StyleSheet.create({
@@ -265,7 +275,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   summaryNote: { paddingBottom: 5, fontSize: 12.5 },
-  chart: { height: 214, marginTop: 22, flexDirection: 'row', gap: 9 },
+  chart: { height: 214, marginTop: 22, direction: 'ltr', flexDirection: 'row', gap: 9 },
   axis: { width: 28, height: 168, justifyContent: 'space-between', alignItems: 'flex-end' },
   axisLabel: { fontSize: 9.5, lineHeight: 11, fontVariant: ['tabular-nums'] },
   plot: { flex: 1, height: 202 },
@@ -284,6 +294,7 @@ const styles = StyleSheet.create({
     right: 0,
     height: 168,
     left: 0,
+    direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 9,

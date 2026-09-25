@@ -1,7 +1,10 @@
+import { DirectionalChevron } from '@/DirectionalChevron';
+import { t } from '@/localization';
+import { currentLocale, formatMonthShort } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
-import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { MonthPicker } from '@/MonthPicker';
@@ -11,6 +14,7 @@ import {
   formatCompactNumber,
   formatMoney,
   formatSpendingChange,
+  formatSpendingComparison,
   formatUnsignedMoney,
   niceChartMaximum,
   spendingTotal,
@@ -33,7 +37,7 @@ export default function CategoryScreen() {
         <View style={[styles.loading, { backgroundColor: colors.background }]}>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           <Text style={[styles.empty, { color: colors.secondary }]}>
-            {loading ? 'Loading category history…' : 'Category history is unavailable.'}
+            {loading ? t('loadingCategoryHistory') : t('categoryHistoryIsUnavailable')}
           </Text>
         </View>
       )}
@@ -71,7 +75,7 @@ function CategoryContent({
   if (!category) {
     return (
       <View style={[styles.loading, { backgroundColor: colors.background }]}>
-        <Text style={{ color: colors.text }}>No {name} spending in this month.</Text>
+        <Text style={{ color: colors.text }}>{t('noCategorySpending', { name })}</Text>
         <View style={styles.navigatorMissing}>
           <MonthPicker
             month={snapshot.month}
@@ -150,12 +154,12 @@ function CategoryContent({
         {total.amount}
       </Text>
       <Text style={[styles.totalLabel, { color: colors.secondary }]}>
-        {percentOfSpending}% of total spending · {total.label.toLowerCase()}
+        {t('spendingShare', { percent: percentOfSpending, label: total.label.toLowerCase() })}
       </Text>
       <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
         {delta === 0
-          ? 'Unchanged from last month'
-          : `${formatSpendingChange(delta, snapshot.currencyCode)} than last month`}
+          ? t('unchangedFromLastMonth')
+          : formatSpendingComparison(delta, snapshot.currencyCode)}
       </Text>
 
       <View style={styles.rangeRow}>
@@ -163,16 +167,19 @@ function CategoryContent({
           compact
           onChange={setRange}
           options={[
-            { label: '3M', value: '3' },
-            { label: '6M', value: '6' },
-            { label: '1Y', value: '12' },
+            { label: t('message3M'), value: '3' },
+            { label: t('message6M'), value: '6' },
+            { label: t('message1Y'), value: '12' },
           ]}
           testID="category-range"
           value={range}
         />
       </View>
 
-      <View style={styles.chart} accessibilityLabel={`${name} spending trend for ${range} months`}>
+      <View
+        style={styles.chart}
+        accessibilityLabel={t('spendingTrendMonths', { name, count: range })}
+      >
         <View style={styles.chartAxis}>
           {ticks.map((tick) => (
             <Text
@@ -196,7 +203,7 @@ function CategoryContent({
               const value = history[index]!.total;
               return (
                 <Pressable
-                  accessibilityLabel={`${item.label}, ${formatUnsignedMoney(value, snapshot.currencyCode)}`}
+                  accessibilityLabel={`${formatMonthShort(item.month)}, ${formatUnsignedMoney(value, snapshot.currencyCode)}`}
                   accessibilityRole="button"
                   accessibilityState={{ selected }}
                   key={item.month}
@@ -223,7 +230,7 @@ function CategoryContent({
                       { color: selected ? colors.text : colors.secondary },
                     ]}
                   >
-                    {item.label}
+                    {formatMonthShort(item.month)}
                   </Text>
                 </Pressable>
               );
@@ -234,28 +241,28 @@ function CategoryContent({
 
       <View style={[styles.stats, { backgroundColor: colors.surfaceSoft }]}>
         <StatRow
-          label="Monthly average"
+          label={t('monthlyAverage')}
           value={formatUnsignedMoney(average, snapshot.currencyCode)}
         />
         <StatRow
-          label="Highest month"
-          value={`${formatUnsignedMoney(history[highestIndex]!.total, snapshot.currencyCode)} (${historyMonths[highestIndex]!.label})`}
+          label={t('highestMonth')}
+          value={`${formatUnsignedMoney(history[highestIndex]!.total, snapshot.currencyCode)} (${formatMonthShort(historyMonths[highestIndex]!.month)})`}
         />
         <StatRow
-          label="Lowest month"
-          value={`${formatUnsignedMoney(history[lowestIndex]!.total, snapshot.currencyCode)} (${historyMonths[lowestIndex]!.label})`}
+          label={t('lowestMonth')}
+          value={`${formatUnsignedMoney(history[lowestIndex]!.total, snapshot.currencyCode)} (${formatMonthShort(historyMonths[lowestIndex]!.month)})`}
           last
         />
       </View>
 
-      <Text style={[styles.title, { color: colors.text }]}>Top merchants</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('topMerchants')}</Text>
       {merchants.length ? (
         merchants.map((merchant) => {
           const merchantDelta = merchant.current - merchant.previous;
           const merchantTotal = spendingTotal(merchant.current, snapshot.currencyCode);
           return (
             <Pressable
-              accessibilityHint={`Opens ${merchant.name} merchant details`}
+              accessibilityHint={t('opensMerchantDetails', { name: merchant.name })}
               accessibilityRole="button"
               key={merchant.name}
               testID={`category-merchant-${merchant.name}`}
@@ -275,11 +282,9 @@ function CategoryContent({
                   {merchant.name}
                 </Text>
                 <Text style={[styles.rowMeta, { color: colors.secondary }]}>
-                  {merchantTotal.amount} {merchantTotal.label.toLowerCase()} · {merchant.count}{' '}
-                  transaction{merchant.count === 1 ? '' : 's'}
+                  {merchantTotal.amount} {merchantTotal.label.toLowerCase()} ·{' '}
+                  {t('transactionCount', { count: merchant.count })}
                 </Text>
-              </View>
-              <View style={styles.trailing}>
                 <Text
                   allowFontScaling={false}
                   style={[
@@ -289,39 +294,39 @@ function CategoryContent({
                 >
                   {formatSpendingChange(merchantDelta, snapshot.currencyCode)}
                 </Text>
-                <SymbolView name="chevron.right" size={11} tintColor={colors.tertiary} />
               </View>
+              <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
             </Pressable>
           );
         })
       ) : Math.abs(merchantRemainder) < 1 ? (
         <Text style={[styles.empty, { color: colors.secondary }]}>
-          No merchant comparison for this month.
+          {t('noMerchantComparisonForThisMonth')}
         </Text>
       ) : null}
       {Math.abs(merchantRemainder) >= 1 ? (
         <View style={[styles.row, { borderBottomColor: colors.separator }]}>
           <View style={styles.rowText}>
-            <Text style={[styles.rowTitle, { color: colors.text }]}>Other merchants</Text>
-            <Text style={[styles.rowMeta, { color: colors.secondary }]}>Combined change</Text>
+            <Text style={[styles.rowTitle, { color: colors.text }]}>{t('otherMerchants')}</Text>
+            <Text style={[styles.rowMeta, { color: colors.secondary }]}>{t('combinedChange')}</Text>
+            <Text
+              allowFontScaling={false}
+              style={[
+                styles.rowDelta,
+                { color: merchantRemainder > 0 ? colors.warning : colors.positive },
+              ]}
+            >
+              {formatSpendingChange(merchantRemainder, snapshot.currencyCode)}
+            </Text>
           </View>
-          <Text
-            allowFontScaling={false}
-            style={[
-              styles.rowDelta,
-              { color: merchantRemainder > 0 ? colors.warning : colors.positive },
-            ]}
-          >
-            {formatSpendingChange(merchantRemainder, snapshot.currencyCode)}
-          </Text>
         </View>
       ) : null}
 
-      <Text style={[styles.title, { color: colors.text }]}>Transactions</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('transactions')}</Text>
       {matching.length ? (
         matching.map((transaction) => (
           <Pressable
-            accessibilityHint="Opens transaction details"
+            accessibilityHint={t('opensTransactionDetails')}
             accessibilityRole="button"
             key={transaction.id}
             onPress={() => router.push(`/transaction/${transaction.id}`)}
@@ -332,9 +337,10 @@ function CategoryContent({
                 {transaction.merchant}
               </Text>
               <Text style={[styles.rowMeta, { color: colors.secondary }]}>
-                {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
-                  new Date(transaction.occurredAt),
-                )}{' '}
+                {new Intl.DateTimeFormat(currentLocale(), {
+                  month: 'short',
+                  day: 'numeric',
+                }).format(new Date(transaction.occurredAt))}{' '}
                 · {transaction.account}
               </Text>
             </View>
@@ -352,7 +358,7 @@ function CategoryContent({
         ))
       ) : (
         <Text style={[styles.empty, { color: colors.secondary }]}>
-          No matching transactions in this month.
+          {t('noMatchingTransactionsInThisMonth')}
         </Text>
       )}
     </ScrollView>
@@ -409,7 +415,7 @@ const styles = StyleSheet.create({
   totalLabel: { marginTop: 3, fontSize: 13, lineHeight: 18, fontWeight: '500' },
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   rangeRow: { marginTop: 22, alignItems: 'center' },
-  chart: { height: 166, marginTop: 18, flexDirection: 'row', gap: 9 },
+  chart: { height: 166, marginTop: 18, direction: 'ltr', flexDirection: 'row', gap: 9 },
   chartAxis: { width: 28, height: 142, justifyContent: 'space-between', alignItems: 'flex-end' },
   chartAxisLabel: { fontSize: 9.5, lineHeight: 11, fontVariant: ['tabular-nums'] },
   chartPlot: { flex: 1, height: 166 },
@@ -425,6 +431,7 @@ const styles = StyleSheet.create({
   chartBars: {
     flex: 1,
     paddingHorizontal: 8,
+    direction: 'ltr',
     flexDirection: 'row',
     alignItems: 'flex-end',
     gap: 8,
@@ -461,13 +468,13 @@ const styles = StyleSheet.create({
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    gap: 12,
+    paddingVertical: 11,
   },
-  rowText: { flex: 1, minWidth: 0, marginRight: 12 },
-  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
-  rowMeta: { marginTop: 3, fontSize: 12.5, lineHeight: 17, writingDirection: 'ltr' },
-  trailing: { flexDirection: 'row', alignItems: 'center', gap: 8 },
-  rowDelta: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  rowText: { flex: 1, minWidth: 0 },
+  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  rowMeta: { marginTop: 3, fontSize: 12.5, lineHeight: 17 },
+  rowDelta: { marginTop: 5, fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
   empty: { marginTop: 10, fontSize: 14, lineHeight: 20 },
   transaction: {
     minHeight: 64,

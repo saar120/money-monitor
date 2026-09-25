@@ -1,6 +1,8 @@
+import { Text } from '@/LocalizedText';
+import { t } from '@/localization';
 import { Stack } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { useMoneyData } from '@/MoneyData';
 import { useAppColors } from '@/theme';
@@ -14,16 +16,16 @@ export default function AccountsAttentionScreen() {
 
   return (
     <>
-      <Stack.Screen options={{ title: 'Accounts', headerBackTitle: 'Home' }} />
+      <Stack.Screen options={{ title: t('accounts'), headerBackTitle: t('home') }} />
       <ScrollView
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
         style={{ backgroundColor: colors.background }}
         testID="account-attention-screen"
       >
-        <Text style={[styles.title, { color: colors.text }]}>Refresh on your Mac</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('refreshOnYourMac')}</Text>
         <Text style={[styles.intro, { color: colors.secondary }]}>
-          These sources need attention before their balances are current.
+          {t('theseSourcesNeedAttentionBeforeTheirBalancesAreCurrent')}
         </Text>
         <View style={[styles.list, { backgroundColor: colors.surface }]}>
           {accounts.map((account) => (
@@ -31,11 +33,7 @@ export default function AccountsAttentionScreen() {
               key={account.account}
               style={[styles.row, { borderBottomColor: colors.separator }]}
             >
-              <SymbolView
-                name="exclamationmark.circle.fill"
-                size={18}
-                tintColor={colors.danger}
-              />
+              <SymbolView name="exclamationmark.circle.fill" size={18} tintColor={colors.danger} />
               <View style={styles.copy}>
                 <Text style={[styles.account, { color: colors.text }]}>{account.account}</Text>
                 <Text style={[styles.detail, { color: colors.secondary }]}>{account.detail}</Text>
@@ -60,7 +58,7 @@ const styles = StyleSheet.create({
     gap: 12,
     borderBottomWidth: StyleSheet.hairlineWidth,
   },
-  copy: { flex: 1, paddingVertical: 12 },
-  account: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
+  copy: { flex: 1, minWidth: 0, paddingVertical: 12 },
+  account: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
   detail: { marginTop: 3, fontSize: 13, lineHeight: 18 },
 });
