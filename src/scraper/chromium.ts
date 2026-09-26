@@ -3,10 +3,9 @@ import { join } from 'node:path';
 import { dataDir } from '../paths.js';
 
 /**
- * Chrome for Testing build that matches puppeteer-core 22.15.0
- * (the version used by israeli-bank-scrapers-core 6.7.1).
+ * Chrome for Testing build that matches puppeteer-core 25.12.0.
  */
-const CHROME_BUILD_ID = '127.0.6533.88';
+const CHROME_BUILD_ID = '154.0.8037.57';
 
 const cacheDir = join(dataDir, 'puppeteer-cache');
 

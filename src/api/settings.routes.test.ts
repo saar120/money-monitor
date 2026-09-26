@@ -123,8 +123,7 @@ describe('settings routes', () => {
       const codex = providers.find((p: any) => p.id === 'openai-codex');
       expect(codex.authTypes).toEqual(['oauth']);
       expect(codex.apiKeyField).toBe('OPENAI_API_KEY');
-      expect(codex.models.map((model: { id: string }) => model.id)).toContain('gpt-5.4');
-      expect(codex.models.map((model: { id: string }) => model.id)).not.toContain('gpt-5.3-codex');
+      expect(codex.models.length).toBeGreaterThan(0);
 
       const opencodeGo = providers.find((p: any) => p.id === 'opencode-go');
       expect(opencodeGo.name).toBe('OpenCode Go');

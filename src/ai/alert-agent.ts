@@ -1,4 +1,5 @@
 import { Agent } from '@earendil-works/pi-agent-core';
+import { streamSimple } from '@earendil-works/pi-ai/compat';
 import type { AgentEvent } from '@earendil-works/pi-agent-core';
 import { resolveApiKey } from './auth.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
@@ -57,6 +58,7 @@ export async function runAlertAgent(opts: {
       thinkingLevel: getConfiguredThinkingLevel(model.reasoning) ?? 'off',
     },
     getApiKey: resolveApiKey,
+    streamFn: streamSimple,
   });
 
   return new Promise<string | null>((resolve) => {

@@ -21,3 +21,27 @@ jobs:
       - run: npm ci
 
       - run: npm test
+
+      - run: npx vitest run --config electron/mobile-access/vitest.config.ts
+
+  mobile:
+    runs-on: ubuntu-latest
+
+    defaults:
+      run:
+        working-directory: mobile
+
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+          cache-dependency-path: mobile/package-lock.json
+
+      - run: npm ci
+
+      - run: npm run typecheck
+
+      - run: npm test

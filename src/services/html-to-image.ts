@@ -30,7 +30,7 @@ export async function renderHtmlToImage(html: string): Promise<Buffer> {
   const page = await b.newPage();
   try {
     await page.setViewport({ width: 800, height: 600 });
-    await page.setContent(html, { waitUntil: 'networkidle0' });
+    await page.setContent(html, { waitUntil: 'load' });
     const element = await page.$('#content');
     if (!element) {
       throw new Error('No #content element found in HTML template');

@@ -1,5 +1,6 @@
 import { Agent } from '@earendil-works/pi-agent-core';
 import { Type } from '@earendil-works/pi-ai';
+import { streamSimple } from '@earendil-works/pi-ai/compat';
 import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
 import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
 import { config, getConfiguredThinkingLevel } from '../config.js';
@@ -263,6 +264,7 @@ export async function* chat(
       thinkingLevel: getConfiguredThinkingLevel(model.reasoning) ?? 'off',
     },
     getApiKey: resolveApiKey,
+    streamFn: streamSimple,
   });
 
   // Queue-based bridge: subscribe() events → async generator

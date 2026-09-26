@@ -1,0 +1,63 @@
+diff --git a/node_modules/israeli-bank-scrapers-core/lib/helpers/fetch.js b/node_modules/israeli-bank-scrapers-core/lib/helpers/fetch.js
+index c211871..53d92a4 100644
+--- a/node_modules/israeli-bank-scrapers-core/lib/helpers/fetch.js
++++ b/node_modules/israeli-bank-scrapers-core/lib/helpers/fetch.js
+@@ -59,20 +59,34 @@ async function fetchGraphql(url, query, variables = {}, extraHeaders = {}) {
+   return result.data;
+ }
+ async function fetchGetWithinPage(page, url, ignoreErrors = false) {
+-  const [result, status] = await page.evaluate(async innerUrl => {
+-    let response;
++  let result, status;
++  try {
++    [result, status] = await page.evaluate(async innerUrl => {
++      let response;
++      try {
++        response = await fetch(innerUrl, {
++          credentials: 'include'
++        });
++        if (response.status === 204) {
++          return [null, response.status];
++        }
++        return [await response.text(), response.status];
++      } catch (e) {
++        throw new Error(`fetchGetWithinPage error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${innerUrl}, status: ${response?.status}`);
++      }
++    }, url);
++  } catch (evalError) {
+     try {
+-      response = await fetch(innerUrl, {
+-        credentials: 'include'
+-      });
+-      if (response.status === 204) {
+-        return [null, response.status];
++      const response = await page.goto(url, { waitUntil: 'networkidle2', timeout: 15000 });
++      status = response.status();
++      result = await response.text();
++    } catch {
++      if (!ignoreErrors) {
++        throw evalError;
+       }
+-      return [await response.text(), response.status];
+-    } catch (e) {
+-      throw new Error(`fetchGetWithinPage error: ${e instanceof Error ? `${e.message}\n${e.stack}` : String(e)}, url: ${innerUrl}, status: ${response?.status}`);
++      return null;
+     }
+-  }, url);
++  }
+   if (!ignoreErrors) {
+     assertAutomationNotBlocked(status, result, url);
+   }
+diff --git a/node_modules/israeli-bank-scrapers-core/lib/scrapers/base-isracard-amex.js b/node_modules/israeli-bank-scrapers-core/lib/scrapers/base-isracard-amex.js
+index f4ea631..0d6254b 100644
+--- a/node_modules/israeli-bank-scrapers-core/lib/scrapers/base-isracard-amex.js
++++ b/node_modules/israeli-bank-scrapers-core/lib/scrapers/base-isracard-amex.js
+@@ -262,7 +262,7 @@ async function getExtraScrapAccount(page, options, accountMap, month) {
+     for (const txnsChunk of (0, _arrays.chunk)(account.txns, RATE_LIMIT.TRANSACTIONS_BATCH_SIZE)) {
+       debug(`processing chunk of ${txnsChunk.length} transactions for account ${account.accountNumber}`);
+       const updatedTxns = await Promise.all(txnsChunk.map(t => getExtraScrapTransaction(page, options, month, account.index, t)));
+-      await (0, _waiting.sleep)(RATE_LIMIT.SLEEP_BETWEEN);
++      await (0, _waiting.randomDelay)(RATE_LIMIT.SLEEP_BETWEEN, RATE_LIMIT.SLEEP_BETWEEN + 500);
+       txns.push(...updatedTxns);
+     }
+     accounts.push({
