@@ -13,6 +13,7 @@ import {
   Settings,
   Bell,
   Wallet,
+  Repeat2,
 } from 'lucide-vue-next';
 import { getSettings, toggleDemoMode } from '../api/client';
 import { useReviewCount } from '../composables/useReviewCount';
@@ -66,6 +67,7 @@ const navSections = [
     label: 'Intelligence',
     items: [
       { path: '/insights', label: 'Insights', icon: Lightbulb },
+      { path: '/recurring-payments', label: 'Subscriptions', icon: Repeat2 },
       { path: '/chat', label: 'AI Chat', icon: Bot },
     ],
   },
@@ -90,6 +92,7 @@ const pageTitles: Record<string, string> = {
   '/net-worth': 'Net Worth',
   '/transactions': 'Transactions',
   '/insights': 'Insights',
+  '/recurring-payments': 'Subscriptions & services',
   '/chat': 'AI Chat',
   '/accounts': 'Accounts',
   '/categories': 'Categories',

@@ -119,6 +119,14 @@ export default function ExploreScreen() {
           title={t('cashFlow')}
         />
         <ExploreRow
+          detail={t('membershipsAndServiceBills')}
+          href="/explore/recurring-payments"
+          icon="repeat"
+          metric=""
+          testID="explore-card-recurring"
+          title={t('subscriptions')}
+        />
+        <ExploreRow
           detail={t('balanceHistoryAndAssetComposition')}
           href="/net-worth"
           icon="chart.xyaxis.line"

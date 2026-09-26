@@ -6,6 +6,8 @@ import {
   type ProductionMobileBootstrapPortOptions,
 } from './bootstrap-production-ports.js';
 import { MOBILE_PROTOCOL_VERSION } from './contract.js';
+import { MobileApiError } from './contract.js';
+import * as schema from '../db/schema.js';
 import {
   MOBILE_READ_CAPABILITY,
   MobileDeviceRegistry,
@@ -31,8 +33,75 @@ import {
 import type { MobileOverviewRouteDependencies } from './overview-routes.js';
 import type { MobileOverviewQuery } from './overview-contract.js';
 import type { MobileTransactionReadContext } from './transaction-routes.js';
+import {
+  readRecurringPaymentDetail,
+  readRecurringPayments,
+  saveRecurringPaymentDecision,
+  type RecurringPaymentDetail,
+  type RecurringPaymentsResult,
+} from '../services/recurring-payments.js';
+import type { MobileRecurringPaymentsDependencies } from './recurring-payments-routes.js';
+import { createMobilePublicIdProjector, type MobilePublicIdProjector } from './mobile-public-id.js';
+import {
+  boundedMobileText,
+  mobileTransactionDisplayName,
+  projectedMobileCurrencyCode,
+} from './mobile-transaction-projection.js';
 
 const UUID_PATTERN = /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
+
+function projectRecurringPayment(
+  payment: RecurringPaymentsResult['payments'][number],
+  publicId: MobilePublicIdProjector,
+) {
+  return {
+    ...payment,
+    accountId: publicId('account', payment.accountId),
+    name: mobileTransactionDisplayName(payment.name),
+    accountName: boundedMobileText(payment.accountName, 'Account', 80),
+    currencyCode: projectedMobileCurrencyCode(payment.currencyCode),
+  };
+}
+
+export function projectMobileRecurringPaymentDetail(
+  detail: RecurringPaymentDetail,
+  publicId: MobilePublicIdProjector,
+) {
+  return {
+    ...detail,
+    payment: projectRecurringPayment(detail.payment, publicId),
+    transactions: detail.transactions.map((transaction) => ({
+      ...transaction,
+      id: publicId('transaction', transaction.id),
+      description: mobileTransactionDisplayName(transaction.description),
+    })),
+  };
+}
+
+export function projectMobileRecurringPayments(
+  result: RecurringPaymentsResult,
+  publicId: MobilePublicIdProjector,
+) {
+  const totals = new Map<string, { monthlyCost: number; annualCost: number }>();
+  for (const total of result.totals) {
+    const currencyCode = projectedMobileCurrencyCode(total.currencyCode);
+    const current = totals.get(currencyCode) ?? { monthlyCost: 0, annualCost: 0 };
+    current.monthlyCost += total.monthlyCost;
+    current.annualCost += total.annualCost;
+    totals.set(currencyCode, current);
+  }
+  return {
+    ...result,
+    payments: result.payments.map((payment) => projectRecurringPayment(payment, publicId)),
+    suggestions: result.suggestions.map((payment) => projectRecurringPayment(payment, publicId)),
+    excluded: result.excluded.map((payment) => projectRecurringPayment(payment, publicId)),
+    totals: [...totals].map(([currencyCode, total]) => ({
+      currencyCode,
+      monthlyCost: Math.round(total.monthlyCost * 100) / 100,
+      annualCost: Math.round(total.annualCost * 100) / 100,
+    })),
+  };
+}
 
 type PairingManager = MobilePairingSessionManager<MobileDeviceCredential>;
 type PairingManagerOverrides = Partial<
@@ -66,6 +135,7 @@ export interface ProductionMobileAccess {
   bootstrapDependencies: MobileBootstrapRouteDependencies;
   transactionDependencies: MobileTransactionRouteDependencies;
   overviewDependencies: MobileOverviewRouteDependencies;
+  recurringPaymentsDependencies: MobileRecurringPaymentsDependencies;
   pairingDependencies: MobilePairingRouteDependencies;
   deviceRegistry: MobileDeviceRegistry;
   createPairingManager(publicUrl: string): PairingManager;
@@ -105,6 +175,16 @@ export function createProductionMobileAccess(
     publicIdKey: options.publicIdKey,
     updateCategory: options.updateTransactionCategory,
   });
+  const publicId = createMobilePublicIdProjector(options.publicIdKey);
+  const resolveAccountId = (publicAccountId: string) => {
+    const account = options.db
+      .select({ id: schema.accounts.id })
+      .from(schema.accounts)
+      .all()
+      .find(({ id }) => publicId('account', id) === publicAccountId);
+    if (!account) throw new MobileApiError('route_not_found');
+    return account.id;
+  };
   const provideOverview = createMobileOverviewProvider({
     db: options.db,
     readNetWorth:
@@ -167,6 +247,47 @@ export function createProductionMobileAccess(
     provide: (query: MobileOverviewQuery, context: MobileTransactionReadContext) => {
       assertMobileReadAvailable();
       return provideOverview(query, context);
+    },
+  });
+  const recurringPaymentsDependencies: MobileRecurringPaymentsDependencies = Object.freeze({
+    authenticator: deviceRegistry,
+    server: Object.freeze({ id: serverId, protocolVersion: MOBILE_PROTOCOL_VERSION }),
+    provide: async (asOfDate: string) => {
+      assertMobileReadAvailable();
+      return projectMobileRecurringPayments(
+        await readRecurringPayments(options.db, asOfDate),
+        publicId,
+      );
+    },
+    detail: (
+      identity: { accountId: string; currencyCode: string; merchantKey: string },
+      asOfDate: string,
+    ) => {
+      assertMobileReadAvailable();
+      const detail = readRecurringPaymentDetail(options.db, asOfDate, {
+        ...identity,
+        accountId: resolveAccountId(identity.accountId),
+      });
+      return detail ? projectMobileRecurringPaymentDetail(detail, publicId) : null;
+    },
+    decide: async (
+      input: {
+        accountId: string;
+        currencyCode: string;
+        merchantKey: string;
+        decision: 'include' | 'exclude' | 'auto';
+      },
+      asOfDate: string,
+    ) => {
+      assertMobileReadAvailable();
+      saveRecurringPaymentDecision(options.db, {
+        ...input,
+        accountId: resolveAccountId(input.accountId),
+      });
+      return projectMobileRecurringPayments(
+        await readRecurringPayments(options.db, asOfDate),
+        publicId,
+      );
     },
   });
 
@@ -235,6 +356,7 @@ export function createProductionMobileAccess(
     bootstrapDependencies,
     transactionDependencies,
     overviewDependencies,
+    recurringPaymentsDependencies,
     pairingDependencies,
     deviceRegistry,
     createPairingManager,

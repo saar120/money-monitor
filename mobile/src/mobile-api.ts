@@ -43,6 +43,43 @@ export type ExploreMonth = {
   merchants: HomeData['merchants'];
 };
 export type CashflowMonth = Pick<ExploreMonth, 'month' | 'label' | 'income' | 'spending'>;
+export type RecurringPayment = {
+  accountId: string;
+  merchantKey: string;
+  name: string;
+  accountName: string;
+  currencyCode: string;
+  usualAmount: number;
+  monthlyCost: number;
+  annualCost: number;
+  frequency: 'monthly' | 'everyTwoMonths';
+  occurrences: number;
+  lastChargeDate: string;
+  nextExpectedDate: string;
+  confidence: 'likely' | 'possible';
+  kind: 'subscription' | 'serviceBill';
+  source: 'automatic' | 'manual' | 'suggestion' | 'excluded';
+};
+export type RecurringPayments = {
+  payments: RecurringPayment[];
+  suggestions: RecurringPayment[];
+  excluded: RecurringPayment[];
+  totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
+  asOfDate: string;
+  classificationPending: boolean;
+};
+export type RecurringPaymentDetail = {
+  payment: RecurringPayment;
+  previousAmount: number | null;
+  changedOnDate: string | null;
+  transactions: Array<{
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    inPattern: boolean;
+  }>;
+};
 export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
 > & { reviewed?: true };
@@ -75,6 +112,13 @@ function boolean(value: unknown, label: string): boolean {
   return value;
 }
 
+function nonnegativeNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`The Mac returned invalid ${label}.`);
+  }
+  return value;
+}
+
 function date(value: unknown, label: string): string {
   const result = text(value, label);
   if (!FINANCIAL_DATE.test(result))
@@ -98,9 +142,7 @@ function apiError(body: unknown, status: number): Error {
     const message = text(error.message, 'error message');
     if (currentLanguage() !== 'he') return new Error(message);
     const key = typeof error.code === 'string' ? MOBILE_ERROR_MESSAGES[error.code] : undefined;
-    return new Error(
-      key ? t(key) : t('macRequestFailed', { code: status }),
-    );
+    return new Error(key ? t(key) : t('macRequestFailed', { code: status }));
   } catch {
     return new Error(t('macRequestFailed', { code: status }));
   }
@@ -362,6 +404,141 @@ export async function fetchHomeData(
       };
     }),
   };
+}
+
+function parseRecurringPayment(raw: unknown): RecurringPayment {
+  const frequencies: RecurringPayment['frequency'][] = ['monthly', 'everyTwoMonths'];
+  const payment = object(raw, 'recurring payment');
+  const frequency = text(payment.frequency, 'payment frequency');
+  const confidence = text(payment.confidence, 'payment confidence');
+  const kind = text(payment.kind, 'payment kind');
+  const source = text(payment.source, 'payment source');
+  if (
+    !frequencies.includes(frequency as RecurringPayment['frequency']) ||
+    (confidence !== 'likely' && confidence !== 'possible') ||
+    (kind !== 'subscription' && kind !== 'serviceBill') ||
+    !['automatic', 'manual', 'suggestion', 'excluded'].includes(source)
+  )
+    throw new Error('The Mac returned an invalid recurring payment.');
+  return {
+    accountId: text(payment.accountId, 'account ID'),
+    merchantKey: text(payment.merchantKey, 'merchant key'),
+    name: text(payment.name, 'payment name'),
+    accountName: text(payment.accountName, 'account name'),
+    currencyCode: text(payment.currencyCode, 'currency'),
+    usualAmount: nonnegativeNumber(payment.usualAmount, 'usual amount'),
+    monthlyCost: nonnegativeNumber(payment.monthlyCost, 'monthly cost'),
+    annualCost: nonnegativeNumber(payment.annualCost, 'annual cost'),
+    frequency: frequency as RecurringPayment['frequency'],
+    occurrences: nonnegativeNumber(payment.occurrences, 'occurrences'),
+    lastChargeDate: date(payment.lastChargeDate, 'last charge date'),
+    nextExpectedDate: date(payment.nextExpectedDate, 'next expected date'),
+    confidence: confidence as RecurringPayment['confidence'],
+    kind: kind as RecurringPayment['kind'],
+    source: source as RecurringPayment['source'],
+  };
+}
+
+function parseRecurringPayments(
+  rootValue: unknown,
+  credential: PairingCredential,
+): RecurringPayments {
+  const root = object(rootValue, 'recurring payments');
+  verifyServer(root, credential);
+  const data = object(root.data, 'recurring payments');
+  if (
+    !Array.isArray(data.payments) ||
+    !Array.isArray(data.suggestions) ||
+    !Array.isArray(data.excluded) ||
+    !Array.isArray(data.totals)
+  ) {
+    throw new Error('The Mac returned invalid recurring payments.');
+  }
+  return {
+    asOfDate: date(data.asOfDate, 'recurring payment date'),
+    classificationPending: boolean(data.classificationPending ?? false, 'classification state'),
+    payments: data.payments.map(parseRecurringPayment),
+    suggestions: data.suggestions.map(parseRecurringPayment),
+    excluded: data.excluded.map(parseRecurringPayment),
+    totals: data.totals.map((raw) => {
+      const total = object(raw, 'recurring total');
+      return {
+        currencyCode: text(total.currencyCode, 'currency'),
+        monthlyCost: nonnegativeNumber(total.monthlyCost, 'monthly cost'),
+        annualCost: nonnegativeNumber(total.annualCost, 'annual cost'),
+      };
+    }),
+  };
+}
+
+export async function fetchRecurringPaymentDetail(
+  credential: PairingCredential,
+  payment: Pick<RecurringPayment, 'accountId' | 'currencyCode' | 'merchantKey'>,
+): Promise<RecurringPaymentDetail> {
+  const query = new URLSearchParams({
+    accountId: String(payment.accountId),
+    currencyCode: payment.currencyCode,
+    merchantKey: payment.merchantKey,
+  });
+  const root = object(
+    await authorizedGet(credential, `/api/mobile/v1/recurring-payments/detail?${query}`),
+    'recurring payment detail',
+  );
+  verifyServer(root, credential);
+  const data = object(root.data, 'recurring payment detail');
+  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid charges.');
+  return {
+    payment: parseRecurringPayment(data.payment),
+    previousAmount:
+      data.previousAmount === null
+        ? null
+        : nonnegativeNumber(data.previousAmount, 'previous amount'),
+    changedOnDate: data.changedOnDate === null ? null : date(data.changedOnDate, 'change date'),
+    transactions: data.transactions.map((raw) => {
+      const item = object(raw, 'merchant charge');
+      return {
+        id: text(item.id, 'charge ID'),
+        date: date(item.date, 'charge date'),
+        description: text(item.description, 'charge description'),
+        amount: nonnegativeNumber(item.amount, 'charge amount'),
+        inPattern: boolean(item.inPattern, 'pattern status'),
+      };
+    }),
+  };
+}
+
+export async function fetchRecurringPayments(
+  credential: PairingCredential,
+  signal?: AbortSignal,
+): Promise<RecurringPayments> {
+  return parseRecurringPayments(
+    await authorizedGet(credential, '/api/mobile/v1/recurring-payments', signal),
+    credential,
+  );
+}
+
+export async function saveRecurringPaymentDecision(
+  credential: PairingCredential,
+  payment: RecurringPayment,
+  decision: 'include' | 'exclude' | 'auto',
+): Promise<RecurringPayments> {
+  return parseRecurringPayments(
+    await requestJson(`${credential.baseURL}/api/mobile/v1/recurring-payments/decision`, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${credential.token}`,
+      },
+      body: JSON.stringify({
+        accountId: payment.accountId,
+        currencyCode: payment.currencyCode,
+        merchantKey: payment.merchantKey,
+        decision,
+      }),
+    }),
+    credential,
+  );
 }
 
 export async function fetchExploreMonth(
