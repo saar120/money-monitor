@@ -1,6 +1,8 @@
+import { t } from '@/localization';
+import { Text } from '@/LocalizedText';
 import { SymbolView } from 'expo-symbols';
 import { useState } from 'react';
-import { Pressable, StyleSheet, Text, View } from 'react-native';
+import { Pressable, StyleSheet, View } from 'react-native';
 import {
   deletePairingCredential,
   readPairingCredential,
@@ -16,26 +18,26 @@ const dummyCredential = {
 
 export default function FoundationScreen() {
   const colors = useAppColors();
-  const [status, setStatus] = useState('Ready. No credential operation has run.');
+  const [status, setStatus] = useState(t('readyNoCredentialOperationHasRun'));
 
   async function perform(operation: 'store' | 'read' | 'delete') {
     try {
       if (operation === 'store') {
         await storePairingCredential(dummyCredential);
-        setStatus('Dummy pairing credential stored in the iOS Keychain.');
+        setStatus(t('dummyPairingCredentialStoredInTheIOSKeychain'));
       } else if (operation === 'read') {
         const credential = await readPairingCredential();
         setStatus(
           credential
-            ? `Read credential for ${credential.serverId.slice(0, 8)}…`
-            : 'No pairing credential is stored.',
+            ? t('readCredentialFor', { id: credential.serverId.slice(0, 8) })
+            : t('noPairingCredentialIsStored'),
         );
       } else {
         await deletePairingCredential();
-        setStatus('Pairing credential deleted.');
+        setStatus(t('pairingCredentialDeleted'));
       }
     } catch (error) {
-      setStatus(error instanceof Error ? error.message : 'The credential operation failed.');
+      setStatus(error instanceof Error ? error.message : t('theCredentialOperationFailed'));
     }
   }
 
@@ -43,20 +45,21 @@ export default function FoundationScreen() {
     <View style={[styles.screen, { backgroundColor: colors.background }]}>
       <View style={[styles.statusArea, { borderBottomColor: colors.separator }]}>
         <SymbolView name="key.icloud.fill" size={37} tintColor={colors.accent} />
-        <Text style={[styles.title, { color: colors.text }]}>Secure credential storage</Text>
+        <Text style={[styles.title, { color: colors.text }]}>{t('secureCredentialStorage')}</Text>
         <Text style={[styles.explanation, { color: colors.secondary }]}>
-          This exercises the exact store, read, and delete operations reserved for a future pairing
-          credential.
+          {t(
+            'thisExercisesTheExactStoreReadAndDeleteOperationsReservedForAFuturePairingCredential',
+          )}
         </Text>
       </View>
       <Text style={[styles.status, { color: colors.text }]} testID="secure-store-status">
         {status}
       </Text>
       <View style={styles.buttons}>
-        <FoundationButton label="Store dummy credential" onPress={() => void perform('store')} />
-        <FoundationButton label="Read credential" onPress={() => void perform('read')} />
+        <FoundationButton label={t('storeDummyCredential')} onPress={() => void perform('store')} />
+        <FoundationButton label={t('readCredential')} onPress={() => void perform('read')} />
         <FoundationButton
-          label="Delete credential"
+          label={t('deleteCredential')}
           destructive
           onPress={() => void perform('delete')}
         />

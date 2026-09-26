@@ -4,6 +4,7 @@ import test from 'node:test';
 import { runInNewContext } from 'node:vm';
 import ts from 'typescript';
 import * as money from './money.ts';
+import { categoryLabel, t } from './translations.ts';
 
 type Element = { type: string; props: Record<string, any> };
 const element = (type: string, props: Record<string, any>, ...children: any[]): Element => ({
@@ -35,10 +36,14 @@ function render(
     react: { useState: (initial: unknown) => [state++ === 0 ? range : initial, () => {}] },
     'react-native': {
       View: 'View',
-      Text: 'Text',
       Pressable: 'Pressable',
       StyleSheet: { create: (styles: unknown) => styles, hairlineWidth: 0.5 },
     },
+    '@/LocalizedText': { Text: 'Text' },
+    '@/DirectionalChevron': { DirectionalChevron: 'SymbolView' },
+    '@/locale-state': { currentLocale: () => 'en-IL', formatMonthShort: () => 'Sep' },
+    '@/localization': { t },
+    '@/translations': { categoryLabel },
     '@/ConnectionState': {},
     '@/GlassSegmentedControl': {},
     '@/MoneyData': {},

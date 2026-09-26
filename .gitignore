@@ -1,5 +1,6 @@
 node_modules/
 dist/
+release/
 data/
 .env
 *.db
@@ -13,3 +14,4 @@ electron/**/*.js
 electron/**/*.mjs
 electron/**/*.js.map
 electron/**/*.mjs.map
+mobile/docs/screenshots/blue-ledger/advisor-*.png

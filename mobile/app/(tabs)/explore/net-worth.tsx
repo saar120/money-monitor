@@ -1,6 +1,9 @@
+import { t } from '@/localization';
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { Area, CartesianChart, Line } from 'victory-native';
 import { useState } from 'react';
-import { ScrollView, StyleSheet, Text, useColorScheme, View } from 'react-native';
+import { ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
 import { useMoneyData } from '@/MoneyData';
@@ -46,7 +49,7 @@ export default function NetWorthScreen() {
             { color: home.netWorthChange >= 0 ? colors.positive : colors.danger },
           ]}
         >
-          {formatMoney(home.netWorthChange, home.currencyCode)} this month
+          {formatMoney(home.netWorthChange, home.currencyCode)} {t('thisMonth')}
         </Text>
       ) : null}
       <View style={styles.rangeSpacing}>
@@ -54,9 +57,9 @@ export default function NetWorthScreen() {
           compact
           onChange={setRange}
           options={[
-            { label: '3M', value: '3' },
-            { label: '6M', value: '6' },
-            { label: '1Y', value: '12' },
+            { label: t('message3M'), value: '3' },
+            { label: t('message6M'), value: '6' },
+            { label: t('message1Y'), value: '12' },
           ]}
           testID="net-worth-range"
           value={range}
@@ -65,7 +68,9 @@ export default function NetWorthScreen() {
       <View
         style={styles.chart}
         accessible
-        accessibilityLabel={`Net worth history ending at ${formatUnsignedMoney(home.netWorth, home.currencyCode)}.`}
+        accessibilityLabel={t('netWorthHistoryEnding', {
+          amount: formatUnsignedMoney(home.netWorth, home.currencyCode),
+        })}
       >
         {history.length > 1 ? (
           <CartesianChart
@@ -96,7 +101,7 @@ export default function NetWorthScreen() {
         ) : (
           <View style={styles.noChart}>
             <Text style={[styles.note, { color: colors.secondary }]}>
-              No history available yet.
+              {t('noHistoryAvailableYet')}
             </Text>
           </View>
         )}
@@ -105,17 +110,17 @@ export default function NetWorthScreen() {
         {history.length ? (
           <>
             <Text style={[styles.label, { color: colors.secondary }]}>
-              {new Intl.DateTimeFormat('en', { month: 'short', year: 'numeric' }).format(
+              {new Intl.DateTimeFormat(currentLocale(), { month: 'short', year: 'numeric' }).format(
                 new Date(`${history[0]!.date}T12:00:00Z`),
               )}
             </Text>
-            <Text style={[styles.label, { color: colors.secondary }]}>Now</Text>
+            <Text style={[styles.label, { color: colors.secondary }]}>{t('now')}</Text>
           </>
         ) : null}
       </View>
 
       <View style={[styles.rule, { backgroundColor: colors.separator }]} />
-      <Text style={[styles.title, { color: colors.text }]}>Composition</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('composition')}</Text>
       <View style={[styles.composition, { backgroundColor: colors.dangerSoft }]}>
         <View
           style={[
@@ -129,20 +134,20 @@ export default function NetWorthScreen() {
       </View>
       <View style={styles.compositionLabels}>
         <View>
-          <Text style={[styles.label, { color: colors.secondary }]}>Assets</Text>
+          <Text style={[styles.label, { color: colors.secondary }]}>{t('assets')}</Text>
           <Text allowFontScaling={false} style={[styles.value, { color: colors.text }]}>
             {formatUnsignedMoney(assets, home.currencyCode)}
           </Text>
         </View>
         <View style={styles.right}>
-          <Text style={[styles.label, { color: colors.secondary }]}>Liabilities</Text>
+          <Text style={[styles.label, { color: colors.secondary }]}>{t('liabilities')}</Text>
           <Text allowFontScaling={false} style={[styles.value, { color: colors.text }]}>
             {formatUnsignedMoney(liabilities, home.currencyCode)}
           </Text>
         </View>
       </View>
       <Text style={[styles.note, { color: colors.secondary }]}>
-        Calculated on your Mac from connected accounts, assets, and liabilities.
+        {t('calculatedOnYourMacFromConnectedAccountsAssetsAndLiabilities')}
       </Text>
     </ScrollView>
   );
@@ -160,9 +165,14 @@ const styles = StyleSheet.create({
   },
   change: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   rangeSpacing: { marginTop: 25 },
-  chart: { height: 220, marginTop: 18 },
+  chart: { height: 220, marginTop: 18, direction: 'ltr' },
   noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  historyLabels: { flexDirection: 'row', justifyContent: 'space-between', marginTop: 2 },
+  historyLabels: {
+    direction: 'ltr',
+    flexDirection: 'row',
+    justifyContent: 'space-between',
+    marginTop: 2,
+  },
   rule: { height: StyleSheet.hairlineWidth, marginVertical: 30 },
   title: { fontSize: 21, lineHeight: 27, fontWeight: '700' },
   composition: { height: 10, borderRadius: 5, overflow: 'hidden', marginTop: 18 },

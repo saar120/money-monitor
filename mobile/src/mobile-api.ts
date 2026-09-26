@@ -1,3 +1,6 @@
+import { t, type MessageKey } from './translations.ts';
+import { currentLanguage } from './locale-state.ts';
+import { currentLocale } from './locale-state.ts';
 import type { HomeData, Transaction } from './fixtures';
 import type { PairingQrPayload } from './pairing/parse-pairing-qr';
 import type { PairingCredential } from './security/pairing-credential-store';
@@ -40,33 +43,214 @@ export type ExploreMonth = {
   merchants: HomeData['merchants'];
 };
 export type CashflowMonth = Pick<ExploreMonth, 'month' | 'label' | 'income' | 'spending'>;
+export type RecurringPayment = {
+  accountId: string;
+  merchantKey: string;
+  name: string;
+  accountName: string;
+  currencyCode: string;
+  usualAmount: number;
+  monthlyCost: number;
+  annualCost: number;
+  frequency: 'monthly' | 'everyTwoMonths';
+  occurrences: number;
+  lastChargeDate: string;
+  nextExpectedDate: string;
+  confidence: 'likely' | 'possible';
+  kind: 'subscription' | 'serviceBill';
+  source: 'automatic' | 'manual' | 'suggestion' | 'excluded';
+};
+export type RecurringPayments = {
+  payments: RecurringPayment[];
+  suggestions: RecurringPayment[];
+  excluded: RecurringPayment[];
+  totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
+  asOfDate: string;
+  classificationPending: boolean;
+};
+export type RecurringPaymentDetail = {
+  payment: RecurringPayment;
+  previousAmount: number | null;
+  changedOnDate: string | null;
+  transactions: Array<{
+    id: string;
+    date: string;
+    description: string;
+    amount: number;
+    inPattern: boolean;
+  }>;
+};
 export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
 > & { reviewed?: true };
+
+export type AdvisorChart = {
+  kind: 'bar' | 'line';
+  title: string;
+  currencyCode: 'ILS';
+  points: { label: string; value: number }[];
+};
+export type AdvisorMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  chart?: AdvisorChart;
+};
+export type AdvisorSession = { id: string; title: string; createdAt: string; updatedAt: string };
+
+const advisorPath = '/api/mobile/v1/advisor/sessions';
+
+export async function listAdvisorSessions(
+  credential: PairingCredential,
+): Promise<AdvisorSession[]> {
+  const root = object(await authorizedGet(credential, advisorPath), 'advisor sessions');
+  verifyServer(root, credential);
+  const sessions = object(root.data, 'advisor sessions').sessions;
+  if (!Array.isArray(sessions)) throw new Error('The Mac returned invalid advisor sessions.');
+  return sessions as AdvisorSession[];
+}
+
+export async function createAdvisorSession(credential: PairingCredential): Promise<AdvisorSession> {
+  const root = object(
+    await requestJson(`${credential.baseURL}${advisorPath}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${credential.token}` },
+    }),
+    'advisor session',
+  );
+  verifyServer(root, credential);
+  return object(object(root.data, 'advisor session').session, 'advisor session') as AdvisorSession;
+}
+
+export async function getAdvisorSession(
+  credential: PairingCredential,
+  id: string,
+): Promise<{ meta: AdvisorSession; messages: AdvisorMessage[] }> {
+  const root = object(
+    await authorizedGet(credential, `${advisorPath}/${encodeURIComponent(id)}`),
+    'advisor session',
+  );
+  verifyServer(root, credential);
+  const session = object(object(root.data, 'advisor session').session, 'advisor session');
+  if (!Array.isArray(session.messages))
+    throw new Error('The Mac returned invalid advisor messages.');
+  return {
+    meta: object(session.meta, 'advisor session') as AdvisorSession,
+    messages: session.messages as AdvisorMessage[],
+  };
+}
+
+export function streamAdvisorReply(
+  credential: PairingCredential,
+  id: string,
+  message: string,
+  onEvent: (event: {
+    type: 'text_delta' | 'status' | 'result' | 'error' | 'chart';
+    text?: string;
+    chart?: AdvisorChart;
+  }) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let offset = 0;
+    let buffer = '';
+    let kind = '';
+    let identityChecked = false;
+    xhr.open('POST', `${credential.baseURL}${advisorPath}/${encodeURIComponent(id)}/messages`);
+    xhr.setRequestHeader('Authorization', `Bearer ${credential.token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 120_000;
+    const consume = () => {
+      if (!identityChecked && xhr.readyState >= 2 && xhr.status >= 200 && xhr.status < 300) {
+        identityChecked = true;
+        if (xhr.getResponseHeader('X-Money-Monitor-Server-Id') !== credential.serverId) {
+          xhr.abort();
+          reject(new Error('The responding Mac does not match the paired Mac.'));
+          return;
+        }
+      }
+      buffer += xhr.responseText.slice(offset);
+      offset = xhr.responseText.length;
+      const frames = buffer.split('\n');
+      buffer = frames.pop() ?? '';
+      for (const line of frames) {
+        if (line.startsWith('event: ')) kind = line.slice(7);
+        else if (line.startsWith('data: ') && kind) {
+          try {
+            const payload = JSON.parse(line.slice(6)) as { text?: string; chart?: AdvisorChart };
+            if (['text_delta', 'status', 'result', 'error', 'chart'].includes(kind))
+              onEvent({
+                type: kind as 'text_delta' | 'status' | 'result' | 'error' | 'chart',
+                ...payload,
+              });
+          } catch {
+            /* Ignore an invalid event; the saved session remains authoritative. */
+          }
+          kind = '';
+        }
+      }
+    };
+    xhr.onprogress = consume;
+    xhr.onload = () => {
+      consume();
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {
+          /* Use the status fallback. */
+        }
+        reject(apiError(body, xhr.status));
+      }
+    };
+    xhr.onerror = () => reject(new Error('The Mac connection was interrupted.'));
+    xhr.ontimeout = () => reject(new Error('The advisor took too long to respond.'));
+    xhr.send(JSON.stringify({ message }));
+  });
+}
 
 const FINANCIAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
 function object(value: unknown, label: string): JsonObject {
   if (!value || typeof value !== 'object' || Array.isArray(value)) {
-    throw new Error(`The Mac returned invalid ${label} data.`);
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidDataGeneric') : t('invalidData', { field: label }),
+    );
   }
   return value as JsonObject;
 }
 
 function text(value: unknown, label: string): string {
-  if (typeof value !== 'string' || !value) throw new Error(`The Mac returned invalid ${label}.`);
+  if (typeof value !== 'string' || !value)
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
   return value;
 }
 
 function boolean(value: unknown, label: string): boolean {
-  if (typeof value !== 'boolean') throw new Error(`The Mac returned invalid ${label}.`);
+  if (typeof value !== 'boolean')
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
+  return value;
+}
+
+function nonnegativeNumber(value: unknown, label: string): number {
+  if (typeof value !== 'number' || !Number.isFinite(value) || value < 0) {
+    throw new Error(`The Mac returned invalid ${label}.`);
+  }
   return value;
 }
 
 function date(value: unknown, label: string): string {
   const result = text(value, label);
-  if (!FINANCIAL_DATE.test(result)) throw new Error(`The Mac returned invalid ${label}.`);
+  if (!FINANCIAL_DATE.test(result))
+    throw new Error(
+      currentLanguage() === 'he' ? t('invalidValueGeneric') : t('invalidValue', { field: label }),
+    );
   return result;
 }
 
@@ -74,18 +258,44 @@ function money(value: unknown): { value: number; currencyCode: string } {
   const candidate = object(value, 'money');
   const decimal = text(candidate.value, 'money amount');
   const parsed = Number(decimal);
-  if (!Number.isFinite(parsed)) throw new Error('The Mac returned an invalid money amount.');
+  if (!Number.isFinite(parsed)) throw new Error(t('theMacReturnedAnInvalidMoneyAmount'));
   return { value: parsed, currencyCode: text(candidate.currencyCode, 'currency') };
 }
 
 function apiError(body: unknown, status: number): Error {
   try {
     const error = object(object(body, 'error response').error, 'error');
-    return new Error(text(error.message, 'error message'));
+    const message = text(error.message, 'error message');
+    if (currentLanguage() !== 'he') return new Error(message);
+    const key = typeof error.code === 'string' ? MOBILE_ERROR_MESSAGES[error.code] : undefined;
+    return new Error(key ? t(key) : t('macRequestFailed', { code: status }));
   } catch {
-    return new Error(`The Mac request failed (${status}).`);
+    return new Error(t('macRequestFailed', { code: status }));
   }
 }
+
+const MOBILE_ERROR_MESSAGES: Record<string, MessageKey> = {
+  invalid_request: 'mobileErrorInvalidRequest',
+  validation_error: 'mobileErrorValidation',
+  authentication_required: 'mobileErrorAuthenticationRequired',
+  authentication_invalid: 'mobileErrorAuthenticationInvalid',
+  authentication_expired: 'mobileErrorAuthenticationExpired',
+  authentication_revoked: 'mobileErrorAuthenticationRevoked',
+  forbidden: 'mobileErrorForbidden',
+  capability_required: 'mobileErrorCapabilityRequired',
+  upgrade_required: 'mobileErrorUpgradeRequired',
+  pairing_invalid: 'mobileErrorPairingInvalid',
+  pairing_rejected: 'mobileErrorPairingRejected',
+  pairing_approval_required: 'mobileErrorPairingApprovalRequired',
+  pairing_replayed: 'mobileErrorPairingReplayed',
+  pairing_exchange_in_progress: 'mobileErrorPairingInProgress',
+  pairing_expired: 'mobileErrorPairingExpired',
+  route_not_found: 'mobileErrorRouteNotFound',
+  transaction_not_found: 'mobileErrorTransactionNotFound',
+  payload_too_large: 'mobileErrorPayloadTooLarge',
+  rate_limited: 'mobileErrorRateLimited',
+  internal_server_error: 'mobileErrorInternal',
+};
 
 async function requestJson(
   url: string,
@@ -104,7 +314,7 @@ async function requestJson(
     return body;
   } catch (error) {
     if (controller.signal.aborted && !externalSignal?.aborted) {
-      throw new Error('The Mac did not respond in time.', { cause: error });
+      throw new Error(t('theMacDidNotRespondInTime'), { cause: error });
     }
     throw error;
   } finally {
@@ -128,7 +338,7 @@ function verifyServer(root: JsonObject, credential: PairingCredential): void {
   const meta = object(root.meta, 'response metadata');
   const server = object(meta.server, 'server identity');
   if (text(server.id, 'server identity') !== credential.serverId) {
-    throw new Error('The responding Mac does not match the paired Mac.');
+    throw new Error(t('theRespondingMacDoesNotMatchThePairedMac'));
   }
 }
 
@@ -137,10 +347,10 @@ function freshnessDetail(
   lastSuccessfulSyncAt: unknown,
   generatedAt: string,
 ): { detail: string; state: 'fresh' | 'aging' | 'stale' } {
-  if (status === 'never_synced') return { detail: 'Never synced', state: 'stale' };
-  if (status === 'error') return { detail: 'Connection needs attention', state: 'stale' };
+  if (status === 'never_synced') return { detail: t('neverSynced'), state: 'stale' };
+  if (status === 'error') return { detail: t('connectionNeedsAttention'), state: 'stale' };
   if (typeof lastSuccessfulSyncAt !== 'string')
-    return { detail: 'Sync time unavailable', state: 'stale' };
+    return { detail: t('syncTimeUnavailable'), state: 'stale' };
 
   const ageMinutes = Math.max(
     0,
@@ -148,12 +358,12 @@ function freshnessDetail(
   );
   const detail =
     ageMinutes < 2
-      ? 'Updated just now'
+      ? t('updatedJustNow')
       : ageMinutes < 60
-        ? `Updated ${ageMinutes} min ago`
+        ? t('updatedMinutes', { count: ageMinutes })
         : ageMinutes < 1_440
-          ? `Updated ${Math.round(ageMinutes / 60)} hr ago`
-          : `Last updated ${Math.round(ageMinutes / 1_440)} days ago`;
+          ? t('updatedHours', { count: Math.round(ageMinutes / 60) })
+          : t('updatedDays', { count: Math.round(ageMinutes / 1_440) });
   return { detail, state: status === 'fresh' ? (ageMinutes < 180 ? 'fresh' : 'aging') : 'stale' };
 }
 
@@ -201,24 +411,24 @@ export async function fetchHomeData(
     }),
   );
   const statusLabels: Record<string, string> = {
-    on_track: 'On track',
-    watch: 'Watch spending',
-    over_budget: 'Over budget',
-    unavailable: 'No single budget',
-    unknown: 'Budget unavailable',
+    on_track: t('onTrack'),
+    watch: t('watchSpending'),
+    over_budget: t('overBudget'),
+    unavailable: t('noSingleBudget'),
+    unknown: t('budgetUnavailable'),
   };
 
   return {
     currentDate: date(period.endDate, 'overview end date'),
     monthKey: text(period.month, 'overview month'),
-    month: new Intl.DateTimeFormat('en', { month: 'long', timeZone: 'UTC' }).format(
+    month: new Intl.DateTimeFormat(currentLocale(), { month: 'long', timeZone: 'UTC' }).format(
       new Date(`${text(period.month, 'overview month')}-01T12:00:00Z`),
     ),
     availableMonths: (Array.isArray(overview.availableMonths) ? overview.availableMonths : []).map(
       (value) => {
         const candidate = text(value, 'available month');
         if (!/^\d{4}-\d{2}$/.test(candidate))
-          throw new Error('The Mac returned an invalid available month.');
+          throw new Error(t('theMacReturnedAnInvalidAvailableMonth'));
         return candidate;
       },
     ),
@@ -233,9 +443,9 @@ export async function fetchHomeData(
     available: primaryBudget ? money(primaryBudget.remaining).value : null,
     budget: primaryBudget ? money(primaryBudget.limit).value : null,
     budgetStatus: primaryBudget
-      ? (statusLabels[text(primaryBudget.status, 'budget status')] ?? 'Budget unavailable')
-      : 'No budget',
-    budgetNote: primaryBudget ? 'Calculated on your Mac' : 'Manage budgets on your Mac',
+      ? (statusLabels[text(primaryBudget.status, 'budget status')] ?? t('budgetUnavailable'))
+      : t('noBudget'),
+    budgetNote: primaryBudget ? t('calculatedOnYourMac') : t('manageBudgetsOnYourMac'),
     netWorth: netWorth.value,
     netWorthChange: overviewNetWorth.change === null ? null : money(overviewNetWorth.change).value,
     assets: overviewNetWorth.assets === null ? null : money(overviewNetWorth.assets).value,
@@ -322,12 +532,147 @@ export async function fetchHomeData(
   };
 }
 
+function parseRecurringPayment(raw: unknown): RecurringPayment {
+  const frequencies: RecurringPayment['frequency'][] = ['monthly', 'everyTwoMonths'];
+  const payment = object(raw, 'recurring payment');
+  const frequency = text(payment.frequency, 'payment frequency');
+  const confidence = text(payment.confidence, 'payment confidence');
+  const kind = text(payment.kind, 'payment kind');
+  const source = text(payment.source, 'payment source');
+  if (
+    !frequencies.includes(frequency as RecurringPayment['frequency']) ||
+    (confidence !== 'likely' && confidence !== 'possible') ||
+    (kind !== 'subscription' && kind !== 'serviceBill') ||
+    !['automatic', 'manual', 'suggestion', 'excluded'].includes(source)
+  )
+    throw new Error('The Mac returned an invalid recurring payment.');
+  return {
+    accountId: text(payment.accountId, 'account ID'),
+    merchantKey: text(payment.merchantKey, 'merchant key'),
+    name: text(payment.name, 'payment name'),
+    accountName: text(payment.accountName, 'account name'),
+    currencyCode: text(payment.currencyCode, 'currency'),
+    usualAmount: nonnegativeNumber(payment.usualAmount, 'usual amount'),
+    monthlyCost: nonnegativeNumber(payment.monthlyCost, 'monthly cost'),
+    annualCost: nonnegativeNumber(payment.annualCost, 'annual cost'),
+    frequency: frequency as RecurringPayment['frequency'],
+    occurrences: nonnegativeNumber(payment.occurrences, 'occurrences'),
+    lastChargeDate: date(payment.lastChargeDate, 'last charge date'),
+    nextExpectedDate: date(payment.nextExpectedDate, 'next expected date'),
+    confidence: confidence as RecurringPayment['confidence'],
+    kind: kind as RecurringPayment['kind'],
+    source: source as RecurringPayment['source'],
+  };
+}
+
+function parseRecurringPayments(
+  rootValue: unknown,
+  credential: PairingCredential,
+): RecurringPayments {
+  const root = object(rootValue, 'recurring payments');
+  verifyServer(root, credential);
+  const data = object(root.data, 'recurring payments');
+  if (
+    !Array.isArray(data.payments) ||
+    !Array.isArray(data.suggestions) ||
+    !Array.isArray(data.excluded) ||
+    !Array.isArray(data.totals)
+  ) {
+    throw new Error('The Mac returned invalid recurring payments.');
+  }
+  return {
+    asOfDate: date(data.asOfDate, 'recurring payment date'),
+    classificationPending: boolean(data.classificationPending ?? false, 'classification state'),
+    payments: data.payments.map(parseRecurringPayment),
+    suggestions: data.suggestions.map(parseRecurringPayment),
+    excluded: data.excluded.map(parseRecurringPayment),
+    totals: data.totals.map((raw) => {
+      const total = object(raw, 'recurring total');
+      return {
+        currencyCode: text(total.currencyCode, 'currency'),
+        monthlyCost: nonnegativeNumber(total.monthlyCost, 'monthly cost'),
+        annualCost: nonnegativeNumber(total.annualCost, 'annual cost'),
+      };
+    }),
+  };
+}
+
+export async function fetchRecurringPaymentDetail(
+  credential: PairingCredential,
+  payment: Pick<RecurringPayment, 'accountId' | 'currencyCode' | 'merchantKey'>,
+): Promise<RecurringPaymentDetail> {
+  const query = new URLSearchParams({
+    accountId: String(payment.accountId),
+    currencyCode: payment.currencyCode,
+    merchantKey: payment.merchantKey,
+  });
+  const root = object(
+    await authorizedGet(credential, `/api/mobile/v1/recurring-payments/detail?${query}`),
+    'recurring payment detail',
+  );
+  verifyServer(root, credential);
+  const data = object(root.data, 'recurring payment detail');
+  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid charges.');
+  return {
+    payment: parseRecurringPayment(data.payment),
+    previousAmount:
+      data.previousAmount === null
+        ? null
+        : nonnegativeNumber(data.previousAmount, 'previous amount'),
+    changedOnDate: data.changedOnDate === null ? null : date(data.changedOnDate, 'change date'),
+    transactions: data.transactions.map((raw) => {
+      const item = object(raw, 'merchant charge');
+      return {
+        id: text(item.id, 'charge ID'),
+        date: date(item.date, 'charge date'),
+        description: text(item.description, 'charge description'),
+        amount: nonnegativeNumber(item.amount, 'charge amount'),
+        inPattern: boolean(item.inPattern, 'pattern status'),
+      };
+    }),
+  };
+}
+
+export async function fetchRecurringPayments(
+  credential: PairingCredential,
+  signal?: AbortSignal,
+): Promise<RecurringPayments> {
+  return parseRecurringPayments(
+    await authorizedGet(credential, '/api/mobile/v1/recurring-payments', signal),
+    credential,
+  );
+}
+
+export async function saveRecurringPaymentDecision(
+  credential: PairingCredential,
+  payment: RecurringPayment,
+  decision: 'include' | 'exclude' | 'auto',
+): Promise<RecurringPayments> {
+  return parseRecurringPayments(
+    await requestJson(`${credential.baseURL}/api/mobile/v1/recurring-payments/decision`, {
+      method: 'PUT',
+      headers: {
+        Accept: 'application/json',
+        'Content-Type': 'application/json',
+        Authorization: `Bearer ${credential.token}`,
+      },
+      body: JSON.stringify({
+        accountId: payment.accountId,
+        currencyCode: payment.currencyCode,
+        merchantKey: payment.merchantKey,
+        decision,
+      }),
+    }),
+    credential,
+  );
+}
+
 export async function fetchExploreMonth(
   credential: PairingCredential,
   month: string,
   signal?: AbortSignal,
 ): Promise<ExploreMonth> {
-  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error('Invalid overview month.');
+  if (!/^\d{4}-\d{2}$/.test(month)) throw new Error(t('invalidOverviewMonth'));
   const value = await authorizedGet(
     credential,
     `/api/mobile/v1/overview?month=${encodeURIComponent(month)}`,
@@ -481,14 +826,14 @@ export async function fetchTransactionPage(
   verifyServer(root, credential);
   const data = object(root.data, 'transactions');
   const page = object(data.page, 'transaction page');
-  if (!Array.isArray(data.transactions)) throw new Error('The Mac returned invalid transactions.');
+  if (!Array.isArray(data.transactions)) throw new Error(t('theMacReturnedInvalidTransactions'));
   const hasMore = boolean(page.hasMore, 'transaction page');
   const nextCursor =
     page.nextCursor === null || page.nextCursor === undefined
       ? null
       : text(page.nextCursor, 'transaction cursor');
   if (hasMore !== (nextCursor !== null))
-    throw new Error('The Mac returned invalid transaction paging data.');
+    throw new Error(t('theMacReturnedInvalidTransactionPagingData'));
   return {
     financialDate: date(data.financialDate, 'financial date'),
     transactions: data.transactions.map((item) => mapTransaction(item)),
@@ -499,7 +844,7 @@ export async function fetchTransactionPage(
 
 function categoryNamesOrLegacy(value: unknown): string[] | null {
   if (value === undefined) return null;
-  if (!Array.isArray(value)) throw new Error('The Mac returned invalid budget categories.');
+  if (!Array.isArray(value)) throw new Error(t('theMacReturnedInvalidBudgetCategories'));
   return value.map((category) => text(category, 'budget category'));
 }
 
@@ -520,7 +865,7 @@ export async function fetchTransactions(
       signal,
     );
     if (page.nextCursor && seenCursors.has(page.nextCursor))
-      throw new Error('The Mac returned repeated transaction paging data.');
+      throw new Error(t('theMacReturnedRepeatedTransactionPagingData'));
     if (page.nextCursor) seenCursors.add(page.nextCursor);
     financialDate = page.financialDate;
     transactions.push(...page.transactions);
@@ -555,7 +900,7 @@ export async function fetchReviewOptions(credential: PairingCredential, signal?:
   verifyServer(root, credential);
   const data = object(root.data, 'review options');
   if (!Array.isArray(data.categories) || !Array.isArray(data.owners))
-    throw new Error('The Mac returned invalid review options.');
+    throw new Error(t('theMacReturnedInvalidReviewOptions'));
   return {
     categories: data.categories.map((value) => text(value, 'category')),
     owners: data.owners.map((value) => text(value, 'owner')),
@@ -608,10 +953,10 @@ function wait(ms: number, signal?: AbortSignal): Promise<void> {
     };
     const abort = () => {
       clearTimeout(timeout);
-      reject(new Error('Pairing was cancelled.'));
+      reject(new Error(t('pairingWasCancelled')));
     };
     if (signal?.aborted) {
-      reject(new Error('Pairing was cancelled.'));
+      reject(new Error(t('pairingWasCancelled')));
       return;
     }
     const timeout = setTimeout(finish, ms);
@@ -627,7 +972,7 @@ export async function completePairing(
   pollDelayMs?: number,
 ): Promise<PairingCredential> {
   if (Date.parse(pairing.expiresAt) <= Date.now()) {
-    throw new Error('This pairing code has expired. Create a new one on your Mac.');
+    throw new Error(t('thisPairingCodeHasExpiredCreateANewOneOnYourMac'));
   }
   onProgress('requesting');
   const startRoot = object(
@@ -653,7 +998,7 @@ export async function completePairing(
 
   while (true) {
     if (Date.parse(pairing.expiresAt) <= Date.now()) {
-      throw new Error('Pairing expired before it was approved.');
+      throw new Error(t('pairingExpiredBeforeItWasApproved'));
     }
     await wait(pollDelayMs ?? serverDelay, signal);
     const statusRoot = object(
@@ -667,8 +1012,7 @@ export async function completePairing(
     );
     const status = text(object(statusRoot.data, 'pairing status').status, 'pairing status');
     if (status === 'approved') break;
-    if (status !== 'pending_approval')
-      throw new Error('The Mac returned an invalid pairing state.');
+    if (status !== 'pending_approval') throw new Error(t('theMacReturnedAnInvalidPairingState'));
   }
 
   onProgress('exchanging');
@@ -682,9 +1026,9 @@ export async function completePairing(
     'pairing exchange',
   );
   const exchange = object(exchangeRoot.data, 'pairing exchange');
-  if (exchange.status !== 'claimed') throw new Error('The Mac did not issue a pairing credential.');
+  if (exchange.status !== 'claimed') throw new Error(t('theMacDidNotIssueAPairingCredential'));
   const credential = object(exchange.credential, 'pairing credential');
   const token = text(credential.token, 'pairing credential');
-  if (!TOKEN.test(token)) throw new Error('The Mac returned an invalid pairing credential.');
+  if (!TOKEN.test(token)) throw new Error(t('theMacReturnedAnInvalidPairingCredential'));
   return { serverId: pairing.serverId, baseURL: pairing.baseURL, token };
 }

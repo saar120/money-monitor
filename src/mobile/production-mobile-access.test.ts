@@ -15,6 +15,7 @@ import {
 } from './production-mobile-access.js';
 import { createMobileServer } from './mobile-server.js';
 import { createMobilePublicIdProjector } from './mobile-public-id.js';
+import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 const NOW = new Date('2026-07-15T10:00:00.000Z');
 const SERVER_ID = '11111111-1111-4111-8111-aaaaaaaaaaaa';
@@ -142,6 +143,79 @@ describe('production mobile access composition', () => {
       transactions: [],
       page: { hasMore: false, nextCursor: null },
     });
+  });
+
+  it('persists a mobile subscription review decision for subsequent reads', async () => {
+    const { access, database } = createHarness();
+    const account = insertAccount(database.db);
+    for (const date of ['2026-04-20', '2026-05-20', '2026-06-20']) {
+      insertTransaction(database.db, account.id, {
+        date,
+        processedDate: date,
+        description: 'Holmes Place',
+        chargedAmount: -50,
+        category: 'fitness',
+      });
+    }
+    const issued = access.deviceRegistry.issue({ name: 'Personal iPhone' });
+    const server = createMobileServer({
+      recurringPayments: access.recurringPaymentsDependencies,
+      transactions: access.transactionDependencies,
+      clock: () => NOW,
+      logger: false,
+    });
+    servers.push(server);
+    const url = '/api/mobile/v1/recurring-payments';
+    const headers = { authorization: `Bearer ${issued.token}` };
+    const initial = await server.app.inject({ method: 'GET', url, headers });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.json().data).toMatchObject({
+      payments: [],
+      suggestions: [{ name: 'Holmes Place' }],
+    });
+    const candidate = initial.json().data.suggestions[0];
+    expect(candidate.accountId).toMatch(/^account_[A-Za-z0-9_-]{22}$/);
+    expect(candidate.merchantKey).toMatch(/^[a-f0-9]{64}$/);
+    const detailQuery = new URLSearchParams({
+      accountId: candidate.accountId,
+      currencyCode: candidate.currencyCode,
+      merchantKey: candidate.merchantKey,
+    });
+    const detail = await server.app.inject({
+      method: 'GET',
+      url: `${url}/detail?${detailQuery}`,
+      headers,
+    });
+    expect(detail.statusCode).toBe(200);
+    const chargeId = detail.json().data.transactions[0].id;
+    expect(chargeId).toMatch(/^transaction_[A-Za-z0-9_-]{22}$/);
+    expect(
+      (
+        await server.app.inject({
+          method: 'GET',
+          url: `/api/mobile/v1/transactions/${chargeId}`,
+          headers,
+        })
+      ).statusCode,
+    ).toBe(200);
+    const saved = await server.app.inject({
+      method: 'PUT',
+      url: `${url}/decision`,
+      headers,
+      payload: {
+        accountId: candidate.accountId,
+        currencyCode: candidate.currencyCode,
+        merchantKey: candidate.merchantKey,
+        decision: 'include',
+      },
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().data).toMatchObject({
+      payments: [{ name: 'Holmes Place' }],
+      suggestions: [],
+    });
+    const reread = await server.app.inject({ method: 'GET', url, headers });
+    expect(reread.json().data.payments).toHaveLength(1);
   });
 
   it('fails bootstrap, transaction list, and detail closed when the desktop source is unavailable', async () => {

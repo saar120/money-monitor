@@ -5,7 +5,7 @@ name: Activity search filters and detail
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
-- tapOn: 'Activity, tab, 2 of 3'
+- tapOn: 'Activity, tab, 2 of 4'
 - assertVisible:
     id: activity-screen
 - assertVisible: Today

@@ -1,10 +1,30 @@
 import { randomUUID } from 'node:crypto';
-import { mkdirSync, readFileSync, appendFileSync, writeFileSync, unlinkSync, readdirSync } from 'node:fs';
+import {
+  mkdirSync,
+  readFileSync,
+  appendFileSync,
+  writeFileSync,
+  unlinkSync,
+  readdirSync,
+} from 'node:fs';
 import { join } from 'node:path';
 import { sessionsDir } from '../paths.js';
+import type { AdvisorChart } from './advisor-chart.js';
 
 const SESSIONS_DIR = sessionsDir;
 const DEFAULT_TITLE = 'New chat';
+const activeReplies = new Set<string>();
+
+/** Keep desktop and mobile replies to one chat in order within the Mac process. */
+export function beginSessionReply(id: string): boolean {
+  if (activeReplies.has(id)) return false;
+  activeReplies.add(id);
+  return true;
+}
+
+export function endSessionReply(id: string): void {
+  activeReplies.delete(id);
+}
 
 export interface SessionMeta {
   type: 'meta';
@@ -19,6 +39,7 @@ export interface SessionMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  chart?: AdvisorChart;
 }
 
 export interface Session {
@@ -59,7 +80,13 @@ export function createSession(): SessionMeta {
   ensureDir();
   const id = randomUUID();
   const now = new Date().toISOString();
-  const meta: SessionMeta = { type: 'meta', id, title: DEFAULT_TITLE, createdAt: now, updatedAt: now };
+  const meta: SessionMeta = {
+    type: 'meta',
+    id,
+    title: DEFAULT_TITLE,
+    createdAt: now,
+    updatedAt: now,
+  };
   appendLine(sessionPath(id), meta);
   return meta;
 }
@@ -74,13 +101,13 @@ export function getSession(id: string): Session | null {
   if (lines.length === 0) return null;
 
   const meta = JSON.parse(lines[0]) as SessionMeta;
-  const messages = lines.slice(1).map(l => JSON.parse(l) as SessionMessage);
+  const messages = lines.slice(1).map((l) => JSON.parse(l) as SessionMessage);
   return { meta, messages };
 }
 
 export function listSessions(): SessionSummary[] {
   ensureDir();
-  const files = readdirSync(SESSIONS_DIR).filter(f => f.endsWith('.jsonl'));
+  const files = readdirSync(SESSIONS_DIR).filter((f) => f.endsWith('.jsonl'));
   const summaries: SessionSummary[] = [];
 
   for (const file of files) {
@@ -88,7 +115,21 @@ export function listSessions(): SessionSummary[] {
       const firstLine = readFileSync(join(SESSIONS_DIR, file), 'utf-8').split('\n')[0];
       if (!firstLine) continue;
       const meta = JSON.parse(firstLine) as SessionMeta;
-      summaries.push({ id: meta.id, title: meta.title, createdAt: meta.createdAt, updatedAt: meta.updatedAt });
+      if (
+        meta.type !== 'meta' ||
+        typeof meta.id !== 'string' ||
+        file !== `${meta.id}.jsonl` ||
+        typeof meta.title !== 'string' ||
+        typeof meta.createdAt !== 'string' ||
+        typeof meta.updatedAt !== 'string'
+      )
+        continue;
+      summaries.push({
+        id: meta.id,
+        title: meta.title,
+        createdAt: meta.createdAt,
+        updatedAt: meta.updatedAt,
+      });
     } catch {
       // Skip corrupted files
     }
@@ -106,9 +147,20 @@ export function deleteSession(id: string): boolean {
   }
 }
 
-export function appendMessage(id: string, role: 'user' | 'assistant', content: string): SessionMessage | null {
+export function appendMessage(
+  id: string,
+  role: 'user' | 'assistant',
+  content: string,
+  chart?: AdvisorChart,
+): SessionMessage | null {
   const path = sessionPath(id);
-  const msg: SessionMessage = { type: 'message', role, content, timestamp: new Date().toISOString() };
+  const msg: SessionMessage = {
+    type: 'message',
+    role,
+    content,
+    timestamp: new Date().toISOString(),
+    ...(chart ? { chart } : {}),
+  };
 
   let lines: string[];
   try {
@@ -129,8 +181,10 @@ export function appendMessage(id: string, role: 'user' | 'assistant', content: s
   return msg;
 }
 
-export function getSessionMessages(id: string): Array<{ role: 'user' | 'assistant'; content: string }> | null {
+export function getSessionMessages(
+  id: string,
+): Array<{ role: 'user' | 'assistant'; content: string }> | null {
   const session = getSession(id);
   if (!session) return null;
-  return session.messages.map(m => ({ role: m.role, content: m.content }));
+  return session.messages.map((m) => ({ role: m.role, content: m.content }));
 }

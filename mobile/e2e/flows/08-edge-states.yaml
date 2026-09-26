@@ -15,18 +15,18 @@ name: Empty and mixed-currency fixtures stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: no-transactions
-- tapOn: 'Activity, tab, 2 of 3'
+- tapOn: 'Activity, tab, 2 of 4'
 - assertVisible:
     id: activity-empty
 - assertVisible: 'No transactions yet'
-- tapOn: 'Explore, tab, 3 of 3'
+- tapOn: 'Explore, tab, 3 of 4'
 - assertVisible:
     id: cashflow-chart
 - launchApp:
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: mixed-currency
-- tapOn: 'Activity, tab, 2 of 3'
+- tapOn: 'Activity, tab, 2 of 4'
 - assertVisible:
     id: transaction-txn-wolt
 - assertVisible:

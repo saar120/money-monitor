@@ -112,6 +112,7 @@ describe('settings routes', () => {
         'google',
         'openrouter',
       ]);
+      expect(ids).not.toContain('typesafe');
 
       // Anthropic supports both API key and OAuth
       const anthropic = providers.find((p: any) => p.id === 'anthropic');

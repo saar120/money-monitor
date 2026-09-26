@@ -1,0 +1,37 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Hebrew setting persists and root screens remain reachable in RTL
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn:
+    id: tab-home
+- assertVisible:
+    id: home-screen
+- tapOn:
+    id: open-settings
+- tapOn:
+    id: language-he
+- assertVisible: בוקר טוב
+- stopApp
+- launchApp:
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+- tapOn:
+    id: tab-home
+- assertVisible: בוקר טוב
+- tapOn: 'פעילות, לשונית 2 מתוך 4'
+- assertVisible:
+    id: activity-screen
+- tapOn: 'סקירה, לשונית 3 מתוך 4'
+- assertVisible:
+    id: explore-screen
+- tapOn:
+    id: explore-card-monthly
+- assertVisible:
+    id: monthly-comparison-screen
+- tapOn: 'יועץ, לשונית 4 מתוך 4'
+- assertVisible:
+    id: advisor-screen
+- assertVisible: 'על מה הוצאתי הכי הרבה בחודש 2026-09?'

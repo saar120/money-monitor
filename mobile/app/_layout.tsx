@@ -18,9 +18,19 @@ import { selectFixtureScenario } from '@/fixture-selection';
 import { MoneyDataProvider } from '@/MoneyData';
 import { LAST_ROOT_TAB_KEY, rootTabFromPath } from '@/navigation-state';
 import { useAppColors } from '@/theme';
+import { LanguageProvider, t, useLanguage } from '@/localization';
 
 export default function RootLayout() {
+  return (
+    <LanguageProvider>
+      <AppLayout />
+    </LanguageProvider>
+  );
+}
+
+function AppLayout() {
   const colors = useAppColors();
+  const { language } = useLanguage();
   const baseNavigationTheme = useColorScheme() === 'dark' ? DarkTheme : DefaultTheme;
   const params = useGlobalSearchParams<{ fixture?: string; auth?: string }>();
   const previewLocked =
@@ -35,7 +45,13 @@ export default function RootLayout() {
   }, []);
 
   return (
-    <GestureHandlerRootView style={{ flex: 1, backgroundColor: colors.background }}>
+    <GestureHandlerRootView
+      style={{
+        flex: 1,
+        backgroundColor: colors.background,
+        direction: language === 'he' ? 'rtl' : 'ltr',
+      }}
+    >
       <StatusBar style="auto" />
       <ThemeProvider
         value={{
@@ -69,15 +85,16 @@ export default function RootLayout() {
                 name="scanner"
                 options={{ headerShown: false, presentation: 'fullScreenModal' }}
               />
-              <Stack.Screen name="foundation" options={{ title: 'Foundation checks' }} />
-              <Stack.Screen name="review" options={{ title: 'Review' }} />
-              <Stack.Screen name="category/[name]" options={{ title: 'Category' }} />
-              <Stack.Screen name="merchant/[name]" options={{ title: 'Merchant' }} />
-              <Stack.Screen name="transaction/[id]" options={{ title: 'Transaction' }} />
-              <Stack.Screen name="net-worth" options={{ title: 'Net worth' }} />
+              <Stack.Screen name="foundation" options={{ title: t('foundationChecks') }} />
+              <Stack.Screen name="review" options={{ title: t('review') }} />
+              <Stack.Screen name="category/[name]" options={{ title: t('category') }} />
+              <Stack.Screen name="merchant/[name]" options={{ title: t('merchant') }} />
+              <Stack.Screen name="transaction/[id]" options={{ title: t('transaction') }} />
+              <Stack.Screen name="net-worth" options={{ title: t('netWorth') }} />
+              <Stack.Screen name="settings" options={{ title: t('settings') }} />
               <Stack.Screen
                 name="accounts-attention"
-                options={{ title: 'Accounts', headerBackTitle: 'Home' }}
+                options={{ title: t('accounts'), headerBackTitle: t('home') }}
               />
             </Stack>
           </MoneyDataProvider>

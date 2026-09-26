@@ -47,6 +47,8 @@ const form = ref({
   AI_BATCH_PROVIDER: '',
   AI_BATCH_MODEL_ID: '',
   AI_BATCH_THINKING_LEVEL: 'inherit',
+  CATEGORIZATION_PROVIDER: 'llm',
+  TYPESAFE_API_KEY: '',
   OPENAI_API_KEY: '',
   OPENCODE_API_KEY: '',
   GEMINI_API_KEY: '',
@@ -81,6 +83,12 @@ const batchModel = computed(() =>
   batchProvider.value?.models.find((model) => model.id === form.value.AI_BATCH_MODEL_ID),
 );
 const supportsBatchModelThinking = computed(() => batchModel.value?.reasoning ?? false);
+const useTypeSafeCategorization = computed({
+  get: () => form.value.CATEGORIZATION_PROVIDER === 'typesafe',
+  set: (enabled: boolean) => {
+    form.value.CATEGORIZATION_PROVIDER = enabled ? 'typesafe' : 'llm';
+  },
+});
 const currentApiKeyField = computed(
   () => (currentProvider.value?.apiKeyField ?? 'ANTHROPIC_API_KEY') as keyof typeof form.value,
 );
@@ -115,6 +123,7 @@ onMounted(async () => {
     form.value.AI_BATCH_PROVIDER = String(s.AI_BATCH_PROVIDER || '');
     form.value.AI_BATCH_MODEL_ID = String(s.AI_BATCH_MODEL_ID || '');
     form.value.AI_BATCH_THINKING_LEVEL = String(s.AI_BATCH_THINKING_LEVEL || 'inherit');
+    form.value.CATEGORIZATION_PROVIDER = String(s.CATEGORIZATION_PROVIDER || 'llm');
     useSeparateBatch.value = !!(s.AI_BATCH_PROVIDER || s.AI_BATCH_MODEL_ID);
     form.value.SCRAPE_CRON = String(s.SCRAPE_CRON || '0 6 * * *');
     form.value.SCRAPE_TIMEZONE = String(s.SCRAPE_TIMEZONE || 'Asia/Jerusalem');
@@ -282,6 +291,7 @@ async function save() {
       AI_BATCH_THINKING_LEVEL: useSeparateBatch.value
         ? form.value.AI_BATCH_THINKING_LEVEL
         : 'inherit',
+      CATEGORIZATION_PROVIDER: form.value.CATEGORIZATION_PROVIDER,
       SCRAPE_CRON: form.value.SCRAPE_CRON,
       SCRAPE_TIMEZONE: form.value.SCRAPE_TIMEZONE,
       SCRAPE_START_DATE_MONTHS_BACK: form.value.SCRAPE_START_DATE_MONTHS_BACK,
@@ -300,6 +310,7 @@ async function save() {
       'OPENCODE_API_KEY',
       'GEMINI_API_KEY',
       'OPENROUTER_API_KEY',
+      'TYPESAFE_API_KEY',
     ] as const;
     for (const key of secretKeys) {
       if (dirtySecrets.value.has(key) && form.value[key]) {
@@ -618,11 +629,30 @@ async function save() {
             </Select>
           </SettingsRow>
 
-          <SettingsRow label="Separate Batch Model">
+          <SettingsRow
+            label="TypeSafe Categorization"
+            description="Use TypeSafe instead of the configured AI batch model for transaction categorization"
+          >
+            <Switch v-model="useTypeSafeCategorization" />
+          </SettingsRow>
+
+          <SettingsRow v-if="useTypeSafeCategorization" label="TypeSafe API Key">
+            <Input
+              v-model="form.TYPESAFE_API_KEY"
+              type="password"
+              class="w-52"
+              :placeholder="
+                data?.settings.TYPESAFE_API_KEY ? String(data.settings.TYPESAFE_API_KEY) : 'Not set'
+              "
+              @input="markDirty('TYPESAFE_API_KEY')"
+            />
+          </SettingsRow>
+
+          <SettingsRow v-if="!useTypeSafeCategorization" label="Separate Batch Model">
             <Switch v-model="useSeparateBatch" />
           </SettingsRow>
 
-          <template v-if="useSeparateBatch">
+          <template v-if="!useTypeSafeCategorization && useSeparateBatch">
             <SettingsRow label="Batch Provider">
               <Select v-model="form.AI_BATCH_PROVIDER">
                 <SelectTrigger>

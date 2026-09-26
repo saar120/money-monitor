@@ -12,7 +12,7 @@ name: Pull-to-refresh belongs to the initiating tab
     start: 50%, 20%
     end: 50%, 78%
     duration: 600
-- tapOn: 'Activity, tab, 2 of 3'
+- tapOn: 'Activity, tab, 2 of 4'
 - extendedWaitUntil:
     visible:
       id: activity-screen

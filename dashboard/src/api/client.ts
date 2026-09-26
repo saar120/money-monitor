@@ -256,6 +256,74 @@ export function getNeedsReviewCount() {
 
 // ─── Summary ───
 
+export interface RecurringPayment {
+  accountId: number;
+  merchantKey: string;
+  name: string;
+  accountName: string;
+  currencyCode: string;
+  usualAmount: number;
+  monthlyCost: number;
+  annualCost: number;
+  frequency: 'monthly' | 'everyTwoMonths';
+  occurrences: number;
+  lastChargeDate: string;
+  nextExpectedDate: string;
+  confidence: 'likely' | 'possible';
+  kind: 'subscription' | 'serviceBill';
+  source: 'automatic' | 'manual' | 'suggestion' | 'excluded';
+}
+
+export interface RecurringPayments {
+  payments: RecurringPayment[];
+  suggestions: RecurringPayment[];
+  excluded: RecurringPayment[];
+  totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
+  asOfDate: string;
+  classificationPending: boolean;
+}
+
+export interface RecurringPaymentDetail {
+  payment: RecurringPayment;
+  previousAmount: number | null;
+  changedOnDate: string | null;
+  transactions: Array<{
+    id: number;
+    date: string;
+    description: string;
+    amount: number;
+    inPattern: boolean;
+  }>;
+}
+
+export function getRecurringPayments() {
+  return request<RecurringPayments>('/recurring-payments');
+}
+
+export function getRecurringPaymentDetail(payment: RecurringPayment) {
+  const query = new URLSearchParams({
+    accountId: String(payment.accountId),
+    currencyCode: payment.currencyCode,
+    merchantKey: payment.merchantKey,
+  });
+  return request<RecurringPaymentDetail>(`/recurring-payments/detail?${query}`);
+}
+
+export function saveRecurringPaymentDecision(
+  payment: RecurringPayment,
+  decision: 'include' | 'exclude' | 'auto',
+) {
+  return request<RecurringPayments>('/recurring-payments/decision', {
+    method: 'PUT',
+    body: JSON.stringify({
+      accountId: payment.accountId,
+      currencyCode: payment.currencyCode,
+      merchantKey: payment.merchantKey,
+      decision,
+    }),
+  });
+}
+
 export interface SummaryItem {
   category?: string;
   month?: string;

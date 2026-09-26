@@ -1,10 +1,14 @@
+import { t } from '@/localization';
+import { categoryLabel } from '@/translations';
+import { currentLocale } from '@/locale-state';
+import { Text } from '@/LocalizedText';
 import { router, Stack, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
-import { ActivityIndicator, Pressable, ScrollView, StyleSheet, Text, View } from 'react-native';
+import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
-import { formatMoney, formatSpendingChange, spendingTotal } from '@/money';
+import { formatMoney, formatSpendingComparison, spendingTotal } from '@/money';
 import type { ExploreMonth } from '@/mobile-api';
 import { useAppColors } from '@/theme';
 
@@ -16,14 +20,14 @@ export default function MerchantScreen() {
   if (status !== 'ready' || !home) return <ConnectionState />;
   return (
     <>
-      <Stack.Screen options={{ title: name ?? 'Merchant' }} />
+      <Stack.Screen options={{ title: name ?? t('merchant') }} />
       {months.length ? (
         <MerchantContent initialMonth={month} months={months} name={name} />
       ) : (
         <View style={[styles.loading, { backgroundColor: colors.background }]}>
           {loading ? <ActivityIndicator color={colors.accent} /> : null}
           <Text style={[styles.empty, { color: colors.secondary }]}>
-            {loading ? 'Loading merchant history…' : 'Merchant history is unavailable.'}
+            {loading ? t('loadingMerchantHistory') : t('merchantHistoryIsUnavailable')}
           </Text>
         </View>
       )}
@@ -83,22 +87,24 @@ function MerchantContent({
           <Text style={[styles.totalLabel, { color: colors.secondary }]}>{total!.label}</Text>
           <Text style={[styles.summary, { color: delta! > 0 ? colors.warning : colors.positive }]}>
             {delta === 0
-              ? 'Unchanged from last month'
-              : `${formatSpendingChange(delta!, snapshot.currencyCode)} than last month`}
+              ? t('unchangedFromLastMonth')
+              : formatSpendingComparison(delta!, snapshot.currencyCode)}
           </Text>
           <Text style={[styles.meta, { color: colors.secondary }]}>
-            {merchant.category} · {merchant.count} transaction{merchant.count === 1 ? '' : 's'}
+            {categoryLabel(merchant.category)} · {t('transactionCount', { count: merchant.count })}
           </Text>
         </>
       ) : (
         <View style={[styles.noSpend, { backgroundColor: colors.surfaceSoft }]}>
-          <Text style={[styles.noSpendTitle, { color: colors.text }]}>No spending this month</Text>
+          <Text style={[styles.noSpendTitle, { color: colors.text }]}>
+            {t('noSpendingThisMonth')}
+          </Text>
           <Text style={[styles.meta, { color: colors.secondary }]}>
-            Use the arrows to inspect another month.
+            {t('useTheArrowsToInspectAnotherMonth')}
           </Text>
         </View>
       )}
-      <Text style={[styles.title, { color: colors.text }]}>Transactions</Text>
+      <Text style={[styles.title, { color: colors.text }]}>{t('transactions')}</Text>
       {loading ? (
         <ActivityIndicator color={colors.accent} style={styles.transactionLoading} />
       ) : error ? (
@@ -106,7 +112,7 @@ function MerchantContent({
       ) : transactions.length ? (
         transactions.map((transaction) => (
           <Pressable
-            accessibilityHint="Opens transaction details"
+            accessibilityHint={t('opensTransactionDetails')}
             accessibilityRole="button"
             key={transaction.id}
             onPress={() => router.push(`/transaction/${transaction.id}`)}
@@ -120,9 +126,10 @@ function MerchantContent({
                 {transaction.merchant}
               </Text>
               <Text style={[styles.rowMeta, { color: colors.secondary }]}>
-                {new Intl.DateTimeFormat('en', { month: 'short', day: 'numeric' }).format(
-                  new Date(transaction.occurredAt),
-                )}{' '}
+                {new Intl.DateTimeFormat(currentLocale(), {
+                  month: 'short',
+                  day: 'numeric',
+                }).format(new Date(transaction.occurredAt))}{' '}
                 · {transaction.account}
               </Text>
             </View>
@@ -137,7 +144,7 @@ function MerchantContent({
         ))
       ) : (
         <Text style={[styles.empty, { color: colors.secondary }]}>
-          No matching transactions in this month.
+          {t('noMatchingTransactionsInThisMonth')}
         </Text>
       )}
     </ScrollView>
@@ -176,8 +183,8 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   rowText: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600', writingDirection: 'ltr' },
-  rowMeta: { marginTop: 3, fontSize: 12.5, lineHeight: 17, writingDirection: 'ltr' },
+  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  rowMeta: { marginTop: 3, fontSize: 12.5, lineHeight: 17 },
   rowAmount: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
   empty: { marginTop: 10, fontSize: 14, lineHeight: 20 },
   transactionLoading: { alignSelf: 'flex-start', marginTop: 14 },

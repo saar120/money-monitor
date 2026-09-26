@@ -1,27 +1,13 @@
 import { Agent } from '@earendil-works/pi-agent-core';
-import { completeSimple } from '@earendil-works/pi-ai/compat';
+import { Type } from '@earendil-works/pi-ai';
 import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
 import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
-import { eq, isNull, inArray, gte, lte, and } from 'drizzle-orm';
-import {
-  config,
-  getBatchModelSpec,
-  getConfiguredBatchThinkingLevel,
-  getConfiguredThinkingLevel,
-} from '../config.js';
-import { applyOwnership } from '../services/ownership.js';
+import { config, getConfiguredThinkingLevel } from '../config.js';
 import { extractAssistantText, resolveModel } from './ai-utils.js';
 import { db } from '../db/connection.js';
-import { transactions, categories } from '../db/schema.js';
-import {
-  buildBatchCategorizerPrompt,
-  buildFinancialAdvisorPrompt,
-  partitionCategories,
-  withMemory,
-} from './prompts.js';
+import { categories } from '../db/schema.js';
+import { buildFinancialAdvisorPrompt, partitionCategories, withMemory } from './prompts.js';
 import type { CategoryWithRules } from './prompts.js';
-import { parseMeta } from '../shared/types.js';
-import type { Transaction } from '../shared/types.js';
 import {
   buildQueryTransactionsTool,
   buildGetSpendingSummaryTool,
@@ -52,6 +38,9 @@ import { buildGetBudgetProgressTool, buildManageBudgetTool } from './budget-tool
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
 import { buildGenerateTableImageTool } from './image-tools.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
+import { createAgentTool } from './tool-adapter.js';
+import { makeAdvisorChart } from './chart-data.js';
+import type { AdvisorChart } from './advisor-chart.js';
 
 // Load OAuth credentials at module init
 loadCredentials();
@@ -73,37 +62,6 @@ function hasEnvApiKey(provider: string): boolean {
   return vars ? vars.some((v) => !!process.env[v]) : false;
 }
 
-function formatTransactionForPrompt(t: Transaction): string {
-  const meta = parseMeta(t.meta);
-  const bankCat = meta.bankCategory ? ` | bank-category: ${meta.bankCategory}` : '';
-  const memo = t.memo ? ` | memo: ${t.memo}` : '';
-  return `ID:${t.id} | ${t.date} | ₪${t.chargedAmount} | ${t.description}${memo}${bankCat}`;
-}
-
-/** Strip markdown code fences that the model may wrap around JSON. */
-function cleanJsonResponse(text: string): string {
-  return text
-    .replace(/^```(?:json)?\n?/m, '')
-    .replace(/\n?```$/m, '')
-    .trim();
-}
-
-/** Parse the model's JSON response, validate categories, and return valid results. */
-function processCategoryResults(
-  text: string,
-  validCategories: Set<string>,
-  validIds: Set<number>,
-): Array<{ id: number; category: string; confidence?: number; reviewReason?: string }> {
-  const clean = cleanJsonResponse(text);
-  const results: Array<{
-    id: number;
-    category: string;
-    confidence?: number;
-    reviewReason?: string;
-  }> = JSON.parse(clean);
-  return results.filter(({ id, category }) => validIds.has(id) && validCategories.has(category));
-}
-
 // ── Chat types ──────────────────────────────────────────────────────────────────
 
 export interface ChatMessage {
@@ -115,7 +73,24 @@ export type ChatEvent =
   | { type: 'text_delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'result'; text: string }
-  | { type: 'error'; text: string };
+  | { type: 'error'; text: string }
+  | { type: 'chart'; chart: AdvisorChart };
+
+const MOBILE_READ_TOOLS = new Set([
+  'query_transactions',
+  'get_spending_summary',
+  'get_account_balances',
+  'compare_periods',
+  'get_spending_trends',
+  'detect_recurring_transactions',
+  'get_top_merchants',
+  'get_net_worth',
+  'get_asset_details',
+  'get_liabilities',
+  'get_net_worth_history',
+  'get_budget_progress',
+  'get_latest_scrape_transactions',
+]);
 
 // ── Tool status mapping ─────────────────────────────────────────────────────────
 
@@ -193,13 +168,20 @@ function getCategoriesWithRules(): CategoryWithRules[] {
 export async function* chat(
   conversationHistory: ChatMessage[],
   images?: ImageContent[],
+  options: { mobileReadOnly?: boolean } = {},
 ): AsyncGenerator<ChatEvent> {
   const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map((c) => c.name);
   const ignoredCategoryNames = ignored.map((c) => c.name);
+  const firstLetter = conversationHistory.at(-1)?.content.match(/[A-Za-z\u0590-\u05FF]/)?.[0];
+  const mobileLanguage = firstLetter && /[\u0590-\u05FF]/.test(firstLetter) ? 'he' : 'en';
 
-  const systemPrompt = withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames));
+  const systemPrompt =
+    withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames)) +
+    (options.mobileReadOnly
+      ? '\nThis iPhone chat is read-only. Reply in the language of the latest user message, including Hebrew when the user writes in Hebrew. Keep saved category and merchant names unchanged. Use show_financial_chart when its scope matches the question and a graph helps; its plotted values come from Mac calculations. For comparisons and detailed results, use compact Markdown tables with a header and separator row so the iPhone can display them as tables. Only include values returned by tools.'
+      : '');
 
   const { model, provider } = resolveModel();
 
@@ -216,7 +198,7 @@ export async function* chat(
     return;
   }
 
-  const tools = [
+  const allTools = [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
     buildGetAccountBalancesTool(),
@@ -245,6 +227,33 @@ export async function* chat(
     buildGetLatestScrapeTransactionsTool(),
     buildGenerateTableImageTool(),
   ];
+  let chart: AdvisorChart | null = null;
+  const tools = options.mobileReadOnly
+    ? [
+        ...allTools.filter((tool) => MOBILE_READ_TOOLS.has(tool.name)),
+        createAgentTool({
+          name: 'show_financial_chart',
+          description:
+            'Show an interactive graph of Mac-calculated overall monthly spending or spending by category for a chosen month. Call only when the chart scope matches the question.',
+          label: 'Preparing chart',
+          parameters: Type.Object({
+            kind: Type.Union([Type.Literal('spending_trend'), Type.Literal('category_spending')]),
+            months: Type.Optional(
+              Type.Number({ description: 'Months for a spending trend, 1-12' }),
+            ),
+            month: Type.Optional(
+              Type.String({
+                description: 'YYYY-MM for spending by category; defaults to current month',
+              }),
+            ),
+          }),
+          execute: async (args) => {
+            chart = makeAdvisorChart(args.kind, args.months, args.month, mobileLanguage);
+            return chart ? JSON.stringify(chart) : 'No chart data is available for this period.';
+          },
+        }),
+      ]
+    : allTools;
 
   const agent = new Agent({
     initialState: {
@@ -306,6 +315,7 @@ export async function* chat(
         return;
       }
       const finalText = extractAssistantText(event.messages);
+      if (chart) push({ type: 'chart', chart });
       push({ type: 'result', text: finalText });
       push({ done: true });
     }
@@ -336,114 +346,4 @@ export async function* chat(
   }
 }
 
-// ── Batch categorization ────────────────────────────────────────────────────────
-
-/** Shared LLM call + result persistence for batch categorization. */
-async function categorizeBatch(txns: Transaction[]): Promise<{ categorized: number }> {
-  if (txns.length === 0) return { categorized: 0 };
-
-  const catRows = getCategoriesWithRules();
-  const categoryNames = catRows.map((r) => r.name);
-  if (categoryNames.length === 0) return { categorized: 0 };
-  const ignoredCategories = new Set(catRows.filter((r) => r.ignoredFromStats).map((r) => r.name));
-
-  const validIds = new Set(txns.map((t) => t.id));
-  const validCategories = new Set(categoryNames);
-  const txnList = txns.map(formatTransactionForPrompt).join('\n');
-
-  const { model, provider } = resolveModel(getBatchModelSpec());
-  const reasoning = getConfiguredBatchThinkingLevel(model.reasoning);
-
-  // Resolve OAuth key if available
-  const oauthKey = await resolveApiKey(provider);
-
-  const response = await completeSimple(
-    model,
-    {
-      systemPrompt: buildBatchCategorizerPrompt(catRows),
-      messages: [
-        {
-          role: 'user',
-          content: `Categorize these transactions:\n${txnList}`,
-          timestamp: Date.now(),
-        },
-      ],
-    },
-    {
-      ...(oauthKey ? { apiKey: oauthKey } : {}),
-      ...(reasoning ? { reasoning } : {}),
-    },
-  );
-
-  const text = response.content
-    .filter((b): b is { type: 'text'; text: string } => b.type === 'text')
-    .map((b) => b.text)
-    .join('');
-
-  let categorized = 0;
-  try {
-    for (const { id, category, confidence, reviewReason } of processCategoryResults(
-      text,
-      validCategories,
-      validIds,
-    )) {
-      const needsReview = confidence !== undefined && confidence < 0.8;
-      db.update(transactions)
-        .set({
-          category,
-          confidence: confidence ?? null,
-          needsReview,
-          reviewReason: needsReview ? (reviewReason ?? 'Low confidence categorization') : null,
-          ignored: ignoredCategories.has(category),
-        })
-        .where(eq(transactions.id, id))
-        .run();
-      categorized++;
-    }
-    if (categorized > 0) applyOwnership({ ids: txns.map((t) => t.id) });
-  } catch (err) {
-    console.error(
-      '[AI] Failed to process categorization results:',
-      err instanceof Error ? err.message : err,
-    );
-  }
-
-  return { categorized };
-}
-
-export async function batchCategorize(
-  batchSize: number = 50,
-  ids?: number[],
-): Promise<{ categorized: number }> {
-  const uncategorized =
-    ids && ids.length > 0
-      ? db
-          .select()
-          .from(transactions)
-          .where(and(isNull(transactions.category), inArray(transactions.id, ids)))
-          .all()
-      : db.select().from(transactions).where(isNull(transactions.category)).limit(batchSize).all();
-
-  return categorizeBatch(uncategorized);
-}
-
-export async function recategorize(
-  startDate?: string,
-  endDate?: string,
-): Promise<{ categorized: number }> {
-  // Categorization maintenance ranges refer to the source records' bank dates.
-  const conditions = [];
-  if (startDate) conditions.push(gte(transactions.date, startDate));
-  if (endDate) conditions.push(lte(transactions.date, endDate));
-
-  const toProcess =
-    conditions.length > 0
-      ? db
-          .select()
-          .from(transactions)
-          .where(and(...conditions))
-          .all()
-      : db.select().from(transactions).all();
-
-  return categorizeBatch(toProcess);
-}
+export { batchCategorize, recategorize } from './categorization/index.js';

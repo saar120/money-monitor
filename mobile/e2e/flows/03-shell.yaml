@@ -5,15 +5,15 @@ name: All root tabs are reachable
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
-- tapOn: 'Explore, tab, 3 of 3'
+- tapOn: 'Explore, tab, 3 of 4'
 - assertVisible:
     id: explore-screen
 - assertVisible:
     id: cashflow-chart
 - assertVisible: 'What changed'
-- tapOn: 'Home, tab, 1 of 3'
+- tapOn: 'Home, tab, 1 of 4'
 - assertVisible:
     id: home-screen
-- tapOn: 'Activity, tab, 2 of 3'
+- tapOn: 'Activity, tab, 2 of 4'
 - assertVisible:
     id: activity-screen

@@ -1,0 +1,20 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Advisor renders and explores a Hebrew reply
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: normal
+      MM_ADVISOR_HEBREW_PREVIEW: '1'
+- tapOn: 'Advisor, tab, 4 of 4'
+- assertVisible: 'על מה הוצאתי הכי הרבה בחודש 2026-09?'
+- assertVisible:
+    id: advisor-table
+- assertVisible:
+    id: advisor-chart
+- tapOn: 'מזון, ₪2,850'
+- assertVisible: 'מזון · ₪2,850'
+- tapOn:
+    id: advisor-input
+- inputText: 'איך השתנו ההוצאות שלי?'
+- assertVisible: 'איך השתנו ההוצאות שלי?'

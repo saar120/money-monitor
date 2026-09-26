@@ -1,3 +1,4 @@
+import { t } from '../translations.ts';
 import type { PairingQrPayload } from './parse-pairing-qr';
 
 export type MobileHealthResult =
@@ -34,7 +35,11 @@ export async function checkMobileHealth(
       !('generatedAt' in body.meta) ||
       typeof body.meta.generatedAt !== 'string'
     ) {
-      return { reachable: false, endpoint, message: `Unexpected response (${response.status}).` };
+      return {
+        reachable: false,
+        endpoint,
+        message: t('unexpectedResponse', { code: response.status }),
+      };
     }
     return { reachable: true, endpoint, generatedAt: body.meta.generatedAt };
   } catch (error) {
@@ -43,8 +48,8 @@ export async function checkMobileHealth(
       endpoint,
       message:
         error instanceof Error && error.name === 'AbortError'
-          ? 'The Mac did not respond in time.'
-          : 'The Mac is unreachable. Check that both devices are on the same Tailnet.',
+          ? t('theMacDidNotRespondInTime')
+          : t('theMacIsUnreachableCheckThatBothDevicesAreOnTheSameTailnet'),
     };
   } finally {
     clearTimeout(timeout);

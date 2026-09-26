@@ -5,9 +5,7 @@ node_modules/
 
 # Expo
 .expo/
-.impeccable/*
-!.impeccable/design.json
-!.impeccable/home-brief.md
+.impeccable/
 dist/
 web-build/
 expo-env.d.ts

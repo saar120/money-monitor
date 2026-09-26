@@ -14,7 +14,32 @@ npm run ios
 
 This app uses native Expo modules, so Face ID, secure storage, app-switcher protection, and the camera should be evaluated in a development build rather than Expo Go.
 
-For physical-device builds, use Xcode 26.6 until Expo's generated iOS shell adopts the `UIScene` lifecycle required by the iOS 27 SDK. Xcode 27 beta builds of Expo SDK 57 terminate before React starts; the same app built with the iOS 26.5 SDK runs on iOS 27.
+Physical-device builds support Xcode 27 through Expo SDK 57's official `ios.enableSceneSupport` build property. Clean prebuilds generate the required scene manifest and use Expo's scene delegate.
+
+## Product and architecture
+
+Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remains authoritative for financial data, calculations, scraping, AI, credentials, and administration; the phone consumes its authenticated mobile API and stores only its device credential in the iOS Keychain.
+
+- **Home** gives a five-second view of spending, income, pace, budgets, and attention items.
+- **Activity** provides searchable, filterable transactions and opens the focused Review workflow.
+- **Explore** follows changes through categories, merchants, transactions, cash flow, budgets, and net worth.
+- `MoneyDataProvider` owns pairing state, shared overview data, fixture selection, and invalidation after review actions. Feature screens call typed API helpers directly; there is no app-wide state framework or client-side financial calculation layer.
+
+## UI rules
+
+- Use semantic roles from `src/theme.ts`; do not add screen-local canvas or surface colors.
+- Cobalt indicates interaction or chart focus. Green, amber, and red are reserved for financial or operational meaning.
+- Keep one leading financial statement per viewport, align monetary values, and use tabular numerals.
+- Prefer native navigation, sheets, controls, Dynamic Type, VoiceOver semantics, and 44-point targets.
+- Reserve Liquid Glass for navigation and compact selection controls—not ordinary content cards.
+- Preserve server-defined inclusion, date, owner, pending, transfer, and currency semantics.
+
+## Language
+
+Open the gear on Home (or **Settings** on the connection screen) to choose **System default**, **English**, or **עברית**. The choice is saved on the iPhone. Restart the app after switching between left-to-right and right-to-left navigation so the native tab bar and navigation controls follow the new direction. iOS permission dialogs follow the app language selected in iPhone Settings.
+
+Interface copy lives in `src/translations.ts`. Add an English and Hebrew value for each new message key, then call `t(key)` at the point of use. Pass variable values and counts as options so the two languages can use their own word order and plural forms. System language comes from `expo-localization`.
+
 
 ## Deterministic E2E
 
@@ -26,6 +51,8 @@ npm run e2e:ios
 ```
 
 The command prebuilds iOS, creates a Release simulator build, then runs the Maestro flows in `e2e/flows` sequentially so their launch fixtures cannot share simulator state. Tests do not require Money Monitor on the Mac, Tailscale, a network connection, or credentials.
+
+`e2e/flows/11-hebrew-language.yaml` changes the app language to Hebrew, restarts it to apply native RTL navigation, and checks the Activity and Explore routes in demo mode.
 
 Maestro selects a scenario with the iOS launch argument `MM_FIXTURE_SCENARIO`. The app reads it through React Native's native Settings API; normal production launches use the paired Mac, and no fixture picker is shown. Add a typed scenario beside the existing values in `src/fixtures.ts`, then launch it from a flow like this:
 
@@ -58,5 +85,3 @@ npm run typecheck
 npm test
 npx expo-doctor
 ```
-
-The current product model and Blue Ledger visual rules are recorded in [`PRODUCT.md`](./PRODUCT.md) and [`DESIGN.md`](./DESIGN.md). Reviewed iPhone 17 Pro captures live in [`docs/screenshots/blue-ledger`](./docs/screenshots/blue-ledger); the repeatable capture flows are `e2e/capture-blue-ledger-light.yaml` and `e2e/capture-blue-ledger-dark.yaml`. The feasibility result and limitations are in [`FEASIBILITY.md`](./FEASIBILITY.md).

@@ -9,10 +9,11 @@ import {
   deleteSession,
   appendMessage,
   getSessionMessages,
+  beginSessionReply,
+  endSessionReply,
 } from '../ai/sessions.js';
 
 export async function aiRoutes(app: FastifyInstance) {
-
   // ── Session CRUD ───────────────────────────────────────────────────────
 
   app.get('/api/ai/sessions', async () => {
@@ -47,40 +48,50 @@ export async function aiRoutes(app: FastifyInstance) {
     // Load session messages
     const history = getSessionMessages(data.sessionId);
     if (!history) return reply.status(404).send({ error: 'Session not found' });
-
-    // Append user message to session file
-    appendMessage(data.sessionId, 'user', data.message);
-
-    // Build full conversation for the agent
-    const conversationHistory = [...history, { role: 'user' as const, content: data.message }];
-
-    reply.hijack();
-    reply.raw.writeHead(200, {
-      'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
-      'X-Accel-Buffering': 'no',
-    });
-
-    let assistantResponse = '';
+    if (!beginSessionReply(data.sessionId))
+      return reply.status(409).send({ error: 'This chat is still receiving a reply.' });
 
     try {
-      for await (const event of chat(conversationHistory)) {
-        reply.raw.write(`event: ${event.type}\ndata: ${JSON.stringify({ text: event.text })}\n\n`);
-        if (event.type === 'result') {
-          assistantResponse = event.text;
-        }
-      }
+      // Append user message to session file
+      if (!appendMessage(data.sessionId, 'user', data.message))
+        return reply.status(500).send({ error: 'Message could not be saved' });
 
-      // Append assistant response to session file
-      if (assistantResponse) {
-        appendMessage(data.sessionId, 'assistant', assistantResponse);
+      // Build full conversation for the agent
+      const conversationHistory = [...history, { role: 'user' as const, content: data.message }];
+
+      reply.hijack();
+      reply.raw.writeHead(200, {
+        'Content-Type': 'text/event-stream',
+        'Cache-Control': 'no-cache',
+        Connection: 'keep-alive',
+        'X-Accel-Buffering': 'no',
+      });
+
+      let assistantResponse = '';
+
+      try {
+        for await (const event of chat(conversationHistory)) {
+          if (event.type === 'chart') continue;
+          reply.raw.write(
+            `event: ${event.type}\ndata: ${JSON.stringify({ text: event.text })}\n\n`,
+          );
+          if (event.type === 'result') {
+            assistantResponse = event.text;
+          }
+        }
+
+        // Append assistant response to session file
+        if (assistantResponse) {
+          appendMessage(data.sessionId, 'assistant', assistantResponse);
+        }
+      } catch (err) {
+        const message = err instanceof Error ? err.message : 'AI chat failed';
+        reply.raw.write(`event: error\ndata: ${JSON.stringify({ text: message })}\n\n`);
+      } finally {
+        reply.raw.end();
       }
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'AI chat failed';
-      reply.raw.write(`event: error\ndata: ${JSON.stringify({ text: message })}\n\n`);
     } finally {
-      reply.raw.end();
+      endSessionReply(data.sessionId);
     }
   });
 
