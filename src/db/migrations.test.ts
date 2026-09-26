@@ -98,6 +98,7 @@ describe('database migrations', () => {
       'liabilities',
       'members',
       'mobile_devices',
+      'recurring_payment_decisions',
       'ownership_rules',
       'scrape_logs',
       'transactions',

@@ -169,6 +169,13 @@
       "when": 1787825036112,
       "tag": "0023_charged_currency",
       "breakpoints": true
+    },
+    {
+      "idx": 24,
+      "version": "6",
+      "when": 1790416730926,
+      "tag": "0024_faithful_ma_gnuci",
+      "breakpoints": true
     }
   ]
 }

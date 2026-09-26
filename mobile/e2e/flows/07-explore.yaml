@@ -85,6 +85,19 @@ name: Explore cards open month-aware drill-downs
     id: cash-flow-range-total
 - assertVisible:
     id: cash-flow-range-average
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- scrollUntilVisible:
+    element:
+      id: explore-card-recurring
+    direction: DOWN
+- tapOn:
+    id: explore-card-recurring
+- assertVisible:
+    id: recurring-payments-screen
+- assertVisible: 'No subscriptions or services found yet'
 - stopApp
 - launchApp
 - assertVisible:

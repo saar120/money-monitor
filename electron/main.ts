@@ -343,6 +343,7 @@ async function startMobileAccessIfEnabled(): Promise<void> {
             pairing: production.pairingDependencies,
             transactions: production.transactionDependencies,
             overview: production.overviewDependencies,
+            recurringPayments: production.recurringPaymentsDependencies,
           });
           try {
             const port = await server.start({ host });

@@ -9,6 +9,10 @@ const router = createRouter({
   routes: [
     { path: '/', component: () => import('./components/OverviewDashboard.vue') },
     { path: '/insights', component: () => import('./components/InsightsPage.vue') },
+    {
+      path: '/recurring-payments',
+      component: () => import('./components/RecurringPaymentsPage.vue'),
+    },
     { path: '/transactions', component: () => import('./components/TransactionTable.vue') },
     { path: '/accounts', component: () => import('./components/AccountManager.vue') },
     { path: '/chat', component: () => import('./components/AiChat.vue') },

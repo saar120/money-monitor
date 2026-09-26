@@ -13,6 +13,10 @@ import {
 } from './mobile-auth.js';
 import type { PublicMobileDevice } from './device-registry.js';
 import {
+  registerMobileRecurringPaymentsRoute,
+  type MobileRecurringPaymentsDependencies,
+} from './recurring-payments-routes.js';
+import {
   registerMobilePairingRoutes,
   type MobilePairingRouteDependencies,
 } from './pairing-routes.js';
@@ -45,6 +49,7 @@ export interface CreateMobileServerOptions {
   pairing?: MobilePairingRouteDependencies;
   transactions?: MobileTransactionRouteDependencies;
   overview?: MobileOverviewRouteDependencies;
+  recurringPayments?: MobileRecurringPaymentsDependencies;
   clock?: () => Date;
   errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
   logger?: boolean;
@@ -158,6 +163,10 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
 
   if (options.overview) {
     registerMobileOverviewRoute(app, options.overview, clock);
+  }
+
+  if (options.recurringPayments) {
+    registerMobileRecurringPaymentsRoute(app, options.recurringPayments, clock);
   }
 
   async function start(startOptions: MobileServerStartOptions = {}): Promise<number> {

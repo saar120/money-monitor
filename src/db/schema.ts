@@ -84,6 +84,25 @@ export const transactions = sqliteTable(
   ],
 );
 
+export const recurringPaymentDecisions = sqliteTable(
+  'recurring_payment_decisions',
+  {
+    accountId: integer('account_id')
+      .notNull()
+      .references(() => accounts.id, { onDelete: 'cascade' }),
+    currencyCode: text('currency_code').notNull(),
+    merchantKey: text('merchant_key').notNull(),
+    decision: text('decision', { enum: ['include', 'exclude'] }).notNull(),
+  },
+  (table) => [
+    uniqueIndex('idx_recurring_payment_decisions_key').on(
+      table.accountId,
+      table.currencyCode,
+      table.merchantKey,
+    ),
+  ],
+);
+
 export const members = sqliteTable('members', {
   id: integer('id').primaryKey({ autoIncrement: true }),
   name: text('name').notNull(),

@@ -4,6 +4,8 @@ import test from 'node:test';
 import {
   completePairing,
   fetchExploreMonth,
+  fetchRecurringPaymentDetail,
+  fetchRecurringPayments,
   fetchHomeData,
   fetchReviewOptions,
   fetchTransactionPage,
@@ -13,6 +15,118 @@ import {
 } from './mobile-api.ts';
 import { setActiveLanguage } from './locale-state.ts';
 import { ownerLabel, t } from './translations.ts';
+
+test('reads recurring payments from the paired Mac', async () => {
+  const originalFetch = globalThis.fetch;
+  const credential = {
+    serverId: '11111111-1111-4111-8111-111111111111',
+    baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+    token: 'T'.repeat(43),
+  };
+  globalThis.fetch = async () =>
+    new Response(
+      JSON.stringify({
+        data: {
+          asOfDate: '2026-09-26',
+          classificationPending: true,
+          payments: [
+            {
+              accountId: `account_${'b'.repeat(22)}`,
+              merchantKey: 'netflix',
+              name: 'Netflix',
+              accountName: 'Card',
+              currencyCode: 'ILS',
+              usualAmount: 49.9,
+              monthlyCost: 49.9,
+              annualCost: 598.8,
+              frequency: 'monthly',
+              occurrences: 3,
+              lastChargeDate: '2026-09-06',
+              nextExpectedDate: '2026-10-06',
+              confidence: 'likely',
+              kind: 'subscription',
+              source: 'automatic',
+            },
+          ],
+          suggestions: [],
+          excluded: [],
+          totals: [{ currencyCode: 'ILS', monthlyCost: 49.9, annualCost: 598.8 }],
+        },
+        meta: { server: { id: credential.serverId } },
+      }),
+      { status: 200 },
+    );
+  try {
+    const result = await fetchRecurringPayments(credential);
+    assert.equal(result.payments[0]?.name, 'Netflix');
+    assert.equal(result.totals[0]?.monthlyCost, 49.9);
+    assert.equal(result.classificationPending, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
+
+test('reads a subscription charge history from the paired Mac', async () => {
+  const originalFetch = globalThis.fetch;
+  const credential = {
+    serverId: '11111111-1111-4111-8111-111111111111',
+    baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
+    token: 'T'.repeat(43),
+  };
+  const merchantKey = 'a'.repeat(64);
+  let requested = '';
+  globalThis.fetch = async (input) => {
+    requested = String(input);
+    return new Response(
+      JSON.stringify({
+        data: {
+          payment: {
+            accountId: `account_${'b'.repeat(22)}`,
+            merchantKey,
+            name: 'Codex Subscription',
+            accountName: 'Card',
+            currencyCode: 'ILS',
+            usualAmount: 100,
+            monthlyCost: 100,
+            annualCost: 1200,
+            frequency: 'monthly',
+            occurrences: 3,
+            lastChargeDate: '2026-09-06',
+            nextExpectedDate: '2026-10-06',
+            confidence: 'likely',
+            kind: 'subscription',
+            source: 'manual',
+          },
+          previousAmount: 20,
+          changedOnDate: '2026-09-06',
+          transactions: [
+            {
+              id: `transaction_${'a'.repeat(22)}`,
+              date: '2026-09-06',
+              description: 'Codex Subscription',
+              amount: 100,
+              inPattern: true,
+            },
+          ],
+        },
+        meta: { server: { id: credential.serverId } },
+      }),
+      { status: 200 },
+    );
+  };
+  try {
+    const detail = await fetchRecurringPaymentDetail(credential, {
+      accountId: `account_${'b'.repeat(22)}`,
+      currencyCode: 'ILS',
+      merchantKey,
+    });
+    assert.match(requested, /recurring-payments\/detail\?accountId=account_/);
+    assert.equal(detail.payment.annualCost, 1200);
+    assert.equal(detail.transactions[0].inPattern, true);
+  } finally {
+    globalThis.fetch = originalFetch;
+  }
+});
 
 test('maps the server canonical bootstrap fixture into the live Home model', async () => {
   const fixture = readFileSync(
@@ -349,7 +463,10 @@ test('Hebrew transaction filters and review saves keep canonical API values', as
     const url = String(input);
     if (init?.method === 'PATCH') {
       updates.push(JSON.parse(String(init.body)));
-      return Response.json({ data: { transaction }, meta: { server: { id: credential.serverId } } });
+      return Response.json({
+        data: { transaction },
+        meta: { server: { id: credential.serverId } },
+      });
     }
     requests.push(url);
     const data = url.endsWith('/review-options')

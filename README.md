@@ -9,6 +9,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 - **AI Financial Advisor** — Chat with your finances using natural language — get category suggestions, detect recurring charges, compare periods, and more
 - **Net Worth Tracking** — Track assets (brokerage accounts, crypto, real estate), liabilities (loans, mortgages), and view historical net worth trends with multi-currency support
 - **Interactive Dashboard** — Real-time charts, spending breakdowns, transaction search, insights, and account management
+- **Recurring Payments** — Find subscriptions and service bills on desktop and iPhone, review uncertain matches, and save include or exclude choices on the Mac
 - **Telegram Bot** — Chat with your AI advisor on the go, upload receipts for scanning, and receive spending alerts
 - **MCP Server** — Expose your financial data to ChatGPT desktop, Codex, Claude Code, and other MCP clients (16 read tools, 25 with writes enabled)
 - **Alerts** — Get notified about large charges, unusual spending, scrape errors, and monthly summaries via Telegram
