@@ -83,6 +83,10 @@ export const MOBILE_ERROR_DEFINITIONS = {
     statusCode: 409,
     message: 'The pairing credential is already being issued.',
   },
+  advisor_reply_in_progress: {
+    statusCode: 409,
+    message: 'This chat is still receiving a reply. Please try again shortly.',
+  },
   pairing_expired: {
     statusCode: 410,
     message: 'The pairing request has expired. Create a new code on the Mac.',

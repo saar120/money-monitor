@@ -1,4 +1,5 @@
 import { Agent } from '@earendil-works/pi-agent-core';
+import { Type } from '@earendil-works/pi-ai';
 import type { AssistantMessage, UserMessage, Message, ImageContent } from '@earendil-works/pi-ai';
 import type { AgentMessage, AgentEvent } from '@earendil-works/pi-agent-core';
 import { config, getConfiguredThinkingLevel } from '../config.js';
@@ -37,6 +38,9 @@ import { buildGetBudgetProgressTool, buildManageBudgetTool } from './budget-tool
 import { buildGetAlertSettingsTool, buildUpdateAlertSettingsTool } from './alert-tools.js';
 import { buildGenerateTableImageTool } from './image-tools.js';
 import { resolveApiKey, loadCredentials } from './auth.js';
+import { createAgentTool } from './tool-adapter.js';
+import { makeAdvisorChart } from './chart-data.js';
+import type { AdvisorChart } from './advisor-chart.js';
 
 // Load OAuth credentials at module init
 loadCredentials();
@@ -69,7 +73,24 @@ export type ChatEvent =
   | { type: 'text_delta'; text: string }
   | { type: 'status'; text: string }
   | { type: 'result'; text: string }
-  | { type: 'error'; text: string };
+  | { type: 'error'; text: string }
+  | { type: 'chart'; chart: AdvisorChart };
+
+const MOBILE_READ_TOOLS = new Set([
+  'query_transactions',
+  'get_spending_summary',
+  'get_account_balances',
+  'compare_periods',
+  'get_spending_trends',
+  'detect_recurring_transactions',
+  'get_top_merchants',
+  'get_net_worth',
+  'get_asset_details',
+  'get_liabilities',
+  'get_net_worth_history',
+  'get_budget_progress',
+  'get_latest_scrape_transactions',
+]);
 
 // ── Tool status mapping ─────────────────────────────────────────────────────────
 
@@ -147,13 +168,20 @@ function getCategoriesWithRules(): CategoryWithRules[] {
 export async function* chat(
   conversationHistory: ChatMessage[],
   images?: ImageContent[],
+  options: { mobileReadOnly?: boolean } = {},
 ): AsyncGenerator<ChatEvent> {
   const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
   const categoryNames = cats.map((c) => c.name);
   const ignoredCategoryNames = ignored.map((c) => c.name);
+  const firstLetter = conversationHistory.at(-1)?.content.match(/[A-Za-z\u0590-\u05FF]/)?.[0];
+  const mobileLanguage = firstLetter && /[\u0590-\u05FF]/.test(firstLetter) ? 'he' : 'en';
 
-  const systemPrompt = withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames));
+  const systemPrompt =
+    withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames)) +
+    (options.mobileReadOnly
+      ? '\nThis iPhone chat is read-only. Reply in the language of the latest user message, including Hebrew when the user writes in Hebrew. Keep saved category and merchant names unchanged. Use show_financial_chart when its scope matches the question and a graph helps; its plotted values come from Mac calculations. For comparisons and detailed results, use compact Markdown tables with a header and separator row so the iPhone can display them as tables. Only include values returned by tools.'
+      : '');
 
   const { model, provider } = resolveModel();
 
@@ -170,7 +198,7 @@ export async function* chat(
     return;
   }
 
-  const tools = [
+  const allTools = [
     buildQueryTransactionsTool(),
     buildGetSpendingSummaryTool(),
     buildGetAccountBalancesTool(),
@@ -199,6 +227,33 @@ export async function* chat(
     buildGetLatestScrapeTransactionsTool(),
     buildGenerateTableImageTool(),
   ];
+  let chart: AdvisorChart | null = null;
+  const tools = options.mobileReadOnly
+    ? [
+        ...allTools.filter((tool) => MOBILE_READ_TOOLS.has(tool.name)),
+        createAgentTool({
+          name: 'show_financial_chart',
+          description:
+            'Show an interactive graph of Mac-calculated overall monthly spending or spending by category for a chosen month. Call only when the chart scope matches the question.',
+          label: 'Preparing chart',
+          parameters: Type.Object({
+            kind: Type.Union([Type.Literal('spending_trend'), Type.Literal('category_spending')]),
+            months: Type.Optional(
+              Type.Number({ description: 'Months for a spending trend, 1-12' }),
+            ),
+            month: Type.Optional(
+              Type.String({
+                description: 'YYYY-MM for spending by category; defaults to current month',
+              }),
+            ),
+          }),
+          execute: async (args) => {
+            chart = makeAdvisorChart(args.kind, args.months, args.month, mobileLanguage);
+            return chart ? JSON.stringify(chart) : 'No chart data is available for this period.';
+          },
+        }),
+      ]
+    : allTools;
 
   const agent = new Agent({
     initialState: {
@@ -260,6 +315,7 @@ export async function* chat(
         return;
       }
       const finalText = extractAssistantText(event.messages);
+      if (chart) push({ type: 'chart', chart });
       push({ type: 'result', text: finalText });
       push({ done: true });
     }

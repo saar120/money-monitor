@@ -290,14 +290,17 @@ async function startMobileAccessIfEnabled(): Promise<void> {
     const { createProductionMobileAccess } =
       await import('../dist/mobile/production-mobile-access.js');
     const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
+    const advisorSessions = await import('../dist/ai/sessions.js');
+    const { chat: advisorChat } = await import('../dist/ai/agent.js');
 
-    if (!config.MOBILE_SERVER_ID || !config.MOBILE_PUBLIC_ID_KEY) {
+    const mobileServerId = config.MOBILE_SERVER_ID;
+    if (!mobileServerId || !config.MOBILE_PUBLIC_ID_KEY) {
       throw new Error('Mobile identity is unavailable');
     }
 
     const production = createProductionMobileAccess({
       db,
-      serverId: config.MOBILE_SERVER_ID,
+      serverId: mobileServerId,
       publicIdKey: config.MOBILE_PUBLIC_ID_KEY,
       server: {
         displayName: `${app.getName()} on this Mac`,
@@ -344,6 +347,16 @@ async function startMobileAccessIfEnabled(): Promise<void> {
             transactions: production.transactionDependencies,
             overview: production.overviewDependencies,
             recurringPayments: production.recurringPaymentsDependencies,
+            advisor: {
+              authenticator: production.deviceRegistry,
+              server: { id: mobileServerId },
+              available: () => !connection.isDemoMode(),
+              list: advisorSessions.listSessions,
+              create: advisorSessions.createSession,
+              get: advisorSessions.getSession,
+              append: advisorSessions.appendMessage,
+              chat: (history) => advisorChat(history, undefined, { mobileReadOnly: true }),
+            },
           });
           try {
             const port = await server.start({ host });

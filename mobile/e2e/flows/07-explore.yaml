@@ -5,7 +5,7 @@ name: Explore cards open month-aware drill-downs
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: category-shift
-- tapOn: 'Explore, tab, 3 of 3'
+- tapOn: 'Explore, tab, 3 of 4'
 - assertVisible:
     id: explore-card-categories
 - assertVisible:

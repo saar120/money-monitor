@@ -28,6 +28,7 @@ import {
   registerMobileOverviewRoute,
   type MobileOverviewRouteDependencies,
 } from './overview-routes.js';
+import { registerMobileAdvisorRoutes, type MobileAdvisorDependencies } from './advisor-routes.js';
 
 export const MOBILE_SERVER_HOST = '127.0.0.1' as const;
 
@@ -50,6 +51,7 @@ export interface CreateMobileServerOptions {
   transactions?: MobileTransactionRouteDependencies;
   overview?: MobileOverviewRouteDependencies;
   recurringPayments?: MobileRecurringPaymentsDependencies;
+  advisor?: MobileAdvisorDependencies;
   clock?: () => Date;
   errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
   logger?: boolean;
@@ -163,6 +165,9 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
 
   if (options.overview) {
     registerMobileOverviewRoute(app, options.overview, clock);
+  }
+  if (options.advisor) {
+    registerMobileAdvisorRoutes(app, options.advisor, clock);
   }
 
   if (options.recurringPayments) {

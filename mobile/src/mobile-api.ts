@@ -84,6 +84,132 @@ export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
 > & { reviewed?: true };
 
+export type AdvisorChart = {
+  kind: 'bar' | 'line';
+  title: string;
+  currencyCode: 'ILS';
+  points: { label: string; value: number }[];
+};
+export type AdvisorMessage = {
+  role: 'user' | 'assistant';
+  content: string;
+  timestamp: string;
+  chart?: AdvisorChart;
+};
+export type AdvisorSession = { id: string; title: string; createdAt: string; updatedAt: string };
+
+const advisorPath = '/api/mobile/v1/advisor/sessions';
+
+export async function listAdvisorSessions(
+  credential: PairingCredential,
+): Promise<AdvisorSession[]> {
+  const root = object(await authorizedGet(credential, advisorPath), 'advisor sessions');
+  verifyServer(root, credential);
+  const sessions = object(root.data, 'advisor sessions').sessions;
+  if (!Array.isArray(sessions)) throw new Error('The Mac returned invalid advisor sessions.');
+  return sessions as AdvisorSession[];
+}
+
+export async function createAdvisorSession(credential: PairingCredential): Promise<AdvisorSession> {
+  const root = object(
+    await requestJson(`${credential.baseURL}${advisorPath}`, {
+      method: 'POST',
+      headers: { Authorization: `Bearer ${credential.token}` },
+    }),
+    'advisor session',
+  );
+  verifyServer(root, credential);
+  return object(object(root.data, 'advisor session').session, 'advisor session') as AdvisorSession;
+}
+
+export async function getAdvisorSession(
+  credential: PairingCredential,
+  id: string,
+): Promise<{ meta: AdvisorSession; messages: AdvisorMessage[] }> {
+  const root = object(
+    await authorizedGet(credential, `${advisorPath}/${encodeURIComponent(id)}`),
+    'advisor session',
+  );
+  verifyServer(root, credential);
+  const session = object(object(root.data, 'advisor session').session, 'advisor session');
+  if (!Array.isArray(session.messages))
+    throw new Error('The Mac returned invalid advisor messages.');
+  return {
+    meta: object(session.meta, 'advisor session') as AdvisorSession,
+    messages: session.messages as AdvisorMessage[],
+  };
+}
+
+export function streamAdvisorReply(
+  credential: PairingCredential,
+  id: string,
+  message: string,
+  onEvent: (event: {
+    type: 'text_delta' | 'status' | 'result' | 'error' | 'chart';
+    text?: string;
+    chart?: AdvisorChart;
+  }) => void,
+): Promise<void> {
+  return new Promise((resolve, reject) => {
+    const xhr = new XMLHttpRequest();
+    let offset = 0;
+    let buffer = '';
+    let kind = '';
+    let identityChecked = false;
+    xhr.open('POST', `${credential.baseURL}${advisorPath}/${encodeURIComponent(id)}/messages`);
+    xhr.setRequestHeader('Authorization', `Bearer ${credential.token}`);
+    xhr.setRequestHeader('Content-Type', 'application/json');
+    xhr.timeout = 120_000;
+    const consume = () => {
+      if (!identityChecked && xhr.readyState >= 2 && xhr.status >= 200 && xhr.status < 300) {
+        identityChecked = true;
+        if (xhr.getResponseHeader('X-Money-Monitor-Server-Id') !== credential.serverId) {
+          xhr.abort();
+          reject(new Error('The responding Mac does not match the paired Mac.'));
+          return;
+        }
+      }
+      buffer += xhr.responseText.slice(offset);
+      offset = xhr.responseText.length;
+      const frames = buffer.split('\n');
+      buffer = frames.pop() ?? '';
+      for (const line of frames) {
+        if (line.startsWith('event: ')) kind = line.slice(7);
+        else if (line.startsWith('data: ') && kind) {
+          try {
+            const payload = JSON.parse(line.slice(6)) as { text?: string; chart?: AdvisorChart };
+            if (['text_delta', 'status', 'result', 'error', 'chart'].includes(kind))
+              onEvent({
+                type: kind as 'text_delta' | 'status' | 'result' | 'error' | 'chart',
+                ...payload,
+              });
+          } catch {
+            /* Ignore an invalid event; the saved session remains authoritative. */
+          }
+          kind = '';
+        }
+      }
+    };
+    xhr.onprogress = consume;
+    xhr.onload = () => {
+      consume();
+      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      else {
+        let body: unknown = null;
+        try {
+          body = JSON.parse(xhr.responseText);
+        } catch {
+          /* Use the status fallback. */
+        }
+        reject(apiError(body, xhr.status));
+      }
+    };
+    xhr.onerror = () => reject(new Error('The Mac connection was interrupted.'));
+    xhr.ontimeout = () => reject(new Error('The advisor took too long to respond.'));
+    xhr.send(JSON.stringify({ message }));
+  });
+}
+
 const FINANCIAL_DATE = /^\d{4}-\d{2}-\d{2}$/;
 const TOKEN = /^[A-Za-z0-9_-]{43}$/;
 
