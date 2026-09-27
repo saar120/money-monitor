@@ -74,6 +74,66 @@ describe('summary service', () => {
       expect(jan.totalAmount).toBe(-100);
     });
 
+    it('filters monthly history to one category', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-02-15',
+        processedDate: '2026-02-15',
+        category: 'food',
+        chargedAmount: -80,
+      });
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-02-16',
+        processedDate: '2026-02-16',
+        category: 'transport',
+        chargedAmount: -20,
+      });
+      const result = getSpendingSummary({ category: 'food', expensesOnly: true }, 'month');
+      expect(result.summary).toMatchObject([{ month: '2026-02', totalAmount: -80 }]);
+    });
+
+    it('nets categorized refunds while excluding income from spending categories', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, { category: 'food', chargedAmount: -100 });
+      insertTransaction(testDb.db, account.id, { category: 'food', chargedAmount: 30 });
+      insertTransaction(testDb.db, account.id, { category: 'income', chargedAmount: 500 });
+      insertTransaction(testDb.db, account.id, { category: null, chargedAmount: 50 });
+      insertTransaction(testDb.db, account.id, { category: null, chargedAmount: -20 });
+      const categories = getSpendingSummary({}, 'spending-category').summary as Array<{
+        category: string;
+        totalAmount: number;
+      }>;
+      expect(categories).toEqual(
+        expect.arrayContaining([
+          expect.objectContaining({ category: 'food', totalAmount: -70 }),
+          expect.objectContaining({ category: 'uncategorized', totalAmount: -20 }),
+        ]),
+      );
+      expect(categories.some((item) => item.category === 'income')).toBe(false);
+      const history = getSpendingSummary({ category: 'food' }, 'spending-category-month')
+        .summary as Array<{ totalAmount: number }>;
+      expect(history).toMatchObject([{ totalAmount: -70 }]);
+    });
+
+    it('groups daily spending by effective reporting date', () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-09-02',
+        processedDate: '2026-09-02',
+        effectiveDate: '2026-09-01',
+        chargedAmount: -100,
+      });
+      insertTransaction(testDb.db, account.id, {
+        date: '2026-09-01',
+        processedDate: '2026-09-01',
+        chargedAmount: -50,
+      });
+      const result = getSpendingSummary({ expensesOnly: true }, 'day');
+      expect(result.summary).toMatchObject([
+        { day: '2026-09-01', totalAmount: -150, transactionCount: 2 },
+      ]);
+    });
+
     it('groups by account', () => {
       const a1 = insertAccount(testDb.db, { displayName: 'Bank A' });
       const a2 = insertAccount(testDb.db, { displayName: 'Bank B' });

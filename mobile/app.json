@@ -43,6 +43,14 @@
       "expo-router",
       ["expo-localization", { "supportedLocales": { "ios": ["en", "he"] } }],
       [
+        "expo-build-properties",
+        {
+          "ios": {
+            "enableSceneSupport": true
+          }
+        }
+      ],
+      [
         "expo-local-authentication",
         {
           "faceIDPermission": "Allow Money Monitor to use Face ID to protect your financial information."
@@ -77,15 +85,7 @@
       ],
       "expo-status-bar",
       "expo-font",
-      "@react-native-community/datetimepicker",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "enableSceneSupport": true
-          }
-        }
-      ]
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true

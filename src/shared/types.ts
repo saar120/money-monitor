@@ -79,7 +79,12 @@ export const MOVEMENT_TYPES = [
 ] as const;
 
 /** Holding types where current value = quantity × lastPrice */
-const PRICED_HOLDING_TYPES: ReadonlySet<string> = new Set(['stock', 'etf', 'fund_units']);
+const PRICED_HOLDING_TYPES: ReadonlySet<string> = new Set([
+  'stock',
+  'etf',
+  'fund_units',
+  'property',
+]);
 
 export function holdingNeedsPrice(
   type: string,

@@ -22,7 +22,16 @@ function normalizeDescription(desc: string): string {
 
 export function getSpendingSummary(
   filters: TransactionFilterParams,
-  groupBy: 'category' | 'month' | 'account' | 'expense-owner' | 'cashflow' | 'cashflow-detail',
+  groupBy:
+    | 'category'
+    | 'spending-category'
+    | 'spending-category-month'
+    | 'day'
+    | 'month'
+    | 'account'
+    | 'expense-owner'
+    | 'cashflow'
+    | 'cashflow-detail',
 ) {
   const { conditions, empty } = buildTransactionFilters(filters);
   if (empty) {
@@ -35,6 +44,14 @@ export function getSpendingSummary(
     return { groupBy, summary: [] };
   }
   conditions.push(eq(transactions.ignored, false));
+  if (groupBy === 'spending-category' || groupBy === 'spending-category-month') {
+    conditions.push(
+      sql`(${transactions.category} IS NULL OR ${transactions.category} != 'income')`,
+    );
+    conditions.push(
+      sql`(${transactions.chargedAmount} < 0 OR ${transactions.category} IS NOT NULL)`,
+    );
+  }
 
   const where = and(...conditions);
 
@@ -98,7 +115,7 @@ export function getSpendingSummary(
     };
   }
 
-  if (groupBy === 'month') {
+  if (groupBy === 'month' || groupBy === 'spending-category-month') {
     const rows = db
       .select({
         month: sql<string>`strftime('%Y-%m', ${transactions.reportingDate})`.as('month'),
@@ -110,7 +127,22 @@ export function getSpendingSummary(
       .groupBy(sql`strftime('%Y-%m', ${transactions.reportingDate})`)
       .orderBy(sql`month desc`)
       .all();
-    return { groupBy: 'month' as const, summary: rows };
+    return { groupBy, summary: rows };
+  }
+
+  if (groupBy === 'day') {
+    const rows = db
+      .select({
+        day: transactions.reportingDate,
+        totalAmount: sql<number>`SUM(${transactions.chargedAmount})`.as('total_amount'),
+        transactionCount: sql<number>`COUNT(*)`.as('transaction_count'),
+      })
+      .from(transactions)
+      .where(where)
+      .groupBy(transactions.reportingDate)
+      .orderBy(transactions.reportingDate)
+      .all();
+    return { groupBy: 'day' as const, summary: rows };
   }
 
   if (groupBy === 'account') {
@@ -160,7 +192,7 @@ export function getSpendingSummary(
     .groupBy(sql`COALESCE(${transactions.category}, 'uncategorized')`)
     .orderBy(sql`total_amount desc`)
     .all();
-  return { groupBy: 'category' as const, summary: rows };
+  return { groupBy, summary: rows };
 }
 
 // ── Compare Periods ──

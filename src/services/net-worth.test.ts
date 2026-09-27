@@ -1,18 +1,33 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
-import { insertAccount, insertLiability, insertAsset, insertHolding, insertBalanceHistory, insertAssetSnapshot } from '../__tests__/helpers/fixtures.js';
+import {
+  insertAccount,
+  insertLiability,
+  insertAsset,
+  insertHolding,
+} from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
 
 vi.mock('./exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
+  getExchangeRates: vi
+    .fn()
+    .mockResolvedValue({
+      rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+      stale: false,
+      fetchedAt: new Date().toISOString(),
+    }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -21,8 +36,7 @@ vi.mock('./exchange-rates.js', () => ({
   }),
 }));
 
-const { generateDatePoints, getNetWorth } =
-  await import('./net-worth.js');
+const { generateDatePoints, getNetWorth } = await import('./net-worth.js');
 
 describe('net-worth service', () => {
   beforeEach(() => {
@@ -91,8 +105,18 @@ describe('net-worth service', () => {
     });
 
     it('sums bank balances', async () => {
-      insertAccount(testDb.db, { displayName: 'Bank A', accountType: 'bank', balance: 10000, isActive: true });
-      insertAccount(testDb.db, { displayName: 'Bank B', accountType: 'bank', balance: 20000, isActive: true });
+      insertAccount(testDb.db, {
+        displayName: 'Bank A',
+        accountType: 'bank',
+        balance: 10000,
+        isActive: true,
+      });
+      insertAccount(testDb.db, {
+        displayName: 'Bank B',
+        accountType: 'bank',
+        balance: 20000,
+        isActive: true,
+      });
 
       const result = await getNetWorth();
       expect(result.banksTotal).toBe(30000);
@@ -101,8 +125,18 @@ describe('net-worth service', () => {
     });
 
     it('excludes inactive bank accounts', async () => {
-      insertAccount(testDb.db, { displayName: 'Active Bank', accountType: 'bank', balance: 10000, isActive: true });
-      insertAccount(testDb.db, { displayName: 'Inactive Bank', accountType: 'bank', balance: 50000, isActive: false });
+      insertAccount(testDb.db, {
+        displayName: 'Active Bank',
+        accountType: 'bank',
+        balance: 10000,
+        isActive: true,
+      });
+      insertAccount(testDb.db, {
+        displayName: 'Inactive Bank',
+        accountType: 'bank',
+        balance: 50000,
+        isActive: false,
+      });
 
       const result = await getNetWorth();
       expect(result.banksTotal).toBe(10000);
@@ -110,8 +144,19 @@ describe('net-worth service', () => {
     });
 
     it('excludes credit card accounts from bank totals', async () => {
-      insertAccount(testDb.db, { displayName: 'Bank', accountType: 'bank', balance: 10000, isActive: true });
-      insertAccount(testDb.db, { displayName: 'Credit Card', accountType: 'credit_card', companyId: 'max', balance: -5000, isActive: true });
+      insertAccount(testDb.db, {
+        displayName: 'Bank',
+        accountType: 'bank',
+        balance: 10000,
+        isActive: true,
+      });
+      insertAccount(testDb.db, {
+        displayName: 'Credit Card',
+        accountType: 'credit_card',
+        companyId: 'max',
+        balance: -5000,
+        isActive: true,
+      });
 
       const result = await getNetWorth();
       expect(result.banksTotal).toBe(10000);
@@ -119,8 +164,18 @@ describe('net-worth service', () => {
     });
 
     it('subtracts liabilities from total', async () => {
-      insertAccount(testDb.db, { displayName: 'Bank', accountType: 'bank', balance: 100000, isActive: true });
-      insertLiability(testDb.db, { name: 'Mortgage', currency: 'ILS', currentBalance: 40000, isActive: true });
+      insertAccount(testDb.db, {
+        displayName: 'Bank',
+        accountType: 'bank',
+        balance: 100000,
+        isActive: true,
+      });
+      insertLiability(testDb.db, {
+        name: 'Mortgage',
+        currency: 'ILS',
+        currentBalance: 40000,
+        isActive: true,
+      });
 
       const result = await getNetWorth();
       expect(result.banksTotal).toBe(100000);
@@ -129,15 +184,30 @@ describe('net-worth service', () => {
     });
 
     it('converts liability currency to ILS', async () => {
-      insertLiability(testDb.db, { name: 'USD Loan', currency: 'USD', currentBalance: 1000, isActive: true });
+      insertLiability(testDb.db, {
+        name: 'USD Loan',
+        currency: 'USD',
+        currentBalance: 1000,
+        isActive: true,
+      });
 
       const result = await getNetWorth();
       expect(result.liabilitiesTotal).toBe(3600); // 1000 * 3.6
     });
 
     it('excludes inactive liabilities', async () => {
-      insertLiability(testDb.db, { name: 'Active', currency: 'ILS', currentBalance: 10000, isActive: true });
-      insertLiability(testDb.db, { name: 'Inactive', currency: 'ILS', currentBalance: 50000, isActive: false });
+      insertLiability(testDb.db, {
+        name: 'Active',
+        currency: 'ILS',
+        currentBalance: 10000,
+        isActive: true,
+      });
+      insertLiability(testDb.db, {
+        name: 'Inactive',
+        currency: 'ILS',
+        currentBalance: 50000,
+        isActive: false,
+      });
 
       const result = await getNetWorth();
       expect(result.liabilitiesTotal).toBe(10000);
@@ -152,7 +222,12 @@ describe('net-worth service', () => {
     });
 
     it('handles bank with null balance', async () => {
-      insertAccount(testDb.db, { displayName: 'No Balance', accountType: 'bank', balance: null, isActive: true });
+      insertAccount(testDb.db, {
+        displayName: 'No Balance',
+        accountType: 'bank',
+        balance: null,
+        isActive: true,
+      });
 
       const result = await getNetWorth();
       expect(result.banksTotal).toBe(0);
@@ -166,6 +241,20 @@ describe('net-worth service', () => {
       const result = await getNetWorth();
       expect(result.assets).toHaveLength(1);
       expect(result.assets[0].name).toBe('Active Asset');
+    });
+
+    it('values legacy property holdings by quantity times price', async () => {
+      const property = insertAsset(testDb.db, { name: 'Property', type: 'real_estate' });
+      insertHolding(testDb.db, property.id, {
+        name: 'Property value',
+        type: 'property',
+        quantity: 1,
+        lastPrice: 1150000,
+      });
+
+      const result = await getNetWorth();
+      expect(result.assetsTotal).toBe(1150000);
+      expect(result.total).toBe(1150000);
     });
   });
 });

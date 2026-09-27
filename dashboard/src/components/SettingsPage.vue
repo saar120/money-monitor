@@ -26,6 +26,61 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CheckCircle, AlertCircle, RefreshCw, Download } from 'lucide-vue-next';
+import {
+  language,
+  languageChoice,
+  setLanguageChoice,
+  t,
+  type LanguageChoice,
+} from '@/lib/language';
+
+const sectionCopy = computed(() =>
+  language.value === 'he'
+    ? {
+        household: 'משק בית',
+        general: 'כללי',
+        ai: 'בינה מלאכותית',
+        mobile: 'גישה מהטלפון',
+        security: 'אבטחה',
+        sync: 'סנכרון',
+        integrations: 'שילובים',
+        updates: 'עדכונים',
+        data: 'נתונים',
+        save: 'שמירת הגדרות',
+        saving: 'שומר…',
+        loading: 'טוען הגדרות…',
+        aiHint: 'בחירת ספק ומודל',
+        securityHint: 'מפתח הצפנה ופרטי גישה',
+        syncHint: 'תזמון וסנכרון חשבונות',
+        integrationsHint: 'חיבור לטלגרם',
+        updatesHint: 'גרסת האפליקציה ועדכונים',
+        dataHint: 'מידע לקריאה בלבד',
+      }
+    : {
+        household: 'Household',
+        general: 'General',
+        ai: 'AI',
+        mobile: 'Mobile access',
+        security: 'Security',
+        sync: 'Sync',
+        integrations: 'Integrations',
+        updates: 'Updates',
+        data: 'Data',
+        save: 'Save settings',
+        saving: 'Saving…',
+        loading: 'Loading settings…',
+        aiHint: 'Choose your AI provider and model',
+        securityHint: 'Encryption and access',
+        syncHint: 'Account sync schedule',
+        integrationsHint: 'Telegram connection',
+        updatesHint: 'App version and updates',
+        dataHint: 'Read-only information',
+      },
+);
+
+function onLanguageChange(event: Event) {
+  setLanguageChoice((event.target as globalThis.HTMLSelectElement).value as LanguageChoice);
+}
 
 const loading = ref(true);
 const saving = ref(false);
@@ -329,11 +384,22 @@ async function save() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto h-full overflow-y-auto pb-20 space-y-5 animate-fade-in-up">
-    <div v-if="loading" class="text-text-secondary">Loading settings...</div>
+  <div class="settings-page max-w-2xl mx-auto pb-20 space-y-5">
+    <div v-if="loading" class="text-text-secondary">{{ sectionCopy.loading }}</div>
 
     <template v-else>
-      <HouseholdSettings />
+      <nav class="settings-index" :aria-label="t('settings')">
+        <a href="#settings-household">{{ sectionCopy.household }}</a>
+        <a href="#settings-general">{{ sectionCopy.general }}</a>
+        <a href="#settings-ai">{{ sectionCopy.ai }}</a>
+        <a href="#settings-mobile">{{ sectionCopy.mobile }}</a>
+        <a href="#settings-security">{{ sectionCopy.security }}</a>
+        <a href="#settings-sync">{{ sectionCopy.sync }}</a>
+        <a href="#settings-integrations">{{ sectionCopy.integrations }}</a>
+        <a href="#settings-updates">{{ sectionCopy.updates }}</a>
+        <a href="#settings-data">{{ sectionCopy.data }}</a>
+      </nav>
+      <section id="settings-household"><HouseholdSettings /></section>
 
       <template v-if="!isElectron">
         <Card>
@@ -359,14 +425,28 @@ async function save() {
               {{ error }}
             </div>
             <Button size="sm" :disabled="saving" @click="save">
-              {{ saving ? 'Saving…' : 'Save Settings' }}
+              {{ saving ? sectionCopy.saving : sectionCopy.save }}
             </Button>
           </div>
         </Teleport>
 
-        <MobileAccessSettings />
+        <SettingsGroup id="settings-general" :title="t('language')">
+          <SettingsRow :label="t('appLanguage')">
+            <select
+              :value="languageChoice"
+              class="ledger-select"
+              :aria-label="t('appLanguage')"
+              @change="onLanguageChange"
+            >
+              <option value="system">{{ t('systemDefault') }}</option>
+              <option value="en">{{ t('english') }}</option>
+              <option value="he">{{ t('hebrew') }}</option>
+            </select>
+          </SettingsRow>
+        </SettingsGroup>
+        <section id="settings-mobile"><MobileAccessSettings /></section>
         <!-- AI Configuration -->
-        <SettingsGroup title="AI Configuration" description="Choose your AI provider and model">
+        <SettingsGroup id="settings-ai" :title="sectionCopy.ai" :description="sectionCopy.aiHint">
           <SettingsRow class="bg-bg-secondary/50">
             <div
               class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary"
@@ -730,7 +810,11 @@ async function save() {
         </SettingsGroup>
 
         <!-- Security -->
-        <SettingsGroup title="Security" description="Encryption key for bank credentials">
+        <SettingsGroup
+          id="settings-security"
+          :title="sectionCopy.security"
+          description="Encryption key for bank credentials"
+        >
           <SettingsRow
             label="Master Key"
             description="Changing this makes existing encrypted credentials unreadable"
@@ -750,7 +834,11 @@ async function save() {
         </SettingsGroup>
 
         <!-- Scraping -->
-        <SettingsGroup title="Scraping" description="Bank scraping schedule and behavior">
+        <SettingsGroup
+          id="settings-sync"
+          :title="sectionCopy.sync"
+          description="Bank scraping schedule and behavior"
+        >
           <SettingsRow label="Cron Schedule">
             <Input v-model="form.SCRAPE_CRON" placeholder="0 6 * * *" class="w-44" />
           </SettingsRow>
@@ -769,7 +857,11 @@ async function save() {
         </SettingsGroup>
 
         <!-- Telegram -->
-        <SettingsGroup title="Telegram" description="Optional Telegram bot integration">
+        <SettingsGroup
+          id="settings-integrations"
+          :title="sectionCopy.integrations"
+          description="Optional Telegram bot integration"
+        >
           <SettingsRow label="Bot Token">
             <Input
               v-model="form.TELEGRAM_BOT_TOKEN"
@@ -793,7 +885,11 @@ async function save() {
         </SettingsGroup>
 
         <!-- Updates -->
-        <SettingsGroup title="Updates" description="Automatic update settings">
+        <SettingsGroup
+          id="settings-updates"
+          :title="sectionCopy.updates"
+          description="Automatic update settings"
+        >
           <SettingsRow v-if="appVersion" label="Current Version">
             <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded"
               >v{{ appVersion }}</code
@@ -841,7 +937,11 @@ async function save() {
         </SettingsGroup>
 
         <!-- System Info (read-only) -->
-        <SettingsGroup title="System" description="Read-only information">
+        <SettingsGroup
+          id="settings-data"
+          :title="sectionCopy.data"
+          :description="sectionCopy.dataHint"
+        >
           <SettingsRow label="Data Directory">
             <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{
               data?.dataDir

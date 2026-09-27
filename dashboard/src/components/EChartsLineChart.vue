@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
@@ -33,6 +34,7 @@ const props = withDefaults(
 );
 
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
 const defaultYAxisFormatter = (v: number): string => {
   if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
@@ -41,6 +43,7 @@ const defaultYAxisFormatter = (v: number): string => {
 };
 
 const option = computed(() => ({
+  animation: !reduceMotion.value,
   tooltip: {
     trigger: 'axis' as const,
     backgroundColor: bgPrimary.value,

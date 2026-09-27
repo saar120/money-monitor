@@ -36,6 +36,7 @@ import { Switch } from '@/components/ui/switch';
 import { Pencil, Trash2, Plus, Check, X } from 'lucide-vue-next';
 import { Skeleton } from '@/components/ui/skeleton';
 import { DEFAULT_CATEGORY_COLOR, getCategoryStyle } from '@/lib/format';
+import { t } from '@/lib/language';
 
 const categories = ref<Category[]>([]);
 const members = ref<Member[]>([]);
@@ -263,7 +264,7 @@ onMounted(load);
     </SettingsGroup>
 
     <!-- Table -->
-    <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
+    <Card class="category-ledger flex-1 min-h-0 flex flex-col overflow-hidden">
       <CardContent class="p-0 flex-1 min-h-0 overflow-auto">
         <Table>
           <TableHeader>
@@ -389,25 +390,28 @@ onMounted(load);
     </Card>
 
     <!-- Re-categorize section -->
-    <SettingsGroup
-      title="Re-categorize Transactions"
-      description="Re-run AI categorization over a date range, overwriting existing categories"
-    >
-      <SettingsRow label="Start Date">
-        <Input v-model="recatStartDate" type="date" class="w-36" />
-      </SettingsRow>
-      <SettingsRow label="End Date">
-        <Input v-model="recatEndDate" type="date" class="w-36" />
-      </SettingsRow>
-      <SettingsRow>
-        <div class="flex items-center gap-2">
-          <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
-            {{ recatLoading ? 'Running…' : 'Re-categorize All' }}
-          </Button>
-          <span v-if="recatResult" class="text-[13px] text-success">{{ recatResult }}</span>
-          <span v-if="recatError" class="text-[13px] text-destructive">{{ recatError }}</span>
-        </div>
-      </SettingsRow>
-    </SettingsGroup>
+    <details class="category-advanced">
+      <summary>{{ t('advanced') }}</summary>
+      <SettingsGroup
+        title="Re-categorize Transactions"
+        description="Re-run AI categorization over a date range, overwriting existing categories"
+      >
+        <SettingsRow label="Start Date">
+          <Input v-model="recatStartDate" type="date" class="w-36" />
+        </SettingsRow>
+        <SettingsRow label="End Date">
+          <Input v-model="recatEndDate" type="date" class="w-36" />
+        </SettingsRow>
+        <SettingsRow>
+          <div class="flex items-center gap-2">
+            <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
+              {{ recatLoading ? 'Running…' : 'Re-categorize All' }}
+            </Button>
+            <span v-if="recatResult" class="text-[13px] text-success">{{ recatResult }}</span>
+            <span v-if="recatError" class="text-[13px] text-destructive">{{ recatError }}</span>
+          </div>
+        </SettingsRow>
+      </SettingsGroup>
+    </details>
   </div>
 </template>

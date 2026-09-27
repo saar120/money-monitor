@@ -39,8 +39,28 @@ import {
   Loader2,
   ChevronDown,
   ChevronRight,
+  Landmark,
 } from 'lucide-vue-next';
 import { formatDateTime } from '@/lib/format';
+import { language } from '@/lib/language';
+
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        choose: 'בחירת חשבון...',
+        syncAll: 'סנכרון הכל',
+        intro: 'עדכון פעולות הבנק והאשראי ומעקב אחר סנכרונים.',
+        active: 'חשבונות פעילים',
+        history: 'היסטוריית סנכרון',
+      }
+    : {
+        choose: 'Choose account...',
+        syncAll: 'Sync all',
+        intro: 'Keep bank and card activity current, with a clear sync history.',
+        active: 'active accounts',
+        history: 'Sync history',
+      },
+);
 
 // ─── State ───
 const accounts = ref<Account[]>([]);
@@ -309,7 +329,7 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
       <div class="flex items-center gap-2">
         <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
           <SelectTrigger class="w-[180px] h-8">
-            <SelectValue placeholder="Scrape account…" />
+            <SelectValue :placeholder="copy.choose" />
           </SelectTrigger>
           <SelectContent>
             <SelectItem
@@ -324,12 +344,21 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
         <Button size="sm" :disabled="triggerLoading || !!liveSession" @click="handleScrapeAll">
           <Loader2 v-if="triggerLoading" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
           <Play v-else class="mr-1.5 h-3.5 w-3.5" />
-          Scrape All
+          {{ copy.syncAll }}
         </Button>
       </div>
     </Teleport>
 
     <div class="flex-1 min-h-0 overflow-y-auto space-y-4">
+      <div class="scraping-intro">
+        <div>
+          <span>{{ copy.intro }}</span>
+        </div>
+        <div class="scraping-account-count">
+          <strong>{{ activeAccounts.length }}</strong
+          ><span>{{ copy.active }}</span>
+        </div>
+      </div>
       <!-- Error Banner -->
       <div
         v-if="errorMessage"
@@ -431,10 +460,23 @@ const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
 
       <!-- Session History -->
       <div v-else class="space-y-2">
-        <h2 class="text-[15px] font-semibold">Session History</h2>
-        <p v-if="sessions.length === 0" class="text-[13px] text-text-secondary py-8 text-center">
-          No scrape sessions yet. Trigger a scrape to get started.
-        </p>
+        <h2 class="text-[15px] font-semibold">{{ copy.history }}</h2>
+        <div v-if="sessions.length === 0" class="scrape-empty">
+          <Landmark :size="28" :stroke-width="1.6" />
+          <h3>No scrape sessions yet</h3>
+          <p>
+            Run a sync to bring in the latest activity. Account credentials and scraping stay on
+            this Mac.
+          </p>
+          <Button
+            size="sm"
+            variant="secondary"
+            :disabled="triggerLoading || !activeAccounts.length"
+            @click="handleScrapeAll"
+          >
+            <Play class="h-3.5 w-3.5 mr-1.5" /> Sync accounts
+          </Button>
+        </div>
         <div v-else class="space-y-1">
           <div
             v-for="session in sessions"

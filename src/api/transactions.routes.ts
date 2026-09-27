@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import {
   transactionQuerySchema,
   ignoreTransactionSchema,
@@ -10,6 +11,8 @@ import {
 import { parseIntParam, validateBody, validateQuery, sendServiceError } from './helpers.js';
 import {
   listTransactions,
+  getTransactionById,
+  getActivitySince,
   getNeedsReviewCount,
   resolveReview,
   setTransactionIgnored,
@@ -30,6 +33,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
       category,
       status,
       needsReview,
+      ignored,
       minAmount,
       maxAmount,
       search,
@@ -49,6 +53,7 @@ export async function transactionsRoutes(app: FastifyInstance) {
         category,
         status,
         needsReview,
+        ignored,
         minAmount,
         maxAmount,
         search,
@@ -62,6 +67,20 @@ export async function transactionsRoutes(app: FastifyInstance) {
 
   app.get('/api/transactions/needs-review/count', async (_request, reply) => {
     return reply.send({ count: getNeedsReviewCount() });
+  });
+
+  app.get('/api/transactions/since', async (request, reply) => {
+    const query = validateQuery(z.object({ since: z.iso.datetime() }), request.query, reply);
+    if (!query) return;
+    return reply.send(getActivitySince(query.since));
+  });
+
+  app.get<{ Params: { id: string } }>('/api/transactions/:id', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
+    const transaction = getTransactionById(id);
+    if (!transaction) return reply.status(404).send({ error: 'Transaction not found' });
+    return reply.send({ transaction });
   });
 
   app.patch<{ Params: { id: string } }>('/api/transactions/:id/resolve', async (request, reply) => {

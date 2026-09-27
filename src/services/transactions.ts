@@ -12,6 +12,7 @@ import type { OwnerType } from '../shared/types.js';
 export interface TransactionFilterParams {
   accountType?: string;
   accountId?: number;
+  category?: string;
   startDate?: string;
   endDate?: string;
   expensesOnly?: boolean;
@@ -34,6 +35,13 @@ export function buildTransactionFilters(params: TransactionFilterParams): Transa
   }
   if (params.accountId !== undefined) {
     conditions.push(eq(transactions.accountId, params.accountId));
+  }
+  if (params.category) {
+    conditions.push(
+      params.category === 'uncategorized'
+        ? sql`COALESCE(${transactions.category}, 'uncategorized') = 'uncategorized'`
+        : eq(transactions.category, params.category),
+    );
   }
   if (params.startDate) {
     conditions.push(gte(transactions.reportingDate, params.startDate));
@@ -66,6 +74,22 @@ function accountTypeCondition(accountType: string): SQL | null {
 
 // ── Reads ──
 
+export function getTransactionById(id: number) {
+  return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
+}
+
+export function getActivitySince(since: string) {
+  const row = db
+    .select({
+      transactions: sql<number>`COUNT(*)`,
+      spent: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.chargedAmount} < 0 THEN ABS(${transactions.chargedAmount}) ELSE 0 END), 0)`,
+    })
+    .from(transactions)
+    .where(sql`datetime(${transactions.createdAt}) >= datetime(${since})`)
+    .get();
+  return { transactions: row?.transactions ?? 0, spent: row?.spent ?? 0 };
+}
+
 export interface ListTransactionsOpts {
   offset?: number;
   limit?: number;
@@ -74,9 +98,9 @@ export interface ListTransactionsOpts {
 }
 
 export interface ListTransactionsFilters extends TransactionFilterParams {
-  category?: string;
   status?: string;
   needsReview?: boolean;
+  ignored?: boolean;
   minAmount?: number;
   maxAmount?: number;
   search?: string;
@@ -96,10 +120,10 @@ export function listTransactions(
       pagination: { total: 0, offset, limit, hasMore: false },
     };
 
-  if (filters.category) conditions.push(eq(transactions.category, filters.category));
   if (filters.status) conditions.push(eq(transactions.status, filters.status));
   if (filters.needsReview !== undefined)
     conditions.push(eq(transactions.needsReview, filters.needsReview));
+  if (filters.ignored !== undefined) conditions.push(eq(transactions.ignored, filters.ignored));
   if (filters.minAmount !== undefined)
     conditions.push(gte(transactions.chargedAmount, filters.minAmount));
   if (filters.maxAmount !== undefined)

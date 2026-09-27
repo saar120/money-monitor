@@ -181,8 +181,9 @@ export async function* chat(
   const systemPrompt =
     withMemory(buildFinancialAdvisorPrompt(categoryNames, ignoredCategoryNames)) +
     (options.mobileReadOnly
-      ? '\nThis iPhone chat is read-only. Reply in the language of the latest user message, including Hebrew when the user writes in Hebrew. Keep saved category and merchant names unchanged. Use show_financial_chart when its scope matches the question and a graph helps; its plotted values come from Mac calculations. For comparisons and detailed results, use compact Markdown tables with a header and separator row so the iPhone can display them as tables. Only include values returned by tools.'
-      : '');
+      ? '\nThis iPhone chat is read-only. Reply in the language of the latest user message, including Hebrew when the user writes in Hebrew. Keep saved category and merchant names unchanged. For comparisons and detailed results, use compact Markdown tables with a header and separator row so the iPhone can display them as tables. Only include values returned by tools.'
+      : '') +
+    '\nUse show_financial_chart when its scope matches the question and a graph helps; its plotted values come from Mac calculations.';
 
   const { model, provider } = resolveModel();
 
@@ -229,32 +230,31 @@ export async function* chat(
     buildGenerateTableImageTool(),
   ];
   let chart: AdvisorChart | null = null;
-  const tools = options.mobileReadOnly
-    ? [
-        ...allTools.filter((tool) => MOBILE_READ_TOOLS.has(tool.name)),
-        createAgentTool({
-          name: 'show_financial_chart',
-          description:
-            'Show an interactive graph of Mac-calculated overall monthly spending or spending by category for a chosen month. Call only when the chart scope matches the question.',
-          label: 'Preparing chart',
-          parameters: Type.Object({
-            kind: Type.Union([Type.Literal('spending_trend'), Type.Literal('category_spending')]),
-            months: Type.Optional(
-              Type.Number({ description: 'Months for a spending trend, 1-12' }),
-            ),
-            month: Type.Optional(
-              Type.String({
-                description: 'YYYY-MM for spending by category; defaults to current month',
-              }),
-            ),
-          }),
-          execute: async (args) => {
-            chart = makeAdvisorChart(args.kind, args.months, args.month, mobileLanguage);
-            return chart ? JSON.stringify(chart) : 'No chart data is available for this period.';
-          },
+  const chartTool = createAgentTool({
+    name: 'show_financial_chart',
+    description:
+      'Show an interactive graph of Mac-calculated overall monthly spending or spending by category for a chosen month. Call only when the chart scope matches the question.',
+    label: 'Preparing chart',
+    parameters: Type.Object({
+      kind: Type.Union([Type.Literal('spending_trend'), Type.Literal('category_spending')]),
+      months: Type.Optional(Type.Number({ description: 'Months for a spending trend, 1-12' })),
+      month: Type.Optional(
+        Type.String({
+          description: 'YYYY-MM for spending by category; defaults to current month',
         }),
-      ]
-    : allTools;
+      ),
+    }),
+    execute: async (args) => {
+      chart = makeAdvisorChart(args.kind, args.months, args.month, mobileLanguage);
+      return chart ? JSON.stringify(chart) : 'No chart data is available for this period.';
+    },
+  });
+  const tools = [
+    ...(options.mobileReadOnly
+      ? allTools.filter((tool) => MOBILE_READ_TOOLS.has(tool.name))
+      : allTools),
+    chartTool,
+  ];
 
   const agent = new Agent({
     initialState: {

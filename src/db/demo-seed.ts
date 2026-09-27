@@ -570,12 +570,10 @@ export function seedDemoData(
       .values({
         assetId: realEstate.id,
         name: 'שווי נכס',
-        type: 'property',
+        type: 'balance',
         currency: 'ILS',
-        quantity: 1,
+        quantity: 1150000,
         costBasis: 950000,
-        lastPrice: 1150000,
-        lastPriceDate: formatDate(daysAgo(30)),
       })
       .run();
 

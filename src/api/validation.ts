@@ -49,7 +49,14 @@ export const transactionQuerySchema = z.object({
     .optional(),
   category: z.string().optional(),
   status: z.enum(['completed', 'pending']).optional(),
-  needsReview: z.coerce.boolean().optional(),
+  needsReview: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
+  ignored: z
+    .enum(['true', 'false'])
+    .transform((value) => value === 'true')
+    .optional(),
   minAmount: z.coerce.number().optional(),
   maxAmount: z.coerce.number().optional(),
   search: z.string().max(200).optional(),
@@ -70,6 +77,7 @@ export const ignoreTransactionSchema = z.object({
 export const summaryQuerySchema = z.object({
   accountId: z.coerce.number().int().positive().optional(),
   accountType: accountTypeEnum.optional(),
+  category: z.string().max(120).optional(),
   startDate: z
     .string()
     .regex(/^\d{4}-\d{2}-\d{2}/)
@@ -79,7 +87,17 @@ export const summaryQuerySchema = z.object({
     .regex(/^\d{4}-\d{2}-\d{2}/)
     .optional(),
   groupBy: z
-    .enum(['category', 'month', 'account', 'expense-owner', 'cashflow', 'cashflow-detail'])
+    .enum([
+      'category',
+      'spending-category',
+      'spending-category-month',
+      'day',
+      'month',
+      'account',
+      'expense-owner',
+      'cashflow',
+      'cashflow-detail',
+    ])
     .default('category'),
   ownerType: z.enum(['all', ...OWNER_TYPES]).optional(),
   ownerMemberId: z.coerce.number().int().positive().optional(),
@@ -377,6 +395,7 @@ export const updateBudgetSchema = z.object({
 });
 
 export const budgetProgressQuerySchema = z.object({
+  referenceDate: z.iso.date().optional(),
   monthlyView: z
     .enum(['true', 'false'])
     .transform((v) => v === 'true')

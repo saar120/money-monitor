@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watchEffect } from 'vue';
+import { ref, computed, onMounted, watch, watchEffect } from 'vue';
+import { useRoute } from 'vue-router';
 import { ToggleGroupRoot, ToggleGroupItem } from 'reka-ui';
 import {
   getBudgetProgress,
@@ -32,13 +33,22 @@ import {
 } from '@/components/ui/select';
 import { formatCurrency, buildCategoryMap, DEFAULT_CATEGORY_COLOR } from '@/lib/format';
 import { Plus, Pencil, Trash2, Wallet, Search, Check } from 'lucide-vue-next';
+import { isValidMonth } from '@/lib/month';
+import { t } from '@/lib/language';
+import BudgetTransactions from './BudgetTransactions.vue';
+import MonthControl from './MonthControl.vue';
 
 // ── State ──
 
 const progressData = ref<BudgetProgress[]>([]);
+const route = useRoute();
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+const selectedMonth = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
+const expandedBudgetId = ref<number | null>(null);
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const error = ref('');
+let requestId = 0;
 const activePeriod = ref<'monthly' | 'yearly'>('monthly');
 
 // Dialog state
@@ -90,20 +100,29 @@ const COLOR_SWATCHES = [
 // ── Data loading ──
 
 async function loadData() {
+  const id = ++requestId;
   loading.value = true;
   error.value = '';
   try {
-    const [progressRes, catRes] = await Promise.all([getBudgetProgress(false), getCategories()]);
+    const [progressRes, catRes] = await Promise.all([
+      getBudgetProgress(false, `${selectedMonth.value}-01`),
+      getCategories(),
+    ]);
+    if (id !== requestId) return;
     progressData.value = progressRes.progress;
     categories.value = catRes.categories;
   } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to load budgets';
+    if (id === requestId) error.value = e instanceof Error ? e.message : 'Failed to load budgets';
   } finally {
-    loading.value = false;
+    if (id === requestId) loading.value = false;
   }
 }
 
 onMounted(loadData);
+watch(selectedMonth, () => {
+  expandedBudgetId.value = null;
+  void loadData();
+});
 
 // ── Computed ──
 
@@ -232,9 +251,10 @@ function progressColor(percentage: number, neutral = false): string {
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="budget-page flex flex-col h-full min-h-0">
     <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
+        <MonthControl v-model="selectedMonth" :max-month="today.slice(0, 7)" />
         <!-- Period picker — only if both types exist -->
         <ToggleGroupRoot
           v-if="hasBothPeriods"
@@ -243,12 +263,16 @@ function progressColor(percentage: number, neutral = false): string {
           class="inline-flex rounded-lg bg-bg-tertiary p-0.5"
           @update:model-value="setActivePeriod"
         >
-          <ToggleGroupItem value="monthly" :class="TOGGLE_ITEM_CLASS">Monthly</ToggleGroupItem>
-          <ToggleGroupItem value="yearly" :class="TOGGLE_ITEM_CLASS">Yearly</ToggleGroupItem>
+          <ToggleGroupItem value="monthly" :class="TOGGLE_ITEM_CLASS">{{
+            t('monthly')
+          }}</ToggleGroupItem>
+          <ToggleGroupItem value="yearly" :class="TOGGLE_ITEM_CLASS">{{
+            t('yearly')
+          }}</ToggleGroupItem>
         </ToggleGroupRoot>
         <Button size="sm" @click="openCreate">
           <Plus class="h-4 w-4 mr-1" />
-          New Budget
+          {{ t('newBudget') }}
         </Button>
       </div>
     </Teleport>
@@ -272,29 +296,29 @@ function progressColor(percentage: number, neutral = false): string {
     >
       <Wallet class="h-10 w-10 text-text-tertiary" />
       <div class="text-center">
-        <p class="text-[14px] font-medium text-text-primary">No budgets yet</p>
+        <p class="text-[14px] font-medium text-text-primary">{{ t('noBudgetsYet') }}</p>
         <p class="text-[13px] text-text-secondary mt-1.5">
-          Set spending limits on categories to track where your money goes.
+          {{ t('budgetEmptyHint') }}
         </p>
       </div>
       <Button size="sm" variant="secondary" @click="openCreate">
         <Plus class="h-4 w-4 mr-1" />
-        Create budget
+        {{ t('createBudget') }}
       </Button>
     </div>
 
     <div v-else class="flex-1 min-h-0 overflow-y-auto space-y-5">
       <!-- Summary -->
-      <div class="grid grid-cols-3 gap-3">
+      <div class="budget-summary grid grid-cols-3 gap-3">
         <div class="rounded-xl border border-separator/50 px-4 py-3">
           <p class="text-[11px] text-text-tertiary mb-1">
-            {{ isMonthly ? 'Monthly Budget' : 'Yearly Budget' }}
+            {{ isMonthly ? t('monthlyBudget') : t('yearlyBudget') }}
           </p>
           <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
             {{ formatCurrency(activeTotal) }}
           </p>
           <p class="text-[11px] text-text-tertiary mt-1.5">
-            {{ activeBudgets.length }} {{ activeBudgets.length === 1 ? 'budget' : 'budgets' }}
+            {{ activeBudgets.length }} {{ t('budgets') }}
             <template v-if="!isMonthly">
               &middot; {{ formatCurrency(activeTotal / 12) }}/mo</template
             >
@@ -302,7 +326,7 @@ function progressColor(percentage: number, neutral = false): string {
         </div>
         <div class="rounded-xl border border-separator/50 px-4 py-3">
           <p class="text-[11px] text-text-tertiary mb-1">
-            {{ isMonthly ? 'Spent This Month' : 'Spent YTD' }}
+            {{ isMonthly ? t('spentSelectedMonth') : t('spentSelectedYear') }}
           </p>
           <div class="flex items-baseline gap-2">
             <p
@@ -328,7 +352,7 @@ function progressColor(percentage: number, neutral = false): string {
           </div>
         </div>
         <div class="rounded-xl border border-separator/50 px-4 py-3">
-          <p class="text-[11px] text-text-tertiary mb-1">Remaining</p>
+          <p class="text-[11px] text-text-tertiary mb-1">{{ t('remaining') }}</p>
           <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
             {{ formatCurrency(activeRemaining) }}
           </p>
@@ -337,17 +361,17 @@ function progressColor(percentage: number, neutral = false): string {
             class="text-[11px] text-[var(--warning)] mt-1.5 flex items-center gap-1"
           >
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--warning)]" />
-            {{ alertCount }} need attention
+            {{ alertCount }} {{ t('needsAttention') }}
           </p>
           <p v-else-if="!isMonthly" class="text-[11px] text-text-tertiary mt-1.5">
             {{ formatCurrency(activeRemaining / 12) }}/mo
           </p>
-          <p v-else class="text-[11px] text-text-tertiary mt-1.5">All on track</p>
+          <p v-else class="text-[11px] text-text-tertiary mt-1.5">{{ t('allOnTrack') }}</p>
         </div>
       </div>
 
       <!-- Budget list -->
-      <Card>
+      <Card class="budget-list">
         <CardContent class="p-0 divide-y divide-separator/40">
           <div v-for="p in activeBudgets" :key="p.budget.id" class="group px-5 py-4">
             <div class="flex items-center justify-between gap-4 mb-2.5 min-w-0">
@@ -362,12 +386,12 @@ function progressColor(percentage: number, neutral = false): string {
                 <span
                   v-if="p.isOverBudget"
                   class="text-[11px] font-medium text-destructive flex-shrink-0"
-                  >Over budget</span
+                  >{{ t('overBudget') }}</span
                 >
                 <span
                   v-else-if="p.isAlertTriggered"
                   class="text-[11px] font-medium text-[var(--warning)] flex-shrink-0"
-                  >Alert</span
+                  >{{ t('alert') }}</span
                 >
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
@@ -422,7 +446,7 @@ function progressColor(percentage: number, neutral = false): string {
               <span
                 class="text-[11px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
               >
-                {{ formatCurrency(Math.max(p.remaining, 0)) }} left
+                {{ formatCurrency(Math.max(p.remaining, 0)) }} {{ t('left') }}
                 <template v-if="!isMonthly">
                   <span class="text-text-tertiary"
                     >&middot; {{ formatCurrency(p.budget.amount / 12) }}/mo</span
@@ -430,6 +454,20 @@ function progressColor(percentage: number, neutral = false): string {
                 </template>
               </span>
             </div>
+            <button
+              type="button"
+              class="budget-expand"
+              :aria-expanded="expandedBudgetId === p.budget.id"
+              @click="expandedBudgetId = expandedBudgetId === p.budget.id ? null : p.budget.id"
+            >
+              {{ expandedBudgetId === p.budget.id ? t('hideTransactions') : t('showTransactions') }}
+            </button>
+            <BudgetTransactions
+              v-if="expandedBudgetId === p.budget.id"
+              :categories="p.budget.categoryNames"
+              :start-date="p.period.startDate"
+              :end-date="p.period.endDate"
+            />
           </div>
         </CardContent>
       </Card>
@@ -439,18 +477,22 @@ function progressColor(percentage: number, neutral = false): string {
     <Dialog v-model:open="showDialog">
       <DialogContent class="max-w-md">
         <DialogHeader>
-          <DialogTitle>{{ editingBudget ? 'Edit Budget' : 'New Budget' }}</DialogTitle>
+          <DialogTitle>{{ editingBudget ? t('editBudget') : t('newBudget') }}</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-5">
           <!-- Name + Color row -->
           <div class="flex gap-3 items-end">
             <div class="flex-1">
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">Name</label>
+              <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
+                t('name')
+              }}</label>
               <Input v-model="formName" placeholder="e.g. Living Expenses" />
             </div>
             <div>
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">Color</label>
+              <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
+                t('color')
+              }}</label>
               <div class="grid grid-cols-6 gap-1.5">
                 <button
                   v-for="swatch in COLOR_SWATCHES"
@@ -471,19 +513,21 @@ function progressColor(percentage: number, neutral = false): string {
           <div class="grid grid-cols-2 gap-3">
             <div>
               <label class="text-[12px] font-medium text-text-secondary mb-1 block"
-                >Amount (₪)</label
+                >{{ t('amount') }} (₪)</label
               >
               <Input v-model="formAmount" type="number" placeholder="5000" min="0" step="100" />
             </div>
             <div>
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">Period</label>
+              <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
+                t('period')
+              }}</label>
               <Select v-model="formPeriod">
                 <SelectTrigger>
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
-                  <SelectItem value="monthly">Monthly</SelectItem>
-                  <SelectItem value="yearly">Yearly</SelectItem>
+                  <SelectItem value="monthly">{{ t('monthly') }}</SelectItem>
+                  <SelectItem value="yearly">{{ t('yearly') }}</SelectItem>
                 </SelectContent>
               </Select>
             </div>
@@ -492,7 +536,7 @@ function progressColor(percentage: number, neutral = false): string {
           <!-- Alert section -->
           <div class="border-t border-separator/30 pt-4">
             <div class="flex items-center justify-between mb-2">
-              <span class="text-[12px] font-medium text-text-primary">Alerts</span>
+              <span class="text-[12px] font-medium text-text-primary">{{ t('alerts') }}</span>
               <Switch v-model="formAlertEnabled" />
             </div>
             <div
@@ -503,7 +547,7 @@ function progressColor(percentage: number, neutral = false): string {
                   : 'text-text-tertiary opacity-40 pointer-events-none'
               "
             >
-              <span class="whitespace-nowrap">Notify at</span>
+              <span class="whitespace-nowrap">{{ t('notifyAt') }}</span>
               <Input
                 v-model.number="formAlertThreshold"
                 type="number"
@@ -512,14 +556,14 @@ function progressColor(percentage: number, neutral = false): string {
                 step="5"
                 class="!h-7 w-16 text-center text-[12px] tabular-nums"
               />
-              <span>% of budget</span>
+              <span>{{ t('percentOfBudget') }}</span>
             </div>
           </div>
 
           <!-- Categories -->
           <div class="border-t border-separator/30 pt-4">
             <label class="text-[12px] font-medium text-text-primary mb-2 block">
-              Categories
+              {{ t('categories') }}
               <span v-if="formCategoryNames.length" class="text-text-tertiary font-normal"
                 >&middot; {{ formCategoryNames.length }}</span
               >
@@ -528,7 +572,11 @@ function progressColor(percentage: number, neutral = false): string {
               <Search
                 class="absolute left-2.5 top-1/2 -translate-y-1/2 h-3.5 w-3.5 text-text-tertiary"
               />
-              <Input v-model="categorySearch" placeholder="Search…" class="!h-7 text-[12px] pl-8" />
+              <Input
+                v-model="categorySearch"
+                :placeholder="t('search')"
+                class="!h-7 text-[12px] pl-8"
+              />
             </div>
             <div class="max-h-48 overflow-y-auto -mx-1 space-y-px">
               <button
@@ -556,20 +604,20 @@ function progressColor(percentage: number, neutral = false): string {
                 v-if="filteredCategories.length === 0"
                 class="text-[12px] text-text-tertiary text-center py-3 px-2"
               >
-                No match for "{{ categorySearch }}"
+                {{ t('noMatchFor') }} "{{ categorySearch }}"
               </p>
             </div>
           </div>
         </div>
 
         <DialogFooter>
-          <Button variant="secondary" @click="showDialog = false">Cancel</Button>
+          <Button variant="secondary" @click="showDialog = false">{{ t('cancel') }}</Button>
           <Button
             variant="filled"
             :disabled="saving || !formName || !Number(formAmount) || formCategoryNames.length === 0"
             @click="saveBudget"
           >
-            {{ saving ? 'Saving…' : editingBudget ? 'Save Changes' : 'Create Budget' }}
+            {{ saving ? t('saving') : editingBudget ? t('saveChanges') : t('createBudget') }}
           </Button>
         </DialogFooter>
       </DialogContent>

@@ -6,7 +6,7 @@ const route = useRoute();
 </script>
 
 <template>
-  <AppLayout v-if="route.name !== 'setup'">
+  <AppLayout v-if="route.name !== 'setup' && route.name !== 'split-prototype'">
     <router-view />
   </AppLayout>
   <router-view v-else />

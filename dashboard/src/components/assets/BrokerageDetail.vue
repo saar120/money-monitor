@@ -17,6 +17,7 @@ import {
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import {
   ASSET_TYPE_COLORS,
   ASSET_TYPE_LABELS,
@@ -74,6 +75,59 @@ import {
 } from 'lucide-vue-next';
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        current: 'שווי נוכחי',
+        invested: 'סך השקעה (₪)',
+        return: 'תשואה כוללת (₪)',
+        noData: 'אין נתונים',
+        holdings: 'החזקות',
+        cancel: 'ביטול',
+        save: 'שמירה',
+        update: 'עדכון ערכים',
+        add: 'הוספת החזקה',
+        noHoldings: 'עדיין אין החזקות',
+        addFirst: 'הוספת החזקה ראשונה',
+        name: 'שם',
+        type: 'סוג',
+        quantity: 'כמות',
+        price: 'מחיר',
+        value: 'שווי',
+        cost: 'עלות רכישה',
+        pnl: 'רווח והפסד',
+        noPrice: 'אין נתוני מחיר',
+        history: 'שווי לאורך זמן',
+        movements: 'היסטוריית תנועות',
+        addMovement: 'הוספת תנועה',
+        noHistory: 'עדכנו החזקות כדי להתחיל לבנות היסטוריית שווי',
+      }
+    : {
+        current: 'Current value',
+        invested: 'Total invested (ILS)',
+        return: 'Total return (ILS)',
+        noData: 'No data',
+        holdings: 'Holdings',
+        cancel: 'Cancel',
+        save: 'Save',
+        update: 'Update values',
+        add: 'Add holding',
+        noHoldings: 'No holdings yet',
+        addFirst: 'Add first holding',
+        name: 'Name',
+        type: 'Type',
+        quantity: 'Quantity',
+        price: 'Price',
+        value: 'Value',
+        cost: 'Cost basis',
+        pnl: 'P&L',
+        noPrice: 'No price data',
+        history: 'Value over time',
+        movements: 'Movement history',
+        addMovement: 'Add movement',
+        noHistory: 'Update holdings to start building value history',
+      },
+);
 
 // ─── Data fetching ───
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -508,7 +562,9 @@ async function confirmDeleteMovement() {
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
+        t('retry')
+      }}</Button>
     </div>
 
     <template v-else-if="asset">
@@ -538,7 +594,9 @@ async function confirmDeleteMovement() {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Current Value</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
+              copy.current
+            }}</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-[22px] font-semibold tabular-nums">
@@ -549,31 +607,32 @@ async function confirmDeleteMovement() {
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Invested (ILS)</CardTitle
-            >
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
+              copy.invested
+            }}</CardTitle>
           </CardHeader>
           <CardContent>
             <div v-if="totalInvestedIls != null" class="text-[22px] font-semibold tabular-nums">
               {{ formatAmount(totalInvestedIls, 'ILS') }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">No data</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.noData }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Return (ILS)</CardTitle
-            >
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
+              copy.return
+            }}</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="totalReturnIls != null">
               <div
                 :class="totalReturnIls >= 0 ? 'text-success' : 'text-destructive'"
                 class="text-[22px] font-semibold tabular-nums"
+                dir="ltr"
               >
-                {{ totalReturnIls >= 0 ? '+' : '' }}{{ formatAmount(totalReturnIls, 'ILS') }}
+                {{ totalReturnIls >= 0 ? '+' : '−' }}{{ formatAmount(totalReturnIls, 'ILS') }}
               </div>
               <div v-if="returnPct != null" class="flex items-center gap-1 mt-0.5">
                 <component
@@ -589,7 +648,7 @@ async function confirmDeleteMovement() {
                 </span>
               </div>
             </template>
-            <div v-else class="text-[13px] text-text-secondary">No data</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.noData }}</div>
           </CardContent>
         </Card>
       </div>
@@ -598,13 +657,15 @@ async function confirmDeleteMovement() {
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between">
-            <CardTitle class="text-[15px]">Holdings</CardTitle>
+            <CardTitle class="text-[15px]">{{ copy.holdings }}</CardTitle>
             <div class="flex items-center gap-2">
               <template v-if="quickUpdateMode">
-                <Button variant="secondary" size="sm" @click="cancelQuickUpdate">Cancel</Button>
+                <Button variant="secondary" size="sm" @click="cancelQuickUpdate">{{
+                  copy.cancel
+                }}</Button>
                 <Button size="sm" :disabled="savingQuick" @click="saveQuickUpdate">
                   <Loader2 v-if="savingQuick" class="h-3.5 w-3.5 mr-1 animate-spin" />
-                  Save
+                  {{ copy.save }}
                 </Button>
               </template>
               <template v-else>
@@ -615,11 +676,11 @@ async function confirmDeleteMovement() {
                   @click="startQuickUpdate"
                 >
                   <RefreshCw class="h-3.5 w-3.5 mr-1" />
-                  Update Values
+                  {{ copy.update }}
                 </Button>
                 <Button size="sm" @click="openAddHolding">
                   <Plus class="h-4 w-4 mr-1" />
-                  Add Holding
+                  {{ copy.add }}
                 </Button>
               </template>
             </div>
@@ -635,10 +696,10 @@ async function confirmDeleteMovement() {
 
           <!-- Empty -->
           <div v-else-if="holdings.length === 0" class="text-center py-8">
-            <p class="text-text-secondary text-[13px]">No holdings yet</p>
+            <p class="text-text-secondary text-[13px]">{{ copy.noHoldings }}</p>
             <Button size="sm" class="mt-2" @click="openAddHolding">
               <Plus class="h-4 w-4 mr-1" />
-              Add First Holding
+              {{ copy.addFirst }}
             </Button>
           </div>
 
@@ -647,13 +708,13 @@ async function confirmDeleteMovement() {
             <Table>
               <TableHeader>
                 <TableRow>
-                  <TableHead>Name</TableHead>
-                  <TableHead class="hidden md:table-cell">Type</TableHead>
-                  <TableHead class="text-right">Quantity</TableHead>
-                  <TableHead class="text-right">Price</TableHead>
-                  <TableHead class="text-right">Value</TableHead>
-                  <TableHead class="text-right hidden lg:table-cell">Cost Basis</TableHead>
-                  <TableHead class="text-right">P&amp;L</TableHead>
+                  <TableHead>{{ copy.name }}</TableHead>
+                  <TableHead class="hidden md:table-cell">{{ copy.type }}</TableHead>
+                  <TableHead class="text-right">{{ copy.quantity }}</TableHead>
+                  <TableHead class="text-right">{{ copy.price }}</TableHead>
+                  <TableHead class="text-right">{{ copy.value }}</TableHead>
+                  <TableHead class="text-right hidden lg:table-cell">{{ copy.cost }}</TableHead>
+                  <TableHead class="text-right">{{ copy.pnl }}</TableHead>
                   <TableHead class="w-[60px]"></TableHead>
                 </TableRow>
               </TableHeader>
@@ -663,7 +724,7 @@ async function confirmDeleteMovement() {
                     {{ h.name }}
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
-                      <span class="text-[11px]">No price data</span>
+                      <span class="text-[11px]">{{ copy.noPrice }}</span>
                     </div>
                   </TableCell>
                   <TableCell class="hidden md:table-cell">
@@ -728,8 +789,9 @@ async function confirmDeleteMovement() {
                       <span
                         :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'"
                         class="text-[13px] tabular-nums font-medium"
+                        dir="ltr"
                       >
-                        {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatAmount(h.gainLoss, h.currency) }}
+                        {{ h.gainLoss >= 0 ? '+' : '−' }}{{ formatAmount(h.gainLoss, h.currency) }}
                       </span>
                       <span
                         v-if="h.gainLossPercent != null"
@@ -807,7 +869,7 @@ async function confirmDeleteMovement() {
       <!-- Value over time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
@@ -822,7 +884,7 @@ async function confirmDeleteMovement() {
             />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
-            Update holdings to start building value history
+            {{ copy.noHistory }}
           </div>
         </CardContent>
       </Card>
@@ -830,10 +892,10 @@ async function confirmDeleteMovement() {
       <!-- Movement history -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold">Movement History</h2>
+          <h2 class="text-[15px] font-semibold">{{ copy.movements }}</h2>
           <Button size="sm" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
-            Add Movement
+            {{ copy.addMovement }}
           </Button>
         </div>
 
