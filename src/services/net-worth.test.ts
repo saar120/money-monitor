@@ -167,5 +167,16 @@ describe('net-worth service', () => {
       expect(result.assets).toHaveLength(1);
       expect(result.assets[0].name).toBe('Active Asset');
     });
+
+    it('values legacy property holdings by quantity times price', async () => {
+      const property = insertAsset(testDb.db, { name: 'Property', type: 'real_estate' });
+      insertHolding(testDb.db, property.id, {
+        name: 'Property value', type: 'property', quantity: 1, lastPrice: 1150000,
+      });
+
+      const result = await getNetWorth();
+      expect(result.assetsTotal).toBe(1150000);
+      expect(result.total).toBe(1150000);
+    });
   });
 });

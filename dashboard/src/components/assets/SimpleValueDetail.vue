@@ -11,6 +11,7 @@ import {
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import { ASSET_TYPE_LABELS } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
@@ -28,6 +29,15 @@ import {
 import { TrendingUp, TrendingDown, Loader2, Plus } from 'lucide-vue-next';
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
+const copy = computed(() => language.value === 'he' ? {
+  current: 'שווי נוכחי', contributed: 'סך הפקדות', return: 'תשואה', noData: 'אין נתונים',
+  update: 'עדכון שווי', history: 'שווי לאורך זמן', historyHint: 'עדכנו את השווי כדי להתחיל לבנות היסטוריה',
+  contributions: 'היסטוריית הפקדות', noContributions: 'עדיין אין הפקדות.',
+} : {
+  current: 'Current value', contributed: 'Total contributed', return: 'Return', noData: 'No data',
+  update: 'Update value', history: 'Value over time', historyHint: 'Update the value to start building history',
+  contributions: 'Contribution history', noContributions: 'No contributions recorded yet.',
+});
 
 // ── Data fetching ──
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -133,7 +143,7 @@ function formatMovementDate(iso: string) {
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{ t('retry') }}</Button>
     </div>
 
     <template v-else-if="asset">
@@ -156,7 +166,7 @@ function formatMovementDate(iso: string) {
       <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Current Value</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{ copy.current }}</CardTitle>
           </CardHeader>
           <CardContent>
             <div class="text-[22px] font-semibold tabular-nums">
@@ -168,20 +178,20 @@ function formatMovementDate(iso: string) {
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Contributed</CardTitle
+              >{{ copy.contributed }}</CardTitle
             >
           </CardHeader>
           <CardContent>
             <div v-if="totalContributed > 0" class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(totalContributed) }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">No data</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.noData }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Return</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{ copy.return }}</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="pnl">
@@ -216,14 +226,14 @@ function formatMovementDate(iso: string) {
       <div>
         <Button @click="openUpdateDialog">
           <Plus class="h-4 w-4 mr-1" />
-          Update Value
+          {{ copy.update }}
         </Button>
       </div>
 
       <!-- Value over time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
@@ -233,14 +243,14 @@ function formatMovementDate(iso: string) {
             <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
-            Update the value to start building history
+            {{ copy.historyHint }}
           </div>
         </CardContent>
       </Card>
 
       <!-- Contribution history -->
       <div class="space-y-4">
-        <h2 class="text-[15px] font-semibold">Contribution History</h2>
+        <h2 class="text-[15px] font-semibold">{{ copy.contributions }}</h2>
 
         <div v-if="movementsApi.loading.value && movements.length === 0" class="space-y-3">
           <Skeleton class="h-12 w-full" />
@@ -249,7 +259,7 @@ function formatMovementDate(iso: string) {
         </div>
 
         <div v-else-if="contributionMovements.length === 0" class="text-center py-8">
-          <p class="text-text-secondary text-[13px]">No contributions recorded yet.</p>
+          <p class="text-text-secondary text-[13px]">{{ copy.noContributions }}</p>
         </div>
 
         <div v-else class="border border-separator rounded-lg divide-y divide-separator">

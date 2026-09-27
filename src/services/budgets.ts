@@ -112,8 +112,13 @@ function getBudgetDateRange(
   const [y, m] = ref.split('-').map(Number);
 
   if (period === 'yearly') {
-    // If the reference year is the current year, end date is today; otherwise end of that year
-    const endDate = y === parseInt(today.split('-')[0], 10) ? today : `${y}-12-31`;
+    // A selected past month shows year-to-date progress through that month.
+    const selectedMonthEnd = `${y}-${String(m).padStart(2, '0')}-${String(new Date(y, m, 0).getDate()).padStart(2, '0')}`;
+    const endDate = referenceDate
+      ? y > Number(today.slice(0, 4)) || selectedMonthEnd < today
+        ? selectedMonthEnd
+        : today
+      : today;
     return { startDate: `${y}-01-01`, endDate };
   }
   // monthly

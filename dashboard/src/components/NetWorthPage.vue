@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, onMounted } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { useRouter } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -9,6 +10,7 @@ import VChart from 'vue-echarts';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 
 use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent, GraphicComponent]);
+const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
 import {
   getNetWorth,
@@ -34,6 +36,7 @@ import {
 } from '../api/client';
 import { useApi } from '../composables/useApi';
 import { formatCurrency, formatAmount, CURRENCY_SYMBOLS } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import {
   ASSET_TYPE_COLORS,
   ASSET_TYPE_LABELS,
@@ -180,6 +183,7 @@ const doughnutOption = computed(() => {
   if (slices.length === 0) return null;
 
   return {
+    animation: !reduceMotion.value,
     tooltip: {
       trigger: 'item' as const,
       backgroundColor: bgPrimary.value,
@@ -230,17 +234,22 @@ const doughnutOption = computed(() => {
 
 // ─── Trend line chart ───
 const showLiquidOnly = ref(false);
+const trendRange = ref<3 | 6 | 12>(12);
+const visibleTrend = computed(() => (history.data.value?.series ?? []).slice(-trendRange.value));
 
 const trendLabels = computed(() => {
-  const series = history.data.value?.series ?? [];
+  const series = visibleTrend.value;
   return series.map((p) => {
     const d = new Date(p.date);
-    return d.toLocaleDateString('en-US', { month: 'short', year: '2-digit' });
+    return d.toLocaleDateString(language.value === 'he' ? 'he-IL' : 'en-US', {
+      month: 'short',
+      year: '2-digit',
+    });
   });
 });
 
 const trendDatasets = computed(() => {
-  const series = history.data.value?.series ?? [];
+  const series = visibleTrend.value;
   if (series.length === 0) return null;
 
   if (showLiquidOnly.value) {
@@ -647,7 +656,7 @@ async function handleDeleteLiability() {
 
 // ─── Helpers ───
 function pctOfTotal(value: number): string {
-  const total = nw.value?.total ?? 0;
+  const total = (nw.value?.assetsTotal ?? 0) + (nw.value?.banksTotal ?? 0);
   if (total <= 0) return '0%';
   return `${((value / total) * 100).toFixed(1)}%`;
 }
@@ -659,10 +668,15 @@ function paidOffPct(original: number, current: number): number {
 
 function formatCompact(value: number): string {
   const abs = Math.abs(value);
-  if (abs >= 1_000_000) return `₪${(value / 1_000_000).toFixed(1)}M`;
-  if (abs >= 1_000) return `₪${(value / 1_000).toFixed(1)}K`;
-  return formatCurrency(value);
+  const sign = value < 0 ? '−' : '';
+  if (abs >= 1_000_000) return `${sign}₪${(abs / 1_000_000).toFixed(1)}M`;
+  if (abs >= 1_000) return `${sign}₪${(abs / 1_000).toFixed(1)}K`;
+  return `${sign}${formatCurrency(value)}`;
 }
+function signedCurrency(value: number): string {
+  return `${value < 0 ? '−' : ''}${formatCurrency(value)}`;
+}
+const addMenuOpen = ref(false);
 
 // Lookup maps for O(1) access in template loops
 const fullAssetMap = computed(() => {
@@ -682,17 +696,32 @@ const fullLiabilityMap = computed(() => {
 </script>
 
 <template>
-  <div class="space-y-5 animate-fade-in-up">
+  <div class="networth-page space-y-5">
     <Teleport to="#toolbar-actions">
-      <div class="flex items-center gap-2">
-        <Button size="sm" variant="secondary" @click="openAddLiability">
-          <Plus class="h-4 w-4 mr-1" />
-          Add Liability
-        </Button>
-        <Button size="sm" @click="openAddAsset">
-          <Plus class="h-4 w-4 mr-1" />
-          Add Asset
-        </Button>
+      <div class="networth-add-wrap">
+        <Button size="sm" :aria-expanded="addMenuOpen" @click="addMenuOpen = !addMenuOpen"
+          ><Plus class="h-4 w-4" />{{ t('add') }}</Button
+        >
+        <div v-if="addMenuOpen" class="networth-add-options">
+          <button
+            type="button"
+            @click="
+              addMenuOpen = false;
+              openAddAsset();
+            "
+          >
+            {{ t('addAsset') }}
+          </button>
+          <button
+            type="button"
+            @click="
+              addMenuOpen = false;
+              openAddLiability();
+            "
+          >
+            {{ t('addLiability') }}
+          </button>
+        </div>
       </div>
     </Teleport>
 
@@ -702,11 +731,11 @@ const fullLiabilityMap = computed(() => {
       class="flex items-center gap-2 px-3 py-2 mb-5 rounded-lg bg-[var(--warning)]/10 border border-[var(--warning)]/20 text-[12px] text-[var(--warning)]"
     >
       <AlertCircle class="h-3.5 w-3.5 flex-shrink-0" />
-      <span>Exchange rates unavailable — some values may be inaccurate</span>
+      <span>{{ t('staleExchangeRates') }}</span>
     </div>
 
     <!-- Hero Card -->
-    <Card class="border-separator animate-fade-in-up stagger-1">
+    <Card class="networth-hero">
       <CardContent class="pt-6">
         <div v-if="netWorth.loading.value && !nw" class="grid grid-cols-[1fr_auto] gap-6">
           <Skeleton class="h-12 w-48" />
@@ -717,11 +746,13 @@ const fullLiabilityMap = computed(() => {
         </div>
         <div v-else-if="nw" class="grid grid-cols-[1fr_auto] gap-6 items-start max-md:grid-cols-1">
           <div>
-            <p class="text-[11px] font-semibold text-text-secondary mb-1">Total Net Worth</p>
-            <p class="text-4xl font-semibold tabular-nums text-text-primary">
+            <p class="text-[11px] font-semibold text-text-secondary mb-1">
+              {{ t('totalNetWorth') }}
+            </p>
+            <p class="text-4xl font-semibold tabular-nums text-text-primary" dir="ltr">
               {{
-                nw.total > 0 || nw.assets.length > 0 || nw.banks.length > 0
-                  ? formatCurrency(nw.total)
+                nw.total !== 0 || nw.assets.length > 0 || nw.banks.length > 0
+                  ? signedCurrency(nw.total)
                   : '₪0.00'
               }}
             </p>
@@ -729,19 +760,19 @@ const fullLiabilityMap = computed(() => {
               v-if="nw.total === 0 && nw.assets.length === 0"
               class="text-[13px] text-text-secondary mt-2"
             >
-              Add your first asset to start tracking net worth
-              <Button size="sm" class="ml-2" @click="openAddAsset">Add Asset</Button>
+              {{ t('addFirstAsset') }}
+              <Button size="sm" class="ml-2" @click="openAddAsset">{{ t('addAsset') }}</Button>
             </p>
           </div>
           <div class="space-y-2 text-right max-md:text-left">
             <div>
-              <p class="text-[11px] text-text-secondary">Liquid Net Worth</p>
-              <p class="text-[15px] font-semibold tabular-nums">
-                {{ formatCurrency(nw.liquidTotal) }}
+              <p class="text-[11px] text-text-secondary">{{ t('liquidNetWorth') }}</p>
+              <p class="text-[15px] font-semibold tabular-nums" dir="ltr">
+                {{ signedCurrency(nw.liquidTotal) }}
               </p>
             </div>
             <div v-if="lastMonthDelta">
-              <p class="text-[11px] text-text-secondary">vs Last Month</p>
+              <p class="text-[11px] text-text-secondary">{{ t('vsLastMonth') }}</p>
               <Badge
                 :class="
                   lastMonthDelta.diff >= 0
@@ -753,7 +784,7 @@ const fullLiabilityMap = computed(() => {
                   :is="lastMonthDelta.diff >= 0 ? TrendingUp : TrendingDown"
                   class="h-3.5 w-3.5 mr-1"
                 />
-                {{ lastMonthDelta.diff >= 0 ? '+' : ''
+                {{ lastMonthDelta.diff >= 0 ? '+' : '−'
                 }}{{ formatCurrency(lastMonthDelta.diff) }} ({{ lastMonthDelta.pct >= 0 ? '+' : ''
                 }}{{ lastMonthDelta.pct.toFixed(1) }}%)
               </Badge>
@@ -764,13 +795,10 @@ const fullLiabilityMap = computed(() => {
     </Card>
 
     <!-- Charts Row -->
-    <div
-      id="networth-charts"
-      class="grid grid-cols-1 lg:grid-cols-2 gap-4 animate-fade-in-up stagger-2"
-    >
+    <div id="networth-charts" class="networth-charts grid grid-cols-1 lg:grid-cols-2 gap-4">
       <Card id="chart-networth-allocation">
         <CardHeader>
-          <CardTitle class="text-[15px]">Allocation by Type</CardTitle>
+          <CardTitle class="text-[15px]">{{ t('allocationByType') }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div class="h-[280px]">
@@ -781,33 +809,47 @@ const fullLiabilityMap = computed(() => {
               class="h-full w-full"
             />
             <Skeleton v-else-if="netWorth.loading.value" class="h-full w-full rounded-lg" />
-            <p v-else class="text-text-secondary text-[13px] text-center py-12">No data yet</p>
+            <p v-else class="text-text-secondary text-[13px] text-center py-12">
+              {{ t('noDataYet') }}
+            </p>
           </div>
         </CardContent>
       </Card>
 
       <Card id="chart-networth-trend">
         <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-[15px]">Net Worth Trend</CardTitle>
-          <div class="flex gap-1 text-[11px]">
+          <CardTitle class="text-[15px]">{{ t('netWorthTrend') }}</CardTitle>
+          <div class="flex items-center gap-2 text-[11px]">
+            <div class="comparison-range" role="group" :aria-label="t('timeRange')">
+              <button
+                v-for="count in [3, 6, 12] as const"
+                :key="count"
+                type="button"
+                :class="{ selected: trendRange === count }"
+                :aria-pressed="trendRange === count"
+                @click="trendRange = count"
+              >
+                {{ count === 12 ? '1Y' : `${count}M` }}
+              </button>
+            </div>
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'ghost' : 'secondary'"
               class="h-7 px-2 text-[11px]"
               @click="showLiquidOnly = false"
-              >Total</Button
+              >{{ t('total') }}</Button
             >
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'secondary' : 'ghost'"
               class="h-7 px-2 text-[11px]"
               @click="showLiquidOnly = true"
-              >Liquid</Button
+              >{{ t('liquid') }}</Button
             >
           </div>
         </CardHeader>
         <CardContent>
-          <div v-if="trendDatasets" class="h-48">
+          <div v-if="trendDatasets" class="h-64">
             <EChartsLineChart
               :labels="trendLabels"
               :datasets="trendDatasets"
@@ -817,7 +859,7 @@ const fullLiabilityMap = computed(() => {
           </div>
           <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-lg" />
           <p v-else class="text-[13px] text-text-secondary text-center py-12">
-            Start tracking your assets to see net worth history
+            {{ t('startTrackingAssets') }}
           </p>
         </CardContent>
       </Card>
@@ -827,7 +869,7 @@ const fullLiabilityMap = computed(() => {
     <div class="space-y-5">
       <!-- Assets Section -->
       <div class="space-y-5 animate-fade-in-up stagger-3">
-        <h2 class="text-[15px] font-semibold">Assets</h2>
+        <h2 class="text-[15px] font-semibold">{{ t('assets') }}</h2>
 
         <Card v-if="assets.length > 0">
           <div
@@ -870,7 +912,7 @@ const fullLiabilityMap = computed(() => {
                   {{ assetNativeDisplay(asset) }}
                 </p>
                 <p class="text-[11px] text-text-secondary">
-                  {{ pctOfTotal(asset.totalValueIls) }} of total
+                  {{ pctOfTotal(asset.totalValueIls) }} {{ language === 'he' ? 'מתוך הנכסים' : 'of assets' }}
                 </p>
               </div>
               <!-- Hover actions -->
@@ -1101,13 +1143,13 @@ const fullLiabilityMap = computed(() => {
           v-else-if="!netWorth.loading.value"
           class="text-text-secondary text-[13px] text-center py-6"
         >
-          No assets tracked yet.
+          {{ t('noAssetsTracked') }}
         </p>
       </div>
 
       <!-- Bank Balances -->
       <div v-if="banks.length > 0" class="space-y-5 animate-fade-in-up stagger-4">
-        <h2 class="text-[15px] font-semibold">Bank Balances</h2>
+        <h2 class="text-[15px] font-semibold">{{ t('bankBalances') }}</h2>
         <div
           class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"
         >
@@ -1126,7 +1168,7 @@ const fullLiabilityMap = computed(() => {
 
       <!-- Liabilities Section -->
       <div class="space-y-5 animate-fade-in-up stagger-5">
-        <h2 class="text-[15px] font-semibold">Liabilities</h2>
+        <h2 class="text-[15px] font-semibold">{{ t('liabilities') }}</h2>
 
         <Card v-if="liabilities.length > 0">
           <template v-for="(liab, idx) in liabilities" :key="liab.id">
@@ -1220,7 +1262,7 @@ const fullLiabilityMap = computed(() => {
           v-else-if="!netWorth.loading.value"
           class="text-text-secondary text-[13px] text-center py-6"
         >
-          No liabilities tracked.
+          {{ t('noLiabilitiesTracked') }}
         </p>
       </div>
     </div>

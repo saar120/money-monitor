@@ -55,6 +55,103 @@ describe('transactions routes', () => {
 
   // ── GET /api/transactions ──
 
+  it('opens a transaction by ID independently of list pagination', async () => {
+    const account = insertAccount(testDb.db);
+    const transaction = insertTransaction(testDb.db, account.id, { description: 'Linked charge' });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/transactions/${transaction.id}`,
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().transaction).toMatchObject({
+      id: transaction.id,
+      description: 'Linked charge',
+    });
+    const missing = await server.inject({
+      method: 'GET',
+      url: '/api/transactions/999999',
+      headers: authHeaders(),
+    });
+    expect(missing.statusCode).toBe(404);
+  });
+
+  it('reports new activity since a saved visit', async () => {
+    const account = insertAccount(testDb.db);
+    insertTransaction(testDb.db, account.id, { chargedAmount: -42 });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/transactions/since?since=2020-01-01T00%3A00%3A00.000Z',
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json()).toMatchObject({ transactions: 1, spent: 42 });
+  });
+
+  it('shows budget progress for the selected historical month', async () => {
+    const account = insertAccount(testDb.db);
+    insertTransaction(testDb.db, account.id, {
+      category: 'food',
+      chargedAmount: -42,
+      date: '2025-01-15',
+      processedDate: '2025-01-15',
+    });
+    insertTransaction(testDb.db, account.id, {
+      category: 'food',
+      chargedAmount: -99,
+      date: '2025-02-15',
+      processedDate: '2025-02-15',
+    });
+    const created = await server.inject({
+      method: 'POST',
+      url: '/api/budgets',
+      headers: authHeaders(),
+      payload: { name: 'Food', amount: 100, categoryNames: ['food'] },
+    });
+    expect(created.statusCode).toBe(201);
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/budgets/progress?referenceDate=2025-01-01&monthlyView=true',
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().progress[0]).toMatchObject({
+      spent: 42,
+      period: { startDate: '2025-01-01', endDate: '2025-01-31' },
+    });
+  });
+
+  it('stops yearly budget progress at the selected month', async () => {
+    const account = insertAccount(testDb.db);
+    insertTransaction(testDb.db, account.id, {
+      category: 'food',
+      chargedAmount: -42,
+      date: '2026-01-15',
+      processedDate: '2026-01-15',
+    });
+    insertTransaction(testDb.db, account.id, {
+      category: 'food',
+      chargedAmount: -99,
+      date: '2026-02-15',
+      processedDate: '2026-02-15',
+    });
+    await server.inject({
+      method: 'POST',
+      url: '/api/budgets',
+      headers: authHeaders(),
+      payload: { name: 'Yearly food', amount: 1200, period: 'yearly', categoryNames: ['food'] },
+    });
+    const response = await server.inject({
+      method: 'GET',
+      url: '/api/budgets/progress?referenceDate=2026-01-01',
+      headers: authHeaders(),
+    });
+    expect(response.json().progress[0]).toMatchObject({
+      spent: 42,
+      period: { startDate: '2026-01-01', endDate: '2026-01-31' },
+    });
+  });
+
   describe('GET /api/transactions', () => {
     it('returns empty list with pagination', async () => {
       const res = await server.inject({
@@ -109,6 +206,45 @@ describe('transactions routes', () => {
       const body = JSON.parse(res.body);
       expect(body.transactions).toHaveLength(1);
       expect(body.transactions[0].category).toBe('food');
+    });
+
+    it('finds uncategorized transactions from category drilldown', async () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, { category: null });
+      insertTransaction(testDb.db, account.id, { category: 'food' });
+      const response = await server.inject({
+        method: 'GET',
+        url: '/api/transactions?category=uncategorized',
+        headers: authHeaders(),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().pagination.total).toBe(1);
+      expect(response.json().transactions[0].category).toBeNull();
+    });
+
+    it('searches descriptions containing punctuation and Hebrew', async () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, { description: 'הלוואה - משכנתא' });
+      const response = await server.inject({
+        method: 'GET',
+        url: `/api/transactions?search=${encodeURIComponent('הלוואה - משכנתא')}`,
+        headers: authHeaders(),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().pagination.total).toBe(1);
+    });
+
+    it('filters excluded and review transactions with explicit false values', async () => {
+      const account = insertAccount(testDb.db);
+      insertTransaction(testDb.db, account.id, { ignored: true, needsReview: false });
+      insertTransaction(testDb.db, account.id, { ignored: false, needsReview: true });
+      const response = await server.inject({
+        method: 'GET',
+        url: '/api/transactions?ignored=false&needsReview=true',
+        headers: authHeaders(),
+      });
+      expect(response.statusCode).toBe(200);
+      expect(response.json().transactions).toMatchObject([{ ignored: false, needsReview: true }]);
     });
 
     it('supports sorting', async () => {

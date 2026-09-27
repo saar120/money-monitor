@@ -12,6 +12,7 @@ import {
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency, formatAmount } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
@@ -28,6 +29,19 @@ import {
 import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
+const copy = computed(() => language.value === 'he' ? {
+  type: 'נדל״ן', value: 'שווי נכס', purchase: 'מחיר רכישה', rent: 'סך הכנסות משכירות',
+  return: 'תשואה כוללת', notSet: 'לא הוגדר', noPurchase: 'לא הוזן מחיר רכישה',
+  update: 'עדכון שווי', recordRent: 'רישום שכירות', history: 'שווי לאורך זמן',
+  historyHint: 'עדכנו את שווי הנכס כדי להתחיל לבנות היסטוריה',
+  rentHistory: 'היסטוריית שכירות', noRent: 'עדיין לא נרשמו הכנסות משכירות',
+} : {
+  type: 'Real estate', value: 'Property value', purchase: 'Purchase price', rent: 'Total rent earned',
+  return: 'Total return', notSet: 'Not set', noPurchase: 'No purchase price recorded',
+  update: 'Update value', recordRent: 'Record rent income', history: 'Value over time',
+  historyHint: 'Update the property value to start building history',
+  rentHistory: 'Rent income history', noRent: 'No rent income recorded yet',
+});
 
 // ─── Data fetching ───
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -159,7 +173,7 @@ const chartDatasets = computed(() =>
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{ t('retry') }}</Button>
     </div>
 
     <template v-else-if="asset">
@@ -171,7 +185,7 @@ const chartDatasets = computed(() =>
             class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-pink-500/10 text-pink-500"
           >
             <Home class="h-3 w-3" />
-            Real Estate
+            {{ copy.type }}
           </span>
           <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
             asset.institution
@@ -184,7 +198,7 @@ const chartDatasets = computed(() =>
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Property Value</CardTitle
+              >{{ copy.value }}</CardTitle
             >
           </CardHeader>
           <CardContent>
@@ -200,21 +214,21 @@ const chartDatasets = computed(() =>
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Purchase Price</CardTitle
+              >{{ copy.purchase }}</CardTitle
             >
           </CardHeader>
           <CardContent>
             <div v-if="purchasePrice" class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(purchasePrice) }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">Not set</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.notSet }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Rent Earned</CardTitle
+              >{{ copy.rent }}</CardTitle
             >
           </CardHeader>
           <CardContent>
@@ -226,15 +240,16 @@ const chartDatasets = computed(() =>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{ copy.return }}</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="pnl">
               <div
                 :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
                 class="text-[22px] font-semibold tabular-nums"
+                dir="ltr"
               >
-                {{ pnl.amount >= 0 ? '+' : '' }}{{ formatCurrency(pnl.amount) }}
+                {{ pnl.amount >= 0 ? '+' : '−' }}{{ formatCurrency(pnl.amount) }}
               </div>
               <div class="flex items-center gap-1 mt-0.5">
                 <component
@@ -250,24 +265,24 @@ const chartDatasets = computed(() =>
                 </span>
               </div>
             </template>
-            <div v-else class="text-[13px] text-text-secondary">No purchase price recorded</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.noPurchase }}</div>
           </CardContent>
         </Card>
       </div>
 
       <!-- Action buttons -->
       <div class="flex gap-3">
-        <Button @click="openUpdateDialog">Update Value</Button>
+        <Button @click="openUpdateDialog">{{ copy.update }}</Button>
         <Button variant="secondary" @click="openRentDialog">
           <Plus class="h-4 w-4 mr-1" />
-          Record Rent Income
+          {{ copy.recordRent }}
         </Button>
       </div>
 
       <!-- Value Over Time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
@@ -277,7 +292,7 @@ const chartDatasets = computed(() =>
             <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
-            Update the property value to start building history
+            {{ copy.historyHint }}
           </div>
         </CardContent>
       </Card>
@@ -285,7 +300,7 @@ const chartDatasets = computed(() =>
       <!-- Rent Income History -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-[15px]">Rent Income History</CardTitle>
+          <CardTitle class="text-[15px]">{{ copy.rentHistory }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="movementsApi.loading.value && rentMovements.length === 0" class="space-y-3">
@@ -293,7 +308,7 @@ const chartDatasets = computed(() =>
             <Skeleton class="h-12 w-full" />
           </div>
           <div v-else-if="rentMovements.length === 0" class="text-center py-8">
-            <p class="text-text-secondary text-[13px]">No rent income recorded yet</p>
+            <p class="text-text-secondary text-[13px]">{{ copy.noRent }}</p>
           </div>
           <div
             v-else

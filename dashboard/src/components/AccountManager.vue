@@ -16,6 +16,8 @@ import {
 import { useOtpFlow } from '../composables/useOtpFlow';
 import { useSseConnection } from '../composables/useSseConnection';
 import { PROVIDERS } from '@/lib/providers';
+import { language, t } from '@/lib/language';
+import { useRoute } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -68,6 +70,7 @@ type BrowserFile = InstanceType<typeof globalThis.File>;
 type BrowserInput = InstanceType<typeof globalThis.HTMLInputElement>;
 
 const expandedSettings = ref(new Set<number>());
+const route = useRoute();
 
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
@@ -120,9 +123,52 @@ const creditCardAccounts = computed(() =>
 
 const accountSections = computed(() =>
   [
-    { type: 'bank' as const, label: 'Banks', accounts: bankAccounts.value },
-    { type: 'credit_card' as const, label: 'Credit Cards', accounts: creditCardAccounts.value },
+    { type: 'bank' as const, label: t('banks'), accounts: bankAccounts.value },
+    { type: 'credit_card' as const, label: t('creditCards'), accounts: creditCardAccounts.value },
   ].filter((s) => s.accounts.length > 0),
+);
+const accountCopy = computed(() =>
+  language.value === 'he'
+    ? {
+        add: 'הוספת חשבון',
+        empty: 'אין חשבונות',
+        emptyHint: 'הוסיפו חשבון בנק או כרטיס אשראי כדי להתחיל.',
+        active: 'פעיל',
+        inactive: 'לא פעיל',
+        lastSync: 'סנכרון אחרון',
+        never: 'עדיין לא סונכרן',
+        unknownMember: 'בן בית לא ידוע',
+        noMember: 'ללא שיוך',
+        settings: 'הגדרות', member: 'בן בית', memberHint: 'עסקאות חדשות בחשבון ישויכו אליו',
+        selectMember: 'בחירת בן בית', manualLogin: 'כניסה ידנית',
+        manualLoginHint: 'כניסה לבנק בחלון דפדפן גלוי', showBrowser: 'הצגת דפדפן',
+        showBrowserHint: 'הצגת חלון הדפדפן בזמן הסנכרון', manualOnly: 'סנכרון ידני בלבד',
+        manualOnlyHint: 'החשבון לא ייכלל בסנכרון המתוזמן', staleAlert: 'התראה אם לא סונכרן במשך',
+        days: 'ימים', credentials: 'עדכון פרטי כניסה', credentialsHint: 'שינוי פרטי הכניסה לסנכרון',
+        update: 'עדכון', importStatement: 'ייבוא דוח', syncing: 'מסנכרן…', sync: 'סנכרון',
+        disable: 'השבתה', enable: 'הפעלה', deleteQuestion: 'למחוק את החשבון',
+        deleteHint: 'החשבון וכל העסקאות שלו יימחקו לצמיתות.', cancel: 'ביטול', delete: 'מחיקה',
+      }
+    : {
+        add: 'Add account',
+        empty: 'No accounts',
+        emptyHint: 'Add a bank or credit card to start tracking.',
+        active: 'Active',
+        inactive: 'Inactive',
+        lastSync: 'Last sync',
+        never: 'Never synced',
+        unknownMember: 'Unknown member',
+        noMember: 'No member',
+        settings: 'Settings', member: 'Member', memberHint: 'New transactions inherit this owner',
+        selectMember: 'Select member', manualLogin: 'Manual login',
+        manualLoginHint: 'Log in to the bank in a visible browser', showBrowser: 'Show browser',
+        showBrowserHint: 'Display the browser during sync', manualOnly: 'Manual sync only',
+        manualOnlyHint: 'Exclude from scheduled syncs', staleAlert: 'Alert if not synced for',
+        days: 'days', credentials: 'Update credentials', credentialsHint: 'Change login details used for sync',
+        update: 'Update', importStatement: 'Import statement', syncing: 'Syncing…', sync: 'Sync',
+        disable: 'Disable', enable: 'Enable', deleteQuestion: 'Delete account',
+        deleteHint: 'This permanently deletes the account and all its transactions.', cancel: 'Cancel', delete: 'Delete',
+      },
 );
 
 const activeMembers = computed(() => members.value.filter((m) => m.isActive));
@@ -431,6 +477,7 @@ async function handleUpdateCreds() {
 }
 
 onMounted(() => {
+  if (route.query.add === '1') showAddDialog.value = true;
   fetchAccounts();
   connectSse();
 });
@@ -441,7 +488,7 @@ onMounted(() => {
     <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-1" />
-        Add Account
+        {{ accountCopy.add }}
       </Button>
     </Teleport>
 
@@ -457,16 +504,18 @@ onMounted(() => {
         <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Building2 class="h-8 w-8 text-primary" />
         </div>
-        <p class="text-[15px] font-medium text-text-primary mb-1">No Accounts</p>
+        <p class="text-[15px] font-medium text-text-primary mb-1">{{ accountCopy.empty }}</p>
         <p class="text-text-secondary text-[13px] mb-5">
-          Add a bank or credit card to start tracking
+          {{ accountCopy.emptyHint }}
         </p>
-        <Button @click="showAddDialog = true"> <Plus class="h-4 w-4 mr-2" /> Add Account </Button>
+        <Button @click="showAddDialog = true">
+          <Plus class="h-4 w-4 mr-2" /> {{ accountCopy.add }}
+        </Button>
       </div>
 
-      <div v-for="section in accountSections" :key="section.type" class="space-y-3">
+      <div v-for="section in accountSections" :key="section.type" class="account-section space-y-3">
         <h2 class="text-[15px] font-semibold text-text-primary">{{ section.label }}</h2>
-        <Card v-for="account in section.accounts" :key="account.id">
+        <Card v-for="account in section.accounts" :key="account.id" class="account-row">
           <CardContent class="p-5">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
@@ -507,13 +556,13 @@ onMounted(() => {
                     :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
                     class="text-[11px]"
                   >
-                    {{ account.isActive ? 'Active' : 'Inactive' }}
+                    {{ account.isActive ? accountCopy.active : accountCopy.inactive }}
                   </Badge>
                   <Badge variant="secondary" class="text-[11px]">
                     {{
                       account.memberId
-                        ? (memberMap.get(account.memberId) ?? 'Unknown member')
-                        : 'No member'
+                        ? (memberMap.get(account.memberId) ?? accountCopy.unknownMember)
+                        : accountCopy.noMember
                     }}
                   </Badge>
                 </div>
@@ -531,9 +580,14 @@ onMounted(() => {
                 </p>
                 <p class="text-[12px] text-text-tertiary mt-1.5">
                   <span v-if="account.lastScrapedAt">
-                    Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
+                    {{ accountCopy.lastSync }}:
+                    {{
+                      new Date(account.lastScrapedAt).toLocaleString(
+                        language === 'he' ? 'he-IL' : 'en-GB',
+                      )
+                    }}
                   </span>
-                  <span v-else>Never scraped</span>
+                  <span v-else>{{ accountCopy.never }}</span>
                 </p>
                 <button
                   class="flex items-center gap-1.5 mt-3 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
@@ -544,7 +598,7 @@ onMounted(() => {
                   "
                 >
                   <Settings class="h-3.5 w-3.5" />
-                  Settings
+                  {{ accountCopy.settings }}
                   <ChevronDown
                     class="h-3 w-3 transition-transform duration-200"
                     :class="{ 'rotate-180': expandedSettings.has(account.id) }"
@@ -557,9 +611,9 @@ onMounted(() => {
                 >
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Member</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.member }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        New transactions from this account inherit this owner
+                        {{ accountCopy.memberHint }}
                       </div>
                     </div>
                     <Select
@@ -567,7 +621,7 @@ onMounted(() => {
                       @update:model-value="patchAccount(account.id, { memberId: Number($event) })"
                     >
                       <SelectTrigger class="w-36 h-8">
-                        <SelectValue placeholder="Select member" />
+                        <SelectValue :placeholder="accountCopy.selectMember" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem
@@ -586,9 +640,9 @@ onMounted(() => {
                     class="px-4 py-3 flex items-center justify-between"
                   >
                     <div>
-                      <div class="text-[13px] text-text-primary">Manual login</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.manualLogin }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Log in to the bank yourself in a visible browser
+                        {{ accountCopy.manualLoginHint }}
                       </div>
                     </div>
                     <Switch
@@ -599,9 +653,9 @@ onMounted(() => {
 
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Show browser</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.showBrowser }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Display the browser window during scraping
+                        {{ accountCopy.showBrowserHint }}
                       </div>
                     </div>
                     <Switch
@@ -614,9 +668,9 @@ onMounted(() => {
                   <div class="px-4 py-3">
                     <div class="flex items-center justify-between">
                       <div>
-                        <div class="text-[13px] text-text-primary">Manual scrape only</div>
+                        <div class="text-[13px] text-text-primary">{{ accountCopy.manualOnly }}</div>
                         <div class="text-[11px] text-text-secondary mt-0.5">
-                          Exclude from scheduled scrapes — only scrape when you click the button
+                          {{ accountCopy.manualOnlyHint }}
                         </div>
                       </div>
                       <Switch
@@ -629,7 +683,7 @@ onMounted(() => {
                       class="flex items-center gap-2 mt-2.5 pl-1"
                     >
                       <label class="text-[12px] text-text-secondary whitespace-nowrap">
-                        Alert if not scraped for
+                        {{ accountCopy.staleAlert }}
                       </label>
                       <Input
                         type="number"
@@ -645,20 +699,20 @@ onMounted(() => {
                           })
                         "
                       />
-                      <span class="text-[12px] text-text-secondary">days</span>
+                      <span class="text-[12px] text-text-secondary">{{ accountCopy.days }}</span>
                     </div>
                   </div>
 
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Update credentials</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.credentials }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Change the login credentials used for scraping
+                        {{ accountCopy.credentialsHint }}
                       </div>
                     </div>
                     <Button variant="secondary" size="sm" @click="openUpdateCreds(account)">
                       <KeyRound class="h-3 w-3 mr-1.5" />
-                      Update
+                      {{ accountCopy.update }}
                     </Button>
                   </div>
                 </div>
@@ -672,7 +726,7 @@ onMounted(() => {
                   @click="openOneZeroImport(account)"
                 >
                   <FileSpreadsheet class="h-3 w-3 mr-1.5" />
-                  Import statement
+                  {{ accountCopy.importStatement }}
                 </Button>
 
                 <Button
@@ -686,7 +740,7 @@ onMounted(() => {
                     class="h-3 w-3 mr-1.5 animate-spin"
                   />
                   <RefreshCw v-else class="h-3 w-3 mr-1.5" />
-                  {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
+                  {{ scrapingAccounts.has(account.id) ? accountCopy.syncing : accountCopy.sync }}
                 </Button>
 
                 <Button
@@ -695,7 +749,7 @@ onMounted(() => {
                   @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
                   <Power class="h-3 w-3 mr-1.5" />
-                  {{ account.isActive ? 'Disable' : 'Enable' }}
+                  {{ account.isActive ? accountCopy.disable : accountCopy.enable }}
                 </Button>
 
                 <AlertDialog>
@@ -710,15 +764,14 @@ onMounted(() => {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete "{{ account.displayName }}"?</AlertDialogTitle>
+                      <AlertDialogTitle>{{ accountCopy.deleteQuestion }} "{{ account.displayName }}"?</AlertDialogTitle>
                       <AlertDialogDescription>
-                        This will permanently delete the account and all its transactions. This
-                        action cannot be undone.
+                        {{ accountCopy.deleteHint }}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction @click="handleDelete(account)"> Delete </AlertDialogAction>
+                      <AlertDialogCancel>{{ accountCopy.cancel }}</AlertDialogCancel>
+                      <AlertDialogAction @click="handleDelete(account)">{{ accountCopy.delete }}</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>

@@ -17,6 +17,7 @@ import {
 } from '@/api/client';
 import { useApi } from '@/composables/useApi';
 import { formatCurrency } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import { HOLDING_TYPE_LABELS } from '@/lib/net-worth-constants';
 import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
@@ -67,6 +68,19 @@ import {
 } from 'lucide-vue-next';
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
+const copy = computed(() => language.value === 'he' ? {
+  type: 'קריפטו', value: 'שווי כולל (₪)', invested: 'סך השקעה', return: 'תשואה כוללת',
+  noData: 'אין נתונים', holdings: 'החזקות מטבעות', cancel: 'ביטול', save: 'שמירה',
+  update: 'עדכון ערכים', history: 'שווי לאורך זמן',
+  historyHint: 'עדכנו החזקות כדי להתחיל לבנות היסטוריית שווי',
+  movements: 'היסטוריית קנייה ומכירה', addMovement: 'הוספת תנועה',
+} : {
+  type: 'Crypto', value: 'Total value (ILS)', invested: 'Total invested', return: 'Total return',
+  noData: 'No data', holdings: 'Coin holdings', cancel: 'Cancel', save: 'Save',
+  update: 'Update values', history: 'Value over time',
+  historyHint: 'Update holdings to start building value history',
+  movements: 'Buy / sell history', addMovement: 'Add movement',
+});
 
 // ── Data fetching ──
 const assetApi = useApi<Asset>(() => getAsset(props.assetId));
@@ -331,7 +345,7 @@ const chartDatasets = computed(() =>
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
-      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{ t('retry') }}</Button>
     </div>
 
     <template v-else-if="asset">
@@ -341,7 +355,7 @@ const chartDatasets = computed(() =>
         <div class="flex items-center gap-2 mt-1">
           <span
             class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]"
-            >Crypto</span
+            >{{ copy.type }}</span
           >
           <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
             asset.institution
@@ -354,7 +368,7 @@ const chartDatasets = computed(() =>
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Value (ILS)</CardTitle
+              >{{ copy.value }}</CardTitle
             >
           </CardHeader>
           <CardContent>
@@ -367,7 +381,7 @@ const chartDatasets = computed(() =>
         <Card>
           <CardHeader class="pb-2">
             <CardTitle class="text-[13px] font-medium text-text-secondary"
-              >Total Invested</CardTitle
+              >{{ copy.invested }}</CardTitle
             >
           </CardHeader>
           <CardContent>
@@ -377,13 +391,13 @@ const chartDatasets = computed(() =>
             >
               {{ formatCurrency(asset.totalInvestedIls) }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">No data</div>
+            <div v-else class="text-[13px] text-text-secondary">{{ copy.noData }}</div>
           </CardContent>
         </Card>
 
         <Card>
           <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">Total Return</CardTitle>
+            <CardTitle class="text-[13px] font-medium text-text-secondary">{{ copy.return }}</CardTitle>
           </CardHeader>
           <CardContent>
             <template v-if="totalReturn">
@@ -419,13 +433,13 @@ const chartDatasets = computed(() =>
       <Card>
         <CardHeader>
           <div class="flex items-center justify-between">
-            <CardTitle class="text-[15px]">Coin Holdings</CardTitle>
+            <CardTitle class="text-[15px]">{{ copy.holdings }}</CardTitle>
             <div class="flex items-center gap-2">
               <template v-if="quickUpdateMode">
-                <Button variant="secondary" size="sm" @click="cancelQuickUpdate">Cancel</Button>
+                <Button variant="secondary" size="sm" @click="cancelQuickUpdate">{{ copy.cancel }}</Button>
                 <Button size="sm" :disabled="savingQuick" @click="saveQuickUpdate">
                   <Loader2 v-if="savingQuick" class="h-3.5 w-3.5 mr-1 animate-spin" />
-                  Save
+                  {{ copy.save }}
                 </Button>
               </template>
               <template v-else>
@@ -436,7 +450,7 @@ const chartDatasets = computed(() =>
                   @click="startQuickUpdate"
                 >
                   <RefreshCw class="h-3.5 w-3.5 mr-1" />
-                  Update Values
+                  {{ copy.update }}
                 </Button>
                 <Button size="sm" @click="openAddHolding">
                   <Plus class="h-4 w-4 mr-1" />
@@ -594,7 +608,7 @@ const chartDatasets = computed(() =>
       <!-- Value over time chart -->
       <Card>
         <CardHeader>
-          <CardTitle class="text-[15px]">Value Over Time</CardTitle>
+          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
         </CardHeader>
         <CardContent>
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
@@ -604,7 +618,7 @@ const chartDatasets = computed(() =>
             <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
           <div v-else class="text-[13px] text-text-secondary text-center py-12">
-            Update holdings to start building value history
+            {{ copy.historyHint }}
           </div>
         </CardContent>
       </Card>
@@ -612,10 +626,10 @@ const chartDatasets = computed(() =>
       <!-- Movement history -->
       <div class="space-y-4">
         <div class="flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold">Buy / Sell History</h2>
+          <h2 class="text-[15px] font-semibold">{{ copy.movements }}</h2>
           <Button size="sm" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
-            Add Movement
+            {{ copy.addMovement }}
           </Button>
         </div>
 

@@ -5,6 +5,21 @@ import { Check, LoaderCircle, QrCode, ShieldCheck, Smartphone, X } from 'lucide-
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
+import { language } from '@/lib/language';
+
+const copy = computed(() => language.value === 'he' ? {
+  title: 'גישה מהטלפון', hint: 'גישה פרטית מהאייפון דרך ה־Tailnet שלך',
+  enabled: 'גישה מהאייפון', enabledHint: 'פרטי הבנק והסנכרון נשארים על ה־Mac הזה.',
+  status: 'מצב', available: 'זמין באפליקציית Mac המותקנת', retry: 'ניסיון חוזר',
+  pair: 'חיבור אייפון', requests: 'בקשות לאישור', devices: 'מכשירים מחוברים',
+  connection: 'פרטי חיבור',
+} : {
+  title: 'Mobile access', hint: 'Private iPhone access through your Tailnet',
+  enabled: 'Allow iPhone access', enabledHint: 'Bank credentials and sync stay on this Mac.',
+  status: 'Status', available: 'Available in the packaged Mac app', retry: 'Retry',
+  pair: 'Pair an iPhone', requests: 'Approval requests', devices: 'Paired devices',
+  connection: 'Connection details',
+});
 
 interface MobileAccessDevice {
   id: string;
@@ -287,10 +302,10 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <SettingsGroup title="Mobile Access" description="Private iPhone access through your Tailnet">
+  <SettingsGroup :title="copy.title" :description="copy.hint">
     <SettingsRow
-      label="Allow iPhone access"
-      description="Off by default. Bank credentials and scraping stay on this Mac."
+      :label="copy.enabled"
+      :description="copy.enabledHint"
     >
       <Switch
         :model-value="snapshot?.enabled ?? false"
@@ -299,7 +314,7 @@ onUnmounted(() => {
       />
     </SettingsRow>
 
-    <SettingsRow label="Status">
+    <SettingsRow :label="copy.status">
       <div class="flex items-center gap-3">
         <div class="flex flex-col items-end gap-1">
           <div class="flex items-center gap-2 text-[13px]" :class="statusTone">
@@ -308,7 +323,7 @@ onUnmounted(() => {
               class="h-3.5 w-3.5 animate-spin"
             />
             <ShieldCheck v-else class="h-3.5 w-3.5" />
-            <span>{{ supported ? statusLabel : 'Available in the packaged Mac app' }}</span>
+            <span>{{ supported ? statusLabel : copy.available }}</span>
           </div>
           <p v-if="statusDetail" class="max-w-[280px] text-right text-[11px] text-text-secondary">
             {{ statusDetail }}
@@ -321,12 +336,12 @@ onUnmounted(() => {
           :disabled="retrying"
           @click="retryTransport"
         >
-          Retry
+          {{ copy.retry }}
         </Button>
       </div>
     </SettingsRow>
 
-    <SettingsRow v-if="snapshot?.enabled" label="Pair an iPhone" vertical>
+    <SettingsRow v-if="snapshot?.enabled" :label="copy.pair" vertical>
       <div class="w-full space-y-3">
         <div class="flex items-center justify-between gap-3">
           <p class="text-[12px] text-text-secondary">
@@ -357,7 +372,7 @@ onUnmounted(() => {
       </div>
     </SettingsRow>
 
-    <SettingsRow v-if="activeRequests.length" label="Approval requests" vertical>
+    <SettingsRow v-if="activeRequests.length" :label="copy.requests" vertical>
       <div class="w-full space-y-2">
         <div
           v-for="request in activeRequests"
@@ -393,7 +408,7 @@ onUnmounted(() => {
       </div>
     </SettingsRow>
 
-    <SettingsRow v-if="snapshot?.devices.length" label="Paired devices" vertical>
+    <SettingsRow v-if="snapshot?.devices.length" :label="copy.devices" vertical>
       <div class="w-full divide-y divide-border/70">
         <div
           v-for="device in snapshot.devices"
@@ -434,7 +449,7 @@ onUnmounted(() => {
       </div>
     </SettingsRow>
 
-    <SettingsRow v-if="snapshot?.transport.publicUrl" label="Connection details" vertical>
+    <SettingsRow v-if="snapshot?.transport.publicUrl" :label="copy.connection" vertical>
       <details class="w-full text-[12px] text-text-secondary">
         <summary class="cursor-pointer select-none">Show private address</summary>
         <code class="mt-2 block break-all rounded bg-bg-secondary px-2.5 py-2 text-[11px]">

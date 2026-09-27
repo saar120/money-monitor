@@ -24,7 +24,7 @@ const props = defineProps<{
       <div class="text-[13px] text-text-primary">{{ label }}</div>
       <div v-if="description" class="text-[11px] text-text-secondary mt-0.5">{{ description }}</div>
     </div>
-    <div :class="vertical ? '' : 'flex items-center gap-2 ml-auto'">
+    <div :class="vertical ? '' : 'flex items-center gap-2 ms-auto'">
       <slot />
     </div>
   </div>

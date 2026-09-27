@@ -85,15 +85,7 @@
       ],
       "expo-status-bar",
       "expo-font",
-      "@react-native-community/datetimepicker",
-      [
-        "expo-build-properties",
-        {
-          "ios": {
-            "enableSceneSupport": true
-          }
-        }
-      ]
+      "@react-native-community/datetimepicker"
     ],
     "experiments": {
       "typedRoutes": true
