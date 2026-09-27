@@ -2669,6 +2669,32 @@ html[dir='rtl'] .lucide-arrow-left {
   color: var(--success);
   font-size: 12px;
 }
+.account-import-link {
+  display: flex;
+  align-items: center;
+  gap: 11px;
+  width: 100%;
+  padding: 12px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  color: var(--accent);
+  text-align: start;
+}
+.account-import-link:hover {
+  background: #f5f8fd;
+}
+.account-import-link span {
+  display: grid;
+  gap: 3px;
+}
+.account-import-link strong {
+  font-size: 12px;
+  font-weight: 700;
+}
+.account-import-link small {
+  color: var(--text-secondary);
+  font-size: 11px;
+}
 .category-inspector-actions .account-sync-button {
   border: 1px solid var(--separator);
   color: var(--text-primary);

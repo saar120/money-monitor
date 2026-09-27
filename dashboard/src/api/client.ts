@@ -123,6 +123,13 @@ export interface OneZeroImportPreview {
   matchedExistingCount: number;
   ambiguousCount: number;
   invalidRows: OneZeroImportInvalidRow[];
+  rows: Array<{
+    row: number;
+    date: string;
+    description: string;
+    amount: number;
+    status: 'new' | 'duplicate' | 'matched' | 'ambiguous';
+  }>;
 }
 
 export interface OneZeroImportCommitResult {

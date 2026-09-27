@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Building2, CreditCard, Plus, RefreshCw, X } from 'lucide-vue-next';
+import { Building2, CreditCard, FileSpreadsheet, Plus, RefreshCw, X } from 'lucide-vue-next';
 import {
   getAccounts,
   getMembers,
@@ -11,6 +11,7 @@ import {
 } from '@/api/client';
 import { formatCurrency } from '@/lib/format';
 import { language, t } from '@/lib/language';
+import OneZeroImportDialog from './OneZeroImportDialog.vue';
 
 const accounts = ref<Account[]>([]);
 const members = ref<Member[]>([]);
@@ -28,6 +29,7 @@ const saving = ref(false);
 const syncing = ref(false);
 const error = ref('');
 const message = ref('');
+const importOpen = ref(false);
 const sections = computed(() =>
   [
     {
@@ -71,6 +73,8 @@ const copy = computed(() =>
         saveError: 'לא ניתן לשמור את החשבון',
         syncError: 'לא ניתן להתחיל סנכרון',
         noMember: 'ללא שיוך',
+        import: 'ייבוא דוח בנק',
+        importHint: 'בדיקת תנועות וכפילויות לפני הייבוא',
       }
     : {
         add: 'Add account',
@@ -97,6 +101,8 @@ const copy = computed(() =>
         saveError: 'Could not save account',
         syncError: 'Could not start sync',
         noMember: 'Unassigned',
+        import: 'Import bank statement',
+        importHint: 'Review transactions and duplicates before import',
       },
 );
 
@@ -269,6 +275,18 @@ onMounted(load);
             ><span>{{ copy.lastSync }}</span
             ><input :value="date(selected.lastScrapedAt)" readonly
           /></label>
+          <button
+            v-if="selected.companyId === 'oneZero'"
+            type="button"
+            class="account-import-link"
+            @click="importOpen = true"
+          >
+            <FileSpreadsheet :size="17" />
+            <span
+              ><strong>{{ copy.import }}</strong
+              ><small>{{ copy.importHint }}</small></span
+            >
+          </button>
           <label class="category-check"
             ><input v-model="active" type="checkbox" /><span>{{ copy.active }}</span></label
           >
@@ -301,5 +319,6 @@ onMounted(load);
       </aside>
       <div v-else class="category-inspector-placeholder">{{ copy.choose }}</div>
     </div>
+    <OneZeroImportDialog v-model:open="importOpen" :account="selected" @imported="load" />
   </div>
 </template>
