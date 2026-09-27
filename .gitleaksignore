@@ -1,0 +1,3 @@
+# The public One Zero Android app certificate in upstream PR #1172 is a shared
+# application identity, not an account credential. Keep this exception exact.
+patches/israeli-bank-scrapers-core+6.12.1.patch:private-key:173
