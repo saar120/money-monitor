@@ -2045,6 +2045,13 @@ html[dir='rtl'] .lucide-arrow-left {
   backdrop-filter: blur(24px) saturate(150%);
   -webkit-backdrop-filter: blur(24px) saturate(150%);
 }
+/* macOS traffic lights remain on the physical left when the app is RTL. */
+:root.platform-darwin[dir='rtl'] .in-electron .content-toolbar {
+  padding-left: max(104px, calc((100% - var(--content-column-width, 1124px)) / 2));
+}
+:root.platform-darwin[dir='rtl'] .in-electron .proto-toolbar {
+  padding-left: 104px;
+}
 :root.platform-darwin .in-electron .comparison-range,
 :root.platform-darwin .in-electron .month-stepper {
   border-color: rgba(118, 139, 169, 0.25);
