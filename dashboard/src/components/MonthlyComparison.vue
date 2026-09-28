@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import { getCategories, getSummary, type Category, type SummaryItem } from '../api/client';
-import { formatCompactCurrency, formatCurrency } from '@/lib/format';
+import { formatCompactNumber, formatCurrency } from '@/lib/format';
 import { isValidMonth } from '@/lib/month';
 import { language, t } from '@/lib/language';
 
@@ -71,7 +71,18 @@ const selected = computed(
     months.value.find((item) => item.key === selectedMonth.value) ??
     months.value[months.value.length - 1]!,
 );
-const maximum = computed(() => Math.max(1, ...months.value.map((item) => item.total)));
+const axisMaximum = computed(() => {
+  const maximum = Math.max(0, ...months.value.map((item) => item.total));
+  if (maximum <= 0) return 5;
+  const roughStep = maximum / 5;
+  const magnitude = 10 ** Math.floor(Math.log10(roughStep));
+  const normalized = roughStep / magnitude;
+  const step = normalized <= 1 ? 1 : normalized <= 2 ? 2 : normalized <= 5 ? 5 : 10;
+  return step * magnitude * 5;
+});
+const ticks = computed(() =>
+  Array.from({ length: 6 }, (_, index) => axisMaximum.value - (axisMaximum.value / 5) * index),
+);
 const categoryMap = computed(() => new Map(categories.value.map((item) => [item.name, item])));
 const categoryLink = (name: string) => ({
   path: `/explore/category/${encodeURIComponent(name)}`,
@@ -117,41 +128,51 @@ const categoryLink = (name: string) => ({
       <strong>{{ loading ? '—' : formatCurrency(grossByMonth.get(selected.key) ?? 0) }}</strong
       ><small>{{ t('postedSpending') }}</small>
     </section>
-    <div
-      class="comparison-chart"
-      :aria-label="t('monthlySpending')"
-      :style="{ gridTemplateColumns: `repeat(${range}, minmax(0, 1fr))` }"
-    >
-      <button
-        v-for="month in months"
-        :key="month.key"
-        type="button"
-        :class="{ selected: month.key === selected.key }"
-        :aria-label="`${month.key}: ${formatCurrency(month.total)}`"
-        :aria-pressed="month.key === selected.key"
-        @click="selectedMonth = month.key"
-      >
-        <span class="comparison-bar-value" dir="ltr">{{ formatCompactCurrency(month.total) }}</span>
-        <span
-          class="comparison-bar"
-          :style="{ height: `${Math.max(2, (month.total / maximum) * 75)}%` }"
+    <div class="comparison-chart" :aria-label="t('monthlySpending')">
+      <div class="comparison-axis" aria-hidden="true">
+        <span v-for="tick in ticks" :key="tick">{{ formatCompactNumber(tick) }}</span>
+      </div>
+      <div class="comparison-plot">
+        <div class="comparison-guides" aria-hidden="true">
+          <span v-for="tick in ticks" :key="tick" />
+        </div>
+        <div
+          class="comparison-bars"
+          :style="{ gridTemplateColumns: `repeat(${range}, minmax(0, 1fr))` }"
         >
-          <span
-            v-for="item in month.spendingItems"
-            :key="item.category"
-            :style="{
-              height: `${(Math.abs(item.totalAmount) / Math.max(month.total, 1)) * 100}%`,
-              background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
-            }"
-          />
-        </span>
-        <span>{{
-          new Date(`${month.key}-01T12:00:00`).toLocaleDateString(
-            language === 'he' ? 'he-IL' : 'en',
-            { month: 'short' },
-          )
-        }}</span>
-      </button>
+          <button
+            v-for="month in months"
+            :key="month.key"
+            type="button"
+            :class="{ selected: month.key === selected.key }"
+            :aria-label="`${month.key}: ${formatCurrency(month.total)}`"
+            :aria-pressed="month.key === selected.key"
+            @click="selectedMonth = month.key"
+          >
+            <span class="comparison-bar-track">
+              <span
+                class="comparison-bar"
+                :style="{ height: `${(month.total / axisMaximum) * 100}%` }"
+              >
+                <span
+                  v-for="item in month.spendingItems"
+                  :key="item.category"
+                  :style="{
+                    height: `${(Math.abs(item.totalAmount) / Math.max(month.total, 1)) * 100}%`,
+                    background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
+                  }"
+                />
+              </span>
+            </span>
+            <span class="comparison-month-label">{{
+              new Date(`${month.key}-01T12:00:00`).toLocaleDateString(
+                language === 'he' ? 'he-IL' : 'en',
+                { month: 'short' },
+              )
+            }}</span>
+          </button>
+        </div>
+      </div>
     </div>
     <div class="ledger-section-heading explore-subheading">
       <h2>{{ t('categoryBreakdown') }}</h2>

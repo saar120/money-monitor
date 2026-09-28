@@ -16,6 +16,13 @@ export function formatCompactCurrency(amount: number): string {
   return `${amount < 0 ? '−' : ''}₪${compactCurrencyFormatter.format(Math.abs(amount))}`;
 }
 
+/** Match the mobile chart's short value labels on an axis. */
+export function formatCompactNumber(amount: number): string {
+  if (amount === 0) return '0';
+  if (amount >= 1_000) return `${Math.round(amount / 1_000)}K`;
+  return String(Math.round(amount));
+}
+
 export const CURRENCY_SYMBOLS: Record<string, string> = {
   ILS: '₪',
   USD: '$',
