@@ -844,16 +844,13 @@ html[dir='rtl'] .lucide-arrow-left {
   padding: 10px 15px;
   color: var(--text-primary);
   text-decoration: none;
-  transition:
-    background-color 0.18s ease,
-    padding-left 0.18s ease;
+  transition: background-color 0.18s ease;
 }
 .category-ledger-row + .category-ledger-row,
 .attention-row + .attention-row {
   border-top: 1px solid var(--separator);
 }
 .category-ledger-row:hover {
-  padding-left: 19px;
   background: var(--bg-secondary);
 }
 .category-dot {
@@ -915,6 +912,7 @@ html[dir='rtl'] .lucide-arrow-left {
   padding: 12px;
   color: var(--text-primary);
   text-decoration: none;
+  transition: background-color 0.18s ease;
 }
 .attention-row:hover {
   background: var(--bg-secondary);
@@ -1077,9 +1075,7 @@ html[dir='rtl'] .lucide-arrow-left {
   padding: 10px 15px;
   color: var(--text-primary);
   text-decoration: none;
-  transition:
-    background-color 0.18s ease,
-    padding-left 0.18s ease;
+  transition: background-color 0.18s ease;
 }
 .explore-row + .explore-row,
 .monthly-row + .monthly-row,
@@ -1089,7 +1085,6 @@ html[dir='rtl'] .lucide-arrow-left {
 .explore-row:hover,
 .monthly-row:hover,
 .explore-destination:hover {
-  padding-left: 19px;
   background: var(--bg-secondary);
 }
 .explore-row-title {
@@ -2115,16 +2110,8 @@ html[dir='rtl'] .lucide-arrow-left {
   padding-inline: 0;
   border-bottom: 1px solid var(--separator);
 }
-.category-ledger-row:hover,
-.explore-row:hover,
-.monthly-row:hover {
-  padding-inline: 10px;
-}
 .attention-row {
   padding-inline: 0;
-}
-.attention-row:hover {
-  padding-inline: 10px;
 }
 .explore-summary {
   grid-template-columns: minmax(0, 0.8fr) minmax(220px, 1fr);
