@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft } from 'lucide-vue-next';
 import { getCashflowSummary, type CashflowItem } from '@/api/client';
-import { formatCurrency } from '@/lib/format';
+import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { isValidMonth } from '@/lib/month';
 import { language, t } from '@/lib/language';
 import CashflowSankey from './CashflowSankey.vue';
@@ -136,8 +136,19 @@ function chooseRange(count: 3 | 6 | 12) {
           :aria-label="`${monthLabel(row.month)}: ${t('income')} ${formatCurrency(row.income)}, ${t('spending')} ${formatCurrency(row.expense)}`"
           @click="selectedMonth = row.month"
         >
-          <span class="cashflow-pair"
-            ><span
+          <span class="cashflow-pair">
+            <span
+              v-if="range !== 12"
+              class="cashflow-pair-values"
+              :style="{
+                bottom: `calc(${Math.max(3, (Math.max(row.income, row.expense) / max) * 100)}% + 4px)`,
+              }"
+              aria-hidden="true"
+            >
+              <span dir="ltr">{{ formatCompactCurrency(row.income) }}</span>
+              <span dir="ltr">{{ formatCompactCurrency(row.expense) }}</span>
+            </span>
+            <span
               class="cashflow-income"
               :style="{ height: `${Math.max(3, (row.income / max) * 100)}%` }" /><span
               class="cashflow-expense"

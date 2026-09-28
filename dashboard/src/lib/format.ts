@@ -6,6 +6,16 @@ export function formatCurrency(amount: number): string {
   return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
 }
 
+const compactCurrencyFormatter = new Intl.NumberFormat('en-US', {
+  notation: 'compact',
+  maximumFractionDigits: 1,
+});
+
+/** Format chart-scale currency values without hiding their magnitude. */
+export function formatCompactCurrency(amount: number): string {
+  return `${amount < 0 ? '−' : ''}₪${compactCurrencyFormatter.format(Math.abs(amount))}`;
+}
+
 export const CURRENCY_SYMBOLS: Record<string, string> = {
   ILS: '₪',
   USD: '$',
@@ -17,7 +27,10 @@ export const CURRENCY_SYMBOLS: Record<string, string> = {
 export function formatAmount(amount: number, currency: string): string {
   const symbol = CURRENCY_SYMBOLS[currency] ?? currency + ' ';
   const isSymbolPrefix = currency in CURRENCY_SYMBOLS;
-  const formatted = Math.abs(amount).toLocaleString('en-US', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  const formatted = Math.abs(amount).toLocaleString('en-US', {
+    minimumFractionDigits: 2,
+    maximumFractionDigits: 2,
+  });
   return isSymbolPrefix ? `${symbol}${formatted}` : `${formatted} ${symbol}`;
 }
 
@@ -29,12 +42,18 @@ export function formatDate(iso: string): string {
 /** Format an ISO datetime string as a short date + time (en-GB). */
 export function formatDateTime(iso: string): string {
   return new Date(iso).toLocaleString('en-GB', {
-    day: 'numeric', month: 'short', hour: '2-digit', minute: '2-digit',
+    day: 'numeric',
+    month: 'short',
+    hour: '2-digit',
+    minute: '2-digit',
   });
 }
 
 /** Build inline style for a category badge: semi-transparent background + matching text color. */
-export function getCategoryStyle(color: string | null | undefined): { backgroundColor: string; color: string | undefined } {
+export function getCategoryStyle(color: string | null | undefined): {
+  backgroundColor: string;
+  color: string | undefined;
+} {
   const c = color ?? DEFAULT_CATEGORY_COLOR;
   return { backgroundColor: c + '33', color: color ?? undefined };
 }

@@ -3,7 +3,7 @@ import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import { getCategories, getSummary, type Category, type SummaryItem } from '../api/client';
-import { formatCurrency } from '@/lib/format';
+import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { isValidMonth } from '@/lib/month';
 import { language, t } from '@/lib/language';
 
@@ -131,9 +131,10 @@ const categoryLink = (name: string) => ({
         :aria-pressed="month.key === selected.key"
         @click="selectedMonth = month.key"
       >
+        <span class="comparison-bar-value" dir="ltr">{{ formatCompactCurrency(month.total) }}</span>
         <span
           class="comparison-bar"
-          :style="{ height: `${Math.max(2, (month.total / maximum) * 100)}%` }"
+          :style="{ height: `${Math.max(2, (month.total / maximum) * 75)}%` }"
         >
           <span
             v-for="item in month.spendingItems"

@@ -5,11 +5,11 @@ import { useRouter } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { PieChart } from 'echarts/charts';
-import { TooltipComponent, LegendComponent, GraphicComponent } from 'echarts/components';
+import { TooltipComponent, GraphicComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 
-use([CanvasRenderer, PieChart, TooltipComponent, LegendComponent, GraphicComponent]);
+use([CanvasRenderer, PieChart, TooltipComponent, GraphicComponent]);
 const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
 import {
@@ -90,7 +90,7 @@ import {
   X,
 } from 'lucide-vue-next';
 
-const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const { textPrimary, bgPrimary, separator } = useChartTheme();
 
 const router = useRouter();
 
@@ -155,10 +155,10 @@ const lastMonthDelta = computed(() => {
 });
 
 // ─── Allocation doughnut ───
-const doughnutOption = computed(() => {
+const allocationSlices = computed(() => {
   const nwData = nw.value;
-  if (!nwData) return null;
   const slices: { label: string; value: number; color: string }[] = [];
+  if (!nwData) return slices;
   const byType = new Map<string, number>();
   for (const asset of nwData.assets) {
     byType.set(asset.type, (byType.get(asset.type) ?? 0) + asset.totalValueIls);
@@ -180,7 +180,13 @@ const doughnutOption = computed(() => {
     });
   }
 
-  if (slices.length === 0) return null;
+  return slices;
+});
+
+const doughnutOption = computed(() => {
+  const nwData = nw.value;
+  const slices = allocationSlices.value;
+  if (!nwData || slices.length === 0) return null;
 
   return {
     animation: !reduceMotion.value,
@@ -193,13 +199,6 @@ const doughnutOption = computed(() => {
       formatter(params: any) {
         return `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`;
       },
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { color: textSecondary.value, fontSize: 11 },
-      itemWidth: 8,
-      itemHeight: 8,
-      icon: 'circle',
     },
     graphic: {
       type: 'text' as const,
@@ -801,7 +800,7 @@ const fullLiabilityMap = computed(() => {
           <CardTitle class="text-[15px]">{{ t('allocationByType') }}</CardTitle>
         </CardHeader>
         <CardContent>
-          <div class="h-[280px]">
+          <div class="h-[220px]">
             <VChart
               v-if="doughnutOption"
               :option="doughnutOption"
@@ -813,6 +812,20 @@ const fullLiabilityMap = computed(() => {
               {{ t('noDataYet') }}
             </p>
           </div>
+          <ul
+            v-if="allocationSlices.length"
+            class="allocation-values"
+            :aria-label="t('allocationByType')"
+          >
+            <li v-for="slice in allocationSlices" :key="slice.label">
+              <span class="allocation-name"
+                ><i :style="{ background: slice.color }" /><bdi dir="auto">{{
+                  slice.label
+                }}</bdi></span
+              >
+              <strong dir="ltr">{{ formatCurrency(slice.value) }}</strong>
+            </li>
+          </ul>
         </CardContent>
       </Card>
 

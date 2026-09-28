@@ -25,7 +25,7 @@ import {
   type OwnerType,
   type SummaryItem,
 } from '../api/client';
-import { formatCurrency } from '@/lib/format';
+import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { useSseConnection } from '@/composables/useSseConnection';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { isValidMonth } from '@/lib/month';
@@ -209,7 +209,7 @@ const chartOption = computed(() => {
       type: 'value' as const,
       axisLabel: {
         color: textSecondary.value,
-        formatter: (amount: number) => `${Math.round(amount / 1000)}k`,
+        formatter: (amount: number) => formatCompactCurrency(amount),
       },
       splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
     },
@@ -281,7 +281,10 @@ function categoryLink(category: string) {
           <p class="home-total" aria-live="polite">
             {{ loading ? '—' : `${netCashflow < 0 ? '−' : ''}${formatCurrency(netCashflow)}` }}
           </p>
-          <h2 class="home-chart-title">{{ t('totalSpending') }}</h2>
+          <div class="home-chart-heading">
+            <h2 class="home-chart-title">{{ t('totalSpending') }}</h2>
+            <strong dir="ltr">{{ loading ? '—' : formatCurrency(totalSpent) }}</strong>
+          </div>
           <div class="home-chart" :aria-label="t('totalSpending')">
             <div v-if="!loading && !dailySpending.length" class="home-chart-empty">
               <Receipt :size="28" />
