@@ -1,37 +1,36 @@
-import { ref, computed, onMounted, onUnmounted } from 'vue';
+import { ref, onMounted, onUnmounted } from 'vue';
 
-/**
- * Resolves CSS custom properties into actual color strings for ECharts.
- * ECharts renders to <canvas> which cannot resolve CSS `var(--...)` tokens.
- * Returns reactive values that update on theme/accent changes.
- */
+/** Keep canvas chart colors in sync with CSS appearance tokens. */
 export function useChartTheme() {
-  const tick = ref(0);
-
-  function bump() { tick.value++; }
-
+  const textPrimary = ref('');
+  const textSecondary = ref('');
+  const bgPrimary = ref('');
+  const separator = ref('');
   const mql = window.matchMedia('(prefers-color-scheme: dark)');
   let observer: MutationObserver | null = null;
 
+  function refresh() {
+    const style = getComputedStyle(document.documentElement);
+    textPrimary.value = style.getPropertyValue('--text-primary').trim();
+    textSecondary.value = style.getPropertyValue('--text-secondary').trim();
+    bgPrimary.value = style.getPropertyValue('--bg-primary').trim();
+    separator.value = style.getPropertyValue('--separator').trim();
+  }
+
   onMounted(() => {
-    mql.addEventListener('change', bump);
-    observer = new MutationObserver(bump);
-    observer.observe(document.documentElement, { attributes: true, attributeFilter: ['class', 'style'] });
+    refresh();
+    mql.addEventListener('change', refresh);
+    observer = new MutationObserver(refresh);
+    observer.observe(document.documentElement, {
+      attributes: true,
+      attributeFilter: ['class', 'style', 'data-theme'],
+    });
   });
 
   onUnmounted(() => {
-    mql.removeEventListener('change', bump);
+    mql.removeEventListener('change', refresh);
     observer?.disconnect();
   });
-
-  function resolve(prop: string): string {
-    return getComputedStyle(document.documentElement).getPropertyValue(prop).trim();
-  }
-
-  const textPrimary = computed(() => { tick.value; return resolve('--text-primary'); });
-  const textSecondary = computed(() => { tick.value; return resolve('--text-secondary'); });
-  const bgPrimary = computed(() => { tick.value; return resolve('--bg-primary'); });
-  const separator = computed(() => { tick.value; return resolve('--separator'); });
 
   return { textPrimary, textSecondary, bgPrimary, separator };
 }

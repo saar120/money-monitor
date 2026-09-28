@@ -592,8 +592,8 @@ watch(search, () => {
   width: 100%;
   height: 100dvh;
   overflow: hidden;
-  color: #152238;
-  background: #fff;
+  color: var(--text-primary);
+  background: var(--bg-primary);
   font:
     14px/1.45 -apple-system,
     BlinkMacSystemFont,
@@ -612,8 +612,8 @@ watch(search, () => {
   flex: 0 0 200px;
   flex-direction: column;
   min-width: 0;
-  background: #f6f8fb;
-  border-inline-end: 1px solid #e6ebf1;
+  background: var(--bg-secondary);
+  border-inline-end: 1px solid var(--separator);
 }
 .proto-brand {
   display: flex;
@@ -621,7 +621,7 @@ watch(search, () => {
   gap: 10px;
   height: 82px;
   padding-inline: 18px;
-  color: #16243b;
+  color: var(--text-primary);
   font-size: 16px;
   font-weight: 700;
   white-space: nowrap;
@@ -644,17 +644,17 @@ watch(search, () => {
   min-height: 42px;
   padding: 0 13px;
   border-radius: 10px;
-  color: #53647d;
+  color: var(--text-secondary);
   text-decoration: none;
   font-weight: 600;
 }
 .proto-nav a:hover,
 .proto-sidebar-footer a:hover {
-  background: #eaf0f9;
+  background: var(--bg-tertiary);
 }
 .proto-nav a.active {
-  color: #0b5ddd;
-  background: #e7f0ff;
+  color: var(--accent);
+  background: var(--accent-15);
 }
 .proto-nav svg,
 .proto-sidebar-footer svg {
@@ -665,14 +665,14 @@ watch(search, () => {
   gap: 5px;
   margin-top: auto;
   padding: 12px 10px 16px;
-  border-top: 1px solid #e6ebf1;
+  border-top: 1px solid var(--separator);
 }
 .proto-sync {
   display: flex;
   align-items: center;
   gap: 7px;
   padding: 8px 13px;
-  color: #738197;
+  color: var(--text-tertiary);
   font-size: 12px;
 }
 .proto-sync i {
@@ -687,7 +687,7 @@ watch(search, () => {
   padding: 4px 7px;
   border: 0;
   background: none;
-  color: #6e7e95;
+  color: var(--text-secondary);
   font-size: 12px;
   cursor: pointer;
 }
@@ -696,7 +696,7 @@ watch(search, () => {
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  background: #fff;
+  background: var(--bg-primary);
 }
 .proto-toolbar {
   display: flex;
@@ -704,7 +704,7 @@ watch(search, () => {
   gap: 12px;
   min-height: 82px;
   padding: 0 25px;
-  border-bottom: 1px solid #edf0f4;
+  border-bottom: 1px solid var(--separator);
 }
 .proto-month {
   display: flex;
@@ -713,9 +713,9 @@ watch(search, () => {
   gap: 8px;
   min-width: 190px;
   padding: 6px 8px;
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--separator);
   border-radius: 12px;
-  background: #f7f9fc;
+  background: var(--bg-secondary);
   font-weight: 650;
   white-space: nowrap;
 }
@@ -729,12 +729,12 @@ watch(search, () => {
   border: 0;
   border-radius: 7px;
   background: transparent;
-  color: #61728d;
+  color: var(--text-secondary);
   cursor: pointer;
 }
 .proto-month button:hover,
 .proto-inspector-head button:hover {
-  background: #e5ecf7;
+  background: var(--bg-tertiary);
 }
 .proto-filter-wrap {
   position: relative;
@@ -745,32 +745,32 @@ watch(search, () => {
   gap: 8px;
   min-height: 39px;
   padding: 0 13px;
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--separator);
   border-radius: 11px;
-  background: #f7f9fc;
-  color: #1c2b43;
+  background: var(--bg-secondary);
+  color: var(--text-primary);
   font-weight: 650;
   cursor: pointer;
 }
 .proto-filter-button:hover {
-  background: #eef3fa;
+  background: var(--bg-tertiary);
 }
 .proto-advanced {
-  color: #61728d;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   text-decoration: none;
   white-space: nowrap;
 }
 .proto-advanced:hover {
-  color: #0b5ddd;
+  color: var(--accent);
   text-decoration: underline;
 }
 .proto-filter-dot {
   width: 6px;
   height: 6px;
   border-radius: 50%;
-  background: #0b5ddd;
+  background: var(--accent);
 }
 .proto-filter-popover {
   position: absolute;
@@ -781,9 +781,9 @@ watch(search, () => {
   gap: 14px;
   width: 285px;
   padding: 17px;
-  border: 1px solid #dbe4ef;
+  border: 1px solid var(--separator);
   border-radius: 14px;
-  background: #fff;
+  background: var(--bg-primary);
   box-shadow: 0 16px 40px #24365425;
 }
 .proto-popover-head {
@@ -795,7 +795,7 @@ watch(search, () => {
 .proto-fields label {
   display: grid;
   gap: 6px;
-  color: #63738b;
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
 }
@@ -806,10 +806,10 @@ watch(search, () => {
   width: 100%;
   min-height: 35px;
   padding: 6px 10px;
-  border: 1px solid #dfe6ef;
+  border: 1px solid var(--separator);
   border-radius: 9px;
-  background: #fff;
-  color: #1a2b43;
+  background: var(--bg-primary);
+  color: var(--text-primary);
   font:
     14px -apple-system,
     BlinkMacSystemFont,
@@ -820,14 +820,14 @@ watch(search, () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  color: #24344d;
+  color: var(--text-primary);
   font-size: 13px;
 }
 .proto-clear {
   justify-self: start;
   border: 0;
   background: none;
-  color: #0b5ddd;
+  color: var(--accent);
   font-weight: 650;
   cursor: pointer;
 }
@@ -839,22 +839,22 @@ watch(search, () => {
   min-height: 39px;
   margin-inline-start: auto;
   padding: 0 12px;
-  border: 1px solid #e6ebf1;
+  border: 1px solid var(--separator);
   border-radius: 11px;
-  background: #f7f9fc;
-  color: #8693a7;
+  background: var(--bg-secondary);
+  color: var(--text-tertiary);
 }
 .proto-search input {
   width: 100%;
   border: 0;
   outline: 0;
   background: transparent;
-  color: #1d2a3d;
+  color: var(--text-primary);
   font: inherit;
 }
 .proto-search:focus-within {
-  border-color: #5b95e7;
-  box-shadow: 0 0 0 3px #0b5ddd18;
+  border-color: var(--accent);
+  box-shadow: 0 0 0 3px var(--accent) 18;
 }
 .proto-content {
   display: flex;
@@ -874,22 +874,22 @@ watch(search, () => {
 }
 .proto-title h1 {
   margin: 0;
-  color: #14223b;
+  color: var(--text-primary);
   font-size: 32px;
   line-height: 1.18;
   font-weight: 750;
   letter-spacing: -0.04em;
 }
 .proto-title span {
-  color: #8b97a9;
+  color: var(--text-tertiary);
   font-size: 13px;
 }
 .proto-error {
   margin-block-end: 12px;
   padding: 10px;
   border-radius: 8px;
-  background: #fff3f0;
-  color: #ba4837;
+  background: color-mix(in srgb, var(--destructive) 12%, var(--bg-primary));
+  color: var(--destructive);
 }
 .proto-error button {
   border: 0;
@@ -926,9 +926,9 @@ watch(search, () => {
   top: 0;
   z-index: 1;
   height: 39px;
-  border-bottom: 1px solid #dce3ec;
-  background: #fff;
-  color: #7d8aa0;
+  border-bottom: 1px solid var(--separator);
+  background: var(--bg-primary);
+  color: var(--text-secondary);
   font-size: 12px;
   font-weight: 600;
   text-align: start;
@@ -939,8 +939,8 @@ watch(search, () => {
 .proto-date-group th {
   height: 49px;
   padding-block-start: 14px;
-  border-bottom: 1px solid #e9edf2;
-  color: #596b85;
+  border-bottom: 1px solid var(--separator);
+  color: var(--text-secondary);
   font-size: 13px;
   font-weight: 700;
   text-align: start;
@@ -951,8 +951,8 @@ watch(search, () => {
 .proto-table td {
   height: 51px;
   overflow: hidden;
-  border-bottom: 1px solid #e9edf2;
-  color: #3d4d65;
+  border-bottom: 1px solid var(--separator);
+  color: var(--text-primary);
   text-align: start;
   text-overflow: ellipsis;
   white-space: nowrap;
@@ -962,17 +962,17 @@ watch(search, () => {
   transition: background-color 0.15s ease;
 }
 .proto-table tbody tr:hover {
-  background: #f5f8fd;
+  background: var(--bg-secondary);
 }
 .proto-table tbody tr.selected {
-  background: #eaf2ff;
+  background: var(--accent-15);
 }
 .proto-table tbody tr:focus-visible {
-  outline: 2px solid #0b5ddd;
+  outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
 .proto-merchant {
-  color: #192740 !important;
+  color: var(--text-primary) !important;
   font-weight: 600;
 }
 .proto-merchant span {
@@ -984,11 +984,11 @@ watch(search, () => {
 }
 .proto-merchant small {
   margin-inline-start: 8px;
-  color: #bd5547;
+  color: var(--destructive);
   font-size: 11px;
 }
 .proto-category {
-  color: #77859a !important;
+  color: var(--text-secondary) !important;
 }
 .proto-amount {
   text-align: end !important;
@@ -997,15 +997,15 @@ watch(search, () => {
 }
 .proto-amount.negative,
 .proto-detail-amount.negative {
-  color: #bf463e !important;
+  color: var(--destructive) !important;
 }
 .proto-amount.positive,
 .proto-detail-amount.positive {
-  color: #098467 !important;
+  color: var(--success) !important;
 }
 .proto-empty {
   padding: 70px 20px;
-  color: #8895a7;
+  color: var(--text-tertiary);
   text-align: center;
 }
 .proto-more {
@@ -1014,8 +1014,8 @@ watch(search, () => {
   padding: 8px 12px;
   border: 0;
   border-radius: 8px;
-  background: #edf3fb;
-  color: #0b5ddd;
+  background: var(--bg-tertiary);
+  color: var(--accent);
   cursor: pointer;
 }
 .proto-inspector {
@@ -1023,8 +1023,8 @@ watch(search, () => {
   flex: 0 0 330px;
   flex-direction: column;
   min-width: 0;
-  border-inline-start: 1px solid #e6ebf1;
-  background: #fbfcfe;
+  border-inline-start: 1px solid var(--separator);
+  background: var(--bg-secondary);
 }
 .proto-backdrop {
   display: none;
@@ -1061,7 +1061,7 @@ watch(search, () => {
   justify-content: space-between;
   min-height: 82px;
   padding: 0 21px;
-  border-bottom: 1px solid #e6ebf1;
+  border-bottom: 1px solid var(--separator);
 }
 .proto-inspector-head h2 {
   margin: 0;
@@ -1077,8 +1077,8 @@ watch(search, () => {
   display: inline-flex;
   padding: 5px 10px;
   border-radius: 7px;
-  background: #ffebe8;
-  color: #c65346;
+  background: color-mix(in srgb, var(--destructive) 12%, var(--bg-primary));
+  color: var(--destructive);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1098,8 +1098,8 @@ watch(search, () => {
 .proto-detail-meta {
   margin: 0 0 20px;
   padding-bottom: 20px;
-  border-bottom: 1px solid #e2e8ef;
-  color: #76849a;
+  border-bottom: 1px solid var(--separator);
+  color: var(--text-secondary);
   font-size: 12px;
 }
 .proto-fields {
@@ -1120,37 +1120,37 @@ watch(search, () => {
   display: flex;
   align-items: center;
   gap: 9px;
-  color: #26364d;
+  color: var(--text-primary);
   font-size: 13px;
 }
 .proto-fields input[type='checkbox'],
 .proto-filter-popover input[type='checkbox'] {
-  accent-color: #0b5ddd;
+  accent-color: var(--accent);
 }
 .proto-fields textarea {
   resize: vertical;
 }
 .proto-preview-note {
   margin-top: 17px;
-  color: #8693a4;
+  color: var(--text-tertiary);
   font-size: 11px;
 }
 .proto-saved {
-  color: #0a8b68;
+  color: var(--success);
   font-size: 12px;
   font-weight: 650;
 }
 .proto-inspector-actions {
   padding: 18px 21px;
-  border-top: 1px solid #e6ebf1;
+  border-top: 1px solid var(--separator);
 }
 .proto-save {
   width: 100%;
   min-height: 40px;
   border: 0;
   border-radius: 9px;
-  background: #0b5ddd;
-  color: #fff;
+  background: var(--accent);
+  color: var(--primary-foreground);
   font:
     700 14px -apple-system,
     BlinkMacSystemFont,
@@ -1159,7 +1159,7 @@ watch(search, () => {
   cursor: pointer;
 }
 .proto-save:hover {
-  background: #064fc1;
+  background: var(--accent-hover);
 }
 .proto-save:disabled {
   opacity: 0.6;

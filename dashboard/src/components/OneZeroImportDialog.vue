@@ -383,14 +383,14 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   flex: none;
   padding: 8px 11px;
   border-radius: 6px;
-  background: #eaf2ff;
+  background: var(--accent-15);
   color: var(--accent);
   font-size: 12px;
   font-weight: 700;
   cursor: pointer;
 }
 .import-file-row label:hover {
-  background: #dae9ff;
+  background: var(--accent-30);
 }
 .import-file-row input:focus-visible + label {
   outline: 2px solid var(--accent);
@@ -430,11 +430,11 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   color: var(--text-secondary);
 }
 .import-error {
-  background: #fff0ef;
+  background: color-mix(in srgb, var(--destructive) 12%, var(--bg-primary));
   color: var(--destructive);
 }
 .import-success {
-  background: #edf8f2;
+  background: color-mix(in srgb, var(--success) 12%, var(--bg-primary));
   color: var(--success);
 }
 .import-preview-head {
@@ -562,7 +562,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
 }
 .import-confirm {
   background: var(--accent);
-  color: white;
+  color: var(--primary-foreground);
 }
 .import-confirm:disabled {
   opacity: 0.45;

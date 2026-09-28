@@ -26,6 +26,7 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { CheckCircle, AlertCircle, RefreshCw, Download } from 'lucide-vue-next';
+import { themeChoice, setThemeChoice, type ThemeChoice } from '@/lib/theme';
 import {
   language,
   languageChoice,
@@ -39,6 +40,11 @@ const sectionCopy = computed(() =>
     ? {
         household: 'משק בית',
         general: 'כללי',
+        appearance: 'מראה',
+        appearanceHint: 'בחירת מראה האפליקציה',
+        followSystem: 'לפי המכשיר',
+        light: 'בהיר',
+        dark: 'כהה',
         ai: 'בינה מלאכותית',
         mobile: 'גישה מהטלפון',
         security: 'אבטחה',
@@ -59,6 +65,11 @@ const sectionCopy = computed(() =>
     : {
         household: 'Household',
         general: 'General',
+        appearance: 'Appearance',
+        appearanceHint: 'Choose how the app looks',
+        followSystem: 'Follow system',
+        light: 'Light',
+        dark: 'Dark',
         ai: 'AI',
         mobile: 'Mobile access',
         security: 'Security',
@@ -80,6 +91,10 @@ const sectionCopy = computed(() =>
 
 function onLanguageChange(event: Event) {
   setLanguageChoice((event.target as globalThis.HTMLSelectElement).value as LanguageChoice);
+}
+
+function onThemeChange(event: Event) {
+  setThemeChoice((event.target as globalThis.HTMLSelectElement).value as ThemeChoice);
 }
 
 const loading = ref(true);
@@ -401,6 +416,33 @@ async function save() {
       </nav>
       <section id="settings-household"><HouseholdSettings /></section>
 
+      <SettingsGroup id="settings-general" :title="sectionCopy.general">
+        <SettingsRow :label="t('appLanguage')">
+          <select
+            :value="languageChoice"
+            class="ledger-select"
+            :aria-label="t('appLanguage')"
+            @change="onLanguageChange"
+          >
+            <option value="system">{{ t('systemDefault') }}</option>
+            <option value="en">{{ t('english') }}</option>
+            <option value="he">{{ t('hebrew') }}</option>
+          </select>
+        </SettingsRow>
+        <SettingsRow :label="sectionCopy.appearance" :description="sectionCopy.appearanceHint">
+          <select
+            :value="themeChoice"
+            class="ledger-select"
+            :aria-label="sectionCopy.appearance"
+            @change="onThemeChange"
+          >
+            <option value="system">{{ sectionCopy.followSystem }}</option>
+            <option value="light">{{ sectionCopy.light }}</option>
+            <option value="dark">{{ sectionCopy.dark }}</option>
+          </select>
+        </SettingsRow>
+      </SettingsGroup>
+
       <template v-if="!isElectron">
         <Card>
           <CardContent class="pt-6">
@@ -430,20 +472,6 @@ async function save() {
           </div>
         </Teleport>
 
-        <SettingsGroup id="settings-general" :title="t('language')">
-          <SettingsRow :label="t('appLanguage')">
-            <select
-              :value="languageChoice"
-              class="ledger-select"
-              :aria-label="t('appLanguage')"
-              @change="onLanguageChange"
-            >
-              <option value="system">{{ t('systemDefault') }}</option>
-              <option value="en">{{ t('english') }}</option>
-              <option value="he">{{ t('hebrew') }}</option>
-            </select>
-          </SettingsRow>
-        </SettingsGroup>
         <section id="settings-mobile"><MobileAccessSettings /></section>
         <!-- AI Configuration -->
         <SettingsGroup id="settings-ai" :title="sectionCopy.ai" :description="sectionCopy.aiHint">

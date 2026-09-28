@@ -5,12 +5,15 @@ import DOMPurify from 'dompurify';
 
 const md = new Marked({ breaks: true, gfm: true });
 
-const props = withDefaults(defineProps<{
-  content: string;
-  streaming?: boolean;
-}>(), {
-  streaming: false,
-});
+const props = withDefaults(
+  defineProps<{
+    content: string;
+    streaming?: boolean;
+  }>(),
+  {
+    streaming: false,
+  },
+);
 
 /**
  * Split markdown into logical blocks on blank lines,
@@ -82,9 +85,15 @@ const renderedBlocks = computed(() =>
   line-height: 1.3;
 }
 
-.markdown-content :deep(h1) { font-size: 1.25em; }
-.markdown-content :deep(h2) { font-size: 1.125em; }
-.markdown-content :deep(h3) { font-size: 1em; }
+.markdown-content :deep(h1) {
+  font-size: 1.25em;
+}
+.markdown-content :deep(h2) {
+  font-size: 1.125em;
+}
+.markdown-content :deep(h3) {
+  font-size: 1em;
+}
 
 .markdown-content :deep(p) {
   margin-bottom: 0.5em;
@@ -104,8 +113,12 @@ const renderedBlocks = computed(() =>
   margin-bottom: 0.5em;
 }
 
-.markdown-content :deep(ul) { list-style-type: disc; }
-.markdown-content :deep(ol) { list-style-type: decimal; }
+.markdown-content :deep(ul) {
+  list-style-type: disc;
+}
+.markdown-content :deep(ol) {
+  list-style-type: decimal;
+}
 
 .markdown-content :deep(li) {
   margin-bottom: 0.2em;
@@ -147,10 +160,8 @@ const renderedBlocks = computed(() =>
   background: rgba(0, 0, 0, 0.02);
 }
 
-@media (prefers-color-scheme: dark) {
-  .markdown-content :deep(tbody tr:hover) {
-    background: rgba(255, 255, 255, 0.03);
-  }
+:global([data-theme='dark']) .markdown-content :deep(tbody tr:hover) {
+  background: rgba(255, 255, 255, 0.03);
 }
 
 .markdown-content :deep(tbody tr:last-child td) {

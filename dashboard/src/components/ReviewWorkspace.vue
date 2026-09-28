@@ -312,7 +312,7 @@ th {
   top: 0;
   z-index: 1;
   height: 42px;
-  background: #fff;
+  background: var(--bg-primary);
   border-bottom: 1px solid var(--separator);
   font-size: 12px;
 }
@@ -344,7 +344,7 @@ tbody tr {
   cursor: pointer;
 }
 tbody tr.selected {
-  background: #eaf2ff;
+  background: var(--accent-15);
 }
 tbody tr:focus-visible {
   outline: 2px solid var(--accent);
@@ -395,7 +395,7 @@ tbody tr:focus-visible {
   flex: 0 0 315px;
   flex-direction: column;
   border-inline-start: 1px solid var(--separator);
-  background: #fbfcfe;
+  background: var(--bg-secondary);
 }
 .review-inspector-head {
   display: flex;
@@ -461,7 +461,7 @@ tbody tr:focus-visible {
   padding: 0 9px;
   border: 1px solid var(--separator);
   border-radius: 8px;
-  background: #fff;
+  background: var(--bg-primary);
 }
 .review-check {
   display: flex;
@@ -481,7 +481,7 @@ tbody tr:focus-visible {
   min-height: 40px;
   border-radius: 9px;
   background: var(--accent);
-  color: #fff;
+  color: var(--primary-foreground);
   font-weight: 700;
 }
 .review-inspector-footer button:disabled {

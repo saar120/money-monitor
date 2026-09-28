@@ -13,15 +13,6 @@ import { useOtpFlow } from '../composables/useOtpFlow';
 import { useSseConnection } from '../composables/useSseConnection';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
-import { Badge } from '@/components/ui/badge';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
 import {
   Dialog,
   DialogContent,
@@ -38,27 +29,86 @@ import {
   Clock,
   Loader2,
   ChevronDown,
-  ChevronRight,
   Landmark,
+  CreditCard,
 } from 'lucide-vue-next';
-import { formatDateTime } from '@/lib/format';
 import { language } from '@/lib/language';
 
 const copy = computed(() =>
   language.value === 'he'
     ? {
-        choose: 'בחירת חשבון...',
-        syncAll: 'סנכרון הכל',
-        intro: 'עדכון פעולות הבנק והאשראי ומעקב אחר סנכרונים.',
-        active: 'חשבונות פעילים',
-        history: 'היסטוריית סנכרון',
+        intro: 'כל החשבונות והעדכונים שלהם במקום אחד.',
+        syncAll: 'סנכרון כל החשבונות',
+        syncing: 'מתחיל סנכרון…',
+        accounts: 'חשבונות מחוברים',
+        active: 'פעילים',
+        lastSync: 'סנכרון אחרון',
+        neverSynced: 'טרם סונכרן',
+        syncAccount: 'סנכרון חשבון',
+        bank: 'בנק',
+        card: 'כרטיס אשראי',
+        history: 'סנכרונים אחרונים',
+        showAll: 'הצגת כל הסנכרונים',
+        showLess: 'הצגת פחות',
+        noHistory: 'אין סנכרונים עדיין',
+        noHistoryHint: 'סנכרנו חשבון כדי לראות כאן את העדכונים. פרטי הגישה נשארים ב־Mac הזה.',
+        noAccounts: 'אין חשבונות פעילים לסנכרון.',
+        running: 'סנכרון מתבצע',
+        cancel: 'ביטול',
+        queued: 'ממתין',
+        scraping: 'מסנכרן…',
+        done: 'הושלם',
+        failed: 'נכשל',
+        newItems: 'חדשות',
+        transactions: 'עסקאות',
+        scheduled: 'אוטומטי',
+        single: 'חשבון בודד',
+        manual: 'ידני',
+        results: 'אין תוצאות',
+        succeededCount: 'הצליחו',
+        succeededOne: 'הצליח',
+        failedCount: 'נכשלו',
+        failedOne: 'נכשל',
+        statusCompleted: 'הושלם',
+        statusError: 'שגיאה',
+        statusCancelled: 'בוטל',
       }
     : {
-        choose: 'Choose account...',
-        syncAll: 'Sync all',
-        intro: 'Keep bank and card activity current, with a clear sync history.',
-        active: 'active accounts',
-        history: 'Sync history',
+        intro: 'Every connected account and its latest update, in one place.',
+        syncAll: 'Sync all accounts',
+        syncing: 'Starting sync…',
+        accounts: 'Connected accounts',
+        active: 'active',
+        lastSync: 'Last synced',
+        neverSynced: 'Not synced yet',
+        syncAccount: 'Sync account',
+        bank: 'Bank',
+        card: 'Credit card',
+        history: 'Recent syncs',
+        showAll: 'Show all syncs',
+        showLess: 'Show fewer',
+        noHistory: 'No syncs yet',
+        noHistoryHint: 'Sync an account to see updates here. Credentials stay on this Mac.',
+        noAccounts: 'No active accounts to sync.',
+        running: 'Sync in progress',
+        cancel: 'Cancel',
+        queued: 'Queued',
+        scraping: 'Syncing…',
+        done: 'Done',
+        failed: 'Failed',
+        newItems: 'new',
+        transactions: 'transactions',
+        scheduled: 'Scheduled',
+        single: 'Single account',
+        manual: 'Manual',
+        results: 'No results',
+        succeededCount: 'succeeded',
+        succeededOne: 'succeeded',
+        failedCount: 'failed',
+        failedOne: 'failed',
+        statusCompleted: 'Completed',
+        statusError: 'Error',
+        statusCancelled: 'Cancelled',
       },
 );
 
@@ -68,6 +118,7 @@ const sessions = ref<ScrapeSession[]>([]);
 const loading = ref(true);
 const triggerLoading = ref(false);
 const expandedSessions = ref<Set<number>>(new Set());
+const showAllSessions = ref(false);
 
 // ─── Active session live state (from SSE) ───
 interface LiveAccountStatus {
@@ -112,6 +163,17 @@ function getAccountName(id: number): string {
   return accounts.value.find((a) => a.id === id)?.displayName ?? `Account #${id}`;
 }
 
+function formatSyncTime(value: string): string {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat(language.value === 'he' ? 'he-IL' : 'en-US', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
+}
+
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const seconds = Math.round(ms / 1000);
@@ -122,16 +184,16 @@ function formatDuration(ms: number): string {
 }
 
 function triggerLabel(trigger: string): string {
-  if (trigger === 'scheduled') return 'Scheduled';
-  if (trigger === 'single') return 'Single Account';
-  return 'Manual';
+  if (trigger === 'scheduled') return copy.value.scheduled;
+  if (trigger === 'single') return copy.value.single;
+  return copy.value.manual;
 }
 
-function statusVariant(status: string): 'default' | 'secondary' | 'destructive' | 'outline' {
-  if (status === 'completed' || status === 'success') return 'default';
-  if (status === 'running' || status === 'scraping') return 'secondary';
-  if (status === 'error' || status === 'cancelled') return 'destructive';
-  return 'outline';
+function statusLabel(status: string): string {
+  if (status === 'completed' || status === 'success') return copy.value.statusCompleted;
+  if (status === 'error') return copy.value.statusError;
+  if (status === 'cancelled') return copy.value.statusCancelled;
+  return copy.value.running;
 }
 
 function sessionAccountNames(session: ScrapeSession): string {
@@ -143,16 +205,16 @@ function sessionAccountNames(session: ScrapeSession): string {
 
 function sessionSummary(session: ScrapeSession): string {
   const logs = session.logs ?? [];
-  if (logs.length === 0) return 'No results';
+  if (logs.length === 0) return copy.value.results;
   const ok = logs.filter((l) => l.status === 'success').length;
   const fail = logs.filter((l) => l.status === 'error').length;
   const totalFound = logs.reduce((sum, l) => sum + (l.transactionsFound ?? 0), 0);
   const totalNew = logs.reduce((sum, l) => sum + (l.transactionsNew ?? 0), 0);
   const parts: string[] = [];
-  if (ok > 0) parts.push(`${ok} ok`);
-  if (fail > 0) parts.push(`${fail} failed`);
-  parts.push(`${totalFound} txns`);
-  if (totalNew > 0) parts.push(`${totalNew} new`);
+  if (ok > 0) parts.push(`${ok} ${ok === 1 ? copy.value.succeededOne : copy.value.succeededCount}`);
+  if (fail > 0) parts.push(`${fail} ${fail === 1 ? copy.value.failedOne : copy.value.failedCount}`);
+  parts.push(`${totalFound} ${copy.value.transactions}`);
+  if (totalNew > 0) parts.push(`${totalNew} ${copy.value.newItems}`);
   return parts.join(' · ');
 }
 
@@ -321,226 +383,182 @@ onUnmounted(() => {
 });
 
 const activeAccounts = computed(() => accounts.value.filter((a) => a.isActive));
+const visibleSessions = computed(() =>
+  showAllSessions.value ? sessions.value : sessions.value.slice(0, 8),
+);
+const latestSession = computed(() => sessions.value[0]);
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="sync-page animate-fade-in-up">
     <Teleport to="#toolbar-actions">
-      <div class="flex items-center gap-2">
-        <Select @update:model-value="(v) => v != null && handleScrapeAccount(Number(v))">
-          <SelectTrigger class="w-[180px] h-8">
-            <SelectValue :placeholder="copy.choose" />
-          </SelectTrigger>
-          <SelectContent>
-            <SelectItem
-              v-for="account in activeAccounts"
-              :key="account.id"
-              :value="String(account.id)"
-            >
-              {{ account.displayName }}
-            </SelectItem>
-          </SelectContent>
-        </Select>
-        <Button size="sm" :disabled="triggerLoading || !!liveSession" @click="handleScrapeAll">
-          <Loader2 v-if="triggerLoading" class="mr-1.5 h-3.5 w-3.5 animate-spin" />
-          <Play v-else class="mr-1.5 h-3.5 w-3.5" />
-          {{ copy.syncAll }}
-        </Button>
-      </div>
+      <Button
+        size="sm"
+        :disabled="triggerLoading || !!liveSession || loading || !activeAccounts.length"
+        @click="handleScrapeAll"
+      >
+        <Loader2 v-if="triggerLoading" class="h-4 w-4 animate-spin" />
+        <Play v-else class="h-4 w-4" />
+        {{ triggerLoading ? copy.syncing : copy.syncAll }}
+      </Button>
     </Teleport>
 
-    <div class="flex-1 min-h-0 overflow-y-auto space-y-4">
-      <div class="scraping-intro">
-        <div>
-          <span>{{ copy.intro }}</span>
-        </div>
-        <div class="scraping-account-count">
-          <strong>{{ activeAccounts.length }}</strong
-          ><span>{{ copy.active }}</span>
-        </div>
-      </div>
-      <!-- Error Banner -->
-      <div
-        v-if="errorMessage"
-        class="flex items-center gap-3 rounded-lg border border-destructive/50 bg-destructive/10 px-4 py-3 text-[13px] text-destructive"
-      >
-        <XCircle class="h-4 w-4 flex-shrink-0" />
-        <span class="flex-1">{{ errorMessage }}</span>
-        <button class="text-destructive/70 hover:text-destructive" @click="errorMessage = null">
-          &times;
-        </button>
-      </div>
-
-      <!-- Active Session Banner -->
-      <Card v-if="liveSession" class="border-primary/30 bg-primary/5 animate-fade-in-up">
-        <CardHeader class="pb-3">
-          <div class="flex items-center justify-between">
-            <div class="flex items-center gap-3">
-              <Loader2 class="h-5 w-5 animate-spin text-primary" />
-              <CardTitle class="text-[15px]">
-                Active Scrape
-                <Badge variant="secondary" class="ml-2">{{
-                  triggerLabel(liveSession.trigger)
-                }}</Badge>
-              </CardTitle>
-            </div>
-            <div class="flex items-center gap-3">
-              <span class="text-[13px] text-text-secondary">
-                <Clock class="inline h-3.5 w-3.5 mr-1" />
-                {{ elapsedSeconds }}s
-              </span>
-              <Button variant="destructive" size="sm" @click="handleCancel">
-                <Square class="mr-1.5 h-3.5 w-3.5" />
-                Cancel
-              </Button>
-            </div>
-          </div>
-        </CardHeader>
-        <CardContent>
-          <div class="space-y-2">
-            <div
-              v-for="accountStatus in liveSession.accounts"
-              :key="accountStatus.accountId"
-              class="flex items-center gap-3 text-[13px]"
-            >
-              <!-- Status icon -->
-              <Loader2
-                v-if="accountStatus.status === 'scraping'"
-                class="h-4 w-4 animate-spin text-primary flex-shrink-0"
-              />
-              <CheckCircle2
-                v-else-if="accountStatus.status === 'done'"
-                class="h-4 w-4 text-success flex-shrink-0"
-              />
-              <XCircle
-                v-else-if="accountStatus.status === 'error'"
-                class="h-4 w-4 text-destructive flex-shrink-0"
-              />
-              <div
-                v-else
-                class="h-4 w-4 rounded-full border-2 border-text-secondary/30 flex-shrink-0"
-              />
-
-              <!-- Account name -->
-              <span class="w-40 truncate font-medium">{{
-                getAccountName(accountStatus.accountId)
-              }}</span>
-
-              <!-- Status text -->
-              <span class="text-text-secondary">
-                <template v-if="accountStatus.status === 'queued'">Queued</template>
-                <template v-else-if="accountStatus.status === 'scraping'">Scraping...</template>
-                <template v-else-if="accountStatus.status === 'done'">
-                  {{ accountStatus.transactionsFound }} txns
-                  <template v-if="accountStatus.transactionsNew"
-                    >({{ accountStatus.transactionsNew }} new)</template
-                  >
-                  <template v-if="accountStatus.durationMs">
-                    &mdash; {{ formatDuration(accountStatus.durationMs) }}</template
-                  >
-                </template>
-                <template v-else-if="accountStatus.status === 'error'">
-                  <span class="text-destructive">{{ accountStatus.error ?? 'Failed' }}</span>
-                  <template v-if="accountStatus.durationMs">
-                    &mdash; {{ formatDuration(accountStatus.durationMs) }}</template
-                  >
-                </template>
-              </span>
-            </div>
-          </div>
-        </CardContent>
-      </Card>
-
-      <!-- Loading skeleton -->
-      <div v-if="loading" class="space-y-3">
-        <Skeleton class="h-20 w-full" />
-        <Skeleton class="h-20 w-full" />
-        <Skeleton class="h-20 w-full" />
-      </div>
-
-      <!-- Session History -->
-      <div v-else class="space-y-2">
-        <h2 class="text-[15px] font-semibold">{{ copy.history }}</h2>
-        <div v-if="sessions.length === 0" class="scrape-empty">
-          <Landmark :size="28" :stroke-width="1.6" />
-          <h3>No scrape sessions yet</h3>
-          <p>
-            Run a sync to bring in the latest activity. Account credentials and scraping stay on
-            this Mac.
-          </p>
-          <Button
-            size="sm"
-            variant="secondary"
-            :disabled="triggerLoading || !activeAccounts.length"
-            @click="handleScrapeAll"
-          >
-            <Play class="h-3.5 w-3.5 mr-1.5" /> Sync accounts
-          </Button>
-        </div>
-        <div v-else class="space-y-1">
-          <div
-            v-for="session in sessions"
-            :key="session.id"
-            class="border rounded-lg hover:bg-bg-secondary/50 transition-colors duration-150"
-          >
-            <!-- Session header row (clickable) -->
-            <button
-              class="w-full flex items-center gap-3 px-4 py-3 text-[13px] hover:bg-bg-tertiary/50 transition-colors text-left"
-              @click="toggleExpand(session.id)"
-            >
-              <ChevronDown
-                v-if="expandedSessions.has(session.id)"
-                class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
-              />
-              <ChevronRight
-                v-else
-                class="h-4 w-4 flex-shrink-0 text-text-secondary transition-transform duration-150"
-              />
-
-              <span class="text-text-secondary w-8 text-right">#{{ session.id }}</span>
-              <span class="w-36">{{ formatDateTime(session.startedAt) }}</span>
-              <Badge :variant="statusVariant(session.status)" class="w-20 justify-center">
-                {{ session.status }}
-              </Badge>
-              <Badge variant="outline">{{ triggerLabel(session.trigger) }}</Badge>
-              <span class="truncate text-text-secondary">{{ sessionAccountNames(session) }}</span>
-              <span class="flex-shrink-0 text-text-secondary ml-auto">{{
-                sessionSummary(session)
-              }}</span>
-            </button>
-
-            <!-- Expanded per-account logs -->
-            <div
-              v-if="expandedSessions.has(session.id) && session.logs.length > 0"
-              class="border-t px-4 py-2 bg-bg-secondary"
-            >
-              <div
-                v-for="log in session.logs"
-                :key="log.id"
-                class="flex items-center gap-3 py-1.5 text-[13px]"
-              >
-                <CheckCircle2
-                  v-if="log.status === 'success'"
-                  class="h-4 w-4 text-success flex-shrink-0"
-                />
-                <XCircle v-else class="h-4 w-4 text-destructive flex-shrink-0" />
-                <span class="w-40 truncate font-medium">{{ log.accountName }}</span>
-                <span v-if="log.status === 'success'" class="text-text-secondary">
-                  {{ log.transactionsFound }} txns ({{ log.transactionsNew ?? 0 }} new)
-                </span>
-                <span v-else class="text-destructive truncate">
-                  {{ log.errorMessage ?? log.errorType ?? 'Error' }}
-                </span>
-                <span v-if="log.durationMs" class="text-text-secondary ml-auto">
-                  {{ formatDuration(log.durationMs) }}
-                </span>
-              </div>
-            </div>
-          </div>
-        </div>
+    <div class="sync-overview">
+      <p>{{ copy.intro }}</p>
+      <div v-if="latestSession" class="sync-latest">
+        <span class="sync-status-dot" :class="latestSession.status" />
+        <span>{{ copy.lastSync }}</span>
+        <strong>{{ formatSyncTime(latestSession.startedAt) }}</strong>
+        <span>· {{ statusLabel(latestSession.status) }}</span>
       </div>
     </div>
-    <!-- end scrollable content -->
+
+    <div v-if="errorMessage" role="alert" class="sync-error">
+      <XCircle class="h-4 w-4 shrink-0" />
+      <span>{{ errorMessage }}</span>
+      <button type="button" :aria-label="copy.cancel" @click="errorMessage = null">×</button>
+    </div>
+
+    <section v-if="liveSession" class="sync-running" aria-live="polite">
+      <div class="sync-section-heading">
+        <h2><Loader2 class="h-4 w-4 animate-spin" />{{ copy.running }}</h2>
+        <div class="sync-running-actions">
+          <span><Clock class="h-4 w-4" />{{ elapsedSeconds }}s</span>
+          <Button variant="secondary" size="sm" @click="handleCancel">
+            <Square class="h-3.5 w-3.5" />{{ copy.cancel }}
+          </Button>
+        </div>
+      </div>
+      <div class="sync-live-accounts">
+        <div v-for="accountStatus in liveSession.accounts" :key="accountStatus.accountId">
+          <Loader2
+            v-if="accountStatus.status === 'scraping'"
+            class="h-4 w-4 animate-spin text-primary"
+          />
+          <CheckCircle2 v-else-if="accountStatus.status === 'done'" class="h-4 w-4 text-success" />
+          <XCircle v-else-if="accountStatus.status === 'error'" class="h-4 w-4 text-destructive" />
+          <Clock v-else class="h-4 w-4 text-text-tertiary" />
+          <strong>{{ getAccountName(accountStatus.accountId) }}</strong>
+          <span v-if="accountStatus.status === 'done'">
+            {{ accountStatus.transactionsFound ?? 0 }} {{ copy.transactions }}
+            <template v-if="accountStatus.transactionsNew"
+              >· {{ accountStatus.transactionsNew }} {{ copy.newItems }}</template
+            >
+          </span>
+          <span v-else-if="accountStatus.status === 'error'" class="text-destructive">{{
+            accountStatus.error ?? copy.failed
+          }}</span>
+          <span v-else>{{ accountStatus.status === 'queued' ? copy.queued : copy.scraping }}</span>
+        </div>
+      </div>
+    </section>
+
+    <section class="sync-section">
+      <div class="sync-section-heading">
+        <h2>{{ copy.accounts }}</h2>
+        <span class="sync-count">{{ activeAccounts.length }} {{ copy.active }}</span>
+      </div>
+      <div v-if="loading" class="sync-skeleton">
+        <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
+      </div>
+      <p v-else-if="!activeAccounts.length" class="sync-empty-inline">{{ copy.noAccounts }}</p>
+      <div v-else class="sync-account-list">
+        <div v-for="account in activeAccounts" :key="account.id" class="sync-account-row">
+          <div class="sync-account-identity">
+            <span class="sync-account-icon">
+              <Landmark v-if="account.accountType === 'bank'" :size="18" />
+              <CreditCard v-else :size="18" />
+            </span>
+            <span class="sync-account-name">
+              <strong>{{ account.displayName }}</strong>
+              <small>{{ account.accountType === 'bank' ? copy.bank : copy.card }}</small>
+            </span>
+          </div>
+          <span class="sync-account-updated">
+            {{ account.lastScrapedAt ? formatSyncTime(account.lastScrapedAt) : copy.neverSynced }}
+          </span>
+          <Button
+            variant="secondary"
+            size="sm"
+            :aria-label="`${copy.syncAccount}: ${account.displayName}`"
+            :disabled="triggerLoading || !!liveSession"
+            @click="handleScrapeAccount(account.id)"
+          >
+            <Play class="h-3.5 w-3.5" />{{ copy.syncAccount }}
+          </Button>
+        </div>
+      </div>
+    </section>
+
+    <section class="sync-section sync-history">
+      <div class="sync-section-heading">
+        <h2>{{ copy.history }}</h2>
+        <button
+          v-if="sessions.length > 8"
+          type="button"
+          class="sync-show-more"
+          @click="showAllSessions = !showAllSessions"
+        >
+          {{ showAllSessions ? copy.showLess : copy.showAll }}
+        </button>
+      </div>
+      <div v-if="loading" class="sync-skeleton">
+        <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
+      </div>
+      <div v-else-if="!sessions.length" class="scrape-empty">
+        <Landmark :size="28" :stroke-width="1.6" />
+        <h3>{{ copy.noHistory }}</h3>
+        <p>{{ copy.noHistoryHint }}</p>
+      </div>
+      <div v-else class="sync-session-list">
+        <div v-for="session in visibleSessions" :key="session.id" class="sync-session">
+          <button
+            type="button"
+            class="sync-session-button"
+            :aria-expanded="expandedSessions.has(session.id)"
+            @click="toggleExpand(session.id)"
+          >
+            <span class="sync-status-icon" :class="session.status">
+              <CheckCircle2 v-if="session.status === 'completed'" :size="17" />
+              <XCircle v-else-if="session.status === 'error'" :size="17" />
+              <Loader2 v-else-if="session.status === 'running'" :size="17" class="animate-spin" />
+              <Clock v-else :size="17" />
+            </span>
+            <span class="sync-session-main">
+              <strong
+                >{{ triggerLabel(session.trigger) }} · {{ statusLabel(session.status) }}</strong
+              >
+              <small>{{ sessionAccountNames(session) || copy.results }}</small>
+            </span>
+            <span class="sync-session-result">{{ sessionSummary(session) }}</span>
+            <time class="sync-session-time">{{ formatSyncTime(session.startedAt) }}</time>
+            <ChevronDown
+              :size="17"
+              class="sync-session-chevron"
+              :class="{ open: expandedSessions.has(session.id) }"
+            />
+          </button>
+          <div
+            v-if="expandedSessions.has(session.id) && session.logs.length"
+            class="sync-session-logs"
+          >
+            <div v-for="log in session.logs" :key="log.id">
+              <CheckCircle2 v-if="log.status === 'success'" :size="16" class="text-success" />
+              <XCircle v-else :size="16" class="text-destructive" />
+              <strong>{{ log.accountName }}</strong>
+              <span v-if="log.status === 'success'"
+                >{{ log.transactionsFound }} {{ copy.transactions }} ·
+                {{ log.transactionsNew ?? 0 }} {{ copy.newItems }}</span
+              >
+              <span v-else class="text-destructive">{{
+                log.errorMessage ?? log.errorType ?? copy.failed
+              }}</span>
+              <small v-if="log.durationMs">{{ formatDuration(log.durationMs) }}</small>
+            </div>
+          </div>
+        </div>
+      </div>
+    </section>
 
     <!-- OTP Dialog -->
     <Dialog v-model:open="otpDialog">

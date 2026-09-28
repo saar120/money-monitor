@@ -299,7 +299,7 @@ function handleKeydown(e: KeyboardEvent) {
   background: var(--bg-secondary);
 }
 .advisor-conversation {
-  background: #fff;
+  background: var(--bg-primary);
 }
 .chat-messages > * {
   width: min(100%, 760px);
