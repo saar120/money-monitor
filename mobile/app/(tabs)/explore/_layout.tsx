@@ -32,8 +32,13 @@ export default function ExploreLayout() {
       <Stack.Screen name="cash-flow" options={{ title: t('cashFlow') }} />
       <Stack.Screen name="recurring-payments" options={{ title: t('subscriptions') }} />
       <Stack.Screen name="recurring-payment-detail" options={{ title: t('subscriptionDetails') }} />
-      <Stack.Screen name="category/[name]" options={{ title: t('category') }} />
-      <Stack.Screen name="merchant/[name]" options={{ title: t('merchant') }} />
+      <Stack.Screen name="category/[name]" options={{ title: '' }} />
+      <Stack.Screen
+        name="merchant/[name]"
+        options={({ route }) => ({
+          title: (route.params as { name?: string } | undefined)?.name ?? t('merchant'),
+        })}
+      />
       <Stack.Screen name="net-worth" options={{ title: t('netWorth') }} />
     </Stack>
   );

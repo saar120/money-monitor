@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { categoryMotionName } from '@/lib/cardMotion';
+import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, ref } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
@@ -88,6 +90,40 @@ const categoryLink = (name: string) => ({
   path: `/explore/category/${encodeURIComponent(name)}`,
   query: { month: selected.value.key },
 });
+let scrubPointer: number | null = null;
+let scrubCenters: Array<{ key: string; x: number }> = [];
+const scrubbing = ref(false);
+function scrub(event: PointerEvent) {
+  if (scrubPointer !== event.pointerId) return;
+  const closest = scrubCenters.reduce<{ key: string; x: number } | undefined>(
+    (best, point) =>
+      !best || Math.abs(event.clientX - point.x) < Math.abs(event.clientX - best.x) ? point : best,
+    undefined,
+  );
+  if (closest) selectedMonth.value = closest.key;
+}
+function beginScrub(event: PointerEvent) {
+  if (event.button !== 0) return;
+  const target = event.currentTarget as HTMLElement;
+  scrubCenters = Array.from(
+    target.querySelectorAll<globalThis.HTMLButtonElement>(
+      'button[data-month]:not(.ledger-reflow-leave-active)',
+    ),
+    (button) => {
+      const rect = button.getBoundingClientRect();
+      return { key: button.dataset.month!, x: rect.left + rect.width / 2 };
+    },
+  );
+  scrubPointer = event.pointerId;
+  scrubbing.value = true;
+  target.setPointerCapture(event.pointerId);
+  scrub(event);
+}
+function endScrub() {
+  scrubPointer = null;
+  scrubbing.value = false;
+  scrubCenters = [];
+}
 </script>
 
 <template>
@@ -125,7 +161,10 @@ const categoryLink = (name: string) => ({
           },
         )
       }}</span>
-      <strong>{{ loading ? '—' : formatCurrency(grossByMonth.get(selected.key) ?? 0) }}</strong
+      <strong
+        ><AnimatedAmount
+          :value="grossByMonth.get(selected.key) ?? 0"
+          :animate="!scrubbing" /></strong
       ><small>{{ t('postedSpending') }}</small>
     </section>
     <div class="comparison-chart" :aria-label="t('monthlySpending')">
@@ -136,13 +175,21 @@ const categoryLink = (name: string) => ({
         <div class="comparison-guides" aria-hidden="true">
           <span v-for="tick in ticks" :key="tick" />
         </div>
-        <div
+        <TransitionGroup
+          tag="div"
+          name="ledger-reflow"
           class="comparison-bars"
+          data-scrub
           :style="{ gridTemplateColumns: `repeat(${range}, minmax(0, 1fr))` }"
+          @pointerdown="beginScrub"
+          @pointermove="scrub"
+          @pointerup="endScrub"
+          @pointercancel="endScrub"
         >
           <button
             v-for="month in months"
             :key="month.key"
+            :data-month="month.key"
             type="button"
             :class="{ selected: month.key === selected.key }"
             :aria-label="`${month.key}: ${formatCurrency(month.total)}`"
@@ -171,18 +218,19 @@ const categoryLink = (name: string) => ({
               )
             }}</span>
           </button>
-        </div>
+        </TransitionGroup>
       </div>
     </div>
     <div class="ledger-section-heading explore-subheading">
       <h2>{{ t('categoryBreakdown') }}</h2>
       <span>{{ selected.key }}</span>
     </div>
-    <div class="ledger-list">
+    <TransitionGroup tag="div" name="ledger-reflow" class="ledger-list">
       <RouterLink
         v-for="item in selected.items"
         :key="item.category"
         :to="categoryLink(item.category ?? 'uncategorized')"
+        :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
         class="explore-row"
       >
         <span
@@ -197,9 +245,9 @@ const categoryLink = (name: string) => ({
           >{{ item.totalAmount > 0 ? '+' : '' }}{{ formatCurrency(item.totalAmount) }}</strong
         ><ArrowRight :size="15" />
       </RouterLink>
-      <p v-if="!loading && !selected.items.length" class="ledger-empty">
+      <p v-if="!loading && !selected.items.length" key="empty" class="ledger-empty">
         {{ t('noPostedSpending') }}
       </p>
-    </div>
+    </TransitionGroup>
   </div>
 </template>

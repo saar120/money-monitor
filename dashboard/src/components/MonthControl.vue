@@ -30,7 +30,9 @@ function choose(event: Event) {
       <ChevronRight v-if="language === 'he'" :size="17" /><ChevronLeft v-else :size="17" />
     </button>
     <label class="month-stepper-current">
-      <span>{{ label }}</span>
+      <Transition name="month-label">
+        <span :key="modelValue">{{ label }}</span>
+      </Transition>
       <input
         type="month"
         :value="modelValue"
@@ -74,6 +76,31 @@ button {
   border-radius: 7px;
   color: var(--text-secondary);
 }
+button {
+  transition:
+    transform 120ms ease-out,
+    background-color 120ms ease-out;
+}
+button:active:not(:disabled) {
+  transform: scale(0.9);
+}
+.month-stepper-current > span {
+  grid-area: 1 / 1;
+}
+.month-label-enter-active,
+.month-label-leave-active {
+  transition:
+    opacity 140ms ease-out,
+    transform 360ms cubic-bezier(0.16, 1, 0.3, 1);
+}
+.month-label-enter-from {
+  opacity: 0;
+  transform: translateY(24px);
+}
+.month-label-leave-to {
+  opacity: 0;
+  transform: translateY(-24px);
+}
 button:hover {
   background: var(--bg-tertiary);
 }
@@ -82,6 +109,7 @@ button:disabled {
 }
 .month-stepper-current {
   position: relative;
+  overflow: hidden;
   display: grid;
   place-items: center;
   flex: 1;

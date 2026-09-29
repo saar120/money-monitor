@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { categoryMotionName } from '@/lib/cardMotion';
+import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
@@ -150,16 +152,17 @@ const merchantLink = (name: string) => ({
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </div>
-    <section class="category-detail-hero">
+    <section
+      class="category-detail-hero"
+      :style="{ viewTransitionName: categoryMotionName(categoryName) }"
+    >
       <span
         class="category-detail-mark"
         :style="{ background: category?.color ?? 'var(--accent)' }"
       />
       <div>
         <span>{{ t('netCategorySpending') }}</span
-        ><strong>{{
-          loading ? '—' : `${current < 0 ? '−' : ''}${formatCurrency(current)}`
-        }}</strong>
+        ><strong><AnimatedAmount :value="current" /></strong>
         <small :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
           delta === 0
             ? t('sameAsLastMonth')

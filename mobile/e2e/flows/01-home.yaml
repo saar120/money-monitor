@@ -22,10 +22,8 @@ name: Home renders the normal fixture
     id: home-category-Housing
 - assertVisible:
     id: category-detail
-- swipe:
-    start: 3%, 50%
-    end: 90%, 50%
-    duration: 500
+- tapOn:
+    point: 7%, 10%
 - assertVisible:
     id: home-screen
 - scrollUntilVisible:

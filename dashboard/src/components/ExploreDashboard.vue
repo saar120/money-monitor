@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useMonthSwipe } from '@/composables/useMonthSwipe';
+import { categoryMotionName } from '@/lib/cardMotion';
+import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowRight } from 'lucide-vue-next';
@@ -18,6 +21,7 @@ import MonthControl from './MonthControl.vue';
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 const route = useRoute();
 const month = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
+const monthSwipe = useMonthSwipe(month);
 const loading = ref(true);
 const error = ref('');
 const current = ref<SummaryItem[]>([]);
@@ -101,7 +105,11 @@ const mix = computed(() =>
 </script>
 
 <template>
-  <div class="ledger-page explore-page">
+  <div
+    class="ledger-page explore-page month-swipe-surface"
+    v-bind="monthSwipe"
+    :aria-busy="loading"
+  >
     <Teleport to="#toolbar-actions"><MonthControl v-model="month" /></Teleport>
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -109,7 +117,7 @@ const mix = computed(() =>
     <section class="explore-summary">
       <div>
         <span>{{ t('totalSpending') }}</span
-        ><strong>{{ loading ? '—' : formatCurrency(total) }}</strong>
+        ><strong><AnimatedAmount :value="total" /></strong>
         <small :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
           delta === 0
             ? t('sameAsLastMonth')
@@ -149,6 +157,7 @@ const mix = computed(() =>
               query: { month },
             }"
             class="explore-row"
+            :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
           >
             <span
               class="category-dot"

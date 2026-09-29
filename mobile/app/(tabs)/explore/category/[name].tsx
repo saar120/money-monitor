@@ -1,9 +1,11 @@
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { ChartScrubber, MonthSwipe, MotionRow, RollingAmount } from '@/Motion';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { currentLocale, formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
@@ -31,7 +33,6 @@ export default function CategoryScreen() {
   if (status !== 'ready' || !home) return <ConnectionState />;
   return (
     <>
-      <Stack.Screen options={{ title: '' }} />
       {months.length ? (
         <CategoryContent initialMonth={month} months={months} name={name} />
       ) : (
@@ -56,6 +57,7 @@ function CategoryContent({
   name: string;
 }) {
   const colors = useAppColors();
+  const reduced = useReducedMotion();
   const fallback = months.at(-1)!;
   const [range, setRange] = useState<'3' | '6' | '12'>('6');
   const [month, setMonth] = useState(
@@ -130,41 +132,42 @@ function CategoryContent({
       contentInsetAdjustmentBehavior="automatic"
       testID="category-detail"
     >
-      <View style={styles.contextRow}>
-        <View style={styles.identity}>
-          <View style={[styles.identityMark, { backgroundColor: category.color }]} />
-          <Text numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
-            {categoryLabel(name)}
-          </Text>
-        </View>
-        <MonthPicker
-          month={snapshot.month}
-          months={months.map((item) => item.month)}
-          onSelect={(selectedMonth) => {
-            setMonth(selectedMonth);
-            setWindowEndMonth(selectedMonth);
-          }}
-          testID="category-month-picker"
-        />
-      </View>
-      <Text
-        adjustsFontSizeToFit
-        allowFontScaling={false}
-        minimumFontScale={0.7}
-        numberOfLines={1}
-        style={[styles.amount, { color: colors.text }]}
+      <MonthSwipe
+        month={snapshot.month}
+        months={months.map((item) => item.month)}
+        onSelect={(next) => {
+          setMonth(next);
+          setWindowEndMonth(next);
+        }}
+        testID="category-month-swipe"
       >
-        {total.amount}
-      </Text>
-      <Text style={[styles.totalLabel, { color: colors.secondary }]}>
-        {t('spendingShare', { percent: percentOfSpending, label: total.label.toLowerCase() })}
-      </Text>
-      <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
-        {delta === 0
-          ? t('unchangedFromLastMonth')
-          : formatSpendingComparison(delta, snapshot.currencyCode)}
-      </Text>
-
+        <View style={styles.contextRow}>
+          <View style={styles.identity}>
+            <View style={[styles.identityMark, { backgroundColor: category.color }]} />
+            <Text numberOfLines={1} style={[styles.identityName, { color: colors.text }]}>
+              {categoryLabel(name)}
+            </Text>
+          </View>
+          <MonthPicker
+            month={snapshot.month}
+            months={months.map((item) => item.month)}
+            onSelect={(selectedMonth) => {
+              setMonth(selectedMonth);
+              setWindowEndMonth(selectedMonth);
+            }}
+            testID="category-month-picker"
+          />
+        </View>
+        <RollingAmount style={[styles.amount, { color: colors.text }]} value={total.amount} />
+        <Text style={[styles.totalLabel, { color: colors.secondary }]}>
+          {t('spendingShare', { percent: percentOfSpending, label: total.label.toLowerCase() })}
+        </Text>
+        <Text style={[styles.summary, { color: delta > 0 ? colors.warning : colors.positive }]}>
+          {delta === 0
+            ? t('unchangedFromLastMonth')
+            : formatSpendingComparison(delta, snapshot.currencyCode)}
+        </Text>
+      </MonthSwipe>
       <View style={styles.rangeRow}>
         <GlassSegmentedControl
           compact
@@ -203,7 +206,17 @@ function CategoryContent({
               <View key={tick} style={[styles.chartGuide, { backgroundColor: colors.separator }]} />
             ))}
           </View>
-          <View style={styles.chartBars}>
+          <ChartScrubber
+            style={styles.chartBars}
+            count={history.length}
+            selectedIndex={history.findIndex((item) => item.month === month)}
+            onSelect={(index) => {
+              const next = history[index];
+              if (next) setMonth(next.month);
+            }}
+            label={`${categoryLabel(name)}, ${formatMonthShort(snapshot.month)}, ${total.amount}`}
+            testID="category-history-scrubber"
+          >
             {historyMonths.map((item, index) => {
               const selected = item.month === snapshot.month;
               const value = history[index]!.total;
@@ -218,18 +231,21 @@ function CategoryContent({
                   testID={`category-bar-${item.month}`}
                 >
                   <View style={styles.chartTrack}>
-                    <View
+                    <Animated.View
                       style={[
                         styles.chartBar,
                         {
                           backgroundColor: category.color,
-                          height: Math.max(5, (value / axisMaximum) * 136),
+                          height: Math.max(0, (value / axisMaximum) * 142),
                           opacity: selected ? 1 : 0.38,
+                          transitionProperty: 'opacity',
+                          transitionDuration: reduced ? 0 : 100,
                         },
                       ]}
                     />
                   </View>
                   <Text
+                    allowFontScaling={false}
                     numberOfLines={1}
                     style={[
                       styles.chartLabel,
@@ -241,7 +257,7 @@ function CategoryContent({
                 </Pressable>
               );
             })}
-          </View>
+          </ChartScrubber>
         </View>
       </View>
 
@@ -331,36 +347,37 @@ function CategoryContent({
       <Text style={[styles.title, { color: colors.text }]}>{t('transactions')}</Text>
       {matching.length ? (
         matching.map((transaction) => (
-          <Pressable
-            accessibilityHint={t('opensTransactionDetails')}
-            accessibilityRole="button"
-            key={transaction.id}
-            onPress={() => router.push(`/transaction/${transaction.id}`)}
-            style={[styles.transaction, { borderBottomColor: colors.separator }]}
-          >
-            <View style={styles.rowText}>
-              <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
-                {transaction.merchant}
-              </Text>
-              <Text style={[styles.rowMeta, { color: colors.secondary }]}>
-                {new Intl.DateTimeFormat(currentLocale(), {
-                  month: 'short',
-                  day: 'numeric',
-                }).format(new Date(transaction.occurredAt))}{' '}
-                · {transaction.account}
-              </Text>
-            </View>
-            <Text
-              allowFontScaling={false}
-              style={[styles.transactionAmount, { color: colors.text }]}
+          <MotionRow key={transaction.id}>
+            <Pressable
+              accessibilityHint={t('opensTransactionDetails')}
+              accessibilityRole="button"
+              onPress={() => router.push(`/transaction/${transaction.id}`)}
+              style={[styles.transaction, { borderBottomColor: colors.separator }]}
             >
-              {formatMoney(
-                transaction.amount,
-                transaction.currencyCode ?? snapshot.currencyCode,
-                true,
-              )}
-            </Text>
-          </Pressable>
+              <View style={styles.rowText}>
+                <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
+                  {transaction.merchant}
+                </Text>
+                <Text style={[styles.rowMeta, { color: colors.secondary }]}>
+                  {new Intl.DateTimeFormat(currentLocale(), {
+                    month: 'short',
+                    day: 'numeric',
+                  }).format(new Date(transaction.occurredAt))}{' '}
+                  · {transaction.account}
+                </Text>
+              </View>
+              <Text
+                allowFontScaling={false}
+                style={[styles.transactionAmount, { color: colors.text }]}
+              >
+                {formatMoney(
+                  transaction.amount,
+                  transaction.currencyCode ?? snapshot.currencyCode,
+                  true,
+                )}
+              </Text>
+            </Pressable>
+          </MotionRow>
         ))
       ) : (
         <Text style={[styles.empty, { color: colors.secondary }]}>
@@ -422,14 +439,20 @@ const styles = StyleSheet.create({
   summary: { marginTop: 6, fontSize: 15, lineHeight: 21, fontWeight: '600' },
   rangeRow: { marginTop: 22, alignItems: 'center' },
   chart: { height: 166, marginTop: 18, direction: 'ltr', flexDirection: 'row', gap: 9 },
-  chartAxis: { width: 28, height: 142, justifyContent: 'space-between', alignItems: 'flex-end' },
+  chartAxis: {
+    width: 28,
+    height: 153,
+    marginTop: -5.5,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
   chartAxisLabel: { fontSize: 9.5, lineHeight: 11, fontVariant: ['tabular-nums'] },
   chartPlot: { flex: 1, height: 166 },
   chartGuides: {
     position: 'absolute',
     top: 0,
     right: 0,
-    bottom: 24,
+    height: 142,
     left: 0,
     justifyContent: 'space-between',
   },
@@ -447,11 +470,17 @@ const styles = StyleSheet.create({
     minWidth: 0,
     height: 166,
     alignItems: 'center',
-    justifyContent: 'flex-end',
+    justifyContent: 'flex-start',
   },
   chartTrack: { width: '100%', height: 142, alignItems: 'center', justifyContent: 'flex-end' },
   chartBar: { width: '62%', minWidth: 10, maxWidth: 38, borderRadius: 5 },
-  chartLabel: { marginTop: 6, textAlign: 'center', fontSize: 10.5, fontWeight: '600' },
+  chartLabel: {
+    marginTop: 8,
+    textAlign: 'center',
+    fontSize: 10.5,
+    lineHeight: 14,
+    fontWeight: '600',
+  },
   stats: { marginTop: 20, paddingHorizontal: 14, borderRadius: 16 },
   statRow: {
     minHeight: 45,

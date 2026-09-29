@@ -1,8 +1,12 @@
+import { MorphingArea, MorphingLine } from '@/MorphingChart';
+import { Circle, Line as SkiaLine, vec } from '@shopify/react-native-skia';
+import { runOnJS, useAnimatedReaction, useDerivedValue } from 'react-native-reanimated';
+import { RollingAmount } from '@/Motion';
 import { t } from '@/localization';
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { Area, CartesianChart, Line } from 'victory-native';
-import { useState } from 'react';
+import { CartesianChart, useChartPressState } from 'victory-native';
+import { useState, useMemo } from 'react';
 import { ScrollView, StyleSheet, useColorScheme, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { GlassSegmentedControl } from '@/GlassSegmentedControl';
@@ -10,18 +14,44 @@ import { useMoneyData } from '@/MoneyData';
 import { formatMoney, formatUnsignedMoney } from '@/money';
 import { chartColors, useAppColors } from '@/theme';
 
+const worthKeys: 'total'[] = ['total'];
+const worthPadding = { left: 4, right: 4, top: 10, bottom: 4 };
+const worthDomainPadding = { top: 16, bottom: 10 };
+const worthPress = { pan: { activateAfterLongPress: 120 } };
+
 export default function NetWorthScreen() {
   const colors = useAppColors();
   const chart = chartColors(useColorScheme() === 'dark');
   const { home, status } = useMoneyData();
+  const { state, isActive } = useChartPressState({ x: 0, y: { total: 0 } });
   const [range, setRange] = useState<'3' | '6' | '12'>('12');
+  const [selection, setSelection] = useState<{ range: string; index: number } | null>(null);
+  const selectedIndex = selection?.range === range ? selection.index : -1;
+  const selectIndex = (index: number) => setSelection({ range, index });
+  const guideTop = useDerivedValue(() => vec(state.x.position.value, 10));
+  const guideBottom = useDerivedValue(() => vec(state.x.position.value, 210));
+  useAnimatedReaction(
+    () => (state.isActive.value ? state.matchedIndex.value : -1),
+    (index, previous) => {
+      if (index >= 0 && index !== previous) runOnJS(selectIndex)(index);
+    },
+  );
+  const history = useMemo(
+    () =>
+      (home?.netWorthHistory ?? []).slice(-Number(range)).map((point, index) => ({
+        index,
+        total: point.total,
+        date: point.date,
+      })),
+    [home?.netWorthHistory, range],
+  );
   if (status !== 'ready' || !home) return <ConnectionState />;
-  const allHistory = home.netWorthHistory.map((point, index) => ({
-    index,
-    total: point.total,
-    date: point.date,
-  }));
-  const history = allHistory.slice(-Number(range));
+  const inspected = history[selectedIndex];
+  const inspectedDate = inspected
+    ? new Intl.DateTimeFormat(currentLocale(), { month: 'long', year: 'numeric' }).format(
+        new Date(`${inspected.date}T12:00:00Z`),
+      )
+    : t('now');
   const assets = home.assets ?? home.netWorth;
   const liabilities = home.liabilities ?? 0;
   const compositionTotal = Math.max(assets + liabilities, 1);
@@ -32,14 +62,13 @@ export default function NetWorthScreen() {
       contentInsetAdjustmentBehavior="automatic"
       testID="net-worth-detail"
     >
-      <Text
-        adjustsFontSizeToFit
-        allowFontScaling={false}
-        minimumFontScale={0.7}
-        numberOfLines={1}
+      <RollingAmount
         style={[styles.amount, { color: colors.text }]}
-      >
-        {formatUnsignedMoney(home.netWorth, home.currencyCode)}
+        value={formatUnsignedMoney(inspected?.total ?? home.netWorth, home.currencyCode)}
+        testID="net-worth-live-amount"
+      />
+      <Text style={[styles.label, { color: colors.secondary }]} testID="net-worth-live-date">
+        {inspectedDate}
       </Text>
       {home.netWorthChange !== null ? (
         <Text
@@ -55,7 +84,11 @@ export default function NetWorthScreen() {
       <View style={styles.rangeSpacing}>
         <GlassSegmentedControl
           compact
-          onChange={setRange}
+          onChange={(next) => {
+            state.isActive.value = false;
+            setSelection(null);
+            setRange(next);
+          }}
           options={[
             { label: t('message3M'), value: '3' },
             { label: t('message6M'), value: '6' },
@@ -68,33 +101,75 @@ export default function NetWorthScreen() {
       <View
         style={styles.chart}
         accessible
-        accessibilityLabel={t('netWorthHistoryEnding', {
-          amount: formatUnsignedMoney(home.netWorth, home.currencyCode),
-        })}
+        accessibilityRole="adjustable"
+        accessibilityActions={[{ name: 'increment' }, { name: 'decrement' }]}
+        onAccessibilityAction={(event) => {
+          const index = selectedIndex < 0 ? history.length - 1 : selectedIndex;
+          if (history.length)
+            selectIndex(
+              Math.max(
+                0,
+                Math.min(
+                  history.length - 1,
+                  index + (event.nativeEvent.actionName === 'increment' ? 1 : -1),
+                ),
+              ),
+            );
+        }}
+        testID="net-worth-scrubber"
+        accessibilityLabel={`${inspectedDate}, ${t('netWorthHistoryEnding', {
+          amount: formatUnsignedMoney(inspected?.total ?? home.netWorth, home.currencyCode),
+        })}`}
       >
         {history.length > 1 ? (
           <CartesianChart
+            chartPressState={state}
+            chartPressConfig={worthPress}
             data={history}
             xKey="index"
-            yKeys={['total']}
-            domainPadding={{ top: 16, bottom: 10 }}
-            padding={{ left: 4, right: 4, top: 10, bottom: 4 }}
+            yKeys={worthKeys}
+            domainPadding={worthDomainPadding}
+            padding={worthPadding}
           >
             {({ points, chartBounds }) => (
               <>
-                <Area
+                <MorphingArea
                   points={points.total}
                   y0={chartBounds.bottom}
                   color={chart.fill}
                   opacity={0.7}
-                  curveType="natural"
+                  curveType="linear"
                 />
-                <Line
+                <MorphingLine
                   points={points.total}
                   color={chart.primary}
                   strokeWidth={3}
-                  curveType="natural"
+                  curveType="linear"
                 />
+                {isActive ? (
+                  <SkiaLine
+                    p1={guideTop}
+                    p2={guideBottom}
+                    color={colors.tertiary}
+                    strokeWidth={1}
+                  />
+                ) : null}
+                {inspected && points.total[selectedIndex] ? (
+                  <>
+                    <Circle
+                      cx={isActive ? state.x.position : points.total[selectedIndex]!.x}
+                      cy={isActive ? state.y.total.position : points.total[selectedIndex]!.y!}
+                      r={11}
+                      color={colors.accentSoft}
+                    />
+                    <Circle
+                      cx={isActive ? state.x.position : points.total[selectedIndex]!.x}
+                      cy={isActive ? state.y.total.position : points.total[selectedIndex]!.y!}
+                      r={5}
+                      color={colors.accent}
+                    />
+                  </>
+                ) : null}
               </>
             )}
           </CartesianChart>

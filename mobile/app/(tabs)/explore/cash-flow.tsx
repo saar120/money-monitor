@@ -1,3 +1,5 @@
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { ChartScrubber, RollingAmount } from '@/Motion';
 import { t, useLanguage } from '@/localization';
 import { currentLocale, formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
@@ -32,10 +34,11 @@ export default function CashFlowScreen() {
 function CashFlowChart({ months }: { months: ExploreMonth[] }) {
   const colors = useAppColors();
   const { language } = useLanguage();
+  const reduced = useReducedMotion();
   const [range, setRange] = useState<Range>('6');
   const [selectedMonth, setSelectedMonth] = useState(months.at(-1)!.month);
   const series = months.slice(-Number(range));
-  const selected = months.find((month) => month.month === selectedMonth) ?? months.at(-1)!;
+  const selected = series.find((month) => month.month === selectedMonth) ?? series.at(-1)!;
   const index = months.findIndex((month) => month.month === selected.month);
   const previous = index > 0 ? months[index - 1] : null;
   const net = overviewCashFlow(selected.income, selected.spending);
@@ -60,13 +63,11 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
       />
 
       <Text style={[styles.month, { color: colors.secondary }]}>{monthTitle(selected.month)}</Text>
-      <Text
-        allowFontScaling={false}
+      <RollingAmount
         style={[styles.net, { color: net >= 0 ? colors.positive : colors.danger }]}
+        value={formatMoney(net, selected.currencyCode)}
         testID="cash-flow-total"
-      >
-        {formatMoney(net, selected.currencyCode)}
-      </Text>
+      />
       <Text style={[styles.delta, { color: colors.secondary }]}>
         {delta === null
           ? t('postedIncomeMinusSpending')
@@ -75,7 +76,21 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
             })}
       </Text>
 
-      <View style={styles.chart} accessibilityLabel={t('incomeAndSpendingByMonth')}>
+      <ChartScrubber
+        style={styles.chart}
+        label={t('monthIncomeSpending', {
+          month: monthTitle(selected.month),
+          income: formatUnsignedMoney(selected.income, selected.currencyCode),
+          spending: formatUnsignedMoney(selected.spending, selected.currencyCode),
+        })}
+        count={series.length}
+        selectedIndex={series.indexOf(selected)}
+        onSelect={(index) => {
+          const next = series[index];
+          if (next) setSelectedMonth(next.month);
+        }}
+        testID="cash-flow-scrubber"
+      >
         {series.map((month) => (
           <Pressable
             accessibilityLabel={t('monthIncomeSpending', {
@@ -89,23 +104,27 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
             style={styles.group}
           >
             <View style={[styles.pair, language === 'he' && { direction: 'rtl' }]}>
-              <View
+              <Animated.View
                 style={[
                   styles.bar,
                   {
                     backgroundColor: colors.accent,
-                    height: Math.max(5, (month.income / max) * 166),
-                    opacity: selected.month === month.month ? 1 : 0.76,
+                    height: Math.max(0, (month.income / max) * 166),
+                    opacity: selected.month === month.month ? 1 : 0.45,
+                    transitionProperty: 'opacity',
+                    transitionDuration: reduced ? 0 : 100,
                   },
                 ]}
               />
-              <View
+              <Animated.View
                 style={[
                   styles.bar,
                   {
                     backgroundColor: colors.blueSoft,
-                    height: Math.max(5, (month.spending / max) * 166),
-                    opacity: selected.month === month.month ? 1 : 0.76,
+                    height: Math.max(0, (month.spending / max) * 166),
+                    opacity: selected.month === month.month ? 1 : 0.45,
+                    transitionProperty: 'opacity',
+                    transitionDuration: reduced ? 0 : 100,
                   },
                 ]}
               />
@@ -120,7 +139,7 @@ function CashFlowChart({ months }: { months: ExploreMonth[] }) {
             </Text>
           </Pressable>
         ))}
-      </View>
+      </ChartScrubber>
 
       <View style={styles.legend}>
         <Legend color={colors.accent} label={t('postedIncome')} />

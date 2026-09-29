@@ -170,23 +170,25 @@ async function exitDemo() {
             <Wallet :size="17" /><span>{{ t('planning') }}</span
             ><ChevronDown :size="15" :class="{ open: planningOpen }" />
           </button>
-          <div v-if="planningOpen" class="nav-subgroup">
-            <RouterLink
-              v-for="item in money"
-              :key="item.path"
-              :to="item.path"
-              class="nav-link"
-              :class="{ active: isActive(item.path) }"
-              :aria-current="isActive(item.path) ? 'page' : undefined"
-              :title="t(item.label)"
-              :aria-label="t(item.label)"
-            >
-              <component :is="item.icon" :size="17" :stroke-width="1.9" />
-              <span>{{ t(item.label) }}</span>
-              <span v-if="item.path === '/insights' && reviewCount" class="nav-count">{{
-                reviewCount
-              }}</span>
-            </RouterLink>
+          <div class="nav-reveal" :class="{ open: planningOpen }" :inert="!planningOpen">
+            <div class="nav-subgroup">
+              <RouterLink
+                v-for="item in money"
+                :key="item.path"
+                :to="item.path"
+                class="nav-link"
+                :class="{ active: isActive(item.path) }"
+                :aria-current="isActive(item.path) ? 'page' : undefined"
+                :title="t(item.label)"
+                :aria-label="t(item.label)"
+              >
+                <component :is="item.icon" :size="17" :stroke-width="1.9" />
+                <span>{{ t(item.label) }}</span>
+                <span v-if="item.path === '/insights' && reviewCount" class="nav-count">{{
+                  reviewCount
+                }}</span>
+              </RouterLink>
+            </div>
           </div>
         </div>
         <div class="nav-group secondary-nav">
@@ -201,21 +203,23 @@ async function exitDemo() {
             <Settings :size="17" /><span>{{ t('manage') }}</span
             ><ChevronDown :size="15" :class="{ open: manageOpen }" />
           </button>
-          <div v-if="manageOpen" class="nav-subgroup">
-            <RouterLink
-              v-for="item in manage"
-              :key="item.path"
-              :to="item.path"
-              class="nav-link"
-              :class="{ active: isActive(item.path) }"
-              :aria-current="isActive(item.path) ? 'page' : undefined"
-              :title="t(item.label)"
-              :aria-label="t(item.label)"
-            >
-              <component :is="item.icon" :size="17" :stroke-width="1.9" /><span>{{
-                t(item.label)
-              }}</span>
-            </RouterLink>
+          <div class="nav-reveal" :class="{ open: manageOpen }" :inert="!manageOpen">
+            <div class="nav-subgroup">
+              <RouterLink
+                v-for="item in manage"
+                :key="item.path"
+                :to="item.path"
+                class="nav-link"
+                :class="{ active: isActive(item.path) }"
+                :aria-current="isActive(item.path) ? 'page' : undefined"
+                :title="t(item.label)"
+                :aria-label="t(item.label)"
+              >
+                <component :is="item.icon" :size="17" :stroke-width="1.9" /><span>{{
+                  t(item.label)
+                }}</span>
+              </RouterLink>
+            </div>
           </div>
         </div>
       </nav>

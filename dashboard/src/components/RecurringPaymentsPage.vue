@@ -143,12 +143,8 @@ onUnmounted(() => {
     </div>
     <template v-else-if="result">
       <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
-      <div v-if="result.totals.length" class="subscription-totals grid gap-4 sm:grid-cols-2">
-        <div
-          v-for="total in result.totals"
-          :key="total.currencyCode"
-          class="rounded-xl border border-separator/60 bg-bg-secondary px-5 py-4"
-        >
+      <div v-if="result.totals.length" class="subscription-totals">
+        <div v-for="total in result.totals" :key="total.currencyCode" class="subscription-total">
           <p class="text-[12px] text-text-secondary">
             {{ t('estimatedMonthly') }} · {{ total.currencyCode }}
           </p>
@@ -235,9 +231,7 @@ onUnmounted(() => {
         <p class="mb-3 text-sm text-text-secondary">
           {{ t('recurringReviewHint') }}
         </p>
-        <div
-          class="divide-y divide-separator/60 rounded-xl border border-separator/60 bg-bg-primary"
-        >
+        <div class="divide-y divide-separator/60 border-y border-separator/60">
           <div
             v-for="payment in result.suggestions"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"
@@ -275,9 +269,7 @@ onUnmounted(() => {
       </section>
       <section v-if="result.excluded.length" :aria-label="t('excluded')">
         <h2 class="mb-2 text-sm font-medium text-text-secondary">{{ t('excluded') }}</h2>
-        <div
-          class="divide-y divide-separator/60 rounded-xl border border-separator/60 bg-bg-primary"
-        >
+        <div class="divide-y divide-separator/60 border-y border-separator/60">
           <div
             v-for="payment in result.excluded"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"

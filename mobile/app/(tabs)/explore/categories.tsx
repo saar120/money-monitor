@@ -1,13 +1,14 @@
+import { DetailLink } from '@/DetailLink';
+import { MonthSwipe, MotionRow } from '@/Motion';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import {
   ActivityIndicator,
-  Pressable,
   ScrollView,
   StyleSheet,
   useWindowDimensions,
@@ -70,7 +71,13 @@ function CategoryList({
   const categories = [...snapshot.categories].sort((a, b) => b.spent - a.spent);
   return (
     <>
-      <View style={styles.contextRow}>
+      <MonthSwipe
+        style={styles.contextRow}
+        month={snapshot.month}
+        months={months.map((item) => item.month)}
+        onSelect={setSelected}
+        testID="categories-month-swipe"
+      >
         <Text
           maxFontSizeMultiplier={1.3}
           style={[styles.contextLabel, { color: colors.secondary }]}
@@ -83,7 +90,7 @@ function CategoryList({
           onSelect={setSelected}
           testID="categories-month-picker"
         />
-      </View>
+      </MonthSwipe>
       <View style={styles.list}>
         {categories.map((category) => {
           const delta = category.spent - category.previous;
@@ -93,51 +100,51 @@ function CategoryList({
               (month) => month.categories.find((item) => item.name === category.name)?.spent ?? 0,
             );
           return (
-            <Pressable
-              accessibilityHint={t('opensDetailsForMonth', {
-                name: categoryLabel(category.name),
-                month: formatMonthShort(snapshot.month),
-              })}
-              accessibilityRole="button"
-              key={category.name}
-              onPress={() =>
-                router.push({
+            <MotionRow key={category.name}>
+              <DetailLink
+                accessibilityLabel={categoryLabel(category.name)}
+                accessibilityHint={t('opensDetailsForMonth', {
+                  name: categoryLabel(category.name),
+                  month: formatMonthShort(snapshot.month),
+                })}
+                accessibilityRole="button"
+                href={{
                   pathname: '/category/[name]',
                   params: { name: category.name, month: snapshot.month },
-                })
-              }
-              style={({ pressed }) => [
-                styles.row,
-                { borderBottomColor: colors.separator, opacity: pressed ? 0.68 : 1 },
-              ]}
-              testID={`category-row-${category.name}`}
-            >
-              <View style={[styles.mark, { backgroundColor: category.color }]} />
-              <View style={styles.copy}>
-                <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
-                  {categoryLabel(category.name)}
-                </Text>
-                <Text
-                  allowFontScaling={false}
-                  style={[styles.delta, { color: delta > 0 ? colors.warning : colors.positive }]}
-                >
-                  {delta === 0 ? t('noChange') : formatMoney(delta, homeCurrency)}
-                </Text>
-              </View>
-              {fontScale < 1.5 ? <Sparkline color={category.color} values={values} /> : null}
-              <View style={styles.amounts}>
-                <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
-                  {formatUnsignedMoney(category.spent, homeCurrency)}
-                </Text>
-                <Text
-                  maxFontSizeMultiplier={1.2}
-                  style={[styles.previous, { color: colors.secondary }]}
-                >
-                  {t('vsLastMonth')}
-                </Text>
-              </View>
-              <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
-            </Pressable>
+                }}
+                style={({ pressed }) => [
+                  styles.row,
+                  { borderBottomColor: colors.separator, opacity: pressed ? 0.68 : 1 },
+                ]}
+                testID={`category-row-${category.name}`}
+              >
+                <View style={[styles.mark, { backgroundColor: category.color }]} />
+                <View style={styles.copy}>
+                  <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
+                    {categoryLabel(category.name)}
+                  </Text>
+                  <Text
+                    allowFontScaling={false}
+                    style={[styles.delta, { color: delta > 0 ? colors.warning : colors.positive }]}
+                  >
+                    {delta === 0 ? t('noChange') : formatMoney(delta, homeCurrency)}
+                  </Text>
+                </View>
+                {fontScale < 1.5 ? <Sparkline color={category.color} values={values} /> : null}
+                <View style={styles.amounts}>
+                  <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
+                    {formatUnsignedMoney(category.spent, homeCurrency)}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={1.2}
+                    style={[styles.previous, { color: colors.secondary }]}
+                  >
+                    {t('vsLastMonth')}
+                  </Text>
+                </View>
+                <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
+              </DetailLink>
+            </MotionRow>
           );
         })}
       </View>

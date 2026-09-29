@@ -11,12 +11,9 @@ import {
   type ReactNode,
 } from 'react';
 import * as SecureStore from 'expo-secure-store';
+import { createHistoryCache } from './history-cache';
 import { activityRequestState } from './activity-request-state';
-import {
-  getFixtureRefreshDelay,
-  getFixtureScenario,
-  isFixtureMode,
-} from './fixture-selection';
+import { getFixtureRefreshDelay, getFixtureScenario, isFixtureMode } from './fixture-selection';
 import { FIXTURE_REVIEW_CATEGORIES, type HomeData, type Transaction } from './fixtures';
 import {
   fetchCashflowMonth,
@@ -50,7 +47,7 @@ type MoneyDataContextValue = {
   loadReviewOptions: () => Promise<ReviewOptions>;
   loadOverviewMonth: (month: string) => Promise<HomeData>;
   loadCashflowHistory: (endingMonth?: string) => Promise<CashflowMonth[]>;
-  loadExploreHistory: (count?: number) => Promise<ExploreMonth[]>;
+  exploreHistory: ReturnType<typeof createHistoryCache<ExploreMonth>>;
 };
 
 const MoneyDataContext = createContext<MoneyDataContextValue | null>(null);
@@ -379,6 +376,14 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     [credential, fixture, home],
   );
 
+  const exploreHistory = useMemo(
+    () => createHistoryCache(loadExploreHistory),
+    [loadExploreHistory, revision],
+  );
+  useEffect(() => {
+    if (status === 'ready') void exploreHistory.load().catch(() => undefined);
+  }, [exploreHistory, status]);
+
   const value = useMemo(
     () => ({
       source: fixture ? ('fixture' as const) : ('live' as const),
@@ -393,7 +398,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       loadReviewOptions,
       loadOverviewMonth,
       loadCashflowHistory,
-      loadExploreHistory,
+      exploreHistory,
     }),
     [
       credential,
@@ -404,7 +409,7 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
       loadReviewOptions,
       loadOverviewMonth,
       loadCashflowHistory,
-      loadExploreHistory,
+      exploreHistory,
       reload,
       revision,
       saveTransaction,
@@ -468,31 +473,34 @@ export function useMoneyData(): MoneyDataContextValue {
 }
 
 export function useExploreHistory(count = 12) {
-  const money = useMoneyData();
-  const [months, setMonths] = useState<ExploreMonth[]>([]);
-  const [loading, setLoading] = useState(true);
+  const { exploreHistory, status } = useMoneyData();
+  const [result, setResult] = useState(() => ({
+    cache: exploreHistory,
+    count,
+    months: exploreHistory.peek(count),
+  }));
+  const months =
+    result.cache === exploreHistory && result.count === count
+      ? result.months
+      : exploreHistory.peek(count);
 
   useEffect(() => {
-    if (money.status !== 'ready' || !money.home) return;
+    if (status !== 'ready') return;
     let current = true;
-    setLoading(true);
-    void money
-      .loadExploreHistory(count)
-      .then((value) => {
-        if (current) setMonths(value);
-      })
-      .catch(() => {
-        if (current) setMonths([]);
-      })
-      .finally(() => {
-        if (current) setLoading(false);
-      });
+    void exploreHistory.load(count).then(
+      (months) => {
+        if (current) setResult({ cache: exploreHistory, count, months });
+      },
+      () => {
+        if (current) setResult({ cache: exploreHistory, count, months: [] });
+      },
+    );
     return () => {
       current = false;
     };
-  }, [count, money]);
+  }, [count, exploreHistory, status]);
 
-  return { months, loading };
+  return { months: months ?? [], loading: months === undefined };
 }
 
 export function useActivityTransactions(

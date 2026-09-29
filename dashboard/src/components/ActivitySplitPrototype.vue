@@ -99,6 +99,14 @@ const copy = computed(() =>
       },
 );
 
+function preserveRowWidth(element: globalThis.Element) {
+  const row = element as HTMLElement;
+  const widths = Array.from(row.children, (cell) => cell.getBoundingClientRect().width);
+  row.style.width = `${row.getBoundingClientRect().width}px`;
+  Array.from(row.children).forEach((cell, index) => {
+    (cell as HTMLElement).style.width = `${widths[index]}px`;
+  });
+}
 const selected = computed(() => rows.value.find((row) => row.id === selectedId.value) ?? null);
 const accountMap = computed(
   () => new Map(accounts.value.map((account) => [account.id, account.displayName])),
@@ -134,19 +142,6 @@ function categoryLabel(value: string | null) {
   const label = categoryMap.value.get(value) ?? value;
   return language.value === 'he' ? (hebrewDemoCategories[label] ?? label) : label;
 }
-const groups = computed(() => {
-  const result: { date: string; transactions: Transaction[] }[] = [];
-  for (const row of rows.value) {
-    const date = row.reportingDate.slice(0, 10);
-    let group = result[result.length - 1];
-    if (group?.date !== date) {
-      group = { date, transactions: [] };
-      result.push(group);
-    }
-    group.transactions.push(row);
-  }
-  return result;
-});
 const monthLabel = computed(() =>
   new Date(`${month.value}-01T12:00:00`).toLocaleDateString(
     language.value === 'he' ? 'he-IL' : 'en-US',
@@ -184,6 +179,9 @@ function selectRow(row: Transaction) {
   draftIncluded.value = !row.ignored;
   draftMemo.value = row.memo ?? '';
   saved.value = false;
+}
+function closeDetails() {
+  selectedId.value = null;
 }
 async function load(append = false) {
   const id = ++requestId;
@@ -272,7 +270,7 @@ function onKeys(event: KeyboardEvent) {
     return;
   if (event.key === 'Escape') {
     filterOpen.value = false;
-    selectedId.value = null;
+    closeDetails();
     return;
   }
   if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
@@ -381,46 +379,48 @@ watch(search, () => {
               class="proto-filter-dot"
             />
           </button>
-          <div v-if="filterOpen" class="proto-filter-popover">
-            <div class="proto-popover-head">
-              <strong>{{ copy.filter }}</strong
-              ><button type="button" :aria-label="t('cancel')" @click="filterOpen = false">
-                <X :size="16" />
+          <Transition name="filter-morph">
+            <div v-if="filterOpen" class="proto-filter-popover">
+              <div class="proto-popover-head">
+                <strong>{{ copy.filter }}</strong
+                ><button type="button" :aria-label="t('cancel')" @click="filterOpen = false">
+                  <X :size="16" />
+                </button>
+              </div>
+              <label
+                ><span>{{ t('category') }}</span
+                ><select v-model="filterCategory">
+                  <option value="all">{{ t('allCategories') }}</option>
+                  <option v-for="item in categories" :key="item.name" :value="item.name">
+                    {{ categoryLabel(item.name) }}
+                  </option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('account') }}</span
+                ><select v-model="filterAccount">
+                  <option value="all">{{ t('allAccounts') }}</option>
+                  <option v-for="item in accounts" :key="item.id" :value="String(item.id)">
+                    {{ item.displayName }}
+                  </option>
+                </select></label
+              >
+              <label class="proto-check"
+                ><input v-model="reviewOnly" type="checkbox" />{{ t('needsReview') }}</label
+              >
+              <button
+                type="button"
+                class="proto-clear"
+                @click="
+                  filterCategory = 'all';
+                  filterAccount = 'all';
+                  reviewOnly = false;
+                "
+              >
+                {{ t('clear') }}
               </button>
             </div>
-            <label
-              ><span>{{ t('category') }}</span
-              ><select v-model="filterCategory">
-                <option value="all">{{ t('allCategories') }}</option>
-                <option v-for="item in categories" :key="item.name" :value="item.name">
-                  {{ categoryLabel(item.name) }}
-                </option>
-              </select></label
-            >
-            <label
-              ><span>{{ t('account') }}</span
-              ><select v-model="filterAccount">
-                <option value="all">{{ t('allAccounts') }}</option>
-                <option v-for="item in accounts" :key="item.id" :value="String(item.id)">
-                  {{ item.displayName }}
-                </option>
-              </select></label
-            >
-            <label class="proto-check"
-              ><input v-model="reviewOnly" type="checkbox" />{{ t('needsReview') }}</label
-            >
-            <button
-              type="button"
-              class="proto-clear"
-              @click="
-                filterCategory = 'all';
-                filterAccount = 'all';
-                reviewOnly = false;
-              "
-            >
-              {{ t('clear') }}
-            </button>
-          </div>
+          </Transition>
         </div>
         <RouterLink v-if="!isPreview" to="/transactions/advanced" class="proto-advanced">{{
           copy.advanced
@@ -457,42 +457,35 @@ watch(search, () => {
                 <th scope="col">{{ t('amount') }}</th>
               </tr>
             </thead>
-            <tbody>
-              <template v-for="group in groups" :key="group.date">
-                <tr class="proto-date-group">
-                  <th colspan="4" scope="rowgroup">
-                    <bdi dir="ltr">{{ dateLabel(group.date) }}</bdi>
-                  </th>
-                </tr>
-                <tr
-                  v-for="row in group.transactions"
-                  :id="`proto-row-${row.id}`"
-                  :key="row.id"
-                  :class="{ selected: selectedId === row.id }"
-                  :aria-selected="selectedId === row.id"
-                  tabindex="0"
-                  @click="selectRow(row)"
-                  @keydown.enter="selectRow(row)"
-                >
-                  <td>
-                    <bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi>
-                  </td>
-                  <td class="proto-merchant">
-                    <span>{{ row.description }}</span
-                    ><small v-if="row.needsReview">{{ t('needsReview') }}</small>
-                  </td>
-                  <td class="proto-category">
-                    {{ categoryLabel(row.category) }}
-                  </td>
-                  <td
-                    class="proto-amount"
-                    :class="row.chargedAmount >= 0 ? 'positive' : 'negative'"
+            <TransitionGroup tag="tbody" name="ledger-reflow" @before-leave="preserveRowWidth">
+              <tr
+                v-for="row in rows"
+                :id="`proto-row-${row.id}`"
+                :key="row.id"
+                :class="{ selected: selectedId === row.id }"
+                :aria-selected="selectedId === row.id"
+                tabindex="0"
+                @click="selectRow(row)"
+                @keydown.enter="selectRow(row)"
+              >
+                <td>
+                  <bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi>
+                </td>
+                <td class="proto-merchant">
+                  <span dir="auto">{{ row.description }}</span
+                  ><small v-if="row.needsReview">{{ t('needsReview') }}</small>
+                  <small class="proto-mobile-date"
+                    ><bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi></small
                   >
-                    <bdi dir="ltr">{{ signedAmount(row) }}</bdi>
-                  </td>
-                </tr>
-              </template>
-            </tbody>
+                </td>
+                <td class="proto-category">
+                  {{ categoryLabel(row.category) }}
+                </td>
+                <td class="proto-amount" :class="row.chargedAmount >= 0 ? 'positive' : 'negative'">
+                  <bdi dir="ltr">{{ signedAmount(row) }}</bdi>
+                </td>
+              </tr>
+            </TransitionGroup>
           </table>
           <div v-if="loading && !rows.length" class="proto-empty">
             {{ t('loadingTransactions') }}
@@ -513,75 +506,79 @@ watch(search, () => {
       </div>
     </section>
 
-    <button
-      v-if="selected"
-      type="button"
-      class="proto-backdrop"
-      :aria-label="t('cancel')"
-      @click="selectedId = null"
-    />
-    <aside v-if="selected" class="proto-inspector" :aria-label="copy.details">
-      <div class="proto-inspector-head">
-        <h2>{{ copy.details }}</h2>
-        <button type="button" :aria-label="t('cancel')" @click="selectedId = null">
-          <X :size="18" />
-        </button>
-      </div>
-      <div class="proto-inspector-content">
-        <span v-if="selected.needsReview" class="proto-review">{{ t('needsReview') }}</span>
-        <strong
-          class="proto-detail-amount"
-          :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
-          ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
-        >
-        <h3>{{ selected.description }}</h3>
-        <p class="proto-detail-meta">
-          {{ accountMap.get(selected.accountId) ?? copy.account }} ·
-          <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
-        </p>
-        <div class="proto-fields">
-          <label
-            ><span>{{ t('category') }}</span
-            ><select v-model="draftCategory">
-              <option value="">{{ t('uncategorized') }}</option>
-              <option v-for="item in categories" :key="item.name" :value="item.name">
-                {{ categoryLabel(item.name) }}
-              </option>
-            </select></label
-          >
-          <label
-            ><span>{{ t('account') }}</span
-            ><input :value="accountMap.get(selected.accountId) ?? ''" readonly
-          /></label>
-          <label
-            ><span>{{ t('owner') }}</span
-            ><select v-model="draftOwner">
-              <option value="shared">{{ t('together') }}</option>
-              <option value="unassigned">{{ t('unassigned') }}</option>
-              <option v-for="item in members" :key="item.id" :value="`member:${item.id}`">
-                {{ item.name }}
-              </option>
-            </select></label
-          >
-          <label class="proto-include"
-            ><input v-model="draftIncluded" type="checkbox" /><span>{{
-              t('includeInStatistics')
-            }}</span></label
-          >
-          <label v-if="isPreview || selected.memo"
-            ><span>{{ copy.notes }}</span
-            ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
-          </label>
+    <Transition name="detail-backdrop">
+      <button
+        v-if="selected"
+        type="button"
+        class="proto-backdrop"
+        :aria-label="t('cancel')"
+        @click="closeDetails"
+      />
+    </Transition>
+    <Transition name="detail-panel">
+      <aside v-if="selected" class="proto-inspector" :aria-label="copy.details">
+        <div class="proto-inspector-head">
+          <h2>{{ copy.details }}</h2>
+          <button type="button" :aria-label="t('cancel')" @click="closeDetails">
+            <X :size="18" />
+          </button>
         </div>
-        <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
-        <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
-      </div>
-      <div class="proto-inspector-actions">
-        <button type="button" class="proto-save" :disabled="saving" @click="saveTransaction">
-          {{ copy.save }}
-        </button>
-      </div>
-    </aside>
+        <div class="proto-inspector-content">
+          <span v-if="selected.needsReview" class="proto-review">{{ t('needsReview') }}</span>
+          <strong
+            class="proto-detail-amount"
+            :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
+            ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
+          >
+          <h3>{{ selected.description }}</h3>
+          <p class="proto-detail-meta">
+            {{ accountMap.get(selected.accountId) ?? copy.account }} ·
+            <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
+          </p>
+          <div class="proto-fields">
+            <label
+              ><span>{{ t('category') }}</span
+              ><select v-model="draftCategory">
+                <option value="">{{ t('uncategorized') }}</option>
+                <option v-for="item in categories" :key="item.name" :value="item.name">
+                  {{ categoryLabel(item.name) }}
+                </option>
+              </select></label
+            >
+            <label
+              ><span>{{ t('account') }}</span
+              ><input :value="accountMap.get(selected.accountId) ?? ''" readonly
+            /></label>
+            <label
+              ><span>{{ t('owner') }}</span
+              ><select v-model="draftOwner">
+                <option value="shared">{{ t('together') }}</option>
+                <option value="unassigned">{{ t('unassigned') }}</option>
+                <option v-for="item in members" :key="item.id" :value="`member:${item.id}`">
+                  {{ item.name }}
+                </option>
+              </select></label
+            >
+            <label class="proto-include"
+              ><input v-model="draftIncluded" type="checkbox" /><span>{{
+                t('includeInStatistics')
+              }}</span></label
+            >
+            <label v-if="isPreview || selected.memo"
+              ><span>{{ copy.notes }}</span
+              ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
+            </label>
+          </div>
+          <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
+          <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
+        </div>
+        <div class="proto-inspector-actions">
+          <button type="button" class="proto-save" :disabled="saving" @click="saveTransaction">
+            {{ copy.save }}
+          </button>
+        </div>
+      </aside>
+    </Transition>
   </div>
 </template>
 
@@ -786,6 +783,48 @@ watch(search, () => {
   background: var(--bg-primary);
   box-shadow: 0 16px 40px #24365425;
 }
+.proto-filter-popover {
+  transform-origin: 24px -24px;
+}
+[dir='rtl'] .proto-filter-popover {
+  transform-origin: calc(100% - 24px) -24px;
+}
+.filter-morph-enter-active {
+  transition:
+    transform 420ms cubic-bezier(0.18, 1.18, 0.3, 1),
+    opacity 150ms ease-out;
+}
+.filter-morph-leave-active {
+  transition:
+    transform 200ms ease-in,
+    opacity 150ms ease-in;
+  pointer-events: none;
+}
+.filter-morph-enter-from,
+.filter-morph-leave-to {
+  transform: translateY(-14px) scale(0.28, 0.12);
+  opacity: 0;
+}
+.filter-morph-enter-active > label,
+.filter-morph-enter-active > .proto-clear {
+  animation: filter-controls-in 360ms 90ms both;
+}
+@keyframes filter-controls-in {
+  from {
+    opacity: 0;
+    transform: translateY(-12px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+@media (prefers-reduced-motion: reduce) {
+  .filter-morph-enter-from,
+  .filter-morph-leave-to {
+    transform: none;
+  }
+}
 .proto-popover-head {
   display: flex;
   align-items: center;
@@ -902,6 +941,9 @@ watch(search, () => {
   flex: 1;
   min-height: 0;
   overflow: auto;
+  scrollbar-gutter: stable;
+  padding-inline-end: 16px;
+  margin-inline-end: -16px;
   outline: none;
 }
 .proto-table {
@@ -926,6 +968,7 @@ watch(search, () => {
   top: 0;
   z-index: 1;
   height: 39px;
+  padding-inline: 12px;
   border-bottom: 1px solid var(--separator);
   background: var(--bg-primary);
   color: var(--text-secondary);
@@ -936,22 +979,11 @@ watch(search, () => {
 .proto-table thead th:last-child {
   text-align: end;
 }
-.proto-date-group th {
-  height: 49px;
-  padding-block-start: 14px;
-  border-bottom: 1px solid var(--separator);
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 700;
-  text-align: start;
-}
-.proto-date-group:not(:first-child) th {
-  padding-block-start: 22px;
-}
 .proto-table td {
-  height: 51px;
+  height: 60px;
+  padding: 10px 12px;
   overflow: hidden;
-  border-bottom: 1px solid var(--separator);
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
   color: var(--text-primary);
   text-align: start;
   text-overflow: ellipsis;
@@ -961,19 +993,24 @@ watch(search, () => {
   cursor: pointer;
   transition: background-color 0.15s ease;
 }
-.proto-table tbody tr:hover {
-  background: var(--bg-secondary);
+.proto-table tbody tr[tabindex]:hover {
+  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
 }
 .proto-table tbody tr.selected {
-  background: var(--accent-15);
+  background: color-mix(in srgb, var(--accent) 7%, transparent);
 }
 .proto-table tbody tr:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
+.proto-table td:first-child {
+  font-size: 12px;
+  color: var(--text-tertiary);
+}
 .proto-merchant {
+  font-size: 14px;
   color: var(--text-primary) !important;
-  font-weight: 600;
+  font-weight: 500;
 }
 .proto-merchant span {
   display: inline-block;
@@ -987,7 +1024,11 @@ watch(search, () => {
   color: var(--destructive);
   font-size: 11px;
 }
+.proto-mobile-date {
+  display: none;
+}
 .proto-category {
+  font-size: 12px;
   color: var(--text-secondary) !important;
 }
 .proto-amount {
@@ -995,7 +1036,9 @@ watch(search, () => {
   font-weight: 650;
   font-variant-numeric: tabular-nums;
 }
-.proto-amount.negative,
+.proto-amount.negative {
+  color: var(--text-primary) !important;
+}
 .proto-detail-amount.negative {
   color: var(--destructive) !important;
 }
@@ -1028,32 +1071,6 @@ watch(search, () => {
 }
 .proto-backdrop {
   display: none;
-}
-.proto-inspector {
-  animation: proto-inspector-in 180ms ease-out;
-}
-@keyframes proto-inspector-in {
-  from {
-    opacity: 0;
-    transform: translateX(-8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
-}
-[dir='ltr'] .proto-inspector {
-  animation-name: proto-inspector-in-ltr;
-}
-@keyframes proto-inspector-in-ltr {
-  from {
-    opacity: 0;
-    transform: translateX(8px);
-  }
-  to {
-    opacity: 1;
-    transform: translateX(0);
-  }
 }
 .proto-inspector-head {
   display: flex;
@@ -1222,18 +1239,33 @@ watch(search, () => {
   }
 }
 @media (max-width: 720px) {
+  .proto-filter-popover {
+    position: fixed;
+    inset-block-start: 112px;
+    inset-inline: 12px;
+    width: auto;
+    max-height: calc(100dvh - 140px);
+    overflow-y: auto;
+    transform-origin: top center;
+  }
+  [dir='rtl'] .proto-filter-popover {
+    transform-origin: top center;
+  }
+
   .proto-advanced {
     display: none;
   }
   .proto-date-col {
     display: none;
   }
+  .proto-merchant .proto-mobile-date {
+    display: block;
+    margin: 3px 0 0;
+    color: var(--text-tertiary);
+  }
   .proto-table thead th:first-child,
   .proto-table td:first-child {
     display: none;
-  }
-  .proto-date-group th {
-    display: table-cell;
   }
   .proto-merchant-col {
     width: 48%;
@@ -1249,6 +1281,16 @@ watch(search, () => {
   }
   .proto-search {
     width: 150px;
+  }
+}
+@media (prefers-reduced-motion: no-preference) {
+  .proto-table tr.ledger-reflow-move,
+  .proto-table tr.ledger-reflow-enter-active,
+  .proto-table tr.ledger-reflow-leave-active {
+    transition:
+      transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
+      opacity 260ms,
+      background-color 150ms;
   }
 }
 @media (prefers-reduced-motion: reduce) {

@@ -1,3 +1,4 @@
+import { installCardMotion } from './lib/cardMotion';
 import { createApp } from 'vue';
 import { createRouter, createWebHistory } from 'vue-router';
 import { getSettings } from './api/client';
@@ -70,6 +71,7 @@ router.beforeEach(async (to) => {
   }
 });
 
+installCardMotion(router);
 const app = createApp(App);
 app.use(router);
 app.mount('#app');

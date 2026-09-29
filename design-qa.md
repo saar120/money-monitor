@@ -2,19 +2,13 @@
 
 **Final result: passed** for the isolated Activity prototype.
 
-## Visual proof
-
-Three final captures use isolated sample data:
-
-- [Hebrew Activity, desktop](docs/screenshots/desktop-redesign/qa-20260927/01-he-activity.png)
-- [Hebrew Activity, compact window](docs/screenshots/desktop-redesign/qa-20260927/05-he-activity-compact.png)
-- [English Home, desktop](docs/screenshots/desktop-redesign/qa-20260927/06-en-home.png)
+## Layout
 
 The selected split-view layout puts navigation on the right and the inspector on the left in Hebrew; English mirrors it. The Activity table stays centered in its workspace, and compact windows keep the merchant, category, and amount columns readable.
 
 ## Interaction check
 
-- Hebrew and English captures render with the intended mirrored layout.
+- Hebrew and English views render with the intended mirrored layout.
 - At 900 px, the full table is visible before selection. Selecting a row opens a dismissible inspector sheet.
 - Category filter returns the expected five September subscription transactions.
 - Previous-month control changes September to August 2026.
@@ -26,10 +20,6 @@ The route is development-only (`/prototype/split-view`). Inspector edits remain 
 ## App-wide implementation
 
 The selected split-view direction is now the production desktop layout. The shared shell uses a pale navigation sidebar and a centered white workspace. Activity and Categories use a trailing inspector; Review uses the same list-and-inspector pattern for pending transactions. Home, Explore, Cash Flow, Monthly Spending, Budgets, Subscriptions, Net Worth, Accounts, Alerts, Account Sync, Advisor, and Settings use the same typography, spacing, separators, and toolbar patterns. The former dense tables and category tools remain available on advanced routes.
-
-### Visual coverage
-
-The three retained captures above show the final RTL desktop and compact Activity layouts and the English shell. The broader route checks are recorded below without committing every intermediate capture.
 
 ### Checks
 
@@ -43,7 +33,7 @@ The demo currently has no Review queue items, so the Review empty state was visu
 
 ## Alignment follow-up — 27 September 2026
 
-The final visual pass covered Hebrew Activity at 1440 and 600 pixels, Hebrew Explore, merchant detail and Alerts at 1440 pixels, and English Home at 1440 pixels. Three representative captures are linked above.
+The final visual pass covered Hebrew Activity at 1440 and 600 pixels, Hebrew Explore, merchant detail and Alerts at 1440 pixels, and English Home at 1440 pixels.
 
 - Centered the capped-width Explore list, monthly category breakdown, and merchant transaction heading and list within the available workspace.
 - Corrected the toolbar's physical/logical margin conflict so actions sit on the outside edge in both Hebrew and English.

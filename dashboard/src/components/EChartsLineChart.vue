@@ -44,8 +44,11 @@ const defaultYAxisFormatter = (v: number): string => {
 
 const option = computed(() => ({
   animation: !reduceMotion.value,
+  animationDurationUpdate: 520,
+  animationEasingUpdate: 'cubicOut' as const,
   tooltip: {
     trigger: 'axis' as const,
+    axisPointer: { type: 'line' as const, snap: true },
     backgroundColor: bgPrimary.value,
     borderColor: separator.value,
     borderWidth: 1,
@@ -91,12 +94,14 @@ const option = computed(() => ({
     splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
   },
   series: props.datasets.map((ds) => ({
+    id: ds.label,
     name: ds.label,
     type: 'line' as const,
     data: ds.data,
     smooth: 0.4,
     symbol: 'circle',
-    symbolSize: 6,
+    symbolSize: 9,
+    emphasis: { scale: 1.6, itemStyle: { shadowBlur: 16, shadowColor: ds.color } },
     showSymbol: true,
     lineStyle: { width: 2.5, cap: 'round' as const, join: 'round' as const, color: ds.color },
     itemStyle: { color: ds.color },

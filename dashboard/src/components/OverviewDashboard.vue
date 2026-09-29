@@ -1,4 +1,7 @@
 <script setup lang="ts">
+import { useMonthSwipe } from '@/composables/useMonthSwipe';
+import { categoryMotionName } from '@/lib/cardMotion';
+import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
@@ -37,6 +40,10 @@ const route = useRoute();
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 const selectedMonth = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
+const displayedMonth = ref(selectedMonth.value);
+const scrubIndex = ref<number | null>(null);
+const chart = ref<InstanceType<typeof VChart> | null>(null);
+const monthSwipe = useMonthSwipe(selectedMonth);
 const selectedOwner = ref('all');
 const loading = ref(true);
 const error = ref('');
@@ -117,6 +124,8 @@ async function refresh() {
   categorySpending.value = value(results[0])?.summary ?? [];
   previousSpending.value = value(results[1])?.summary ?? [];
   dailySpending.value = value(results[2])?.summary ?? [];
+  displayedMonth.value = selectedMonth.value;
+  scrubIndex.value = null;
   cashflow.value = value(results[3])?.summary[0] ?? null;
   categories.value = value(results[4])?.categories ?? [];
   accounts.value = value(results[5])?.accounts ?? [];
@@ -179,23 +188,31 @@ const budgetNeedsAttention = computed(
   () => budget.value && (budget.value.isAlertTriggered || budget.value.isOverBudget),
 );
 const chartOption = computed(() => {
-  const end = Number(range.value.endDate.slice(-2));
+  const end = Number(
+    monthRange(
+      displayedMonth.value,
+      displayedMonth.value === today.slice(0, 7) ? Number(today.slice(8, 10)) : undefined,
+    ).endDate.slice(-2),
+  );
   const daily = new Map(dailySpending.value.map((item) => [item.day, Math.abs(item.totalAmount)]));
   let cumulative = 0;
   const days = Array.from({ length: end }, (_, index) => {
-    cumulative += daily.get(`${selectedMonth.value}-${String(index + 1).padStart(2, '0')}`) ?? 0;
+    cumulative += daily.get(`${displayedMonth.value}-${String(index + 1).padStart(2, '0')}`) ?? 0;
     return cumulative;
   });
   return {
     animation: !reduceMotion.value,
+    animationDurationUpdate: 520,
+    animationEasingUpdate: 'cubicOut' as const,
     grid: { left: 8, right: 14, top: 18, bottom: 24, containLabel: true },
     tooltip: {
       trigger: 'axis' as const,
+      axisPointer: { type: 'line' as const, snap: true, lineStyle: { color: '#0B5DDD', width: 2 } },
       backgroundColor: bgPrimary.value,
       borderColor: separator.value,
       textStyle: { color: textPrimary.value },
       formatter: (items: Array<{ axisValue: string; value: number }>) =>
-        `${selectedMonth.value}-${items[0]?.axisValue}<br/><b>${formatCurrency(items[0]?.value ?? 0)}</b>`,
+        `${displayedMonth.value}-${items[0]?.axisValue}<br/><b>${formatCurrency(items[0]?.value ?? 0)}</b>`,
     },
     xAxis: {
       type: 'category' as const,
@@ -215,16 +232,54 @@ const chartOption = computed(() => {
     },
     series: [
       {
+        id: 'daily-spending',
         type: 'line' as const,
         data: days,
         smooth: 0.25,
         showSymbol: false,
+        symbolSize: 12,
+        emphasis: { scale: 1.4, itemStyle: { shadowBlur: 18, shadowColor: '#0B5DDD' } },
         lineStyle: { color: '#0B5DDD', width: 3 },
         areaStyle: { color: 'rgba(11, 93, 221, 0.11)' },
       },
     ],
   };
 });
+const scrubAmount = computed(() =>
+  scrubIndex.value == null
+    ? totalSpent.value
+    : (chartOption.value.series[0]!.data[scrubIndex.value] ?? 0),
+);
+const scrubDate = computed(() =>
+  scrubIndex.value == null
+    ? t('totalSpending')
+    : `${displayedMonth.value}-${String(scrubIndex.value + 1).padStart(2, '0')}`,
+);
+function pointAt(event: { axesInfo?: Array<{ value: number | string }> }) {
+  const value = Number(event.axesInfo?.[0]?.value);
+  if (Number.isFinite(value))
+    scrubIndex.value = Math.max(0, Math.min(chartOption.value.series[0]!.data.length - 1, value));
+}
+function scrubWithKeyboard(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) return;
+  event.preventDefault();
+  const last = chartOption.value.series[0]!.data.length - 1;
+  if (event.key === 'Escape') {
+    scrubIndex.value = null;
+    chart.value?.dispatchAction({ type: 'hideTip' });
+    return;
+  }
+  scrubIndex.value =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? last
+        : Math.max(
+            0,
+            Math.min(last, (scrubIndex.value ?? last) + (event.key === 'ArrowLeft' ? -1 : 1)),
+          );
+  chart.value?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: scrubIndex.value });
+}
 function activityLink(category?: string) {
   return {
     path: '/transactions',
@@ -240,7 +295,7 @@ function categoryLink(category: string) {
 </script>
 
 <template>
-  <div class="ledger-page home-page">
+  <div class="ledger-page home-page month-swipe-surface" v-bind="monthSwipe" :aria-busy="loading">
     <Teleport to="#toolbar-actions">
       <div class="toolbar-controls">
         <MonthControl v-model="selectedMonth" />
@@ -279,18 +334,39 @@ function categoryLink(category: string) {
             /></RouterLink>
           </div>
           <p class="home-total" aria-live="polite">
-            {{ loading ? '—' : `${netCashflow < 0 ? '−' : ''}${formatCurrency(netCashflow)}` }}
+            <AnimatedAmount :value="netCashflow" />
           </p>
           <div class="home-chart-heading">
-            <h2 class="home-chart-title">{{ t('totalSpending') }}</h2>
-            <strong dir="ltr">{{ loading ? '—' : formatCurrency(totalSpent) }}</strong>
+            <h2 class="home-chart-title">{{ scrubDate }}</h2>
+            <strong dir="ltr"
+              ><AnimatedAmount :value="scrubAmount" :animate="scrubIndex == null"
+            /></strong>
           </div>
-          <div class="home-chart" :aria-label="t('totalSpending')">
+          <div
+            class="home-chart"
+            data-scrub
+            tabindex="0"
+            role="slider"
+            :aria-label="t('totalSpending')"
+            :aria-valuemin="1"
+            :aria-valuemax="chartOption.series[0]!.data.length"
+            :aria-valuenow="(scrubIndex ?? chartOption.series[0]!.data.length - 1) + 1"
+            :aria-valuetext="`${scrubDate}: ${formatCurrency(scrubAmount)}`"
+            @keydown="scrubWithKeyboard"
+          >
             <div v-if="!loading && !dailySpending.length" class="home-chart-empty">
               <Receipt :size="28" />
               <span>{{ t('noPostedSpendingYet') }}</span>
             </div>
-            <VChart v-else :option="chartOption" autoresize class="h-full w-full" />
+            <VChart
+              v-else
+              ref="chart"
+              :option="chartOption"
+              autoresize
+              class="h-full w-full"
+              @update-axis-pointer="pointAt"
+              @globalout="scrubIndex = null"
+            />
           </div>
           <p class="home-comparison" :class="spendingDelta > 0 ? 'is-warning' : 'is-positive'">
             {{
@@ -310,7 +386,7 @@ function categoryLink(category: string) {
           </div>
           <div>
             <span>{{ t('totalSpending') }}</span
-            ><strong>{{ loading ? '—' : formatCurrency(totalSpent) }}</strong>
+            ><strong><AnimatedAmount :value="totalSpent" /></strong>
           </div>
         </div>
         <section class="home-section">
@@ -325,6 +401,7 @@ function categoryLink(category: string) {
               v-for="item in topCategories"
               :key="item.category"
               :to="categoryLink(item.category ?? 'uncategorized')"
+              :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
               class="category-ledger-row"
             >
               <span

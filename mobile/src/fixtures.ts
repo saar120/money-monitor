@@ -7,6 +7,7 @@ export type FixtureScenarioName =
   | 'no-budget'
   | 'no-transactions'
   | 'category-shift'
+  | 'small-bars'
   | 'slower-spending'
   | 'mixed-currency';
 
@@ -482,6 +483,13 @@ export const fixtureScenarios: Record<FixtureScenarioName, FixtureScenario> = {
     transactions: [],
     trend: [],
     sinceLastVisit: null,
+  },
+  'small-bars': {
+    ...normal,
+    name: 'small-bars',
+    categories: normal.categories.map((category) =>
+      category.name === 'Dining' ? { ...category, spent: 6100, previous: 100 } : category,
+    ),
   },
   'category-shift': {
     ...normal,

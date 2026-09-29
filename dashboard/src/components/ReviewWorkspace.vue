@@ -203,66 +203,70 @@ onMounted(async () => {
           </div>
         </div>
       </div>
-      <button
-        v-if="selected"
-        type="button"
-        class="review-backdrop"
-        :aria-label="t('cancel')"
-        @click="selectedId = null"
-      />
-      <aside v-if="selected" class="review-inspector" :aria-label="t('details')">
-        <div class="review-inspector-head">
-          <h3>{{ t('details') }}</h3>
-          <button type="button" :aria-label="t('cancel')" @click="selectedId = null">
-            <X :size="18" />
-          </button>
-        </div>
-        <div class="review-inspector-body">
-          <strong
-            class="review-detail-amount"
-            :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
-            ><bdi dir="ltr">{{ amount(selected) }}</bdi></strong
-          >
-          <h4 dir="auto">{{ selected.description }}</h4>
-          <p class="review-detail-date">
-            <bdi dir="ltr">{{ date(selected) }}</bdi>
-          </p>
-          <div class="review-reason">
-            <span>{{ copy.reason }}</span>
-            <p>{{ selected.reviewReason ?? t('needsReview') }}</p>
-            <small v-if="selected.confidence != null"
-              >{{ Math.round(selected.confidence * 100) }}%</small
+      <Transition name="detail-backdrop">
+        <button
+          v-if="selected"
+          type="button"
+          class="review-backdrop"
+          :aria-label="t('cancel')"
+          @click="selectedId = null"
+        />
+      </Transition>
+      <Transition name="detail-panel">
+        <aside v-if="selected" class="review-inspector" :aria-label="t('details')">
+          <div class="review-inspector-head">
+            <h3>{{ t('details') }}</h3>
+            <button type="button" :aria-label="t('cancel')" @click="selectedId = null">
+              <X :size="18" />
+            </button>
+          </div>
+          <div class="review-inspector-body">
+            <strong
+              class="review-detail-amount"
+              :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
+              ><bdi dir="ltr">{{ amount(selected) }}</bdi></strong
+            >
+            <h4 dir="auto">{{ selected.description }}</h4>
+            <p class="review-detail-date">
+              <bdi dir="ltr">{{ date(selected) }}</bdi>
+            </p>
+            <div class="review-reason">
+              <span>{{ copy.reason }}</span>
+              <p>{{ selected.reviewReason ?? t('needsReview') }}</p>
+              <small v-if="selected.confidence != null"
+                >{{ Math.round(selected.confidence * 100) }}%</small
+              >
+            </div>
+            <label
+              ><span>{{ copy.category }}</span
+              ><select v-model="draftCategory">
+                <option value="">{{ t('uncategorized') }}</option>
+                <option v-for="category in categories" :key="category.name" :value="category.name">
+                  {{ category.label }}
+                </option>
+              </select></label
+            >
+            <label
+              ><span>{{ copy.owner }}</span
+              ><select v-model="draftOwner">
+                <option value="shared">{{ t('together') }}</option>
+                <option value="unassigned">{{ t('unassigned') }}</option>
+                <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
+                  {{ member.name }}
+                </option>
+              </select></label
+            >
+            <label class="review-check"
+              ><input v-model="draftIncluded" type="checkbox" />{{ copy.include }}</label
             >
           </div>
-          <label
-            ><span>{{ copy.category }}</span
-            ><select v-model="draftCategory">
-              <option value="">{{ t('uncategorized') }}</option>
-              <option v-for="category in categories" :key="category.name" :value="category.name">
-                {{ category.label }}
-              </option>
-            </select></label
-          >
-          <label
-            ><span>{{ copy.owner }}</span
-            ><select v-model="draftOwner">
-              <option value="shared">{{ t('together') }}</option>
-              <option value="unassigned">{{ t('unassigned') }}</option>
-              <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-                {{ member.name }}
-              </option>
-            </select></label
-          >
-          <label class="review-check"
-            ><input v-model="draftIncluded" type="checkbox" />{{ copy.include }}</label
-          >
-        </div>
-        <div class="review-inspector-footer">
-          <button type="button" :disabled="saving || !draftCategory" @click="confirm">
-            {{ copy.confirm }}
-          </button>
-        </div>
-      </aside>
+          <div class="review-inspector-footer">
+            <button type="button" :disabled="saving || !draftCategory" @click="confirm">
+              {{ copy.confirm }}
+            </button>
+          </div>
+        </aside>
+      </Transition>
     </div>
   </div>
 </template>
@@ -503,7 +507,7 @@ tbody tr:focus-visible {
     inset-block: 0;
     inset-inline-end: 0;
     z-index: 6;
-    width: 315px;
+    width: min(315px, 100vw);
     box-shadow: 0 8px 36px #162b4833;
   }
 }

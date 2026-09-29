@@ -1,0 +1,41 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Category rows and tiny bars retain their layout
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: small-bars
+- tapOn:
+    id: tab-explore
+- tapOn:
+    id: explore-card-categories
+- assertVisible:
+    id: category-row-Dining
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: categories-rows
+- tapOn:
+    id: category-row-Dining
+- assertVisible:
+    id: category-detail
+- tapOn:
+    id: category-bar-2026-08
+- assertVisible: '₪100'
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: small-bar-zero
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- tapOn:
+    id: explore-card-monthly
+- assertVisible:
+    id: monthly-category-Dining
+- waitForAnimationToEnd:
+    timeout: 5000
+- takeScreenshot: monthly-rows
