@@ -87,8 +87,13 @@ function AppLayout() {
               />
               <Stack.Screen name="foundation" options={{ title: t('foundationChecks') }} />
               <Stack.Screen name="review" options={{ title: t('review') }} />
-              <Stack.Screen name="category/[name]" options={{ title: t('category') }} />
-              <Stack.Screen name="merchant/[name]" options={{ title: t('merchant') }} />
+              <Stack.Screen name="category/[name]" options={{ title: '' }} />
+              <Stack.Screen
+                name="merchant/[name]"
+                options={({ route }) => ({
+                  title: (route.params as { name?: string } | undefined)?.name ?? t('merchant'),
+                })}
+              />
               <Stack.Screen name="transaction/[id]" options={{ title: t('transaction') }} />
               <Stack.Screen name="net-worth" options={{ title: t('netWorth') }} />
               <Stack.Screen name="settings" options={{ title: t('settings') }} />

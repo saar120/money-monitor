@@ -1,0 +1,51 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Hebrew chart scrub matches chronological bars
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn:
+    id: tab-home
+- tapOn:
+    id: open-settings
+- tapOn:
+    id: language-he
+- stopApp
+- launchApp:
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn:
+    id: tab-explore
+- tapOn:
+    id: explore-card-monthly
+- swipe:
+    start: 85%, 35%
+    end: 15%, 35%
+    duration: 800
+- assertVisible: 'אפריל 2026'
+- assertVisible:
+    id: monthly-bar-2026-04
+    selected: true
+- swipe:
+    start: 15%, 35%
+    end: 92%, 35%
+    duration: 800
+- assertVisible: 'ספטמבר 2026'
+- assertVisible:
+    id: monthly-bar-2026-09
+    selected: true
+- tapOn: '3 חודשים'
+- tapOn: 'שנה'
+- tapOn: '6 חודשים'
+- tapOn:
+    id: tab-home
+- tapOn:
+    id: open-settings
+- tapOn:
+    id: language-en
+- stopApp
+- launchApp:
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- assertVisible: Home

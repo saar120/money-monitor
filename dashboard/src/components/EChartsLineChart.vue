@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
 import { LineChart } from 'echarts/charts';
@@ -33,6 +34,7 @@ const props = withDefaults(
 );
 
 const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
 const defaultYAxisFormatter = (v: number): string => {
   if (v >= 1_000_000) return `₪${(v / 1_000_000).toFixed(1)}M`;
@@ -41,8 +43,12 @@ const defaultYAxisFormatter = (v: number): string => {
 };
 
 const option = computed(() => ({
+  animation: !reduceMotion.value,
+  animationDurationUpdate: 520,
+  animationEasingUpdate: 'cubicOut' as const,
   tooltip: {
     trigger: 'axis' as const,
+    axisPointer: { type: 'line' as const, snap: true },
     backgroundColor: bgPrimary.value,
     borderColor: separator.value,
     borderWidth: 1,
@@ -88,12 +94,14 @@ const option = computed(() => ({
     splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
   },
   series: props.datasets.map((ds) => ({
+    id: ds.label,
     name: ds.label,
     type: 'line' as const,
     data: ds.data,
     smooth: 0.4,
     symbol: 'circle',
-    symbolSize: 6,
+    symbolSize: 9,
+    emphasis: { scale: 1.6, itemStyle: { shadowBlur: 16, shadowColor: ds.color } },
     showSymbol: true,
     lineStyle: { width: 2.5, cap: 'round' as const, join: 'round' as const, color: ds.color },
     itemStyle: { color: ds.color },

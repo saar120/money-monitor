@@ -1,9 +1,12 @@
+import Animated, { useReducedMotion } from 'react-native-reanimated';
+import { ChartScrubber, MotionRow, RollingAmount } from '@/Motion';
+import { DetailLink } from '@/DetailLink';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { currentLocale, formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { router, useLocalSearchParams } from 'expo-router';
+import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
@@ -53,6 +56,7 @@ function MonthlyComparison({
   months: ExploreMonth[];
 }) {
   const colors = useAppColors();
+  const reduced = useReducedMotion();
   const [range, setRange] = useState<Range>('6');
   const series = months.slice(-Number(range));
   const fallback = series.at(-1)!;
@@ -90,9 +94,11 @@ function MonthlyComparison({
           <Text style={[styles.label, { color: colors.secondary }]}>
             {monthTitle(selected.month)}
           </Text>
-          <Text allowFontScaling={false} style={[styles.total, { color: colors.text }]}>
-            {formatUnsignedMoney(selected.spending, selected.currencyCode)}
-          </Text>
+          <RollingAmount
+            style={[styles.total, { color: colors.text }]}
+            value={formatUnsignedMoney(selected.spending, selected.currencyCode)}
+            testID="monthly-selected-total"
+          />
         </View>
         <Text style={[styles.summaryNote, { color: colors.secondary }]}>
           {t('postedSpending2')}
@@ -114,7 +120,20 @@ function MonthlyComparison({
             </Text>
           ))}
         </View>
-        <View style={styles.plot}>
+        <ChartScrubber
+          style={styles.plot}
+          count={series.length}
+          selectedIndex={series.findIndex((item) => item.month === selected.month)}
+          onSelect={(index) => {
+            const next = series[index];
+            if (next) setSelectedMonth(next.month);
+          }}
+          label={t('monthCategorySpending', {
+            month: monthTitle(selected.month),
+            amount: formatUnsignedMoney(selected.spending, selected.currencyCode),
+          })}
+          testID="monthly-scrubber"
+        >
           <View pointerEvents="none" style={styles.guides}>
             {ticks.map((tick) => (
               <View key={tick} style={[styles.guide, { backgroundColor: colors.separator }]} />
@@ -137,11 +156,14 @@ function MonthlyComparison({
                   style={styles.month}
                   testID={`monthly-bar-${item.month}`}
                 >
-                  <View
+                  <Animated.View
                     style={[
                       styles.bar,
                       {
                         height: (total / axisMax) * 168,
+                        opacity: selectedBar ? 1 : 0.48,
+                        transitionProperty: 'opacity',
+                        transitionDuration: reduced ? 0 : 100,
                       },
                     ]}
                   >
@@ -159,7 +181,7 @@ function MonthlyComparison({
                         />
                       );
                     })}
-                  </View>
+                  </Animated.View>
                   <Text
                     allowFontScaling={false}
                     numberOfLines={1}
@@ -174,7 +196,7 @@ function MonthlyComparison({
               );
             })}
           </View>
-        </View>
+        </ChartScrubber>
       </View>
       <Text style={[styles.chartNote, { color: colors.secondary }]}>
         {t('netCategorySpendingNetReceiptsAreExcludedFromTheChartAndListedBelow')}
@@ -188,50 +210,53 @@ function MonthlyComparison({
               ? Math.round((category.spent / selectedCategorySpending) * 100)
               : 0;
           return (
-            <Pressable
-              accessibilityHint={t('opensCategoryMerchants', {
-                name: categoryLabel(category.name),
-              })}
-              accessibilityRole="button"
-              key={category.name}
-              onPress={() =>
-                router.push({
+            <MotionRow key={category.name}>
+              <DetailLink
+                accessibilityLabel={categoryLabel(category.name)}
+                accessibilityHint={t('opensCategoryMerchants', {
+                  name: categoryLabel(category.name),
+                })}
+                accessibilityRole="button"
+                href={{
                   pathname: '/category/[name]',
                   params: { name: category.name, month: selected.month },
-                })
-              }
-              style={({ pressed }) => [
-                styles.row,
-                {
-                  borderBottomColor: colors.separator,
-                  borderBottomWidth:
-                    index === visibleCategories.length - 1 ? 0 : StyleSheet.hairlineWidth,
-                  opacity: pressed ? 0.62 : 1,
-                },
-              ]}
-              testID={`monthly-category-${category.name}`}
-            >
-              <View style={[styles.dot, { backgroundColor: category.color }]} />
-              <View style={styles.categoryName}>
-                <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
-                  {categoryLabel(category.name)}
-                </Text>
-                {category.spent < 0 ? (
-                  <Text style={[styles.creditLabel, { color: colors.secondary }]}>
-                    {t('netReceived')}
+                }}
+                style={({ pressed }) => [
+                  styles.row,
+                  {
+                    borderBottomColor: colors.separator,
+                    borderBottomWidth:
+                      index === visibleCategories.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                    opacity: pressed ? 0.62 : 1,
+                  },
+                ]}
+                testID={`monthly-category-${category.name}`}
+              >
+                <View style={[styles.dot, { backgroundColor: category.color }]} />
+                <View style={styles.categoryName}>
+                  <Text numberOfLines={1} style={[styles.name, { color: colors.text }]}>
+                    {categoryLabel(category.name)}
                   </Text>
-                ) : null}
-              </View>
-              <Text allowFontScaling={false} style={[styles.percent, { color: colors.secondary }]}>
-                {category.spent > 0 ? `${percent}%` : '—'}
-              </Text>
-              <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
-                {category.spent < 0
-                  ? formatMoney(category.spent, selected.currencyCode)
-                  : formatUnsignedMoney(category.spent, selected.currencyCode)}
-              </Text>
-              <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
-            </Pressable>
+                  {category.spent < 0 ? (
+                    <Text style={[styles.creditLabel, { color: colors.secondary }]}>
+                      {t('netReceived')}
+                    </Text>
+                  ) : null}
+                </View>
+                <Text
+                  allowFontScaling={false}
+                  style={[styles.percent, { color: colors.secondary }]}
+                >
+                  {category.spent > 0 ? `${percent}%` : '—'}
+                </Text>
+                <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
+                  {category.spent < 0
+                    ? formatMoney(category.spent, selected.currencyCode)
+                    : formatUnsignedMoney(category.spent, selected.currencyCode)}
+                </Text>
+                <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
+              </DetailLink>
+            </MotionRow>
           );
         })}
       </View>
@@ -279,7 +304,13 @@ const styles = StyleSheet.create({
   },
   summaryNote: { paddingBottom: 5, fontSize: 12.5 },
   chart: { height: 214, marginTop: 22, direction: 'ltr', flexDirection: 'row', gap: 9 },
-  axis: { width: 28, height: 168, justifyContent: 'space-between', alignItems: 'flex-end' },
+  axis: {
+    width: 28,
+    height: 179,
+    marginTop: -5.5,
+    justifyContent: 'space-between',
+    alignItems: 'flex-end',
+  },
   axisLabel: { fontSize: 9.5, lineHeight: 11, fontVariant: ['tabular-nums'] },
   plot: { flex: 1, height: 202 },
   guides: {

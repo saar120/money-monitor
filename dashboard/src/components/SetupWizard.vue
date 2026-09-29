@@ -15,6 +15,90 @@ import {
   SelectValue,
 } from '@/components/ui/select';
 import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check, CheckCircle } from 'lucide-vue-next';
+import { language } from '@/lib/language';
+
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        intro: 'הגדרת האפליקציה',
+        provider: 'ספק בינה מלאכותית',
+        providerHint: 'בחירת ספק והזנת מפתח API',
+        key: 'מפתח',
+        model: 'מודל',
+        selectModel: 'בחירת מודל',
+        or: 'או',
+        opencodeHint: 'הזינו מפתח OpenCode Go. המודלים והחיבור יוגדרו אוטומטית.',
+        learnMore: 'מידע נוסף',
+        connected: 'חשבון Anthropic מחובר',
+        login: 'כניסה עם Anthropic',
+        loginHint: 'אפשר להתחבר לחשבון במקום להזין מפתח API',
+        codeHint: 'חלון דפדפן נפתח. לאחר אישור הגישה, הדביקו את הקוד כאן:',
+        pasteCode: 'הדבקת קוד אישור…',
+        submit: 'אישור',
+        cancel: 'ביטול',
+        verifying: 'מאמת גישה…',
+        oauthToken: 'אסימון OAuth',
+        tokenHint: 'אפשר להדביק אסימון ישירות, למשל מ־Claude Code.',
+        skipLater: 'אפשר להגדיר זאת בהמשך בהגדרות.',
+        encryption: 'מפתח הצפנה',
+        encryptionHint: 'משמש להצפנת פרטי הכניסה לבנקים',
+        auto: 'יצירה אוטומטית',
+        custom: 'מפתח אישי',
+        storageHint: 'המפתח נשמר בהגדרות האפליקציה ומצפין פרטי כניסה לבנקים.',
+        customPlaceholder: 'הזינו מפתח עם לפחות 8 תווים',
+        optional: 'הגדרות נוספות',
+        optionalHint: 'אפשר לשנות אותן בכל עת בהגדרות',
+        schedule: 'תזמון סנכרון (cron)',
+        timezone: 'אזור זמן',
+        telegram: 'אסימון בוט טלגרם',
+        optionalPlaceholder: 'לא חובה',
+        back: 'חזרה',
+        skip: 'דילוג',
+        next: 'המשך',
+        finish: 'סיום ההגדרה',
+        saving: 'שומר…',
+      }
+    : {
+        intro: 'Set up your desktop app',
+        provider: 'AI provider',
+        providerHint: 'Choose a provider and enter an API key',
+        key: 'Key',
+        model: 'Model',
+        selectModel: 'Select model',
+        or: 'or',
+        opencodeHint:
+          'Enter your OpenCode Go API key. Models and the endpoint are configured automatically.',
+        learnMore: 'Learn more',
+        connected: 'Anthropic account connected',
+        login: 'Log in with Anthropic',
+        loginHint: 'Use your account instead of an API key',
+        codeHint: 'A browser window opened. After authorizing, paste the code here:',
+        pasteCode: 'Paste authorization code…',
+        submit: 'Submit',
+        cancel: 'Cancel',
+        verifying: 'Verifying authorization…',
+        oauthToken: 'OAuth token',
+        tokenHint: 'You can paste a token directly, for example from Claude Code.',
+        skipLater: 'You can set this later in Settings.',
+        encryption: 'Encryption key',
+        encryptionHint: 'Encrypts your bank credentials at rest',
+        auto: 'Auto-generate',
+        custom: 'Custom',
+        storageHint: 'This key is stored in app settings and encrypts bank login credentials.',
+        customPlaceholder: 'Enter a key with at least 8 characters',
+        optional: 'Optional settings',
+        optionalHint: 'You can change these anytime in Settings',
+        schedule: 'Sync schedule (cron)',
+        timezone: 'Timezone',
+        telegram: 'Telegram bot token',
+        optionalPlaceholder: 'Optional',
+        back: 'Back',
+        skip: 'Skip',
+        next: 'Next',
+        finish: 'Finish setup',
+        saving: 'Saving…',
+      },
+);
 
 const router = useRouter();
 const isElectron = !!(window as any).electronAPI;
@@ -126,8 +210,8 @@ async function finish() {
 
 <template>
   <div
-    class="min-h-screen bg-bg-secondary flex items-center justify-center p-8"
-    style="background-image: radial-gradient(ellipse at 50% 0%, var(--accent-15), transparent 70%)"
+    class="setup-page min-h-screen bg-bg-secondary flex items-center justify-center p-8"
+    :dir="language === 'he' ? 'rtl' : 'ltr'"
   >
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
@@ -140,7 +224,7 @@ async function finish() {
           <Wallet class="h-7 w-7 text-primary" />
         </div>
         <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
-        <p class="text-text-secondary mt-1">Let's set up your desktop app</p>
+        <p class="text-text-secondary mt-1">{{ copy.intro }}</p>
       </div>
 
       <!-- Progress -->
@@ -161,8 +245,8 @@ async function finish() {
               <Bot class="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle>AI Provider</CardTitle>
-              <CardDescription>Choose your AI provider and enter your API key</CardDescription>
+              <CardTitle>{{ copy.provider }}</CardTitle>
+              <CardDescription>{{ copy.providerHint }}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -187,7 +271,7 @@ async function finish() {
           <!-- API Key -->
           <div class="space-y-1">
             <label class="text-[13px] font-medium text-text-primary block"
-              >{{ currentProvider?.name ?? 'API' }} Key</label
+              >{{ currentProvider?.name ?? 'API' }} {{ copy.key }}</label
             >
             <Input
               v-model="apiKey"
@@ -198,14 +282,13 @@ async function finish() {
               v-if="selectedProvider === 'opencode-go'"
               class="text-[11px] leading-relaxed text-text-secondary"
             >
-              Enter your OpenCode Go API key. The available models and OpenAI-compatible endpoint
-              are configured automatically.
+              {{ copy.opencodeHint }}
               <a
                 href="https://opencode.ai/zen/go"
                 target="_blank"
                 rel="noopener noreferrer"
                 class="underline"
-                >Learn more</a
+                >{{ copy.learnMore }}</a
               >
             </p>
           </div>
@@ -214,7 +297,7 @@ async function finish() {
           <template v-if="selectedProvider === 'anthropic'">
             <div class="relative flex items-center justify-center">
               <div class="absolute border-t w-full" />
-              <span class="relative bg-card px-2 text-xs text-muted-foreground">or</span>
+              <span class="relative bg-card px-2 text-xs text-muted-foreground">{{ copy.or }}</span>
             </div>
 
             <div
@@ -222,60 +305,62 @@ async function finish() {
               class="flex items-center gap-2 text-[13px]"
             >
               <CheckCircle class="h-4 w-4 text-green-500" />
-              <span class="text-text-secondary">Anthropic OAuth connected</span>
+              <span class="text-text-secondary">{{ copy.connected }}</span>
             </div>
 
             <div v-else-if="oauthStep === 'idle'" class="space-y-1.5">
               <Button variant="secondary" size="sm" class="w-full" @click="startOAuth">
-                Login with Anthropic
+                {{ copy.login }}
               </Button>
               <p class="text-[11px] text-text-secondary">
-                Use your Anthropic account instead of an API key
+                {{ copy.loginHint }}
               </p>
             </div>
 
             <div v-else-if="oauthStep === 'waiting_code'" class="space-y-2">
               <p class="text-[12px] text-text-secondary">
-                A browser window has been opened. After authorizing, paste the code below:
+                {{ copy.codeHint }}
               </p>
               <div class="flex gap-2">
                 <Input
                   v-model="oauthCode"
-                  placeholder="Paste authorization code..."
+                  :placeholder="copy.pasteCode"
                   class="flex-1"
                   @keydown.enter="submitOAuthCode"
                 />
                 <Button size="sm" :disabled="!oauthCode.trim()" @click="submitOAuthCode">
-                  Submit
+                  {{ copy.submit }}
                 </Button>
               </div>
               <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">
-                Cancel
+                {{ copy.cancel }}
               </button>
             </div>
 
             <div v-else-if="oauthStep === 'submitting'" class="text-[12px] text-text-secondary">
-              Verifying authorization...
+              {{ copy.verifying }}
             </div>
 
             <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
 
             <!-- Manual OAuth token paste -->
             <div class="space-y-1">
-              <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
+              <label class="text-[13px] font-medium text-text-primary block">{{
+                copy.oauthToken
+              }}</label>
               <Input v-model="oauthToken" type="password" placeholder="oat-..." />
               <p class="text-[11px] text-text-secondary mt-1">
-                Paste an OAuth token directly (e.g. from Claude Code CLI)
+                {{ copy.tokenHint }}
               </p>
             </div>
           </template>
 
           <!-- Model selection -->
           <div class="space-y-1">
-            <label class="text-[13px] font-medium text-text-primary block">Model</label>
+            <label class="text-[13px] font-medium text-text-primary block">{{ copy.model }}</label>
             <Select v-model="selectedModel">
               <SelectTrigger>
-                <SelectValue placeholder="Select model" />
+                <SelectValue :placeholder="copy.selectModel" />
               </SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="m in currentProvider?.models ?? []" :key="m.id" :value="m.id">
@@ -286,7 +371,7 @@ async function finish() {
           </div>
 
           <p class="text-[11px] text-text-secondary">
-            You can skip this and set it later in Settings.
+            {{ copy.skipLater }}
           </p>
         </CardContent>
       </Card>
@@ -299,8 +384,8 @@ async function finish() {
               <Key class="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle>Encryption Key</CardTitle>
-              <CardDescription>Used to encrypt your bank credentials at rest</CardDescription>
+              <CardTitle>{{ copy.encryption }}</CardTitle>
+              <CardDescription>{{ copy.encryptionHint }}</CardDescription>
             </div>
           </div>
         </CardHeader>
@@ -311,14 +396,14 @@ async function finish() {
               size="sm"
               @click="masterKeyMode = 'auto'"
             >
-              Auto-generate
+              {{ copy.auto }}
             </Button>
             <Button
               :variant="masterKeyMode === 'custom' ? 'default' : 'secondary'"
               size="sm"
               @click="masterKeyMode = 'custom'"
             >
-              Custom
+              {{ copy.custom }}
             </Button>
           </div>
 
@@ -329,16 +414,12 @@ async function finish() {
               {{ autoMasterKey }}
             </div>
             <p class="text-[11px] text-text-secondary mt-1.5">
-              This key is stored in your app config and encrypts bank login credentials.
+              {{ copy.storageHint }}
             </p>
           </div>
 
           <div v-else>
-            <Input
-              v-model="customMasterKey"
-              type="text"
-              placeholder="Enter a key (min 8 characters)"
-            />
+            <Input v-model="customMasterKey" type="text" :placeholder="copy.customPlaceholder" />
           </div>
         </CardContent>
       </Card>
@@ -351,27 +432,33 @@ async function finish() {
               <Check class="h-4 w-4 text-primary" />
             </div>
             <div>
-              <CardTitle>Optional Settings</CardTitle>
-              <CardDescription>You can change these anytime in Settings</CardDescription>
+              <CardTitle>{{ copy.optional }}</CardTitle>
+              <CardDescription>{{ copy.optionalHint }}</CardDescription>
             </div>
           </div>
         </CardHeader>
         <CardContent class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5"
-              >Scrape Schedule (cron)</label
-            >
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+              copy.schedule
+            }}</label>
             <Input v-model="scrapeCron" placeholder="0 6 * * *" />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">Timezone</label>
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+              copy.timezone
+            }}</label>
             <Input v-model="scrapeTimezone" placeholder="Asia/Jerusalem" />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5"
-              >Telegram Bot Token</label
-            >
-            <Input v-model="telegramBotToken" type="password" placeholder="Optional" />
+            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+              copy.telegram
+            }}</label>
+            <Input
+              v-model="telegramBotToken"
+              type="password"
+              :placeholder="copy.optionalPlaceholder"
+            />
           </div>
         </CardContent>
       </Card>
@@ -382,8 +469,8 @@ async function finish() {
       <!-- Navigation -->
       <div class="flex items-center justify-between mt-6">
         <Button v-if="step > 1" variant="ghost" @click="prev">
-          <ArrowLeft class="h-4 w-4 mr-1" />
-          Back
+          <ArrowLeft class="setup-back-arrow h-4 w-4 mr-1" />
+          {{ copy.back }}
         </Button>
         <div v-else />
 
@@ -398,14 +485,14 @@ async function finish() {
               cancelOAuth();
             "
           >
-            Skip
+            {{ copy.skip }}
           </Button>
           <Button v-if="step < 3" :disabled="step === 2 && !canProceed" @click="next">
-            Next
-            <ArrowRight class="h-4 w-4 ml-1" />
+            {{ copy.next }}
+            <ArrowRight class="setup-next-arrow h-4 w-4 ml-1" />
           </Button>
           <Button v-if="step === 3" :disabled="saving" @click="finish">
-            {{ saving ? 'Saving...' : 'Finish Setup' }}
+            {{ saving ? copy.saving : copy.finish }}
             <Check v-if="!saving" class="h-4 w-4 ml-1" />
           </Button>
         </div>

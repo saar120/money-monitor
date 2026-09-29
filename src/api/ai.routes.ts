@@ -2,6 +2,7 @@ import type { FastifyInstance } from 'fastify';
 import { chat, batchCategorize, recategorize } from '../ai/agent.js';
 import { categorizeSchema, recategorizeSchema, sessionChatSchema } from './validation.js';
 import { validateBody } from './helpers.js';
+import { advisorChartSchema, type AdvisorChart } from '../ai/advisor-chart.js';
 import {
   createSession,
   getSession,
@@ -68,10 +69,18 @@ export async function aiRoutes(app: FastifyInstance) {
       });
 
       let assistantResponse = '';
+      let chart: AdvisorChart | undefined;
 
       try {
         for await (const event of chat(conversationHistory)) {
-          if (event.type === 'chart') continue;
+          if (event.type === 'chart') {
+            const valid = advisorChartSchema.safeParse(event.chart);
+            if (valid.success) {
+              chart = valid.data;
+              reply.raw.write(`event: chart\ndata: ${JSON.stringify({ chart })}\n\n`);
+            }
+            continue;
+          }
           reply.raw.write(
             `event: ${event.type}\ndata: ${JSON.stringify({ text: event.text })}\n\n`,
           );
@@ -81,8 +90,8 @@ export async function aiRoutes(app: FastifyInstance) {
         }
 
         // Append assistant response to session file
-        if (assistantResponse) {
-          appendMessage(data.sessionId, 'assistant', assistantResponse);
+        if (assistantResponse || chart) {
+          appendMessage(data.sessionId, 'assistant', assistantResponse, chart);
         }
       } catch (err) {
         const message = err instanceof Error ? err.message : 'AI chat failed';

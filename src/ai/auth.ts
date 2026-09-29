@@ -1,7 +1,8 @@
 import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
 import { join } from 'node:path';
-import { loginAnthropic, loginOpenAICodex, getOAuthApiKey } from '@earendil-works/pi-ai/oauth';
-import type { OAuthCredentials } from '@earendil-works/pi-ai/oauth';
+import type { OAuthAuth, OAuthCredentials, OAuthCredential } from '@earendil-works/pi-ai';
+import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
+import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex';
 import { dataDir } from '../paths.js';
 import { config, type Config } from '../config.js';
 
@@ -34,10 +35,10 @@ function saveCredentials(): void {
 
 // ── Generic OAuth flow factory ─────────────────────────────────────────────
 
-type LoginAdapter = (
-  onUrl: (url: string) => void,
-  getCode: () => Promise<string>,
-) => Promise<OAuthCredentials>;
+const oauthProviders: Record<string, OAuthAuth | undefined> = {
+  anthropic: anthropicProvider().auth.oauth,
+  'openai-codex': openaiCodexProvider().auth.oauth,
+};
 
 export interface OAuthFlow {
   start(): Promise<string>;
@@ -47,10 +48,11 @@ export interface OAuthFlow {
   hasOAuth(): boolean;
 }
 
-function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow {
+function createOAuthFlow(providerKey: string, oauth: OAuthAuth): OAuthFlow {
   let pendingResolve: ((code: string) => void) | null = null;
   let pendingReject: ((err: Error) => void) | null = null;
   let pendingLogin: Promise<void> | null = null;
+  let abortController: AbortController | null = null;
 
   function start(): Promise<string> {
     if (pendingResolve) {
@@ -58,12 +60,20 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
     }
 
     return new Promise<string>((resolveUrl, rejectUrl) => {
+      abortController = new AbortController();
       const codePromise = new Promise<string>((resolve, reject) => {
         pendingResolve = resolve;
         pendingReject = reject;
       });
 
-      pendingLogin = loginFn(resolveUrl, () => codePromise)
+      pendingLogin = oauth
+        .login({
+          signal: abortController.signal,
+          notify: (event) => {
+            if (event.type === 'auth_url') resolveUrl(event.url);
+          },
+          prompt: (prompt) => (prompt.type === 'select' ? Promise.resolve('browser') : codePromise),
+        })
         .then((creds) => {
           credentials[providerKey] = creds;
           saveCredentials();
@@ -75,6 +85,7 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
           pendingResolve = null;
           pendingReject = null;
           pendingLogin = null;
+          abortController = null;
         });
     });
   }
@@ -93,6 +104,7 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
   }
 
   function cancel(): void {
+    abortController?.abort();
     if (pendingReject) {
       pendingReject(new Error('OAuth flow cancelled'));
     }
@@ -116,21 +128,8 @@ function createOAuthFlow(providerKey: string, loginFn: LoginAdapter): OAuthFlow 
 
 // ── Provider flows ─────────────────────────────────────────────────────────
 
-const anthropicFlow = createOAuthFlow('anthropic', (onUrl, getCode) =>
-  loginAnthropic({
-    onAuth: (info) => onUrl(info.url),
-    onPrompt: getCode,
-    onManualCodeInput: getCode,
-  }),
-);
-
-const openaiCodexFlow = createOAuthFlow('openai-codex', (onUrl, getCode) =>
-  loginOpenAICodex({
-    onAuth: (info) => onUrl(info.url),
-    onPrompt: getCode,
-    onManualCodeInput: getCode,
-  }),
-);
+const anthropicFlow = createOAuthFlow('anthropic', oauthProviders.anthropic!);
+const openaiCodexFlow = createOAuthFlow('openai-codex', oauthProviders['openai-codex']!);
 
 export const startAnthropicOAuth = anthropicFlow.start;
 export const completeAnthropicOAuth = anthropicFlow.complete;
@@ -162,11 +161,18 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
   // 1. Try OAuth credentials (auto-refresh) — only if we have stored creds for this provider
   if (credentials[provider]) {
     try {
-      const result = await getOAuthApiKey(provider, credentials);
-      if (result) {
-        credentials[provider] = result.newCredentials;
+      const oauth = oauthProviders[provider];
+      if (oauth) {
+        let credential: OAuthCredential = {
+          ...credentials[provider],
+          type: 'oauth',
+        } as OAuthCredential;
+        if (!credential.expires || credential.expires <= Date.now() + 60_000) {
+          credential = await oauth.refresh(credential, new AbortController().signal);
+        }
+        credentials[provider] = credential;
         saveCredentials();
-        return result.apiKey;
+        return (await oauth.toAuth(credential)).apiKey;
       }
     } catch (err) {
       console.error(

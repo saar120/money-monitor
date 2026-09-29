@@ -1,6 +1,6 @@
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { t } from '@/localization';
+import { t, useLanguage } from '@/localization';
 import { categoryLabel, ownerLabel } from '@/translations';
 import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
@@ -9,11 +9,13 @@ import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
+  Easing,
   Modal,
   Pressable,
   ScrollView,
   StyleSheet,
   Switch,
+  useWindowDimensions,
   View,
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
@@ -29,6 +31,8 @@ import type { TransactionUpdate } from '@/mobile-api';
 export default function ReviewScreen() {
   const colors = useAppColors();
   const insets = useSafeAreaInsets();
+  const { width } = useWindowDimensions();
+  const { language } = useLanguage();
   const reduceMotion = useReducedMotion();
   const { home, reload, saveTransaction, loadReviewOptions } = useMoneyData();
   const { transactions, loading, error } = useActivityTransactions('', 'review');
@@ -37,14 +41,21 @@ export default function ReviewScreen() {
     Record<string, Partial<Pick<Transaction, 'included' | 'owner'>>>
   >({});
   const queue = transactions.filter((transaction) => !dismissedIds.has(transaction.id));
-  const sourceCurrent = queue[0] ?? null;
+  // Keep the saved card on screen while the provider refreshes the queue.
+  const [heldCard, setHeldCard] = useState<Transaction | null>(null);
+  const sourceCurrent = heldCard ?? queue[0] ?? null;
   const current = sourceCurrent ? { ...sourceCurrent, ...overrides[sourceCurrent.id] } : null;
   const [sessionTotal, setSessionTotal] = useState(home?.reviewCount ?? 0);
   const [saving, setSaving] = useState(false);
   const [picker, setPicker] = useState<'category' | 'owner' | null>(null);
   const [options, setOptions] = useState({ categories: [] as string[], owners: [] as string[] });
   const [saveError, setSaveError] = useState<string | null>(null);
-  const opacity = useRef(new Animated.Value(1)).current;
+  const departure = useRef(new Animated.Value(0)).current;
+  const arrival = useRef(new Animated.Value(1)).current;
+  const burst = useRef(new Animated.Value(1)).current;
+  const busy = useRef(false);
+  const mounted = useRef(true);
+  const completionScale = useRef(new Animated.Value(1)).current;
   const initializedQueue = useRef(false);
 
   useEffect(() => {
@@ -63,43 +74,56 @@ export default function ReviewScreen() {
       );
   }, [loadReviewOptions]);
 
+  useEffect(() => {
+    mounted.current = true;
+    return () => {
+      mounted.current = false;
+      departure.stopAnimation();
+      arrival.stopAnimation();
+    };
+  }, [arrival, departure]);
+
   async function complete(update: TransactionUpdate) {
-    if (!current || saving) return;
+    if (!current || busy.current || saving) return;
+    busy.current = true;
+    setHeldCard(current);
     setSaving(true);
     setSaveError(null);
     try {
-      if (!reduceMotion)
+      await saveTransaction(current.id, update);
+      if (!mounted.current) return;
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      if (!reduceMotion) {
         await new Promise<void>((resolve) =>
-          Animated.timing(opacity, { toValue: 0, duration: 120, useNativeDriver: true }).start(() =>
-            resolve(),
-          ),
+          Animated.timing(departure, {
+            toValue: 1,
+            duration: 300,
+            easing: Easing.bezier(0.4, 0, 0.8, 0.6),
+            useNativeDriver: true,
+          }).start(() => resolve()),
         );
+      }
+      if (!mounted.current) return;
+      departure.setValue(0);
+      arrival.setValue(reduceMotion ? 1 : 0);
       setDismissedIds((ids) => new Set(ids).add(current.id));
-      if (reduceMotion) opacity.setValue(1);
-      else {
-        opacity.setValue(0);
-        Animated.spring(opacity, {
+      setHeldCard(null);
+      if (!reduceMotion) {
+        Animated.spring(arrival, {
           toValue: 1,
-          damping: 18,
-          stiffness: 220,
-          mass: 0.7,
+          damping: 19,
+          stiffness: 230,
+          mass: 0.9,
           useNativeDriver: true,
         }).start();
       }
-      await saveTransaction(current.id, update);
-      await Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success);
     } catch (caught) {
-      if (current) {
-        setDismissedIds((ids) => {
-          const next = new Set(ids);
-          next.delete(current.id);
-          return next;
-        });
-      }
-      opacity.setValue(1);
+      if (!mounted.current) return;
+      departure.setValue(0);
       setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
     } finally {
-      setSaving(false);
+      busy.current = false;
+      if (mounted.current) setSaving(false);
     }
   }
 
@@ -136,6 +160,34 @@ export default function ReviewScreen() {
     hasError: Boolean(error),
     remaining,
   });
+
+  useEffect(() => {
+    if (viewState !== 'complete' || !reviewed || reduceMotion) {
+      completionScale.setValue(1);
+      burst.setValue(1);
+      return;
+    }
+    completionScale.setValue(0.45);
+    burst.setValue(0);
+    const animation = Animated.spring(completionScale, {
+      toValue: 1,
+      stiffness: 260,
+      damping: 20,
+      mass: 0.7,
+      useNativeDriver: true,
+    });
+    const celebration = Animated.parallel([
+      animation,
+      Animated.timing(burst, {
+        toValue: 1,
+        duration: 650,
+        easing: Easing.out(Easing.cubic),
+        useNativeDriver: true,
+      }),
+    ]);
+    celebration.start();
+    return () => celebration.stop();
+  }, [burst, completionScale, reduceMotion, reviewed, viewState]);
 
   return (
     <>
@@ -190,7 +242,69 @@ export default function ReviewScreen() {
           </View>
         ) : viewState === 'complete' ? (
           <View style={styles.caughtUp} testID="review-complete">
-            <SymbolView name="checkmark.circle.fill" size={58} tintColor={colors.positive} />
+            <View style={styles.completionSeal}>
+              <Animated.View
+                pointerEvents="none"
+                style={[
+                  styles.completionRing,
+                  {
+                    borderColor: colors.positive,
+                    opacity: burst.interpolate({
+                      inputRange: [0, 0.12, 1],
+                      outputRange: [0, 0.8, 0],
+                    }),
+                    transform: [
+                      {
+                        scale: burst.interpolate({ inputRange: [0, 1], outputRange: [0.5, 1.65] }),
+                      },
+                    ],
+                  },
+                ]}
+              />
+              {Array.from({ length: 8 }, (_, index) => {
+                const angle = (index * Math.PI) / 4;
+                return (
+                  <Animated.View
+                    key={index}
+                    pointerEvents="none"
+                    style={[
+                      styles.completionRay,
+                      {
+                        backgroundColor: index % 2 ? colors.accent : colors.positive,
+                        opacity: burst.interpolate({
+                          inputRange: [0, 0.15, 0.75, 1],
+                          outputRange: [0, 1, 1, 0],
+                        }),
+                        transform: [
+                          {
+                            translateX: burst.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [35 * Math.sin(angle), 90 * Math.sin(angle)],
+                            }),
+                          },
+                          {
+                            translateY: burst.interpolate({
+                              inputRange: [0, 1],
+                              outputRange: [35 * Math.cos(angle), 90 * Math.cos(angle)],
+                            }),
+                          },
+                          { rotate: `${-index * 45}deg` },
+                          {
+                            scaleY: burst.interpolate({
+                              inputRange: [0, 0.3, 1],
+                              outputRange: [0.2, 1, 0.1],
+                            }),
+                          },
+                        ],
+                      },
+                    ]}
+                  />
+                );
+              })}
+              <Animated.View style={{ transform: [{ scale: completionScale }] }}>
+                <SymbolView name="checkmark.circle.fill" size={96} tintColor={colors.positive} />
+              </Animated.View>
+            </View>
             <Text style={[styles.caughtUpTitle, { color: colors.text }]}>{t('allCaughtUp')}</Text>
             <Text style={[styles.caughtUpBody, { color: colors.secondary }]}>
               {t('everythingInYourFinancialInboxHasBeenReviewed')}
@@ -210,104 +324,150 @@ export default function ReviewScreen() {
             </Pressable>
           </View>
         ) : current ? (
-          <Animated.View
-            style={[
-              styles.card,
-              {
-                opacity,
-                transform: [
-                  {
-                    translateY: opacity.interpolate({ inputRange: [0, 1], outputRange: [-16, 0] }),
-                  },
-                ],
-              },
-            ]}
-          >
-            <ScrollView
-              contentContainerStyle={styles.reviewContent}
-              showsVerticalScrollIndicator={false}
-            >
-              <Text style={[styles.date, { color: colors.secondary }]}>
-                {relativeDate(current.occurredAt, home?.currentDate)} · {current.account}
-              </Text>
-              <Text
-                maxFontSizeMultiplier={1.6}
-                numberOfLines={2}
-                style={[styles.merchant, { color: colors.text }]}
-              >
-                {current.merchant}
-              </Text>
-              <Text
-                adjustsFontSizeToFit
-                allowFontScaling={false}
-                minimumFontScale={0.7}
-                numberOfLines={1}
+          <>
+            <View style={styles.cardStack}>
+              {[2, 1]
+                .filter((depth) => queue.filter((item) => item.id !== current.id).length >= depth)
+                .map((depth) => (
+                  <Animated.View
+                    key={depth}
+                    pointerEvents="none"
+                    accessibilityElementsHidden
+                    style={[
+                      styles.queuedCard,
+                      {
+                        backgroundColor: depth === 1 ? colors.surfaceSoft : colors.accentSoft,
+                        borderColor: colors.separator,
+                        transform: [{ translateY: -depth * 10 }, { scale: 1 - depth * 0.045 }],
+                      },
+                    ]}
+                  />
+                ))}
+              <Animated.View
                 style={[
-                  styles.amount,
-                  { color: current.amount > 0 ? colors.positive : colors.text },
+                  styles.card,
+                  {
+                    backgroundColor: colors.surface,
+                    borderColor: colors.separator,
+                    opacity: departure.interpolate({
+                      inputRange: [0, 0.7, 1],
+                      outputRange: [1, 1, 0],
+                    }),
+                    transform: [
+                      {
+                        translateX: departure.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [0, width * (language === 'he' ? -1.2 : 1.2)],
+                        }),
+                      },
+                      {
+                        translateY: arrival.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: [-22, 0],
+                        }),
+                      },
+                      {
+                        scale: arrival.interpolate({ inputRange: [0, 1], outputRange: [0.91, 1] }),
+                      },
+                      {
+                        rotate: departure.interpolate({
+                          inputRange: [0, 1],
+                          outputRange: ['0deg', language === 'he' ? '-14deg' : '14deg'],
+                        }),
+                      },
+                    ],
+                  },
                 ]}
               >
-                {formatMoney(current.amount, current.currencyCode ?? home?.currencyCode, true)}
-              </Text>
-              {current.description ? (
-                <Text style={[styles.description, { color: colors.secondary }]}>
-                  {current.description}
-                </Text>
-              ) : null}
+                <ScrollView
+                  contentContainerStyle={styles.reviewContent}
+                  showsVerticalScrollIndicator={false}
+                >
+                  <Text style={[styles.date, { color: colors.secondary }]}>
+                    {relativeDate(current.occurredAt, home?.currentDate)} · {current.account}
+                  </Text>
+                  <Text
+                    maxFontSizeMultiplier={1.6}
+                    numberOfLines={2}
+                    style={[styles.merchant, { color: colors.text }]}
+                  >
+                    {current.merchant}
+                  </Text>
+                  <Text
+                    adjustsFontSizeToFit
+                    allowFontScaling={false}
+                    minimumFontScale={0.7}
+                    numberOfLines={1}
+                    style={[
+                      styles.amount,
+                      { color: current.amount > 0 ? colors.positive : colors.text },
+                    ]}
+                  >
+                    {formatMoney(current.amount, current.currencyCode ?? home?.currencyCode, true)}
+                  </Text>
+                  {current.description ? (
+                    <Text style={[styles.description, { color: colors.secondary }]}>
+                      {current.description}
+                    </Text>
+                  ) : null}
 
-              <View style={[styles.fields, { backgroundColor: colors.surface }]}>
-                <Field
-                  symbol="tag"
-                  label={t('category')}
-                  value={categoryLabel(current.category)}
-                  colors={colors}
-                  disabled={saving}
-                  onPress={() => setPicker('category')}
-                  testID="review-category"
-                />
-                <Field
-                  symbol="person"
-                  label={t('owner')}
-                  value={ownerLabel(current.owner)}
-                  colors={colors}
-                  disabled={saving}
-                  onPress={() => setPicker('owner')}
-                />
-                <View style={styles.fieldRow}>
-                  <SymbolView name="chart.bar" size={18} tintColor={colors.secondary} />
-                  <View style={styles.fieldText}>
-                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                      {t('includeInReports')}
-                    </Text>
-                    <Text style={[styles.fieldValue, { color: colors.secondary }]}>
-                      {current.included ? t('included') : t('excluded')}
-                    </Text>
+                  <View style={[styles.fields, { backgroundColor: colors.surfaceSoft }]}>
+                    <Field
+                      symbol="tag"
+                      label={t('category')}
+                      value={categoryLabel(current.category)}
+                      colors={colors}
+                      disabled={saving}
+                      onPress={() => setPicker('category')}
+                      testID="review-category"
+                    />
+                    <Field
+                      symbol="person"
+                      label={t('owner')}
+                      value={ownerLabel(current.owner)}
+                      colors={colors}
+                      disabled={saving}
+                      onPress={() => setPicker('owner')}
+                    />
+                    <View style={styles.fieldRow}>
+                      <SymbolView name="chart.bar" size={18} tintColor={colors.secondary} />
+                      <View style={styles.fieldText}>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                          {t('includeInReports')}
+                        </Text>
+                        <Text style={[styles.fieldValue, { color: colors.secondary }]}>
+                          {current.included ? t('included') : t('excluded')}
+                        </Text>
+                      </View>
+                      <Switch
+                        disabled={saving}
+                        value={current.included}
+                        onValueChange={(included) => {
+                          void saveField(current, { included });
+                        }}
+                        trackColor={{ true: colors.positive }}
+                      />
+                    </View>
+                    <View style={styles.fieldRow}>
+                      <SymbolView name="calendar" size={18} tintColor={colors.secondary} />
+                      <View style={styles.fieldText}>
+                        <Text style={[styles.fieldLabel, { color: colors.text }]}>
+                          {t('reportingDate')}
+                        </Text>
+                        <Text style={[styles.fieldValue, { color: colors.secondary }]}>
+                          {current.effectiveDate}
+                        </Text>
+                      </View>
+                    </View>
                   </View>
-                  <Switch
-                    disabled={saving}
-                    value={current.included}
-                    onValueChange={(included) => {
-                      void saveField(current, { included });
-                    }}
-                    trackColor={{ true: colors.positive }}
-                  />
-                </View>
-                <View style={styles.fieldRow}>
-                  <SymbolView name="calendar" size={18} tintColor={colors.secondary} />
-                  <View style={styles.fieldText}>
-                    <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                      {t('reportingDate')}
+                  {error || saveError ? (
+                    <Text style={[styles.error, { color: colors.danger }]}>
+                      {error ?? saveError}
                     </Text>
-                    <Text style={[styles.fieldValue, { color: colors.secondary }]}>
-                      {current.effectiveDate}
-                    </Text>
-                  </View>
-                </View>
-              </View>
-              {error || saveError ? (
-                <Text style={[styles.error, { color: colors.danger }]}>{error ?? saveError}</Text>
-              ) : null}
-            </ScrollView>
+                  ) : null}
+                </ScrollView>
+              </Animated.View>
+            </View>
             <View style={styles.actions}>
               <Pressable
                 accessibilityRole="button"
@@ -331,7 +491,7 @@ export default function ReviewScreen() {
                 {t('changingTheCategoryConfirmsItAutomatically')}
               </Text>
             </View>
-          </Animated.View>
+          </>
         ) : null}
       </View>
       <CategoryPickerSheet
@@ -412,10 +572,11 @@ function OptionSheet({
   onClose: () => void;
   onSelect: (value: string) => void;
 }) {
+  const reduceMotion = useReducedMotion();
   return (
     <Modal
       visible={visible}
-      animationType="slide"
+      animationType={reduceMotion ? 'none' : 'slide'}
       presentationStyle="pageSheet"
       onRequestClose={onClose}
     >
@@ -480,8 +641,24 @@ const styles = StyleSheet.create({
     overflow: 'hidden',
   },
   progressFill: { height: '100%', borderRadius: 2 },
-  card: { flex: 1 },
-  reviewContent: { paddingHorizontal: 20, paddingTop: 34, paddingBottom: 24 },
+  cardStack: { flex: 1, marginHorizontal: 16, marginTop: 32, marginBottom: 10 },
+  queuedCard: {
+    ...StyleSheet.absoluteFill,
+    borderRadius: 26,
+    borderWidth: 1,
+    transformOrigin: 'top',
+  },
+  card: { flex: 1, borderRadius: 26, borderWidth: 1, overflow: 'hidden' },
+  completionSeal: { width: 128, height: 128, alignItems: 'center', justifyContent: 'center' },
+  completionRing: {
+    position: 'absolute',
+    width: 108,
+    height: 108,
+    borderRadius: 54,
+    borderWidth: 2,
+  },
+  completionRay: { position: 'absolute', width: 4, height: 14, borderRadius: 2 },
+  reviewContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24 },
   date: { fontSize: 13, textAlign: 'center', writingDirection: 'auto' },
   merchant: {
     marginTop: 16,
@@ -501,7 +678,7 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   description: { marginTop: 8, fontSize: 14, textAlign: 'center', writingDirection: 'auto' },
-  fields: { marginTop: 36, borderRadius: 16, paddingHorizontal: 14 },
+  fields: { marginTop: 24, borderRadius: 16, paddingHorizontal: 14 },
   fieldRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12 },
   disabled: { opacity: 0.55 },
   fieldText: { flex: 1 },

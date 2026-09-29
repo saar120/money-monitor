@@ -1,0 +1,92 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Charts, month gestures, detail navigation, and filtered row continuity
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn: Home
+- assertVisible:
+    id: home-primary-money
+- swipe:
+    start: 25%, 24%
+    end: 75%, 24%
+    duration: 600
+- assertVisible: 'Aug 2026'
+- swipe:
+    start: 75%, 24%
+    end: 25%, 24%
+    duration: 600
+- assertVisible: 'Sep 2026'
+- swipe:
+    start: 22%, 45%
+    end: 76%, 45%
+    duration: 4500
+- tapOn: 'Explore, tab, 3 of 4'
+- tapOn:
+    id: explore-card-monthly
+- tapOn: '1Y'
+- tapOn: '3M'
+- tapOn: '6M'
+- tapOn:
+    id: monthly-bar-2026-04
+- assertVisible: 'April 2026'
+- swipe:
+    start: 18%, 35%
+    end: 90%, 35%
+    duration: 4500
+- assertVisible: 'September 2026'
+- scrollUntilVisible:
+    element:
+      text: 'Dining'
+    direction: DOWN
+- tapOn:
+    text: 'Dining'
+- assertVisible:
+    id: category-detail
+- swipe:
+    start: 25%, 20%
+    end: 75%, 20%
+    duration: 600
+- assertVisible: 'Aug 2026'
+- tapOn:
+    point: 7%, 10%
+- assertVisible:
+    id: monthly-comparison-screen
+- assertVisible: 'Dining'
+- tapOn:
+    point: 7%, 10%
+- scrollUntilVisible:
+    element:
+      id: explore-card-net-worth
+    direction: DOWN
+- tapOn:
+    id: explore-card-net-worth
+- tapOn: '3M'
+- tapOn: '1Y'
+- swipe:
+    start: 22%, 35%
+    end: 75%, 35%
+    duration: 4500
+- assertVisible:
+    id: net-worth-live-date
+- assertVisible:
+    id: net-worth-live-amount
+- tapOn:
+    point: 7%, 10%
+- tapOn: 'Activity, tab, 2 of 4'
+- tapOn:
+    id: activity-open-filters
+- tapOn: '.*Category.*'
+- tapOn: 'Dining'
+- tapOn: 'Done'
+- assertVisible:
+    id: transaction-txn-wolt
+- assertNotVisible:
+    id: transaction-txn-salary
+- tapOn:
+    id: activity-open-filters
+- tapOn: 'Reset all filters'
+- tapOn: 'Done'
+- assertVisible:
+    id: transaction-txn-salary

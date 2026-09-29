@@ -6,14 +6,21 @@ import ts from 'typescript';
 import * as money from './money.ts';
 import { categoryLabel, t } from './translations.ts';
 
-type Element = { type: string; props: Record<string, any> };
-const element = (type: string, props: Record<string, any>, ...children: any[]): Element => ({
+type Element = {
+  type: unknown;
+  props: Record<string, unknown> & {
+    children: Element[];
+    style?: Record<string, unknown>;
+    onSelect: (index: number) => void;
+  };
+};
+const element = (type: unknown, props: Element['props'], ...children: Element[]): Element => ({
   type,
   props: { ...props, children: children.flat(Infinity).filter(Boolean) },
 });
 const flatten = (node: Element): Element[] => [
   node,
-  ...(node.props.children ?? []).filter((child: any) => typeof child === 'object').flatMap(flatten),
+  ...(node.props.children ?? []).filter((child) => typeof child === 'object').flatMap(flatten),
 ];
 const style = (node: Element) => Object.assign({}, ...[node.props.style].flat());
 const text = (node: Element) => node.props.children.join('');
@@ -28,10 +35,20 @@ function render(
     new URL('../app/(tabs)/explore/monthly-comparison.tsx', import.meta.url),
     'utf8',
   );
-  const module = { exports: {} as { replay: (props: any) => Element } };
+  const module = { exports: {} as { replay: (props: Record<string, unknown>) => Element } };
   let state = 0;
-  const mocks: Record<string, any> = {
+  const mocks: Record<string, unknown> = {
     'expo-router': {},
+    'react-native-reanimated': {
+      __esModule: true,
+      default: { View: 'View', createAnimatedComponent: (component: unknown) => component },
+      useReducedMotion: () => false,
+      LinearTransition: { duration: () => ({}) },
+      FadeIn: { duration: () => ({}) },
+      FadeOut: { duration: () => ({}) },
+    },
+    '@/Motion': { ChartScrubber: 'View', MotionRow: 'View', RollingAmount: 'Text' },
+    '@/DetailLink': { DetailLink: 'Pressable' },
     'expo-symbols': { SymbolView: 'SymbolView' },
     react: { useState: (initial: unknown) => [state++ === 0 ? range : initial, () => {}] },
     'react-native': {
@@ -94,10 +111,15 @@ test('all ranges plot every spending category in its own color, not a gray remai
     const segments = bar.props.children.map((node: Element) => style(node));
     assert.ok(
       Math.abs(
-        segments.reduce((sum: number, segment: any) => sum + parseFloat(segment.height), 0) - 100,
+        segments.reduce(
+          (sum: number, segment: Record<string, string>) => sum + parseFloat(segment.height),
+          0,
+        ) - 100,
       ) < 0.001,
     );
-    assert.ok(!segments.some((segment: any) => segment.backgroundColor === '#gray'));
+    assert.ok(
+      !segments.some((segment: Record<string, string>) => segment.backgroundColor === '#gray'),
+    );
     assert.equal(style(bar).height, (819 / money.niceChartMaximum(819, 5)) * 168);
     for (const category of categories) {
       const row = nodes.find((node) => node.props.testID === `monthly-category-${category.name}`)!;
@@ -128,4 +150,15 @@ test('months with only credits do not invent spending bars', () => {
   )!;
   const bar = month.props.children[0];
   assert.equal(style(bar).height, 0);
+});
+
+test('selected and unselected bars share the exact zero baseline and width', () => {
+  const nodes = render('6', [{ name: 'Rent', spent: 500, color: '#orange' }]);
+  for (const id of ['monthly-bar-2026-11', 'monthly-bar-2026-12']) {
+    const month = nodes.find((node) => node.props.testID === id)!;
+    const bar = month.props.children[0];
+    assert.ok(!style(bar).transform, `${id} must not translate or scale financial geometry`);
+    assert.ok(!bar.props.layout, 'bar geometry must settle with its axis, without delayed layout');
+    assert.ok(!month.props.entering, 'range changes must not hide labels while bars enter');
+  }
 });

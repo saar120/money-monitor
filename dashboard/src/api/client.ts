@@ -123,6 +123,13 @@ export interface OneZeroImportPreview {
   matchedExistingCount: number;
   ambiguousCount: number;
   invalidRows: OneZeroImportInvalidRow[];
+  rows: Array<{
+    row: number;
+    date: string;
+    description: string;
+    amount: number;
+    status: 'new' | 'duplicate' | 'matched' | 'ambiguous';
+  }>;
 }
 
 export interface OneZeroImportCommitResult {
@@ -198,6 +205,7 @@ export interface TransactionFilters {
   category?: string;
   status?: string;
   needsReview?: boolean;
+  ignored?: boolean;
   minAmount?: number;
   maxAmount?: number;
   search?: string;
@@ -216,6 +224,16 @@ export function getTransactions(filters: TransactionFilters = {}) {
   });
   return request<{ transactions: Transaction[]; pagination: Pagination }>(
     `/transactions?${params}`,
+  );
+}
+
+export function getTransaction(id: number) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}`);
+}
+
+export function getActivitySince(since: string) {
+  return request<{ transactions: number; spent: number }>(
+    `/transactions/since?${new URLSearchParams({ since })}`,
   );
 }
 
@@ -326,6 +344,7 @@ export function saveRecurringPaymentDecision(
 
 export interface SummaryItem {
   category?: string;
+  day?: string;
   month?: string;
   accountId?: number;
   displayName?: string;
@@ -343,9 +362,19 @@ export interface CashflowItem {
 }
 
 export interface SummaryFilters {
-  groupBy?: 'category' | 'month' | 'account' | 'expense-owner' | 'cashflow' | 'cashflow-detail';
+  groupBy?:
+    | 'category'
+    | 'spending-category'
+    | 'spending-category-month'
+    | 'day'
+    | 'month'
+    | 'account'
+    | 'expense-owner'
+    | 'cashflow'
+    | 'cashflow-detail';
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
+  category?: string;
   startDate?: string;
   endDate?: string;
   expensesOnly?: boolean;
@@ -620,6 +649,7 @@ export interface SessionMessage {
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
+  chart?: AdvisorChart;
 }
 
 export interface SessionData {
@@ -648,12 +678,19 @@ export function deleteChatSession(id: string) {
 export interface ChatMessage {
   role: 'user' | 'assistant';
   content: string;
+  chart?: AdvisorChart;
 }
 
-export interface ChatStreamEvent {
-  type: 'text_delta' | 'status' | 'result' | 'error';
-  text: string;
+export interface AdvisorChart {
+  kind: 'bar' | 'line';
+  title: string;
+  currencyCode: 'ILS';
+  points: { label: string; value: number }[];
 }
+
+export type ChatStreamEvent =
+  | { type: 'text_delta' | 'status' | 'result' | 'error'; text: string }
+  | { type: 'chart'; chart: AdvisorChart };
 
 export async function* aiChatStream(
   sessionId: string,
@@ -692,8 +729,13 @@ export async function* aiChatStream(
         if (line.startsWith('event: ')) {
           currentEvent = line.slice(7);
         } else if (line.startsWith('data: ') && currentEvent) {
-          const data = JSON.parse(line.slice(6)) as { text: string };
-          yield { type: currentEvent as ChatStreamEvent['type'], text: data.text };
+          const data = JSON.parse(line.slice(6)) as { text?: string; chart?: AdvisorChart };
+          if (currentEvent === 'chart' && data.chart) yield { type: 'chart', chart: data.chart };
+          else if (currentEvent !== 'chart' && typeof data.text === 'string')
+            yield {
+              type: currentEvent as 'text_delta' | 'status' | 'result' | 'error',
+              text: data.text,
+            };
           currentEvent = '';
         }
       }
@@ -1185,14 +1227,18 @@ export function getBudgets() {
   return request<{ budgets: Budget[] }>('/budgets');
 }
 
-export function getBudgetProgress(monthlyView = false) {
-  const params = monthlyView ? '?monthlyView=true' : '';
-  return request<{ progress: BudgetProgress[] }>(`/budgets/progress${params}`);
+export function getBudgetProgress(monthlyView = false, referenceDate?: string) {
+  const params = new URLSearchParams();
+  if (monthlyView) params.set('monthlyView', 'true');
+  if (referenceDate) params.set('referenceDate', referenceDate);
+  return request<{ progress: BudgetProgress[] }>(`/budgets/progress?${params}`);
 }
 
-export function getSingleBudgetProgress(id: number, monthlyView = false) {
-  const params = monthlyView ? '?monthlyView=true' : '';
-  return request<BudgetProgress>(`/budgets/${id}/progress${params}`);
+export function getSingleBudgetProgress(id: number, monthlyView = false, referenceDate?: string) {
+  const params = new URLSearchParams();
+  if (monthlyView) params.set('monthlyView', 'true');
+  if (referenceDate) params.set('referenceDate', referenceDate);
+  return request<BudgetProgress>(`/budgets/${id}/progress?${params}`);
 }
 
 export function createBudget(data: {

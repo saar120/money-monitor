@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
+import { useMediaQuery } from '@vueuse/core';
 import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -26,11 +27,13 @@ import PeriodSelector from './PeriodSelector.vue';
 use([CanvasRenderer, SankeyChart, TooltipComponent]);
 
 const { textPrimary, bgPrimary, separator } = useChartTheme();
+const reduceMotion = useMediaQuery('(prefers-reduced-motion: reduce)');
 
 const route = useRoute();
 const props = defineProps<{
   ownerType?: OwnerType;
   ownerMemberId?: number;
+  month?: string;
 }>();
 
 // ── Period selector ──
@@ -43,7 +46,16 @@ const qStart = route.query.startDate as string | undefined;
 const initialMonth = qStart
   ? qStart.slice(0, 7) // "2026-01-01" → "2026-01"
   : `${now.getFullYear()}-${String(now.getMonth() + 1).padStart(2, '0')}`;
-const selectedMonth = ref(initialMonth);
+const selectedMonth = ref(props.month ?? initialMonth);
+watch(
+  () => props.month,
+  (month) => {
+    if (month) {
+      selectedMonth.value = month;
+      periodMode.value = 'month';
+    }
+  },
+);
 
 function israelDate(d: Date): string {
   return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
@@ -216,6 +228,7 @@ function buildOption(interactive: boolean) {
   }
 
   return {
+    animation: !reduceMotion.value,
     tooltip: {
       trigger: 'item' as const,
       triggerOn: 'mousemove' as const,

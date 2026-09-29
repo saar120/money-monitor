@@ -1,0 +1,68 @@
+appId: com.saaramrani.moneymonitor.mobile
+name: Chart range resets and sheet gesture interruptions
+---
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: review-heavy
+- tapOn: Home
+- scrollUntilVisible:
+    element:
+      id: start-review
+    direction: DOWN
+- tapOn:
+    id: start-review
+- tapOn:
+    id: review-category
+- assertVisible:
+    id: category-picker-sheet
+- swipe:
+    start: 50%, 46%
+    end: 50%, 49%
+    duration: 800
+- assertVisible:
+    id: category-picker-sheet
+- swipe:
+    start: 50%, 46%
+    end: 50%, 75%
+    duration: 600
+- assertNotVisible:
+    id: category-picker-sheet
+- assertVisible: '8 transactions to review'
+- tapOn:
+    id: review-category
+- tapOn: Cancel
+- tapOn:
+    id: review-category
+- tapOn:
+    id: category-option-Dining
+- assertVisible: '7 transactions to review'
+- launchApp:
+    clearState: true
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
+- tapOn: 'Explore, tab, 3 of 4'
+- tapOn:
+    id: explore-card-net-worth
+- swipe:
+    start: 80%, 45%
+    end: 15%, 45%
+    duration: 600
+- assertNotVisible:
+    text: Now
+    id: net-worth-live-date
+- repeat:
+    times: 3
+    commands:
+      - tapOn:
+          text: '3M'
+          waitToSettleTimeoutMs: 0
+      - tapOn:
+          text: '1Y'
+          waitToSettleTimeoutMs: 0
+- assertVisible:
+    text: Now
+    id: net-worth-live-date
+- assertVisible:
+    text: '₪1,284,500'
+    id: net-worth-live-amount

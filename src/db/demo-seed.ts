@@ -1,4 +1,4 @@
-import { randomUUID } from 'node:crypto';
+import { createHash, randomUUID } from 'node:crypto';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import type { Database as BetterSqlite3Database } from 'better-sqlite3';
 import * as schema from './schema.js';
@@ -417,6 +417,7 @@ export function seedDemoData(
       { description: 'הלוואה - משכנתא', category: 'loans', amount: -3200, accountIdx: 0 },
       { description: 'קרן השתלמות', category: 'savings', amount: -1500, accountIdx: 0 },
       { description: 'העברה לחסכון', category: 'transfer', amount: -2000, accountIdx: 0 },
+      { description: 'YouTube Premium', category: 'subscriptions', amount: -29.9, accountIdx: 2 },
     ];
 
     const now = new Date();
@@ -495,6 +496,46 @@ export function seedDemoData(
       }
     }
 
+    const reviewDate = formatDate(daysAgo(2));
+    db.insert(schema.transactions)
+      .values({
+        accountId: accountIds[2],
+        date: reviewDate,
+        processedDate: reviewDate,
+        originalAmount: -219.9,
+        originalCurrency: 'ILS',
+        chargedAmount: -219.9,
+        description: 'קנייה לבדיקה',
+        type: 'normal',
+        status: 'completed',
+        expenseOwnerType: 'member',
+        expenseOwnerMemberId: demoMemberIds[2],
+        ownerSource: 'account',
+        ownerConfidence: 1,
+        needsReview: true,
+        reviewReason: 'Low confidence categorization',
+        confidence: 0.55,
+        hash: randomUUID(),
+      })
+      .run();
+
+    db.insert(schema.budgets)
+      .values([
+        { name: 'Groceries', amount: 2500, period: 'monthly', categoryNames: '["groceries"]' },
+        { name: 'Dining out', amount: 1200, period: 'monthly', categoryNames: '["restaurants"]' },
+        { name: 'Insurance', amount: 6000, period: 'yearly', categoryNames: '["insurance"]' },
+      ])
+      .run();
+
+    db.insert(schema.recurringPaymentDecisions)
+      .values({
+        accountId: accountIds[2],
+        currencyCode: 'ILS',
+        merchantKey: createHash('sha256').update('youtube premium').digest('hex'),
+        decision: 'include',
+      })
+      .run();
+
     // Backfill FTS index for demo transactions
     sqlite.exec(`
       INSERT OR IGNORE INTO transactions_fts(rowid, description, memo)
@@ -570,12 +611,10 @@ export function seedDemoData(
       .values({
         assetId: realEstate.id,
         name: 'שווי נכס',
-        type: 'property',
+        type: 'balance',
         currency: 'ILS',
-        quantity: 1,
+        quantity: 1150000,
         costBasis: 950000,
-        lastPrice: 1150000,
-        lastPriceDate: formatDate(daysAgo(30)),
       })
       .run();
 

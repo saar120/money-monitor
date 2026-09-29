@@ -8,6 +8,7 @@ import {
 } from '../api/client';
 import { Plus, Trash2, MessageSquare } from 'lucide-vue-next';
 import { Button } from '@/components/ui/button';
+import { language, t } from '@/lib/language';
 
 const emit = defineEmits<{
   (e: 'select', session: SessionMeta): void;
@@ -56,10 +57,13 @@ function formatDate(iso: string): string {
   const now = new Date();
   const diffMs = now.getTime() - d.getTime();
   const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
-  if (diffDays === 0) return 'Today';
-  if (diffDays === 1) return 'Yesterday';
-  if (diffDays < 7) return `${diffDays}d ago`;
-  return d.toLocaleDateString('en-IL', { month: 'short', day: 'numeric' });
+  if (diffDays === 0) return t('today');
+  if (diffDays === 1) return t('yesterday');
+  if (diffDays < 7) return `${diffDays} ${language.value === 'he' ? 'ימים' : 'days ago'}`;
+  return d.toLocaleDateString(language.value === 'he' ? 'he-IL' : 'en-IL', {
+    month: 'short',
+    day: 'numeric',
+  });
 }
 
 onMounted(loadSessions);
@@ -78,7 +82,7 @@ defineExpose({ loadSessions });
         @click="handleNewChat"
       >
         <Plus class="h-4 w-4" />
-        New Chat
+        {{ t('newChat') }}
       </Button>
     </div>
 
@@ -112,7 +116,7 @@ defineExpose({ loadSessions });
         v-if="sessions.length === 0"
         class="px-3 py-6 text-center text-text-secondary text-[11px]"
       >
-        No conversations yet
+        {{ t('noConversations') }}
       </div>
     </div>
   </div>

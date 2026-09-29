@@ -31,6 +31,57 @@ import {
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Badge } from '@/components/ui/badge';
 import { Check, Plus, Trash2, X } from 'lucide-vue-next';
+import { language } from '@/lib/language';
+
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        title: 'משק בית',
+        hint: 'בני בית, כללי הוצאות משותפות ושיוך עסקאות',
+        members: 'בני בית',
+        loading: 'טוען את הגדרות משק הבית…',
+        inactive: 'לא פעיל',
+        rename: 'שינוי שם',
+        newMember: 'שם בן בית חדש',
+        addMember: 'הוספת בן בית',
+        ownership: 'כללי שיוך',
+        anyDescription: 'כל תיאור',
+        anyCategory: 'כל קטגוריה',
+        anyMember: 'כל בן בית',
+        ruleName: 'שם הכלל',
+        descriptionContains: 'התיאור מכיל',
+        anyAccount: 'כל חשבון',
+        target: 'שיוך לעסקה',
+        together: 'ביחד',
+        unassigned: 'ללא שיוך',
+        addRule: 'הוספת כלל',
+        applyRules: 'החלת הכללים',
+        applying: 'מחיל…',
+      }
+    : {
+        title: 'Household',
+        hint: 'Members, shared expense rules, and ownership defaults',
+        members: 'Members',
+        loading: 'Loading household settings…',
+        inactive: 'Inactive',
+        rename: 'Rename',
+        newMember: 'New member name',
+        addMember: 'Add member',
+        ownership: 'Ownership rules',
+        anyDescription: 'Any description',
+        anyCategory: 'Any category',
+        anyMember: 'Any member',
+        ruleName: 'Rule name',
+        descriptionContains: 'Description contains',
+        anyAccount: 'Any account',
+        target: 'Target owner',
+        together: 'Together',
+        unassigned: 'Unassigned',
+        addRule: 'Add rule',
+        applyRules: 'Apply rules',
+        applying: 'Applying…',
+      },
+);
 
 const members = ref<Member[]>([]);
 const accounts = ref<Account[]>([]);
@@ -57,7 +108,9 @@ const newRule = ref({
 
 const activeMembers = computed(() => members.value.filter((m) => m.isActive));
 const memberName = (id: number | null) =>
-  id == null ? 'Any member' : (members.value.find((m) => m.id === id)?.name ?? 'Unknown member');
+  id == null
+    ? copy.value.anyMember
+    : (members.value.find((m) => m.id === id)?.name ?? copy.value.anyMember);
 
 function ownerTypeFromValue(value: string): OwnerType {
   return value.startsWith('member:') ? 'member' : (value as OwnerType);
@@ -68,8 +121,8 @@ function ownerMemberIdFromValue(value: string): number | null {
 }
 
 function targetLabel(type: OwnerType, memberId: number | null): string {
-  if (type === 'shared') return 'Together';
-  if (type === 'unassigned') return 'Unassigned';
+  if (type === 'shared') return copy.value.together;
+  if (type === 'unassigned') return copy.value.unassigned;
   return memberName(memberId);
 }
 
@@ -200,13 +253,10 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsGroup
-    title="Household"
-    description="Members, shared expense rules, and ownership defaults"
-  >
-    <SettingsRow label="Members" vertical>
+  <SettingsGroup :title="copy.title" :description="copy.hint">
+    <SettingsRow :label="copy.members" vertical>
       <div v-if="loading" class="text-[13px] text-text-secondary">
-        Loading household settings...
+        {{ copy.loading }}
       </div>
       <div v-else class="space-y-2">
         <div
@@ -230,9 +280,11 @@ onMounted(load);
           </template>
           <template v-else>
             <span class="text-[13px] font-medium">{{ member.name }}</span>
-            <Badge v-if="!member.isActive" variant="secondary" class="text-[10px]">Inactive</Badge>
+            <Badge v-if="!member.isActive" variant="secondary" class="text-[10px]">{{
+              copy.inactive
+            }}</Badge>
             <Button size="sm" variant="secondary" class="ml-auto" @click="startEdit(member)">
-              Rename
+              {{ copy.rename }}
             </Button>
             <Button
               v-if="member.isActive"
@@ -246,16 +298,16 @@ onMounted(load);
           </template>
         </div>
         <div class="flex gap-2">
-          <Input v-model="newMemberName" placeholder="New member name" class="max-w-64" />
+          <Input v-model="newMemberName" :placeholder="copy.newMember" class="max-w-64" />
           <Button size="sm" :disabled="saving || !newMemberName.trim()" @click="addMember">
             <Plus class="h-4 w-4 mr-1" />
-            Add Member
+            {{ copy.addMember }}
           </Button>
         </div>
       </div>
     </SettingsRow>
 
-    <SettingsRow label="Ownership Rules" vertical>
+    <SettingsRow :label="copy.ownership" vertical>
       <div class="space-y-2">
         <div
           v-for="rule in rules"
@@ -266,8 +318,8 @@ onMounted(load);
           <div class="min-w-0">
             <div class="text-[13px] font-medium truncate">{{ rule.name }}</div>
             <div class="text-[11px] text-text-secondary truncate">
-              {{ rule.descriptionContains || 'Any description' }} ·
-              {{ rule.categoryName || 'Any category' }} · {{ memberName(rule.accountMemberId) }} →
+              {{ rule.descriptionContains || copy.anyDescription }} ·
+              {{ rule.categoryName || copy.anyCategory }} · {{ memberName(rule.accountMemberId) }} →
               {{ targetLabel(rule.targetOwnerType, rule.targetOwnerMemberId) }}
             </div>
           </div>
@@ -283,21 +335,21 @@ onMounted(load);
         </div>
 
         <div class="grid grid-cols-2 gap-2 rounded-lg border border-separator/60 p-3">
-          <Input v-model="newRule.name" placeholder="Rule name" />
-          <Input v-model="newRule.descriptionContains" placeholder="Description contains" />
+          <Input v-model="newRule.name" :placeholder="copy.ruleName" />
+          <Input v-model="newRule.descriptionContains" :placeholder="copy.descriptionContains" />
           <Select v-model="newRule.accountId">
-            <SelectTrigger><SelectValue placeholder="Any account" /></SelectTrigger>
+            <SelectTrigger><SelectValue :placeholder="copy.anyAccount" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any account</SelectItem>
+              <SelectItem value="any">{{ copy.anyAccount }}</SelectItem>
               <SelectItem v-for="account in accounts" :key="account.id" :value="String(account.id)">
                 {{ account.displayName }}
               </SelectItem>
             </SelectContent>
           </Select>
           <Select v-model="newRule.accountMemberId">
-            <SelectTrigger><SelectValue placeholder="Any account member" /></SelectTrigger>
+            <SelectTrigger><SelectValue :placeholder="copy.anyMember" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any account member</SelectItem>
+              <SelectItem value="any">{{ copy.anyMember }}</SelectItem>
               <SelectItem
                 v-for="member in activeMembers"
                 :key="member.id"
@@ -308,9 +360,9 @@ onMounted(load);
             </SelectContent>
           </Select>
           <Select v-model="newRule.categoryName">
-            <SelectTrigger><SelectValue placeholder="Any category" /></SelectTrigger>
+            <SelectTrigger><SelectValue :placeholder="copy.anyCategory" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="any">Any category</SelectItem>
+              <SelectItem value="any">{{ copy.anyCategory }}</SelectItem>
               <SelectItem
                 v-for="category in categories"
                 :key="category.name"
@@ -321,10 +373,10 @@ onMounted(load);
             </SelectContent>
           </Select>
           <Select v-model="newRule.target">
-            <SelectTrigger><SelectValue placeholder="Target owner" /></SelectTrigger>
+            <SelectTrigger><SelectValue :placeholder="copy.target" /></SelectTrigger>
             <SelectContent>
-              <SelectItem value="shared">Together</SelectItem>
-              <SelectItem value="unassigned">Unassigned</SelectItem>
+              <SelectItem value="shared">{{ copy.together }}</SelectItem>
+              <SelectItem value="unassigned">{{ copy.unassigned }}</SelectItem>
               <SelectItem
                 v-for="member in activeMembers"
                 :key="member.id"
@@ -336,10 +388,10 @@ onMounted(load);
           </Select>
           <div class="col-span-2 flex items-center gap-2">
             <Button size="sm" :disabled="saving || !newRule.name.trim()" @click="addRule">
-              Add Rule
+              {{ copy.addRule }}
             </Button>
             <Button size="sm" variant="secondary" :disabled="applying" @click="applyRules">
-              {{ applying ? 'Applying...' : 'Apply Rules' }}
+              {{ applying ? copy.applying : copy.applyRules }}
             </Button>
             <span v-if="message" class="text-[13px] text-success">{{ message }}</span>
             <span v-if="error" class="text-[13px] text-destructive">{{ error }}</span>

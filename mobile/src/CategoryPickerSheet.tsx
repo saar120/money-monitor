@@ -76,6 +76,7 @@ export function CategoryPickerSheet({
   const [query, setQuery] = useState('');
   const hiddenOffset = Math.max(height * 0.6, 440);
   const translateY = useSharedValue(hiddenOffset);
+  const dragOrigin = useSharedValue(0);
   const backdropOpacity = useSharedValue(0);
   const closing = useSharedValue(false);
   const visibleCategories = useMemo(() => {
@@ -96,6 +97,14 @@ export function CategoryPickerSheet({
     }
     return () => Keyboard.dismiss();
   }, [backdropOpacity, closing, hiddenOffset, translateY, visible]);
+
+  useEffect(
+    () => () => {
+      cancelAnimation(translateY);
+      cancelAnimation(backdropOpacity);
+    },
+    [backdropOpacity, translateY],
+  );
 
   const present = useCallback(() => {
     cancelAnimation(translateY);
@@ -121,8 +130,8 @@ export function CategoryPickerSheet({
         return;
       }
       backdropOpacity.value = withTiming(0, { duration: 140 });
-      translateY.value = withTiming(hiddenOffset, { duration: 180 }, () => {
-        runOnJS(completion)();
+      translateY.value = withTiming(hiddenOffset, { duration: 180 }, (finished) => {
+        if (finished) runOnJS(completion)();
       });
     },
     [backdropOpacity, closing, hiddenOffset, reduceMotion, translateY],
@@ -134,14 +143,25 @@ export function CategoryPickerSheet({
       Gesture.Pan()
         .activeOffsetY(6)
         .failOffsetX([-24, 24])
+        .onStart(() => {
+          if (closing.value) return;
+          cancelAnimation(translateY);
+          dragOrigin.value = translateY.value;
+        })
         .onUpdate((event) => {
-          translateY.value = Math.max(0, event.translationY);
+          if (!closing.value) translateY.value = Math.max(0, dragOrigin.value + event.translationY);
         })
         .onEnd((event) => {
-          if (event.translationY > 72 || event.velocityY > 900) runOnJS(close)();
-          else translateY.value = withSpring(0, sheetSpring);
+          if (closing.value) return;
+          if (translateY.value > 72 || event.velocityY > 900) runOnJS(close)();
+          else translateY.value = reduceMotion ? 0 : withSpring(0, sheetSpring);
+        })
+        .onFinalize((_event, success) => {
+          if (!success && !closing.value) {
+            translateY.value = reduceMotion ? 0 : withSpring(0, sheetSpring);
+          }
         }),
-    [close, translateY],
+    [close, closing, dragOrigin, reduceMotion, translateY],
   );
 
   const sheetStyle = useAnimatedStyle(() => ({

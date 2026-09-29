@@ -7,13 +7,15 @@ import {
   type SessionMeta,
   type SessionMessage,
   type ChatMessage,
+  type AdvisorChart,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { Card } from '@/components/ui/card';
 import { SendHorizontal, Bot, User, PanelLeftClose, PanelLeft } from 'lucide-vue-next';
 import MarkdownContent from './MarkdownContent.vue';
 import ChatSidebar from './ChatSidebar.vue';
+import AdvisorChartView from './AdvisorChartView.vue';
+import { t, type LanguageLabel } from '@/lib/language';
 
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
@@ -31,12 +33,12 @@ const isWaiting = computed(() => {
   return !last || last.role !== 'assistant' || !last.content;
 });
 
-const suggestions = [
-  'What are my top spending categories this month?',
-  'How much did I spend on food this month vs last month?',
-  'How can I save money based on my spending?',
-  'What are my recurring subscriptions?',
-  'Categorize my uncategorized transactions',
+const suggestionKeys: LanguageLabel[] = [
+  'askTopCategories',
+  'askFoodComparison',
+  'askSavings',
+  'askSubscriptions',
+  'askCategorize',
 ];
 
 async function scrollToBottom(instant = false) {
@@ -56,6 +58,7 @@ async function selectSession(session: SessionMeta) {
     messages.value = data.messages.map((m: SessionMessage) => ({
       role: m.role,
       content: m.content,
+      chart: m.chart,
     }));
     await scrollToBottom(true);
   } catch {
@@ -80,8 +83,6 @@ async function sendMessage(text?: string) {
   const messageText = text ?? input.value.trim();
   if (!messageText) return;
 
-  const sessionId = await ensureSession();
-
   messages.value.push({ role: 'user', content: messageText });
   input.value = '';
   loading.value = true;
@@ -89,9 +90,11 @@ async function sendMessage(text?: string) {
   await scrollToBottom();
 
   try {
+    const sessionId = await ensureSession();
     // Accumulate response without showing partial text —
     // the typing indicator stays visible until the full message is ready.
     let accumulated = '';
+    let chart: AdvisorChart | undefined;
 
     for await (const event of aiChatStream(sessionId, messageText)) {
       if (event.type === 'text_delta') {
@@ -100,13 +103,15 @@ async function sendMessage(text?: string) {
         status.value = event.text;
       } else if (event.type === 'result') {
         accumulated = event.text;
+      } else if (event.type === 'chart') {
+        chart = event.chart;
       } else if (event.type === 'error') {
         throw new Error(event.text);
       }
     }
 
-    if (accumulated) {
-      messages.value.push({ role: 'assistant', content: accumulated });
+    if (accumulated || chart) {
+      messages.value.push({ role: 'assistant', content: accumulated, chart });
     }
     // Refresh sidebar to update title/timestamp
     sidebarRef.value?.loadSessions();
@@ -131,17 +136,17 @@ function handleKeydown(e: KeyboardEvent) {
 </script>
 
 <template>
-  <div class="relative flex-1 min-h-0 animate-fade-in-up">
-    <div class="absolute inset-0 flex gap-4">
+  <div class="advisor-workspace relative flex-1 min-h-0">
+    <div class="absolute inset-0 flex gap-0">
       <!-- Sidebar -->
-      <Card v-if="sidebarOpen" class="w-64 flex-shrink-0 overflow-hidden">
+      <div v-if="sidebarOpen" class="advisor-history w-64 flex-shrink-0 overflow-hidden">
         <ChatSidebar
           ref="sidebarRef"
           :active-session-id="activeSession?.id"
           @select="selectSession"
           @new-chat="handleNewChat"
         />
-      </Card>
+      </div>
 
       <!-- Chat area -->
       <div class="flex-1 flex flex-col min-w-0">
@@ -152,7 +157,7 @@ function handleKeydown(e: KeyboardEvent) {
           </Button>
         </div>
 
-        <Card class="flex-1 overflow-hidden flex flex-col min-h-0">
+        <div class="advisor-conversation flex-1 overflow-hidden flex flex-col min-h-0">
           <div ref="chatContainer" class="chat-messages flex-1 overflow-y-auto p-5 space-y-5">
             <!-- Empty state with suggestions -->
             <div
@@ -165,22 +170,21 @@ function handleKeydown(e: KeyboardEvent) {
                 <Bot class="h-8 w-8 text-primary" />
               </div>
               <p class="text-text-primary text-[15px] font-medium mb-1">
-                Ask me anything about your finances
+                {{ t('askAboutFinances') }}
               </p>
               <p class="text-text-secondary text-[12px] mb-6 max-w-sm">
-                I can analyze spending, track subscriptions, categorize transactions, and give
-                budget advice
+                {{ t('advisorDescription') }}
               </p>
               <div class="flex flex-wrap gap-2 justify-center max-w-lg">
                 <Button
-                  v-for="s in suggestions"
-                  :key="s"
+                  v-for="key in suggestionKeys"
+                  :key="key"
                   variant="secondary"
                   size="sm"
                   class="rounded-xl border-separator/70 text-primary hover:bg-primary/8 text-[12px] h-auto py-2 px-4 shadow-[var(--shadow-sm)]"
-                  @click="sendMessage(s)"
+                  @click="sendMessage(t(key))"
                 >
-                  {{ s }}
+                  {{ t(key) }}
                 </Button>
               </div>
             </div>
@@ -207,11 +211,14 @@ function handleKeydown(e: KeyboardEvent) {
                     : 'bg-bg-secondary text-text-primary rounded-2xl rounded-bl-md'
                 "
               >
-                <MarkdownContent
-                  v-if="msg.role === 'assistant'"
-                  :content="msg.content"
-                  :streaming="loading && i === messages.length - 1"
-                />
+                <template v-if="msg.role === 'assistant'">
+                  <MarkdownContent
+                    v-if="msg.content"
+                    :content="msg.content"
+                    :streaming="loading && i === messages.length - 1"
+                  />
+                  <AdvisorChartView v-if="msg.chart" :chart="msg.chart" />
+                </template>
                 <div v-else class="whitespace-pre-wrap">{{ msg.content }}</div>
               </div>
 
@@ -259,32 +266,57 @@ function handleKeydown(e: KeyboardEvent) {
 
           <!-- Input area -->
           <div
-            class="border-t border-separator/50 p-4 flex gap-3 items-end flex-shrink-0 bg-bg-primary"
+            class="advisor-composer border-t border-separator/50 p-4 flex-shrink-0 bg-bg-primary"
           >
-            <Textarea
-              v-model="input"
-              placeholder="Ask about your finances... (Enter to send, Shift+Enter for newline)"
-              class="resize-none min-h-[44px] max-h-32 text-[13px]"
-              rows="1"
-              :disabled="loading"
-              @keydown="handleKeydown"
-            />
-            <Button
-              size="icon"
-              :disabled="loading || !input.trim()"
-              class="flex-shrink-0"
-              @click="sendMessage()"
-            >
-              <SendHorizontal class="h-4 w-4" />
-            </Button>
+            <div class="advisor-composer-inner flex gap-3 items-end">
+              <Textarea
+                v-model="input"
+                :placeholder="t('advisorPlaceholder')"
+                class="resize-none min-h-[44px] max-h-32 text-[13px]"
+                rows="1"
+                :disabled="loading"
+                @keydown="handleKeydown"
+              />
+              <Button
+                size="icon"
+                :disabled="loading || !input.trim()"
+                class="flex-shrink-0"
+                @click="sendMessage()"
+              >
+                <SendHorizontal class="h-4 w-4" />
+              </Button>
+            </div>
           </div>
-        </Card>
+        </div>
       </div>
     </div>
   </div>
 </template>
 
 <style scoped>
+.advisor-history {
+  border-inline-end: 1px solid var(--separator);
+  background: var(--bg-secondary);
+}
+.advisor-conversation {
+  background: var(--bg-primary);
+}
+.chat-messages > * {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+.advisor-composer-inner {
+  width: min(100%, 760px);
+  margin-inline: auto;
+}
+.advisor-composer {
+  padding-block: 16px;
+}
+@media (max-width: 900px) {
+  .advisor-history {
+    width: 210px;
+  }
+}
 .typing-dot {
   animation: typing-pulse 1.4s ease-in-out infinite;
 }

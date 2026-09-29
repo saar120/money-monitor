@@ -1,412 +1,517 @@
 <script setup lang="ts">
-import { onMounted, computed, ref, watch } from 'vue';
+import { useMonthSwipe } from '@/composables/useMonthSwipe';
+import { categoryMotionName } from '@/lib/cardMotion';
+import AnimatedAmount from './AnimatedAmount.vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
-import { PieChart, BarChart } from 'echarts/charts';
-import { TooltipComponent, LegendComponent, GridComponent } from 'echarts/components';
+import { LineChart } from 'echarts/charts';
+import { GridComponent, TooltipComponent } from 'echarts/components';
 import VChart from 'vue-echarts';
-import { useDocumentVisibility, useThrottleFn } from '@vueuse/core';
-import { getSummary, getAccounts, getMembers, type OwnerType } from '../api/client';
-import CashflowSankey from './CashflowSankey.vue';
-import { useApi } from '../composables/useApi';
-import { useSseConnection } from '../composables/useSseConnection';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
-import { Badge } from '@/components/ui/badge';
+import { AlertCircle, ArrowRight, CheckCircle2, Receipt, RefreshCw } from 'lucide-vue-next';
 import {
-  Select,
-  SelectContent,
-  SelectItem,
-  SelectTrigger,
-  SelectValue,
-} from '@/components/ui/select';
-import { Skeleton } from '@/components/ui/skeleton';
-import { formatCurrency } from '@/lib/format';
+  getAccounts,
+  getActivitySince,
+  getBudgetProgress,
+  getCashflowSummary,
+  getCategories,
+  getMembers,
+  getNeedsReviewCount,
+  getNetWorth,
+  getSummary,
+  type Account,
+  type BudgetProgress,
+  type CashflowItem,
+  type Category,
+  type Member,
+  type OwnerType,
+  type SummaryItem,
+} from '../api/client';
+import { formatCompactCurrency, formatCurrency } from '@/lib/format';
+import { useSseConnection } from '@/composables/useSseConnection';
 import { useChartTheme } from '@/composables/useChartTheme';
-import { BarChart3 } from 'lucide-vue-next';
+import { isValidMonth } from '@/lib/month';
+import { t } from '@/lib/language';
+import MonthControl from './MonthControl.vue';
 
-use([CanvasRenderer, PieChart, BarChart, TooltipComponent, LegendComponent, GridComponent]);
-
-const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
-
+use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
 const route = useRoute();
+const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+const selectedMonth = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
+const displayedMonth = ref(selectedMonth.value);
+const scrubIndex = ref<number | null>(null);
+const chart = ref<InstanceType<typeof VChart> | null>(null);
+const monthSwipe = useMonthSwipe(selectedMonth);
 const selectedOwner = ref('all');
+const loading = ref(true);
+const error = ref('');
+const categories = ref<Category[]>([]);
+const accounts = ref<Account[]>([]);
+const members = ref<Member[]>([]);
+const categorySpending = ref<SummaryItem[]>([]);
+const previousSpending = ref<SummaryItem[]>([]);
+const dailySpending = ref<SummaryItem[]>([]);
+const cashflow = ref<CashflowItem | null>(null);
+const budget = ref<BudgetProgress | null>(null);
+const reviewCount = ref(0);
+const sinceLastVisit = ref<{ transactions: number; spent: number } | null>(null);
+const visitStartedAt = new Date().toISOString();
+const savedVisit = localStorage.getItem('money-monitor:last-home-visit');
+const lastVisit = savedVisit && Number.isFinite(Date.parse(savedVisit)) ? savedVisit : null;
+const netWorth = ref<number | null>(null);
+const motionPreference = window.matchMedia('(prefers-reduced-motion: reduce)');
+const reduceMotion = ref(motionPreference.matches);
+const syncMotion = () => {
+  reduceMotion.value = motionPreference.matches;
+};
+let requestId = 0;
 
-function israelDate(d: Date): string {
-  return d.toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
+function monthRange(month: string, throughDay?: number) {
+  const [year, number] = month.split('-').map(Number) as [number, number];
+  const end = Math.min(throughDay ?? Infinity, new Date(Date.UTC(year, number, 0)).getUTCDate());
+  return { startDate: `${month}-01`, endDate: `${month}-${String(end).padStart(2, '0')}` };
 }
-const [y, m] = israelDate(new Date()).split('-').map(Number) as [number, number];
-// Allow URL query params to override dates (used by Puppeteer screenshots)
-const thisMonthStart = (route.query.startDate as string) ?? `${y}-${String(m).padStart(2, '0')}-01`;
-const thisMonthEnd = (route.query.endDate as string) ?? israelDate(new Date(y, m, 0));
-const lastMonthStart = israelDate(new Date(y, m - 2, 1));
-const lastMonthEnd = israelDate(new Date(y, m - 1, 0));
-
-const accountsData = useApi(() => getAccounts());
-const membersData = useApi(() => getMembers());
+const elapsedDays = computed(() =>
+  selectedMonth.value === today.slice(0, 7)
+    ? Number(today.slice(8, 10))
+    : Number(monthRange(selectedMonth.value).endDate.slice(-2)),
+);
+const range = computed(() => monthRange(selectedMonth.value, elapsedDays.value));
+const previousRange = computed(() => {
+  const [year, month] = selectedMonth.value.split('-').map(Number) as [number, number];
+  return monthRange(
+    new Date(Date.UTC(year, month - 2, 1)).toISOString().slice(0, 7),
+    elapsedDays.value,
+  );
+});
 const ownerFilter = computed(() => ({
   ownerType: selectedOwner.value.startsWith('member:')
     ? ('member' as OwnerType)
-    : selectedOwner.value !== 'all'
-      ? (selectedOwner.value as OwnerType)
-      : undefined,
+    : selectedOwner.value === 'all'
+      ? undefined
+      : (selectedOwner.value as OwnerType),
   ownerMemberId: selectedOwner.value.startsWith('member:')
-    ? Number(selectedOwner.value.slice('member:'.length))
+    ? Number(selectedOwner.value.slice(7))
     : undefined,
 }));
-const categorySummary = useApi(() =>
-  getSummary({
-    groupBy: 'category',
-    startDate: thisMonthStart,
-    endDate: thisMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const monthlySummary = useApi(() =>
-  getSummary({ groupBy: 'month', expensesOnly: true, ...ownerFilter.value }),
-);
-const accountSummary = useApi(() =>
-  getSummary({
-    groupBy: 'account',
-    startDate: thisMonthStart,
-    endDate: thisMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const lastMonthSummary = useApi(() =>
-  getSummary({
-    groupBy: 'category',
-    startDate: lastMonthStart,
-    endDate: lastMonthEnd,
-    expensesOnly: true,
-    ...ownerFilter.value,
-  }),
-);
-const bankAccounts = computed(() =>
-  (accountsData.data.value?.accounts ?? []).filter((a) => a.accountType === 'bank'),
-);
+const value = <T,>(result: PromiseSettledResult<T>): T | null =>
+  result.status === 'fulfilled' ? result.value : null;
 
-function refreshAll() {
-  accountsData.execute();
-  membersData.execute();
-  categorySummary.execute();
-  monthlySummary.execute();
-  accountSummary.execute();
-  lastMonthSummary.execute();
+async function refresh() {
+  const currentRequest = ++requestId;
+  loading.value = true;
+  error.value = '';
+  const results = await Promise.allSettled([
+    getSummary({ groupBy: 'spending-category', ...range.value, ...ownerFilter.value }),
+    getSummary({
+      groupBy: 'day',
+      ...previousRange.value,
+      expensesOnly: true,
+      ...ownerFilter.value,
+    }),
+    getSummary({ groupBy: 'day', ...range.value, expensesOnly: true, ...ownerFilter.value }),
+    getCashflowSummary({ ...range.value, ...ownerFilter.value }),
+    getCategories(),
+    getAccounts(),
+    getMembers(),
+    getBudgetProgress(true, `${selectedMonth.value}-01`),
+    getNeedsReviewCount(),
+    getNetWorth(),
+  ] as const);
+  if (currentRequest !== requestId) return;
+  categorySpending.value = value(results[0])?.summary ?? [];
+  previousSpending.value = value(results[1])?.summary ?? [];
+  dailySpending.value = value(results[2])?.summary ?? [];
+  displayedMonth.value = selectedMonth.value;
+  scrubIndex.value = null;
+  cashflow.value = value(results[3])?.summary[0] ?? null;
+  categories.value = value(results[4])?.categories ?? [];
+  accounts.value = value(results[5])?.accounts ?? [];
+  members.value = value(results[6])?.members ?? [];
+  budget.value =
+    value(results[7])?.progress.find((item) => item.budget.period === 'monthly') ?? null;
+  reviewCount.value = value(results[8])?.count ?? 0;
+  netWorth.value = value(results[9])?.total ?? null;
+  if (results.slice(0, 4).some((result) => result.status === 'rejected')) {
+    error.value = 'Some financial data could not load. Try refreshing.';
+  }
+  loading.value = false;
 }
-
-const throttledRefresh = useThrottleFn(refreshAll, 2000);
-
-// Refresh when scraping completes
-const { connect: connectSse } = useSseConnection({
-  'account-scrape-done': throttledRefresh,
-  'session-completed': throttledRefresh,
+const { connect } = useSseConnection({
+  'account-scrape-done': refresh,
+  'session-completed': refresh,
 });
-
-watch(selectedOwner, () => {
-  refreshAll();
-});
-
-// Refresh when window regains focus (catches any external data changes)
-const visibility = useDocumentVisibility();
-watch(visibility, (state) => {
-  if (state === 'visible') throttledRefresh();
-});
-
+watch([selectedMonth, selectedOwner], refresh);
 onMounted(() => {
-  refreshAll();
-  connectSse();
+  motionPreference.addEventListener('change', syncMotion);
+  refresh();
+  connect();
+  if (lastVisit) {
+    void getActivitySince(lastVisit)
+      .then((result) => {
+        sinceLastVisit.value = result;
+        localStorage.setItem('money-monitor:last-home-visit', visitStartedAt);
+      })
+      .catch(() => undefined);
+  } else {
+    localStorage.setItem('money-monitor:last-home-visit', visitStartedAt);
+  }
 });
+onUnmounted(() => motionPreference.removeEventListener('change', syncMotion));
 
-const thisMonthTotal = computed(
-  () => categorySummary.data.value?.summary.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0,
+const totalSpent = computed(() =>
+  Math.abs(dailySpending.value.reduce((sum, item) => sum + item.totalAmount, 0)),
 );
-const lastMonthTotal = computed(
-  () => lastMonthSummary.data.value?.summary.reduce((sum, s) => sum + s.totalAmount, 0) ?? 0,
+const previousSpent = computed(() =>
+  Math.abs(previousSpending.value.reduce((sum, item) => sum + item.totalAmount, 0)),
 );
-
-const chartColors = [
-  '#007AFF',
-  '#34C759',
-  '#FF9500',
-  '#AF52DE',
-  '#FF2D55',
-  '#5AC8FA',
-  '#FFCC00',
-  '#FF3B30',
-  '#30D158',
-  '#64D2FF',
-];
-
-const doughnutOption = computed(() => {
-  const items = categorySummary.data.value?.summary ?? [];
-  if (items.length === 0) return null;
+const spendingDelta = computed(() => totalSpent.value - previousSpent.value);
+const income = computed(() => cashflow.value?.income ?? 0);
+const netCashflow = computed(() => income.value - (cashflow.value?.expense ?? 0));
+const categoryMap = computed(() => new Map(categories.value.map((item) => [item.name, item])));
+const topCategories = computed(() =>
+  [...categorySpending.value]
+    .filter((item) => item.totalAmount < 0)
+    .sort((a, b) => a.totalAmount - b.totalAmount)
+    .slice(0, 5),
+);
+const staleAccounts = computed(() =>
+  accounts.value.filter((account) => {
+    if (!account.isActive || !account.stalenessDays) return false;
+    if (!account.lastScrapedAt) return true;
+    return Date.now() - Date.parse(account.lastScrapedAt) > account.stalenessDays * 86_400_000;
+  }),
+);
+const budgetNeedsAttention = computed(
+  () => budget.value && (budget.value.isAlertTriggered || budget.value.isOverBudget),
+);
+const chartOption = computed(() => {
+  const end = Number(
+    monthRange(
+      displayedMonth.value,
+      displayedMonth.value === today.slice(0, 7) ? Number(today.slice(8, 10)) : undefined,
+    ).endDate.slice(-2),
+  );
+  const daily = new Map(dailySpending.value.map((item) => [item.day, Math.abs(item.totalAmount)]));
+  let cumulative = 0;
+  const days = Array.from({ length: end }, (_, index) => {
+    cumulative += daily.get(`${displayedMonth.value}-${String(index + 1).padStart(2, '0')}`) ?? 0;
+    return cumulative;
+  });
   return {
-    tooltip: {
-      trigger: 'item' as const,
-      backgroundColor: bgPrimary.value,
-      borderColor: separator.value,
-      borderWidth: 1,
-      textStyle: { color: textPrimary.value, fontSize: 12 },
-      formatter(params: any) {
-        return `${params.name}<br/><b>${formatCurrency(params.value)}</b> (${params.percent}%)`;
-      },
-    },
-    legend: {
-      bottom: 0,
-      textStyle: { color: textSecondary.value, fontSize: 11 },
-      itemWidth: 8,
-      itemHeight: 8,
-      itemGap: 8,
-      icon: 'circle',
-    },
-    series: [
-      {
-        type: 'pie',
-        radius: ['50%', '72%'],
-        center: ['50%', '38%'],
-        padAngle: 2,
-        itemStyle: { borderRadius: 6 },
-        label: { show: false },
-        data: items.map((s, i) => ({
-          name: s.category ?? 'uncategorized',
-          value: Math.abs(s.totalAmount),
-          itemStyle: { color: chartColors[i % chartColors.length] },
-        })),
-      },
-    ],
-  };
-});
-
-const barOption = computed(() => {
-  const items = (monthlySummary.data.value?.summary ?? []).slice(0, 12).reverse();
-  if (items.length === 0) return null;
-  return {
+    animation: !reduceMotion.value,
+    animationDurationUpdate: 520,
+    animationEasingUpdate: 'cubicOut' as const,
+    grid: { left: 8, right: 14, top: 18, bottom: 24, containLabel: true },
     tooltip: {
       trigger: 'axis' as const,
+      axisPointer: { type: 'line' as const, snap: true, lineStyle: { color: '#0B5DDD', width: 2 } },
       backgroundColor: bgPrimary.value,
       borderColor: separator.value,
-      borderWidth: 1,
-      textStyle: { color: textPrimary.value, fontSize: 12 },
-      formatter(params: any) {
-        const p = Array.isArray(params) ? params[0] : params;
-        return `${p.axisValueLabel}<br/><b>${formatCurrency(p.value)}</b>`;
-      },
+      textStyle: { color: textPrimary.value },
+      formatter: (items: Array<{ axisValue: string; value: number }>) =>
+        `${displayedMonth.value}-${items[0]?.axisValue}<br/><b>${formatCurrency(items[0]?.value ?? 0)}</b>`,
     },
-    grid: { left: 12, right: 12, top: 10, bottom: 10, containLabel: true },
     xAxis: {
       type: 'category' as const,
-      data: items.map((s) => s.month ?? ''),
-      axisLabel: { color: textSecondary.value, fontSize: 11 },
+      boundaryGap: false,
+      data: Array.from({ length: end }, (_, index) => String(index + 1).padStart(2, '0')),
+      axisLabel: { color: textSecondary.value, interval: 6 },
       axisLine: { lineStyle: { color: separator.value } },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value' as const,
-      axisLabel: { color: textSecondary.value, fontSize: 11 },
+      axisLabel: {
+        color: textSecondary.value,
+        formatter: (amount: number) => formatCompactCurrency(amount),
+      },
       splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
     },
     series: [
       {
-        type: 'bar',
-        data: items.map((s) => Math.abs(s.totalAmount)),
-        itemStyle: { color: '#007AFF', borderRadius: [6, 6, 0, 0] },
+        id: 'daily-spending',
+        type: 'line' as const,
+        data: days,
+        smooth: 0.25,
+        showSymbol: false,
+        symbolSize: 12,
+        emphasis: { scale: 1.4, itemStyle: { shadowBlur: 18, shadowColor: '#0B5DDD' } },
+        lineStyle: { color: '#0B5DDD', width: 3 },
+        areaStyle: { color: 'rgba(11, 93, 221, 0.11)' },
       },
     ],
   };
 });
+const scrubAmount = computed(() =>
+  scrubIndex.value == null
+    ? totalSpent.value
+    : (chartOption.value.series[0]!.data[scrubIndex.value] ?? 0),
+);
+const scrubDate = computed(() =>
+  scrubIndex.value == null
+    ? t('totalSpending')
+    : `${displayedMonth.value}-${String(scrubIndex.value + 1).padStart(2, '0')}`,
+);
+function pointAt(event: { axesInfo?: Array<{ value: number | string }> }) {
+  const value = Number(event.axesInfo?.[0]?.value);
+  if (Number.isFinite(value))
+    scrubIndex.value = Math.max(0, Math.min(chartOption.value.series[0]!.data.length - 1, value));
+}
+function scrubWithKeyboard(event: KeyboardEvent) {
+  if (!['ArrowLeft', 'ArrowRight', 'Home', 'End', 'Escape'].includes(event.key)) return;
+  event.preventDefault();
+  const last = chartOption.value.series[0]!.data.length - 1;
+  if (event.key === 'Escape') {
+    scrubIndex.value = null;
+    chart.value?.dispatchAction({ type: 'hideTip' });
+    return;
+  }
+  scrubIndex.value =
+    event.key === 'Home'
+      ? 0
+      : event.key === 'End'
+        ? last
+        : Math.max(
+            0,
+            Math.min(last, (scrubIndex.value ?? last) + (event.key === 'ArrowLeft' ? -1 : 1)),
+          );
+  chart.value?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: scrubIndex.value });
+}
+function activityLink(category?: string) {
+  return {
+    path: '/transactions',
+    query: { month: selectedMonth.value, ...(category ? { category } : {}) },
+  };
+}
+function categoryLink(category: string) {
+  return {
+    path: `/explore/category/${encodeURIComponent(category)}`,
+    query: { month: selectedMonth.value },
+  };
+}
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="ledger-page home-page month-swipe-surface" v-bind="monthSwipe" :aria-busy="loading">
     <Teleport to="#toolbar-actions">
-      <Select v-model="selectedOwner">
-        <SelectTrigger class="w-40 h-8">
-          <SelectValue placeholder="All owners" />
-        </SelectTrigger>
-        <SelectContent>
-          <SelectItem value="all">All owners</SelectItem>
-          <SelectItem value="shared">Together</SelectItem>
-          <SelectItem
-            v-for="member in membersData.data.value?.members.filter((m) => m.isActive) ?? []"
+      <div class="toolbar-controls">
+        <MonthControl v-model="selectedMonth" />
+        <select v-model="selectedOwner" :aria-label="t('everyone')" class="ledger-select">
+          <option value="all">{{ t('everyone') }}</option>
+          <option value="shared">{{ t('together') }}</option>
+          <option
+            v-for="member in members.filter((item) => item.isActive)"
             :key="member.id"
             :value="`member:${member.id}`"
           >
             {{ member.name }}
-          </SelectItem>
-          <SelectItem value="unassigned">Unassigned</SelectItem>
-        </SelectContent>
-      </Select>
+          </option>
+          <option value="unassigned">{{ t('unassigned') }}</option>
+        </select>
+        <button
+          class="toolbar-icon-button"
+          :aria-label="t('refresh')"
+          :title="t('refresh')"
+          @click="refresh"
+        >
+          <RefreshCw :size="16" />
+        </button>
+      </div>
     </Teleport>
-    <div class="flex-1 min-h-0 overflow-y-auto space-y-5">
-      <!-- Bank Balances + Spending — compact top row -->
-      <div class="grid grid-cols-[auto_1fr] gap-4 items-end">
-        <h2 v-if="bankAccounts.length > 0" class="text-[13px] font-semibold text-text-secondary">
-          Bank Balances
-        </h2>
-        <div v-else-if="accountsData.loading.value" />
-        <div v-else />
-        <h2 class="text-[13px] font-semibold text-text-secondary">Spending</h2>
-      </div>
-      <!-- All cards in one flat flex row so they share the same height -->
-      <div class="flex gap-3 items-stretch">
-        <!-- Bank Balances -->
-        <template v-if="bankAccounts.length > 0">
-          <Card v-for="account in bankAccounts" :key="account.id" class="min-w-[180px]">
-            <CardContent class="py-4 px-5">
-              <p class="text-[12px] font-medium truncate text-text-secondary">
-                {{ account.displayName }}
-              </p>
-              <p v-if="account.balance != null" class="text-[17px] font-semibold mt-1 tabular-nums">
-                {{ formatCurrency(account.balance) }}
-              </p>
-              <p v-else class="text-[12px] text-text-tertiary mt-1">No balance data</p>
-            </CardContent>
-          </Card>
-        </template>
-        <Skeleton v-else-if="accountsData.loading.value" class="h-16 w-48 rounded-xl" />
-
-        <!-- Spacer between sections -->
-        <div class="w-4 flex-shrink-0" />
-
-        <!-- Spending -->
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">This Month</p>
-            <div v-if="categorySummary.loading.value"><Skeleton class="h-6 w-24 mt-1" /></div>
-            <p v-else class="text-[18px] font-semibold mt-1 tabular-nums">
-              {{ formatCurrency(thisMonthTotal) }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Last Month</p>
-            <div v-if="lastMonthSummary.loading.value"><Skeleton class="h-6 w-24 mt-1" /></div>
-            <p v-else class="text-[18px] font-semibold mt-1 tabular-nums">
-              {{ formatCurrency(lastMonthTotal) }}
-            </p>
-          </CardContent>
-        </Card>
-        <Card class="flex-1">
-          <CardContent class="py-4 px-5">
-            <p class="text-[12px] text-text-secondary">Difference</p>
-            <div v-if="categorySummary.loading.value || lastMonthSummary.loading.value">
-              <Skeleton class="h-6 w-24 mt-1" />
+    <div v-if="error" class="ledger-notice" role="alert">
+      {{ error }} <button @click="refresh">{{ t('retry') }}</button>
+    </div>
+    <div class="home-grid">
+      <section class="home-main">
+        <div class="home-hero">
+          <div class="home-hero-top">
+            <span>{{ t('netCashFlow') }}</span
+            ><RouterLink :to="activityLink()"
+              >{{ t('viewActivity') }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <p class="home-total" aria-live="polite">
+            <AnimatedAmount :value="netCashflow" />
+          </p>
+          <div class="home-chart-heading">
+            <h2 class="home-chart-title">{{ scrubDate }}</h2>
+            <strong dir="ltr"
+              ><AnimatedAmount :value="scrubAmount" :animate="scrubIndex == null"
+            /></strong>
+          </div>
+          <div
+            class="home-chart"
+            data-scrub
+            tabindex="0"
+            role="slider"
+            :aria-label="t('totalSpending')"
+            :aria-valuemin="1"
+            :aria-valuemax="chartOption.series[0]!.data.length"
+            :aria-valuenow="(scrubIndex ?? chartOption.series[0]!.data.length - 1) + 1"
+            :aria-valuetext="`${scrubDate}: ${formatCurrency(scrubAmount)}`"
+            @keydown="scrubWithKeyboard"
+          >
+            <div v-if="!loading && !dailySpending.length" class="home-chart-empty">
+              <Receipt :size="28" />
+              <span>{{ t('noPostedSpendingYet') }}</span>
             </div>
-            <template v-else>
-              <p
-                class="text-[18px] font-semibold mt-1 tabular-nums"
-                :class="
-                  Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal)
-                    ? 'text-destructive'
-                    : 'text-success'
-                "
-              >
-                {{ formatCurrency(Math.abs(Math.abs(thisMonthTotal) - Math.abs(lastMonthTotal))) }}
-              </p>
-              <Badge
-                v-if="Math.abs(thisMonthTotal) > Math.abs(lastMonthTotal)"
-                variant="destructive"
-                class="mt-1.5 text-[10px]"
-                >↑ More than last month</Badge
-              >
-              <Badge v-else class="mt-1.5 text-[10px] bg-success/10 text-success"
-                >↓ Less than last month</Badge
-              >
-            </template>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Charts Row — constrained height -->
-      <div id="overview-charts" class="grid grid-cols-2 gap-4">
-        <Card id="chart-spending-by-category">
-          <CardHeader class="py-4 px-5">
-            <CardTitle class="text-[15px]">Spending by Category</CardTitle>
-          </CardHeader>
-          <CardContent class="px-5 pb-4 pt-0">
-            <div class="h-[300px]">
-              <VChart
-                v-if="doughnutOption"
-                :option="doughnutOption"
-                autoresize
-                class="h-full w-full"
-              />
-              <Skeleton
-                v-else-if="categorySummary.loading.value"
-                class="h-full w-full rounded-lg"
-              />
-              <div v-else class="flex flex-col items-center justify-center text-center">
-                <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
-                <p class="text-text-secondary text-[13px]">No data yet</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-
-        <Card id="chart-monthly-trend">
-          <CardHeader class="py-4 px-5">
-            <CardTitle class="text-[15px]">Monthly Trend</CardTitle>
-          </CardHeader>
-          <CardContent class="px-5 pb-4 pt-0">
-            <div class="h-[240px]">
-              <VChart v-if="barOption" :option="barOption" autoresize class="h-full w-full" />
-              <Skeleton v-else-if="monthlySummary.loading.value" class="h-full w-full rounded-lg" />
-              <div v-else class="flex flex-col items-center justify-center h-full text-center">
-                <BarChart3 class="h-8 w-8 text-text-tertiary mb-2" />
-                <p class="text-text-secondary text-[13px]">No data yet</p>
-              </div>
-            </div>
-          </CardContent>
-        </Card>
-      </div>
-
-      <!-- Cashflow Sankey -->
-      <CashflowSankey
-        :owner-type="ownerFilter.ownerType"
-        :owner-member-id="ownerFilter.ownerMemberId"
-      />
-
-      <!-- Per Account -->
-      <div v-if="accountSummary.loading.value" class="space-y-2">
-        <h2 class="text-[13px] font-semibold text-text-secondary">Per Account (This Month)</h2>
-        <div
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))"
-        >
-          <Skeleton v-for="i in 3" :key="i" class="h-16 w-full rounded-xl" />
+            <VChart
+              v-else
+              ref="chart"
+              :option="chartOption"
+              autoresize
+              class="h-full w-full"
+              @update-axis-pointer="pointAt"
+              @globalout="scrubIndex = null"
+            />
+          </div>
+          <p class="home-comparison" :class="spendingDelta > 0 ? 'is-warning' : 'is-positive'">
+            {{
+              spendingDelta === 0
+                ? t('sameAsLastMonth')
+                : `${formatCurrency(Math.abs(spendingDelta))} ${spendingDelta > 0 ? t('more') : t('less')} ${t('thanLastMonth')}`
+            }}
+          </p>
+          <p v-if="loading || dailySpending.length" class="home-chart-hint">
+            {{ t('dailyChartHint') }}
+          </p>
         </div>
-      </div>
-      <div v-else-if="accountSummary.data.value">
-        <h2 class="text-[13px] font-semibold text-text-secondary mb-3">Per Account (This Month)</h2>
-        <p
-          v-if="accountSummary.data.value.summary.length === 0"
-          class="text-text-tertiary text-[13px]"
-        >
-          No account data yet
-        </p>
-        <div
-          class="grid gap-3"
-          style="grid-template-columns: repeat(auto-fill, minmax(180px, 1fr))"
-        >
-          <Card v-for="acc in accountSummary.data.value.summary" :key="acc.accountId">
-            <CardContent class="py-4 px-5">
-              <p class="text-[12px] font-medium truncate text-text-secondary">
-                {{ acc.displayName }}
-              </p>
-              <p class="text-[17px] font-semibold mt-1 tabular-nums">
-                {{ formatCurrency(acc.totalAmount) }}
-              </p>
-              <p class="text-[11px] text-text-tertiary mt-0.5">
-                {{ acc.transactionCount }} transactions
-              </p>
-            </CardContent>
-          </Card>
+        <div class="home-stats">
+          <div>
+            <span>{{ t('postedIncome') }}</span
+            ><strong>{{ loading ? '—' : formatCurrency(income) }}</strong>
+          </div>
+          <div>
+            <span>{{ t('totalSpending') }}</span
+            ><strong><AnimatedAmount :value="totalSpent" /></strong>
+          </div>
         </div>
-      </div>
+        <section class="home-section">
+          <div class="ledger-section-heading">
+            <h2>{{ t('whereItWent') }}</h2>
+            <RouterLink :to="{ path: '/explore', query: { month: selectedMonth } }"
+              >{{ t('explore') }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <div class="ledger-list">
+            <RouterLink
+              v-for="item in topCategories"
+              :key="item.category"
+              :to="categoryLink(item.category ?? 'uncategorized')"
+              :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
+              class="category-ledger-row"
+            >
+              <span
+                class="category-dot"
+                :style="{ background: categoryMap.get(item.category ?? '')?.color ?? '#B8C2CC' }"
+              />
+              <span class="category-row-content"
+                ><span>{{ categoryMap.get(item.category ?? '')?.label ?? item.category }}</span
+                ><span class="category-track"
+                  ><span
+                    :style="{
+                      width: `${Math.min(100, (Math.abs(item.totalAmount) / Math.max(totalSpent, 1)) * 100)}%`,
+                      background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
+                    }" /></span
+              ></span>
+              <strong>{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
+              ><ArrowRight :size="15" class="row-chevron" />
+            </RouterLink>
+            <p v-if="!loading && !topCategories.length" class="ledger-empty">
+              {{ t('noSpendingThisMonth') }}
+            </p>
+          </div>
+        </section>
+      </section>
+      <aside class="home-rail">
+        <section class="rail-section">
+          <h2>{{ t('needsAttention') }}</h2>
+          <div class="ledger-list attention-list">
+            <RouterLink v-if="sinceLastVisit?.transactions" to="/transactions" class="attention-row"
+              ><RefreshCw :size="18" /><span
+                ><strong>{{ t('sinceLastVisit') }}</strong
+                ><small
+                  >{{ sinceLastVisit.transactions }} {{ t('newTransactions') }} ·
+                  {{ formatCurrency(sinceLastVisit.spent) }} {{ t('spent') }}</small
+                ></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink v-if="reviewCount" to="/insights" class="attention-row"
+              ><AlertCircle :size="18" /><span
+                ><strong>{{ reviewCount }} {{ t('toReview') }}</strong
+                ><small>{{ t('cleanFinancialInbox') }}</small></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink v-if="budgetNeedsAttention" to="/budgets" class="attention-row"
+              ><AlertCircle :size="18" /><span
+                ><strong>{{ t('budgetNeedsAttention') }}</strong
+                ><small>{{ budget?.budget.name }}</small></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink v-if="staleAccounts.length" to="/accounts" class="attention-row"
+              ><AlertCircle :size="18" /><span
+                ><strong>{{ staleAccounts.length }} {{ t('accountsNeedAttention') }}</strong
+                ><small>{{ t('checkLatestSync') }}</small></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <div
+              v-if="
+                !loading &&
+                !sinceLastVisit?.transactions &&
+                !reviewCount &&
+                !budgetNeedsAttention &&
+                !staleAccounts.length
+              "
+              class="attention-row all-clear"
+            >
+              <CheckCircle2 :size="18" /><span
+                ><strong>{{ t('everythingCurrent') }}</strong
+                ><small>{{ t('noActionNeeded') }}</small></span
+              >
+            </div>
+          </div>
+        </section>
+        <section class="rail-section">
+          <div class="ledger-section-heading">
+            <h2>{{ t('budgetPace') }}</h2>
+            <RouterLink :to="{ path: '/budgets', query: { month: selectedMonth } }"
+              >{{ t('budgets') }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <div v-if="budget" class="budget-readout">
+            <strong>{{ Math.round(budget.percentage) }}%</strong
+            ><span
+              >{{ t('ofPlanned') }} {{ formatCurrency(budget.budget.amount) }}
+              {{ t('planned') }}</span
+            >
+            <div class="budget-track">
+              <span :style="{ width: `${Math.min(100, budget.percentage)}%` }" />
+            </div>
+            <p>{{ formatCurrency(Math.max(0, budget.remaining)) }} {{ t('remaining') }}</p>
+          </div>
+          <RouterLink
+            v-else
+            :to="{ path: '/budgets', query: { month: selectedMonth } }"
+            class="rail-empty-link"
+            >{{ t('setBudgetForPace') }} <ArrowRight :size="15"
+          /></RouterLink>
+        </section>
+        <section class="rail-section">
+          <div class="ledger-section-heading">
+            <h2>{{ t('netWorth') }}</h2>
+            <RouterLink to="/net-worth">{{ t('details') }} <ArrowRight :size="15" /></RouterLink>
+          </div>
+          <RouterLink to="/net-worth" class="networth-readout"
+            ><bdi dir="ltr">{{
+              netWorth == null ? '—' : `${netWorth < 0 ? '−' : ''}${formatCurrency(netWorth)}`
+            }}</bdi>
+            <ArrowRight :size="16"
+          /></RouterLink>
+        </section>
+      </aside>
     </div>
   </div>
 </template>

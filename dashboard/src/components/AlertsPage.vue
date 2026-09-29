@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, onMounted } from 'vue';
+import { computed, ref, onMounted } from 'vue';
 import {
   getAlertSettings,
   updateAlertSettings,
@@ -11,20 +11,53 @@ import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Switch } from '@/components/ui/switch';
-import {
-  CheckCircle,
-  AlertCircle,
-  RotateCcw,
-  SendHorizonal,
-  Info,
-  Sparkles,
-} from 'lucide-vue-next';
-const ALERT_HINTS = {
-  postScrape:
-    'Runs after each scrape. An AI agent analyzes new transactions and spending patterns, alerting only when something noteworthy is found.',
-  monthlySummary:
-    "Sent once a month at 9:00 AM on your configured day. An AI agent summarizes last month's finances with contextual insights.",
-} as const;
+import { CheckCircle, AlertCircle, RotateCcw, SendHorizonal } from 'lucide-vue-next';
+import { language } from '@/lib/language';
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        reset: 'איפוס',
+        test: 'בדיקה',
+        sending: 'שולח…',
+        save: 'שמירה',
+        saving: 'שומר…',
+        saved: 'ההגדרות נשמרו',
+        resetDone: 'ברירות המחדל שוחזרו',
+        sent: 'התראת בדיקה נשלחה לטלגרם',
+        enabled: 'התראות פעילות',
+        enabledHint: 'התראות לטלגרם על פעילות שדורשת תשומת לב',
+        activity: 'אחרי סנכרון',
+        activityHint: 'בדיקה של עסקאות חדשות ושינויים חריגים',
+        largeCharge: 'סכום חיוב גדול (₪)',
+        unusual: 'שינוי חריג בהוצאות (%)',
+        errors: 'שגיאות סנכרון',
+        monthly: 'סיכום חודשי',
+        monthlyHint: 'סקירה של החודש הקודם',
+        monthlyEnabled: 'שליחת סיכום',
+        day: 'יום בחודש',
+      }
+    : {
+        reset: 'Reset',
+        test: 'Send test',
+        sending: 'Sending…',
+        save: 'Save',
+        saving: 'Saving…',
+        saved: 'Settings saved',
+        resetDone: 'Defaults restored',
+        sent: 'Test alert sent to Telegram',
+        enabled: 'Alerts enabled',
+        enabledHint: 'Telegram notifications for activity that needs attention',
+        activity: 'After sync',
+        activityHint: 'Review new transactions and unusual changes',
+        largeCharge: 'Large charge (₪)',
+        unusual: 'Unusual spending change (%)',
+        errors: 'Sync errors',
+        monthly: 'Monthly summary',
+        monthlyHint: 'A review of the previous month',
+        monthlyEnabled: 'Send summary',
+        day: 'Day of month',
+      },
+);
 
 const loading = ref(true);
 const saving = ref(false);
@@ -58,7 +91,7 @@ async function save() {
   try {
     const data = await updateAlertSettings(settings.value);
     settings.value = data;
-    success.value = 'Settings saved';
+    success.value = copy.value.saved;
     setTimeout(() => {
       success.value = '';
     }, 3000);
@@ -75,7 +108,7 @@ async function reset() {
   try {
     const data = await resetAlertSettings();
     settings.value = data;
-    success.value = 'Reset to defaults';
+    success.value = copy.value.resetDone;
     setTimeout(() => {
       success.value = '';
     }, 3000);
@@ -91,7 +124,7 @@ async function testAlert() {
   error.value = '';
   try {
     await sendTestAlert();
-    success.value = 'Test alert sent to Telegram';
+    success.value = copy.value.sent;
     setTimeout(() => {
       success.value = '';
     }, 3000);
@@ -104,7 +137,7 @@ async function testAlert() {
 </script>
 
 <template>
-  <div class="max-w-2xl mx-auto space-y-5 overflow-y-auto flex-1">
+  <div class="alerts-page max-w-2xl mx-auto space-y-7 overflow-y-auto flex-1">
     <Teleport to="#toolbar-actions">
       <div class="flex items-center gap-2">
         <div v-if="success" class="flex items-center gap-1.5 text-[13px] text-success">
@@ -117,55 +150,31 @@ async function testAlert() {
         </div>
         <Button variant="secondary" size="sm" :disabled="saving" @click="reset">
           <RotateCcw class="h-3 w-3 mr-1.5" />
-          Reset
+          {{ copy.reset }}
         </Button>
         <Button variant="secondary" size="sm" :disabled="testSending" @click="testAlert">
           <SendHorizonal class="h-3 w-3 mr-1.5" />
-          {{ testSending ? 'Sending…' : 'Test' }}
+          {{ testSending ? copy.sending : copy.test }}
         </Button>
         <Button size="sm" :disabled="saving" @click="save">
-          {{ saving ? 'Saving…' : 'Save' }}
+          {{ saving ? copy.saving : copy.save }}
         </Button>
       </div>
     </Teleport>
 
     <template v-if="!loading">
-      <!-- Master Switch -->
       <SettingsGroup>
-        <SettingsRow
-          label="Enable Alerts"
-          description="Master switch for all Telegram notifications"
-        >
+        <SettingsRow :label="copy.enabled" :description="copy.enabledHint">
           <Switch v-model="settings.enabled" />
         </SettingsRow>
       </SettingsGroup>
 
-      <!-- AI approach description -->
-      <div
-        :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
-        class="flex items-start gap-2.5 text-[12px] text-text-secondary bg-primary/8 border border-primary/15 rounded-lg px-3 py-2.5"
-      >
-        <Sparkles class="h-4 w-4 text-primary flex-shrink-0 mt-0.5" />
-        <span>
-          Alerts are generated by an AI agent that autonomously investigates your financial data —
-          transactions, spending patterns, balances, and net worth. It only sends a message when
-          something genuinely noteworthy is found. The thresholds below guide the agent's analysis.
-        </span>
-      </div>
-
-      <!-- Post-Scrape Analysis -->
       <SettingsGroup
-        title="Post-Scrape Analysis"
-        description="After each scrape, the agent reviews new transactions and spending patterns"
+        :title="copy.activity"
+        :description="copy.activityHint"
         :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
       >
-        <SettingsRow class="bg-bg-secondary/30 text-[11px] text-text-tertiary">
-          <div class="flex items-start gap-1.5">
-            <Info class="h-3 w-3 mt-0.5 flex-shrink-0" />
-            {{ ALERT_HINTS.postScrape }}
-          </div>
-        </SettingsRow>
-        <SettingsRow label="Large charge threshold (₪)">
+        <SettingsRow :label="copy.largeCharge">
           <Input
             v-model.number="settings.largeChargeThreshold"
             type="number"
@@ -173,7 +182,7 @@ async function testAlert() {
             min="0"
           />
         </SettingsRow>
-        <SettingsRow label="Unusual spending threshold (%)">
+        <SettingsRow :label="copy.unusual">
           <Input
             v-model.number="settings.unusualSpendingPercent"
             type="number"
@@ -182,27 +191,20 @@ async function testAlert() {
             max="200"
           />
         </SettingsRow>
-        <SettingsRow label="Report scrape errors">
+        <SettingsRow :label="copy.errors">
           <Switch v-model="settings.reportScrapeErrors" />
         </SettingsRow>
       </SettingsGroup>
 
-      <!-- Monthly Summary -->
       <SettingsGroup
-        title="Monthly Summary"
-        description="A comprehensive AI-generated review of last month's finances"
+        :title="copy.monthly"
+        :description="copy.monthlyHint"
         :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
       >
-        <SettingsRow class="bg-bg-secondary/30 text-[11px] text-text-tertiary">
-          <div class="flex items-start gap-1.5">
-            <Info class="h-3 w-3 mt-0.5 flex-shrink-0" />
-            {{ ALERT_HINTS.monthlySummary }}
-          </div>
-        </SettingsRow>
-        <SettingsRow label="Enabled">
+        <SettingsRow :label="copy.monthlyEnabled">
           <Switch v-model="settings.monthlySummary.enabled" />
         </SettingsRow>
-        <SettingsRow v-if="settings.monthlySummary.enabled" label="Day of month to send">
+        <SettingsRow v-if="settings.monthlySummary.enabled" :label="copy.day">
           <Input
             v-model.number="settings.monthlySummary.dayOfMonth"
             type="number"

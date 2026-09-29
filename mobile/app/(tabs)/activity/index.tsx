@@ -1,3 +1,4 @@
+import Animated, { LinearTransition, useReducedMotion } from 'react-native-reanimated';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { t, useLanguage } from '@/localization';
 import { currentLocale } from '@/locale-state';
@@ -14,6 +15,7 @@ import {
   TextInput,
   useColorScheme,
   View,
+  type ViewProps,
 } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { ActivityFiltersSheet, activityFilterCount } from '@/ActivityFiltersSheet';
@@ -85,6 +87,7 @@ export default function ActivityScreen() {
   return (
     <>
       <SectionList
+        CellRendererComponent={ActivityCell}
         style={{ backgroundColor: colors.background }}
         contentContainerStyle={styles.content}
         contentInsetAdjustmentBehavior="automatic"
@@ -288,6 +291,19 @@ export default function ActivityScreen() {
         visible={filtersVisible}
       />
     </>
+  );
+}
+
+function ActivityCell({ children, ...props }: ViewProps) {
+  const reduced = useReducedMotion();
+  return (
+    <Animated.View
+      {...props}
+      collapsable={false}
+      layout={reduced ? undefined : LinearTransition.duration(180)}
+    >
+      {children}
+    </Animated.View>
   );
 }
 

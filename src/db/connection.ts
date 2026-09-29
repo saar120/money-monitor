@@ -2,7 +2,7 @@ import Database, { type Database as BetterSqlite3Database } from 'better-sqlite3
 import { drizzle, type BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
 import * as schema from './schema.js';
-import { readdirSync, readFileSync } from 'node:fs';
+import { readdirSync, readFileSync, rmSync } from 'node:fs';
 import { fileURLToPath } from 'node:url';
 import { join, dirname } from 'node:path';
 import { dbPath, demoDbPath, usesElectronUserData } from '../paths.js';
@@ -68,6 +68,10 @@ export function isDemoMode(): boolean {
 export function swapToDemo(): void {
   if (_isDemoMode) return;
 
+  // Demo edits are disposable; rebuild the sample data with dates relative to today.
+  for (const suffix of ['', '-wal', '-shm', '-journal']) {
+    rmSync(`${demoDbPath}${suffix}`, { force: true });
+  }
   const newSqlite = new Database(demoDbPath);
   try {
     if (usesElectronUserData) hardenOwnerOnlySqliteFiles(demoDbPath);

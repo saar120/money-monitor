@@ -80,6 +80,10 @@ describe('One Zero import', () => {
       matchedExistingCount: 1,
       duplicateCount: 0,
       ambiguousCount: 0,
+      rows: [
+        { row: 2, description: 'Existing', status: 'matched' },
+        { row: 3, description: 'New', status: 'new' },
+      ],
     });
     expect(commitOneZeroImport(account.id, buffer)).toEqual({
       imported: 1,
@@ -120,6 +124,10 @@ describe('One Zero import', () => {
       matchedExistingCount: 0,
       duplicateCount: 2,
       ambiguousCount: 0,
+      rows: [
+        { row: 2, status: 'duplicate' },
+        { row: 3, status: 'duplicate' },
+      ],
     });
   });
 });

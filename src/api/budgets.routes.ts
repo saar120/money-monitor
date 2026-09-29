@@ -19,7 +19,9 @@ export async function budgetsRoutes(app: FastifyInstance) {
   app.get('/api/budgets/progress', async (request, reply) => {
     const query = validateQuery(budgetProgressQuerySchema, request.query, reply);
     if (!query) return;
-    return reply.send({ progress: getAllBudgetProgress(query.monthlyView ?? false) });
+    return reply.send({
+      progress: getAllBudgetProgress(query.monthlyView ?? false, query.referenceDate),
+    });
   });
 
   app.get<{ Params: { id: string } }>('/api/budgets/:id', async (request, reply) => {
@@ -35,7 +37,7 @@ export async function budgetsRoutes(app: FastifyInstance) {
     if (id === null) return;
     const query = validateQuery(budgetProgressQuerySchema, request.query, reply);
     if (!query) return;
-    const progress = getBudgetProgress(id, query.monthlyView ?? false);
+    const progress = getBudgetProgress(id, query.monthlyView ?? false, query.referenceDate);
     if (!progress) return reply.status(404).send({ error: 'Budget not found' });
     return reply.send(progress);
   });

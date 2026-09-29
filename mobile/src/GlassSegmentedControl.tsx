@@ -1,17 +1,14 @@
 import { Text } from './LocalizedText';
 import { GlassView } from 'expo-glass-effect';
 import { useEffect, useState } from 'react';
-import { Pressable, StyleSheet, useColorScheme } from 'react-native';
+import { I18nManager, Pressable, StyleSheet, useColorScheme } from 'react-native';
 import Animated, {
   useAnimatedStyle,
   useReducedMotion,
   useSharedValue,
-  withSpring,
+  withTiming,
 } from 'react-native-reanimated';
-import { useLanguage } from './localization';
 import { useAppColors } from './theme';
-
-const AnimatedGlassView = Animated.createAnimatedComponent(GlassView);
 
 export function GlassSegmentedControl<T extends string>({
   compact = false,
@@ -27,7 +24,6 @@ export function GlassSegmentedControl<T extends string>({
   value: T;
 }) {
   const colors = useAppColors();
-  const { language } = useLanguage();
   const colorScheme = useColorScheme() === 'dark' ? 'dark' : 'light';
   const reduceMotion = useReducedMotion();
   const [width, setWidth] = useState(0);
@@ -39,13 +35,10 @@ export function GlassSegmentedControl<T extends string>({
   const lensWidth = width > 0 ? (width - 8) / options.length : 0;
 
   useEffect(() => {
-    index.value = reduceMotion
-      ? selectedIndex
-      : withSpring(selectedIndex, { stiffness: 300, damping: 28, mass: 0.82 });
+    index.value = reduceMotion ? selectedIndex : withTiming(selectedIndex, { duration: 160 });
   }, [index, reduceMotion, selectedIndex]);
-
   const lensStyle = useAnimatedStyle(() => ({
-    transform: [{ translateX: index.value * lensWidth * (language === 'he' ? -1 : 1) }],
+    transform: [{ translateX: index.value * lensWidth * (I18nManager.isRTL ? -1 : 1) }],
   }));
 
   return (
@@ -65,9 +58,7 @@ export function GlassSegmentedControl<T extends string>({
       testID={testID}
     >
       {width ? (
-        <AnimatedGlassView
-          colorScheme={colorScheme}
-          glassEffectStyle="clear"
+        <Animated.View
           pointerEvents="none"
           style={[
             styles.lens,
@@ -85,6 +76,8 @@ export function GlassSegmentedControl<T extends string>({
         return (
           <Pressable
             key={option.value}
+            accessibilityRole="button"
+            accessibilityState={{ selected }}
             onPress={() => onChange(option.value)}
             style={({ pressed }) => [styles.button, { opacity: pressed ? 0.64 : 1 }]}
           >

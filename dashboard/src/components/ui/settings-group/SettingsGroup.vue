@@ -11,7 +11,7 @@ const props = defineProps<{
 
 <template>
   <div :class="cn('', props.class)">
-    <div v-if="title" class="px-1 mb-2">
+    <div v-if="title" class="px-1 mb-2 text-start">
       <h3 class="text-[13px] font-semibold text-text-primary">{{ title }}</h3>
       <p v-if="description" class="text-[12px] text-text-secondary mt-0.5">{{ description }}</p>
     </div>

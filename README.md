@@ -72,6 +72,8 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 
 ## Getting Started
 
+Building or running from source requires Node.js 22.22.2 or newer.
+
 ### Option A: Desktop App (recommended)
 
 Download the latest release for your platform, or build from source:

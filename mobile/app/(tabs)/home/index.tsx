@@ -1,13 +1,16 @@
+import { MorphingArea, MorphingLine } from '@/MorphingChart';
+import { DetailLink } from '@/DetailLink';
+import { MonthSwipe, MotionRow, RollingAmount } from '@/Motion';
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { Text } from '@/LocalizedText';
-import { Circle } from '@shopify/react-native-skia';
-import { Area, CartesianChart, Line, useChartPressState } from 'victory-native';
-import { router } from 'expo-router';
+import { Circle, Line as SkiaLine, vec } from '@shopify/react-native-skia';
+import { CartesianChart, useChartPressState } from 'victory-native';
+import { router, type Href } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useEffect, useState } from 'react';
-import { runOnJS, useAnimatedReaction } from 'react-native-reanimated';
+import { useMemo, useState } from 'react';
+import { runOnJS, useAnimatedReaction, useDerivedValue } from 'react-native-reanimated';
 import { Pressable, RefreshControl, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
@@ -20,6 +23,10 @@ import {
   spendingTotal,
 } from '@/money';
 import { useAppColors, type AppColors } from '@/theme';
+
+const trendKeys: ('current' | 'previous')[] = ['current', 'previous'];
+const trendPadding = { top: 14, bottom: 8, left: 2, right: 2 };
+const trendPress = { pan: { activateAfterLongPress: 80 } };
 
 export default function HomeScreen() {
   const colors = useAppColors();
@@ -94,28 +101,31 @@ export default function HomeScreen() {
         </Pressable>
       </View>
 
-      <View style={styles.hero} testID="home-primary-money">
+      <MonthSwipe
+        style={styles.hero}
+        testID="home-primary-money"
+        month={home.monthKey}
+        months={selected.months}
+        onSelect={(month) => {
+          if (!selected.loading) selected.selectMonth(month);
+        }}
+      >
         <View style={styles.heroHeader}>
           <Text maxFontSizeMultiplier={1.3} style={[styles.heroLabel, { color: colors.text }]}>
             {t('totalSpending')}
           </Text>
           <MonthPicker
-            month={selected.month}
+            month={home.monthKey}
             months={selected.months}
             onSelect={selected.selectMonth}
             testID="home-month-picker"
           />
         </View>
-        <Text
-          adjustsFontSizeToFit
-          allowFontScaling={false}
-          minimumFontScale={0.7}
-          numberOfLines={1}
+        <RollingAmount
           style={[styles.heroValue, { color: colors.text }]}
-        >
-          {formatUnsignedMoney(home.spent, home.currencyCode)}
-        </Text>
-      </View>
+          value={formatUnsignedMoney(home.spent, home.currencyCode)}
+        />
+      </MonthSwipe>
 
       <SpendingTrendCard
         colors={colors}
@@ -235,7 +245,7 @@ export default function HomeScreen() {
               }
               colors={colors}
               tone="danger"
-              onPress={() => router.push('/accounts-attention')}
+              href="/accounts-attention"
               testID="account-attention"
             />
           ) : null}
@@ -265,57 +275,57 @@ export default function HomeScreen() {
             const delta = category.spent - category.previous;
             const total = spendingTotal(category.spent, home.currencyCode);
             return (
-              <Pressable
-                accessibilityHint={t('opensSpendingDetails', {
-                  name: categoryLabel(category.name),
-                })}
-                accessibilityRole="button"
-                key={category.name}
-                onPress={() =>
-                  router.push({
+              <MotionRow key={category.name}>
+                <DetailLink
+                  accessibilityLabel={categoryLabel(category.name)}
+                  accessibilityHint={t('opensSpendingDetails', {
+                    name: categoryLabel(category.name),
+                  })}
+                  accessibilityRole="button"
+                  href={{
                     pathname: '/category/[name]',
                     params: { name: category.name, month: home.monthKey },
-                  })
-                }
-                style={({ pressed }) => [styles.categoryRow, { opacity: pressed ? 0.62 : 1 }]}
-                testID={`home-category-${category.name}`}
-              >
-                <View style={styles.categoryTop}>
-                  <Text numberOfLines={1} style={[styles.categoryName, { color: colors.text }]}>
-                    {categoryLabel(category.name)}
-                  </Text>
-                  <Text
-                    allowFontScaling={false}
-                    style={[styles.categoryAmount, { color: colors.text }]}
-                  >
-                    {total.amount} {total.label.toLowerCase()}
-                  </Text>
-                </View>
-                <View style={styles.categoryBottom}>
-                  <View style={[styles.categoryTrack, { backgroundColor: colors.separator }]}>
-                    <View
-                      style={[
-                        styles.categoryFill,
-                        {
-                          backgroundColor: category.color,
-                          width: `${Math.min(1, category.spent / Math.max(1, home.spent)) * 100}%`,
-                        },
-                      ]}
-                    />
+                  }}
+                  style={({ pressed }) => [styles.categoryRow, { opacity: pressed ? 0.62 : 1 }]}
+                  testID={`home-category-${category.name}`}
+                >
+                  <View style={styles.categoryTop}>
+                    <Text numberOfLines={1} style={[styles.categoryName, { color: colors.text }]}>
+                      {categoryLabel(category.name)}
+                    </Text>
+                    <Text
+                      allowFontScaling={false}
+                      style={[styles.categoryAmount, { color: colors.text }]}
+                    >
+                      {total.amount} {total.label.toLowerCase()}
+                    </Text>
                   </View>
-                  <Text
-                    allowFontScaling={false}
-                    style={[
-                      styles.categoryDelta,
-                      { color: delta > 0 ? colors.warning : colors.secondary },
-                    ]}
-                  >
-                    {delta === 0
-                      ? t('noChange')
-                      : formatSpendingComparison(delta, home.currencyCode)}
-                  </Text>
-                </View>
-              </Pressable>
+                  <View style={styles.categoryBottom}>
+                    <View style={[styles.categoryTrack, { backgroundColor: colors.separator }]}>
+                      <View
+                        style={[
+                          styles.categoryFill,
+                          {
+                            backgroundColor: category.color,
+                            width: `${Math.min(1, category.spent / Math.max(1, home.spent)) * 100}%`,
+                          },
+                        ]}
+                      />
+                    </View>
+                    <Text
+                      allowFontScaling={false}
+                      style={[
+                        styles.categoryDelta,
+                        { color: delta > 0 ? colors.warning : colors.secondary },
+                      ]}
+                    >
+                      {delta === 0
+                        ? t('noChange')
+                        : formatSpendingComparison(delta, home.currencyCode)}
+                    </Text>
+                  </View>
+                </DetailLink>
+              </MotionRow>
             );
           })
         ) : (
@@ -378,17 +388,21 @@ function SpendingTrendCard({
 }) {
   const day = Number(currentDate.slice(8, 10));
   const max = Math.max(1, ...trend.flatMap((point) => [point.current, point.previous]));
+  const domain = useMemo(() => ({ y: [0, max * 1.08] as [number, number] }), [max]);
   const { state, isActive } = useChartPressState({
     x: trend.at(-1)?.day ?? day,
     y: { current: trend.at(-1)?.current ?? spent, previous: trend.at(-1)?.previous ?? 0 },
   });
-  const [selectedIndex, setSelectedIndex] = useState(Math.max(0, trend.length - 1));
-
-  useEffect(() => setSelectedIndex(Math.max(0, trend.length - 1)), [trend]);
+  const guideTop = useDerivedValue(() => vec(state.x.position.value, 10));
+  const guideBottom = useDerivedValue(() => vec(state.x.position.value, 160));
+  const [selection, setSelection] = useState<{ trend: typeof trend; index: number } | null>(null);
+  const selectedIndex =
+    selection?.trend === trend ? selection.index : Math.max(0, trend.length - 1);
+  const selectIndex = (index: number) => setSelection({ trend, index });
   useAnimatedReaction(
-    () => state.matchedIndex.value,
+    () => (state.isActive.value ? state.matchedIndex.value : -1),
     (index, previous) => {
-      if (index >= 0 && index !== previous) runOnJS(setSelectedIndex)(index);
+      if (index >= 0 && index !== previous) runOnJS(selectIndex)(index);
     },
   );
 
@@ -414,42 +428,56 @@ function SpendingTrendCard({
         </View>
         {trend.length ? (
           <CartesianChart
-            chartPressConfig={{ pan: { activateAfterLongPress: 80 } }}
+            chartPressConfig={trendPress}
             chartPressState={state}
             data={trend}
-            domain={{ y: [0, max * 1.08] }}
-            padding={{ top: 14, bottom: 8, left: 2, right: 2 }}
+            domain={domain}
+            padding={trendPadding}
             xKey="day"
-            yKeys={['current', 'previous']}
+            yKeys={trendKeys}
           >
             {({ points, chartBounds }) => (
               <>
-                <Area
+                <MorphingArea
                   color="#86B9FF"
-                  curveType="natural"
+                  curveType="linear"
                   opacity={0.42}
                   points={points.current}
                   y0={chartBounds.bottom}
                 />
-                <Line
+                <MorphingLine
                   color="rgba(255,255,255,0.58)"
-                  curveType="natural"
+                  curveType="linear"
                   points={points.previous}
                   strokeWidth={2}
                 />
-                <Line
+                <MorphingLine
                   color="#FFFFFF"
-                  curveType="natural"
+                  curveType="linear"
                   points={points.current}
                   strokeWidth={2.8}
                 />
                 {isActive ? (
-                  <Circle
-                    color="#FFFFFF"
-                    cx={state.x.position}
-                    cy={state.y.current.position}
-                    r={4.5}
-                  />
+                  <>
+                    <SkiaLine
+                      p1={guideTop}
+                      p2={guideBottom}
+                      color="rgba(255,255,255,0.45)"
+                      strokeWidth={1}
+                    />
+                    <Circle
+                      color="rgba(255,255,255,0.2)"
+                      cx={state.x.position}
+                      cy={state.y.current.position}
+                      r={12}
+                    />
+                    <Circle
+                      color="#FFFFFF"
+                      cx={state.x.position}
+                      cy={state.y.current.position}
+                      r={5}
+                    />
+                  </>
                 ) : null}
               </>
             )}
@@ -591,6 +619,7 @@ function AttentionRow({
   colors,
   tone,
   onPress,
+  href,
   testID,
 }: {
   symbol: SFSymbol;
@@ -599,6 +628,7 @@ function AttentionRow({
   colors: AppColors;
   tone?: 'warning' | 'danger';
   onPress?: () => void;
+  href?: Href;
   testID?: string;
 }) {
   const tint =
@@ -617,11 +647,23 @@ function AttentionRow({
           {detail}
         </Text>
       </View>
-      {onPress ? (
+      {onPress || href ? (
         <DirectionalChevron direction="forward" size={12} tintColor={colors.tertiary} />
       ) : null}
     </>
   );
+  if (href)
+    return (
+      <DetailLink
+        accessibilityLabel={`${title}, ${detail}`}
+        href={href}
+        accessibilityRole="button"
+        testID={testID}
+        style={styles.attentionRow}
+      >
+        {content}
+      </DetailLink>
+    );
   return onPress ? (
     <Pressable
       accessibilityRole="button"

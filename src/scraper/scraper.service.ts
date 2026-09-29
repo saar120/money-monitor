@@ -21,6 +21,7 @@ import { batchCategorize } from '../ai/agent.js';
 import { applyOwnership } from '../services/ownership.js';
 import { ensureChromium } from './chromium.js';
 import { resolveChargedCurrency } from './transaction-currency.js';
+import { oneZeroDateFieldsOverlap } from '../services/transaction-identity.js';
 
 export const MANUAL_LOGIN_COMPANIES = new Set(['isracard', 'amex']);
 
@@ -51,6 +52,86 @@ function mapTransaction(accountId: number, txn: ScraperTransaction): NewTransact
     meta: Object.keys(meta).length > 0 ? JSON.stringify(meta) : null,
     hash: computeHash(accountId, txn),
   };
+}
+
+function hasOneZeroReference(meta: string | null): boolean {
+  try {
+    return typeof JSON.parse(meta ?? '{}').oneZeroReference === 'string';
+  } catch {
+    return false;
+  }
+}
+
+function descriptionTokens(description: string): Set<string> {
+  const tokens = new Set(description.match(/[\p{L}]{3,}/gu) ?? []);
+  for (const token of tokens) {
+    if (/^[למב][\u0590-\u05FF]{3,}$/.test(token)) tokens.add(token.slice(1));
+  }
+  return tokens;
+}
+
+/** Match only when the amount/dates identify one movement, or the wording uniquely separates a repeated amount. */
+function findOneZeroImportMatches(
+  scraped: NewTransaction[],
+  imported: (typeof transactions.$inferSelect)[],
+  existingHashes: Set<string>,
+): Map<number, number> {
+  const candidates = scraped.map((row) =>
+    existingHashes.has(row.hash)
+      ? []
+      : imported.filter(
+          (existing) =>
+            Math.round(existing.chargedAmount * 100) === Math.round(row.chargedAmount * 100) &&
+            oneZeroDateFieldsOverlap(
+              { movementDate: row.processedDate, valueDate: row.date },
+              existing,
+            ),
+        ),
+  );
+  const matches = new Map<number, number>();
+  const claimed = new Set<number>();
+
+  for (let i = 0; i < scraped.length; i++) {
+    const options = candidates[i];
+    if (
+      options.length === 1 &&
+      candidates.filter((rows) => rows.includes(options[0])).length === 1
+    ) {
+      matches.set(i, options[0].id);
+      claimed.add(options[0].id);
+    }
+  }
+
+  // ponytail: Repeated same-amount movements need a unique shared name; uncertain pairs stay separate.
+  const tokens = scraped.map((row) => descriptionTokens(row.description));
+  const importedTokens = new Map(
+    imported.map((row) => [row.id, descriptionTokens(row.description)]),
+  );
+  const score = (i: number, id: number) =>
+    [...tokens[i]].filter((token) => importedTokens.get(id)?.has(token)).length;
+
+  for (let i = 0; i < scraped.length; i++) {
+    if (matches.has(i)) continue;
+    const options = candidates[i];
+    const ranked = options.map((row) => ({ id: row.id, score: score(i, row.id) }));
+    ranked.sort((a, b) => b.score - a.score);
+    const best = ranked[0];
+    if (!best || claimed.has(best.id) || best.score < 2 || best.score === ranked[1]?.score)
+      continue;
+    const competitors = candidates
+      .map((rows, index) => ({ index, matches: rows.some((row) => row.id === best.id) }))
+      .filter((entry) => entry.matches && !matches.has(entry.index))
+      .map((entry) => score(entry.index, best.id));
+    if (
+      competitors.filter((value) => value === best.score).length !== 1 ||
+      competitors.some((value) => value > best.score)
+    )
+      continue;
+    matches.set(i, best.id);
+    claimed.add(best.id);
+  }
+
+  return matches;
 }
 
 /** Find or create a DB account row for a specific card returned by the scraper. */
@@ -294,16 +375,32 @@ export async function scrapeAccount(
           .run();
       }
 
-      const txns = scraperAccount.txns ?? [];
+      const txns = (scraperAccount.txns ?? []).filter((txn) => txn.status !== 'pending');
+      const mappedTxns = txns.map((txn) => mapTransaction(targetAccount.id, txn));
+      const existing =
+        account.companyId === 'oneZero'
+          ? db.select().from(transactions).where(eq(transactions.accountId, targetAccount.id)).all()
+          : [];
+      const imported = existing.filter((row) => hasOneZeroReference(row.meta));
+      const existingHashes = new Set(existing.map((row) => row.hash));
+      const importMatches = findOneZeroImportMatches(mappedTxns, imported, existingHashes);
       let accountFound = 0;
       let accountNew = 0;
 
-      for (const txn of txns) {
-        if (txn.status === 'pending') continue;
+      for (const [index, txn] of txns.entries()) {
         accountFound++;
 
-        const mapped = mapTransaction(targetAccount.id, txn);
+        const mapped = mappedTxns[index];
         try {
+          const importedId = importMatches.get(index);
+          if (importedId != null && !existingHashes.has(mapped.hash)) {
+            db.update(transactions)
+              .set({ hash: mapped.hash })
+              .where(eq(transactions.id, importedId))
+              .run();
+            existingHashes.add(mapped.hash);
+            continue;
+          }
           const insertResult = db
             .insert(transactions)
             .values({

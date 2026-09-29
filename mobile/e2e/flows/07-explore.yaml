@@ -14,8 +14,12 @@ name: Explore cards open month-aware drill-downs
     id: explore-card-categories
 - assertVisible:
     id: categories-screen
-- tapOn: 'Previous month'
-- tapOn: 'Next month'
+- tapOn:
+    id: categories-month-picker-previous
+- assertVisible: 'Aug 2026'
+- tapOn:
+    id: categories-month-picker-next
+- assertVisible: 'Sep 2026'
 - tapOn:
     id: category-row-Dining
 - assertVisible: 'Top merchants'
@@ -49,10 +53,11 @@ name: Explore cards open month-aware drill-downs
 - tapOn:
     id: monthly-category-Dining
 - assertVisible: 'Monthly average'
-- assertVisible: '6K'
+- assertVisible: 'Apr 2026'
+- assertVisible: '3K'
 - tapOn:
-    id: category-bar-2026-05
-- assertVisible: 'May 2026'
+    id: category-bar-2026-03
+- assertVisible: 'Mar 2026'
 - swipe:
     start: 3%, 50%
     end: 90%, 50%
@@ -99,7 +104,9 @@ name: Explore cards open month-aware drill-downs
     id: recurring-payments-screen
 - assertVisible: 'No subscriptions or services found yet'
 - stopApp
-- launchApp
+- launchApp:
+    arguments:
+      MM_FIXTURE_SCENARIO: category-shift
 - assertVisible:
     id: explore-screen
 - scrollUntilVisible:

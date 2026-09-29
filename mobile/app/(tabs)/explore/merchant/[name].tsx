@@ -2,7 +2,7 @@ import { t } from '@/localization';
 import { categoryLabel } from '@/translations';
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
-import { router, Stack, useLocalSearchParams } from 'expo-router';
+import { router, useLocalSearchParams } from 'expo-router';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
@@ -20,7 +20,6 @@ export default function MerchantScreen() {
   if (status !== 'ready' || !home) return <ConnectionState />;
   return (
     <>
-      <Stack.Screen options={{ title: name ?? t('merchant') }} />
       {months.length ? (
         <MerchantContent initialMonth={month} months={months} name={name} />
       ) : (

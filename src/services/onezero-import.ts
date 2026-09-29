@@ -25,6 +25,13 @@ export interface OneZeroImportPreview {
   matchedExistingCount: number;
   ambiguousCount: number;
   invalidRows: OneZeroInvalidRow[];
+  rows: Array<{
+    row: number;
+    date: string;
+    description: string;
+    amount: number;
+    status: ImportClassification['kind'];
+  }>;
 }
 
 export interface OneZeroImportCommitResult {
@@ -179,6 +186,13 @@ export function createOneZeroImportPreview(
     matchedExistingCount: analysis.matchedExistingCount,
     ambiguousCount: analysis.ambiguousCount,
     invalidRows: parsed.invalidRows,
+    rows: analysis.classifications.map(({ kind, row }) => ({
+      row: row.row,
+      date: row.valueDate,
+      description: row.description,
+      amount: row.amount,
+      status: kind,
+    })),
   };
 }
 

@@ -1,11 +1,13 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
-// Mock pi-ai/oauth
-const mockGetOAuthApiKey = vi.fn();
-vi.mock('@earendil-works/pi-ai/oauth', () => ({
-  getOAuthApiKey: mockGetOAuthApiKey,
-  loginAnthropic: vi.fn(),
-  loginOpenAICodex: vi.fn(),
+const mockRefresh = vi.fn();
+const mockToAuth = vi.fn();
+const mockOAuth = { login: vi.fn(), refresh: mockRefresh, toAuth: mockToAuth };
+vi.mock('@earendil-works/pi-ai/providers/anthropic', () => ({
+  anthropicProvider: () => ({ auth: { oauth: mockOAuth } }),
+}));
+vi.mock('@earendil-works/pi-ai/providers/openai-codex', () => ({
+  openaiCodexProvider: () => ({ auth: { oauth: mockOAuth } }),
 }));
 
 // Mock paths
@@ -40,6 +42,7 @@ const {
   PROVIDER_KEY_MAP,
   loadCredentials,
   completeOpenAICodexOAuth,
+  startOpenAICodexOAuth,
   logoutOpenAICodexOAuth,
   hasOpenAICodexOAuth,
 } = await import('./auth.js');
@@ -75,7 +78,8 @@ describe('PROVIDER_KEY_MAP', () => {
 describe('resolveApiKey', () => {
   beforeEach(() => {
     resetConfig();
-    mockGetOAuthApiKey.mockReset();
+    mockRefresh.mockReset();
+    mockToAuth.mockReset();
     mockReadFileSync.mockReturnValue('{}');
     mockWriteFileSync.mockReset();
     loadCredentials(); // resets internal credentials to {}
@@ -85,34 +89,37 @@ describe('resolveApiKey', () => {
     // Seed credentials so the OAuth branch is entered
     mockReadFileSync.mockReturnValue(JSON.stringify({ anthropic: { refresh: 'existing-tok' } }));
     loadCredentials();
-    mockGetOAuthApiKey.mockResolvedValue({
-      apiKey: 'oauth-key-123',
-      newCredentials: { refresh: 'tok' },
+    mockRefresh.mockResolvedValue({
+      type: 'oauth',
+      access: 'oauth-key-123',
+      refresh: 'tok',
+      expires: Date.now() + 3600000,
     });
+    mockToAuth.mockImplementation(async (credential) => ({ apiKey: credential.access }));
     expect(await resolveApiKey('anthropic')).toBe('oauth-key-123');
+    expect(mockRefresh).toHaveBeenCalledOnce();
   });
 
   it('falls through to ANTHROPIC_OAUTH_TOKEN for anthropic (step 2)', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     mockConfig.ANTHROPIC_OAUTH_TOKEN = 'oat-test-token';
     expect(await resolveApiKey('anthropic')).toBe('oat-test-token');
   });
 
   it('skips ANTHROPIC_OAUTH_TOKEN for non-anthropic providers', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     mockConfig.ANTHROPIC_OAUTH_TOKEN = 'oat-test-token';
     mockConfig.OPENAI_API_KEY = 'sk-openai';
     expect(await resolveApiKey('openai')).toBe('sk-openai');
   });
 
   it('returns config API key when OAuth fails (step 3)', async () => {
-    mockGetOAuthApiKey.mockRejectedValue(new Error('OAuth expired'));
+    mockReadFileSync.mockReturnValue(JSON.stringify({ anthropic: { refresh: 'expired' } }));
+    loadCredentials();
+    mockRefresh.mockRejectedValue(new Error('OAuth expired'));
     mockConfig.ANTHROPIC_API_KEY = 'sk-ant-test';
     expect(await resolveApiKey('anthropic')).toBe('sk-ant-test');
   });
 
   it('returns config key for each provider', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     mockConfig.OPENAI_API_KEY = 'sk-openai';
     expect(await resolveApiKey('openai')).toBe('sk-openai');
 
@@ -127,17 +134,14 @@ describe('resolveApiKey', () => {
   });
 
   it('returns undefined when no key is available (step 4)', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     expect(await resolveApiKey('anthropic')).toBeUndefined();
   });
 
   it('returns undefined for unknown provider', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     expect(await resolveApiKey('unknown-provider')).toBeUndefined();
   });
 
   it('skips empty string config keys', async () => {
-    mockGetOAuthApiKey.mockResolvedValue(null);
     mockConfig.ANTHROPIC_API_KEY = '';
     expect(await resolveApiKey('anthropic')).toBeUndefined();
   });
@@ -179,6 +183,28 @@ describe('OAuth logout', () => {
 });
 
 describe('OAuth completion', () => {
+  it('completes the new provider login flow with a pasted code', async () => {
+    mockReadFileSync.mockReturnValue('{}');
+    mockWriteFileSync.mockReset();
+    loadCredentials();
+    mockOAuth.login.mockImplementationOnce(async (interaction) => {
+      interaction.notify({ type: 'auth_url', url: 'https://auth.example.test' });
+      const code = await interaction.prompt({ type: 'manual_code', message: 'Enter code' });
+      expect(code).toBe('test-code');
+      return {
+        type: 'oauth',
+        refresh: 'new-refresh',
+        access: 'new-access',
+        expires: Date.now() + 3600000,
+      };
+    });
+
+    await expect(startOpenAICodexOAuth()).resolves.toBe('https://auth.example.test');
+    await expect(completeOpenAICodexOAuth('test-code')).resolves.toBeUndefined();
+    expect(hasOpenAICodexOAuth()).toBe(true);
+    expect(mockWriteFileSync).toHaveBeenCalledOnce();
+  });
+
   it('succeeds when the browser callback already stored ChatGPT credentials', async () => {
     mockReadFileSync.mockReturnValue(
       JSON.stringify({ 'openai-codex': { refresh: 'openai-refresh' } }),

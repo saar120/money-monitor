@@ -5,6 +5,7 @@ name: Review reaches financial inbox zero
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: review-heavy
+- tapOn: Home
 - scrollUntilVisible:
     element:
       id: start-review
@@ -13,31 +14,31 @@ name: Review reaches financial inbox zero
     id: start-review
 - assertVisible:
     id: review-screen
-- assertVisible: '8 to review'
+- assertVisible: '8 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '7 to review'
+- assertVisible: '7 transactions to review'
 - tapOn:
     id: review-category
 - assertVisible: 'Choose category'
 - tapOn:
     id: category-option-Dining
-- assertVisible: '6 to review'
+- assertVisible: '6 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '5 to review'
+- assertVisible: '5 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '4 to review'
+- assertVisible: '4 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '3 to review'
+- assertVisible: '3 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '2 to review'
+- assertVisible: '2 transactions to review'
 - tapOn:
     id: looks-right
-- assertVisible: '1 to review'
+- assertVisible: '1 transaction to review'
 - tapOn:
     id: looks-right
 - assertVisible:

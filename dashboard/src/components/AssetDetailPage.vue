@@ -10,6 +10,7 @@ import SimpleValueDetail from './assets/SimpleValueDetail.vue';
 import RealEstateDetail from './assets/RealEstateDetail.vue';
 import CryptoDetail from './assets/CryptoDetail.vue';
 import BrokerageDetail from './assets/BrokerageDetail.vue';
+import { t } from '@/lib/language';
 
 const route = useRoute();
 const router = useRouter();
@@ -33,13 +34,13 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
 </script>
 
 <template>
-  <div class="animate-fade-in-up space-y-6">
+  <div class="asset-detail-page animate-fade-in-up space-y-6">
     <button
       class="flex items-center gap-1.5 text-[13px] text-text-secondary hover:text-text-primary transition-colors"
       @click="router.push('/net-worth')"
     >
       <ArrowLeft class="h-4 w-4" />
-      Back to Net Worth
+      {{ t('netWorth') }}
     </button>
 
     <div v-if="loading">
@@ -49,7 +50,9 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
 
     <div v-else-if="error" class="text-center py-12">
       <p class="text-destructive text-[13px]">{{ error }}</p>
-      <Button variant="secondary" size="sm" class="mt-4" @click="$router.go(0)">Retry</Button>
+      <Button variant="secondary" size="sm" class="mt-4" @click="$router.go(0)">{{
+        t('retry')
+      }}</Button>
     </div>
 
     <template v-else-if="asset">

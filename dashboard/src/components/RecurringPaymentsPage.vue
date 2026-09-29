@@ -9,6 +9,7 @@ import {
   type RecurringPayments,
 } from '../api/client';
 import { formatAmount } from '@/lib/format';
+import { language, t } from '@/lib/language';
 import { Button } from '@/components/ui/button';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Dialog, DialogContent, DialogHeader, DialogTitle } from '@/components/ui/dialog';
@@ -59,8 +60,7 @@ async function load() {
     result.value = loaded;
     scheduleRefresh();
   } catch {
-    if (!disposed && version === requestVersion)
-      error.value = 'Recurring payments could not be loaded.';
+    if (!disposed && version === requestVersion) error.value = t('recurringLoadError');
   } finally {
     if (!disposed && version === requestVersion) loading.value = false;
   }
@@ -101,7 +101,7 @@ async function openDetail(payment: RecurringPayment) {
 }
 
 function shortDate(value: string) {
-  return new Intl.DateTimeFormat('en-GB', {
+  return new Intl.DateTimeFormat(language.value === 'he' ? 'he-IL' : 'en-GB', {
     day: 'numeric',
     month: 'short',
     timeZone: 'UTC',
@@ -109,8 +109,8 @@ function shortDate(value: string) {
 }
 
 function frequencyLabel(value: string) {
-  if (value === 'everyTwoMonths') return 'Every 2 months';
-  return 'Monthly';
+  if (value === 'everyTwoMonths') return t('everyTwoMonths');
+  return t('monthly');
 }
 
 onMounted(load);
@@ -123,40 +123,36 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <section class="w-full max-w-5xl mx-auto space-y-7" aria-label="Subscriptions and services">
+  <section
+    class="subscriptions-page w-full max-w-5xl mx-auto space-y-7"
+    :aria-label="t('subscriptionsAndServices')"
+  >
     <header>
-      <h1 class="text-[24px] font-semibold tracking-tight text-text-primary">
-        Subscriptions & services
-      </h1>
-      <p class="mt-1 text-[13px] text-text-secondary">
-        Repeating charges for subscriptions and service bills. Check uncertain matches below.
+      <p class="text-[13px] text-text-secondary">
+        {{ t('recurringIntro') }}
       </p>
     </header>
 
-    <div v-if="loading" class="space-y-3" aria-label="Loading recurring payments">
+    <div v-if="loading" class="space-y-3" :aria-label="t('loadingTransactions')">
       <Skeleton class="h-20 w-full" />
       <Skeleton class="h-60 w-full" />
     </div>
     <div v-else-if="error && !result" class="rounded-xl border border-separator p-6 text-center">
       <p class="text-sm text-text-secondary">{{ error }}</p>
-      <Button class="mt-4" variant="secondary" @click="load">Try again</Button>
+      <Button class="mt-4" variant="secondary" @click="load">{{ t('tryAgain') }}</Button>
     </div>
     <template v-else-if="result">
       <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
-      <div v-if="result.totals.length" class="grid gap-4 sm:grid-cols-2">
-        <div
-          v-for="total in result.totals"
-          :key="total.currencyCode"
-          class="rounded-xl border border-separator/60 bg-bg-secondary px-5 py-4"
-        >
+      <div v-if="result.totals.length" class="subscription-totals">
+        <div v-for="total in result.totals" :key="total.currencyCode" class="subscription-total">
           <p class="text-[12px] text-text-secondary">
-            Estimated monthly · {{ total.currencyCode }}
+            {{ t('estimatedMonthly') }} · {{ total.currencyCode }}
           </p>
           <p class="mt-1 text-[28px] font-semibold tabular-nums text-text-primary">
             {{ formatAmount(total.monthlyCost, total.currencyCode) }}
           </p>
           <p class="mt-1 text-[12px] text-text-secondary">
-            {{ formatAmount(total.annualCost, total.currencyCode) }} a year
+            {{ formatAmount(total.annualCost, total.currencyCode) }} {{ t('aYear') }}
           </p>
         </div>
       </div>
@@ -165,24 +161,24 @@ onUnmounted(() => {
         v-if="!result.payments.length && !result.suggestions.length"
         class="rounded-xl border border-separator/60 px-6 py-12 text-center"
       >
-        <p class="font-medium text-text-primary">No subscriptions or services found yet</p>
+        <p class="font-medium text-text-primary">{{ t('noSubscriptions') }}</p>
         <p class="mt-1 text-sm text-text-secondary">
-          Confirm a suggestion below or wait for more matching charges.
+          {{ t('recurringEmptyHint') }}
         </p>
       </div>
       <div
         v-else-if="result.payments.length"
-        class="overflow-x-auto rounded-xl border border-separator/60 bg-bg-primary"
+        class="subscriptions-ledger overflow-x-auto rounded-xl border border-separator/60 bg-bg-primary"
       >
         <table class="w-full text-left text-[13px]">
           <thead class="bg-bg-secondary text-[12px] text-text-secondary">
             <tr>
-              <th scope="col" class="px-5 py-3 font-medium">Payment</th>
-              <th scope="col" class="px-4 py-3 font-medium">Pattern</th>
-              <th scope="col" class="px-4 py-3 font-medium text-right">Usual charge</th>
-              <th scope="col" class="px-4 py-3 font-medium">Last charged</th>
-              <th scope="col" class="px-5 py-3 font-medium">Next expected</th>
-              <th scope="col" class="px-5 py-3 font-medium">Actions</th>
+              <th scope="col" class="px-5 py-3 font-medium">{{ t('payment') }}</th>
+              <th scope="col" class="px-4 py-3 font-medium">{{ t('pattern') }}</th>
+              <th scope="col" class="px-4 py-3 font-medium text-right">{{ t('usualCharge') }}</th>
+              <th scope="col" class="px-4 py-3 font-medium">{{ t('lastCharged') }}</th>
+              <th scope="col" class="px-5 py-3 font-medium">{{ t('nextExpected') }}</th>
+              <th scope="col" class="px-5 py-3 font-medium">{{ t('actions') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -206,7 +202,7 @@ onUnmounted(() => {
               </td>
               <td class="px-4 py-3.5 text-text-secondary">
                 <span>{{ frequencyLabel(payment.frequency) }}</span>
-                <span class="ml-2 text-[11px]">{{ payment.occurrences }} charges</span>
+                <span class="ml-2 text-[11px]">{{ payment.occurrences }} {{ t('charges') }}</span>
               </td>
               <td class="px-4 py-3.5 text-right tabular-nums font-medium text-text-primary">
                 {{ formatAmount(payment.usualAmount, payment.currencyCode) }}
@@ -215,7 +211,7 @@ onUnmounted(() => {
                 {{ shortDate(payment.lastChargeDate) }}
               </td>
               <td class="px-5 py-3.5 whitespace-nowrap text-text-secondary">
-                Around {{ shortDate(payment.nextExpectedDate) }}
+                {{ t('around') }} {{ shortDate(payment.nextExpectedDate) }}
               </td>
               <td class="px-5 py-3.5">
                 <Button
@@ -223,21 +219,19 @@ onUnmounted(() => {
                   variant="ghost"
                   :disabled="!!saving"
                   @click="decide(payment, 'exclude')"
-                  >Exclude</Button
+                  >{{ t('exclude') }}</Button
                 >
               </td>
             </tr>
           </tbody>
         </table>
       </div>
-      <section v-if="result.suggestions.length" aria-label="Review recurring payments">
-        <h2 class="mb-2 text-lg font-semibold text-text-primary">Review recurring payments</h2>
+      <section v-if="result.suggestions.length" :aria-label="t('reviewRecurring')">
+        <h2 class="mb-2 text-lg font-semibold text-text-primary">{{ t('reviewRecurring') }}</h2>
         <p class="mb-3 text-sm text-text-secondary">
-          These repeat, but may be ordinary purchases. They are not in your estimate.
+          {{ t('recurringReviewHint') }}
         </p>
-        <div
-          class="divide-y divide-separator/60 rounded-xl border border-separator/60 bg-bg-primary"
-        >
+        <div class="divide-y divide-separator/60 border-y border-separator/60">
           <div
             v-for="payment in result.suggestions"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"
@@ -254,7 +248,7 @@ onUnmounted(() => {
               </button>
               <p class="text-xs text-text-secondary">
                 {{ payment.accountName }} · {{ frequencyLabel(payment.frequency) }} ·
-                {{ payment.occurrences }} charges ·
+                {{ payment.occurrences }} {{ t('charges') }} ·
                 {{ formatAmount(payment.usualAmount, payment.currencyCode) }}
               </p>
             </div>
@@ -264,20 +258,18 @@ onUnmounted(() => {
                 variant="secondary"
                 :disabled="!!saving"
                 @click="decide(payment, 'exclude')"
-                >Not recurring</Button
+                >{{ t('notRecurring') }}</Button
               >
-              <Button size="sm" :disabled="!!saving" @click="decide(payment, 'include')"
-                >Include</Button
-              >
+              <Button size="sm" :disabled="!!saving" @click="decide(payment, 'include')">{{
+                t('include')
+              }}</Button>
             </div>
           </div>
         </div>
       </section>
-      <section v-if="result.excluded.length" aria-label="Excluded recurring payments">
-        <h2 class="mb-2 text-sm font-medium text-text-secondary">Excluded</h2>
-        <div
-          class="divide-y divide-separator/60 rounded-xl border border-separator/60 bg-bg-primary"
-        >
+      <section v-if="result.excluded.length" :aria-label="t('excluded')">
+        <h2 class="mb-2 text-sm font-medium text-text-secondary">{{ t('excluded') }}</h2>
+        <div class="divide-y divide-separator/60 border-y border-separator/60">
           <div
             v-for="payment in result.excluded"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"
@@ -291,8 +283,12 @@ onUnmounted(() => {
             >
               {{ payment.name }}
             </button>
-            <Button size="sm" variant="ghost" :disabled="!!saving" @click="decide(payment, 'auto')"
-              >Undo</Button
+            <Button
+              size="sm"
+              variant="ghost"
+              :disabled="!!saving"
+              @click="decide(payment, 'auto')"
+              >{{ t('undo') }}</Button
             >
           </div>
         </div>
@@ -301,11 +297,11 @@ onUnmounted(() => {
     <Dialog v-model:open="detailOpen">
       <DialogContent class="max-h-[85vh] max-w-2xl overflow-y-auto">
         <DialogHeader>
-          <DialogTitle dir="auto">{{ detail?.payment.name ?? 'Payment details' }}</DialogTitle>
+          <DialogTitle dir="auto">{{ detail?.payment.name ?? t('paymentDetails') }}</DialogTitle>
         </DialogHeader>
         <Skeleton v-if="detailLoading" class="h-40 w-full" />
         <p v-else-if="detailError" role="alert" class="text-sm text-destructive">
-          Payment details could not be loaded.
+          {{ t('paymentDetailsLoadError') }}
         </p>
         <template v-else-if="detail">
           <p class="text-sm text-text-secondary" dir="auto">
@@ -313,13 +309,13 @@ onUnmounted(() => {
           </p>
           <div class="grid grid-cols-2 gap-3 rounded-xl bg-bg-secondary p-4">
             <div>
-              <p class="text-xs text-text-secondary">Usual charge</p>
+              <p class="text-xs text-text-secondary">{{ t('usualCharge') }}</p>
               <p class="text-lg font-semibold tabular-nums text-text-primary">
                 {{ formatAmount(detail.payment.usualAmount, detail.payment.currencyCode) }}
               </p>
             </div>
             <div>
-              <p class="text-xs text-text-secondary">Estimated per year</p>
+              <p class="text-xs text-text-secondary">{{ t('estimatedPerYear') }}</p>
               <p class="text-lg font-semibold tabular-nums text-text-primary">
                 {{ formatAmount(detail.payment.annualCost, detail.payment.currencyCode) }}
               </p>
@@ -336,12 +332,15 @@ onUnmounted(() => {
             a billing schedule.
           </p>
           <section>
-            <h3 class="mb-2 text-sm font-semibold text-text-primary">Charges in this pattern</h3>
+            <h3 class="mb-2 text-sm font-semibold text-text-primary">
+              {{ t('chargesInPattern') }}
+            </h3>
             <div class="divide-y divide-separator/60 rounded-xl border border-separator/60">
-              <div
+              <RouterLink
                 v-for="row in matchedCharges"
                 :key="row.id"
-                class="flex justify-between gap-4 px-4 py-3 text-sm"
+                :to="{ path: '/transactions', query: { transactionId: row.id } }"
+                class="flex justify-between gap-4 px-4 py-3 text-sm hover:bg-bg-secondary"
               >
                 <div>
                   <p class="text-text-primary" dir="auto">{{ row.description }}</p>
@@ -350,18 +349,19 @@ onUnmounted(() => {
                 <span class="tabular-nums text-text-primary whitespace-nowrap">{{
                   formatAmount(row.amount, detail.payment.currencyCode)
                 }}</span>
-              </div>
+              </RouterLink>
             </div>
           </section>
           <details v-if="otherCharges.length" class="text-sm">
             <summary class="cursor-pointer font-medium text-text-secondary">
-              Other charges from this merchant ({{ otherCharges.length }})
+              {{ t('otherMerchantCharges') }} ({{ otherCharges.length }})
             </summary>
             <div class="mt-2 divide-y divide-separator/60 rounded-xl border border-separator/60">
-              <div
+              <RouterLink
                 v-for="row in otherCharges"
                 :key="row.id"
-                class="flex justify-between gap-4 px-4 py-3"
+                :to="{ path: '/transactions', query: { transactionId: row.id } }"
+                class="flex justify-between gap-4 px-4 py-3 hover:bg-bg-secondary"
               >
                 <div>
                   <p class="text-text-primary" dir="auto">{{ row.description }}</p>
@@ -370,7 +370,7 @@ onUnmounted(() => {
                 <span class="tabular-nums text-text-primary whitespace-nowrap">{{
                   formatAmount(row.amount, detail.payment.currencyCode)
                 }}</span>
-              </div>
+              </RouterLink>
             </div>
           </details>
         </template>

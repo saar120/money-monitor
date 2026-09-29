@@ -7,15 +7,15 @@ import {
   updateAccount,
   deleteAccount,
   triggerScrape,
-  previewOneZeroImport,
-  commitOneZeroImport,
   type Account,
   type Member,
-  type OneZeroImportPreview,
 } from '../api/client';
 import { useOtpFlow } from '../composables/useOtpFlow';
 import { useSseConnection } from '../composables/useSseConnection';
 import { PROVIDERS } from '@/lib/providers';
+import { language, t } from '@/lib/language';
+import OneZeroImportDialog from './OneZeroImportDialog.vue';
+import { useRoute } from 'vue-router';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -64,10 +64,8 @@ import {
   FileSpreadsheet,
 } from 'lucide-vue-next';
 
-type BrowserFile = InstanceType<typeof globalThis.File>;
-type BrowserInput = InstanceType<typeof globalThis.HTMLInputElement>;
-
 const expandedSettings = ref(new Set<number>());
+const route = useRoute();
 
 const MANUAL_LOGIN_COMPANY_IDS = new Set(['isracard', 'amex']);
 
@@ -98,14 +96,6 @@ const updateCredsSaving = ref(false);
 // One Zero statement import
 const oneZeroImportOpen = ref(false);
 const oneZeroImportAccount = ref<Account | null>(null);
-const oneZeroImportFile = ref<BrowserFile | null>(null);
-const oneZeroImportPreview = ref<OneZeroImportPreview | null>(null);
-const oneZeroImportLoading = ref(false);
-const oneZeroImportCommitting = ref(false);
-const oneZeroImportError = ref('');
-const oneZeroImportSuccess = ref('');
-const oneZeroImportCommitted = ref(false);
-const oneZeroImportInput = ref<BrowserInput | null>(null);
 
 const updateCredsProvider = computed(() =>
   updateCredsAccount.value
@@ -120,9 +110,82 @@ const creditCardAccounts = computed(() =>
 
 const accountSections = computed(() =>
   [
-    { type: 'bank' as const, label: 'Banks', accounts: bankAccounts.value },
-    { type: 'credit_card' as const, label: 'Credit Cards', accounts: creditCardAccounts.value },
+    { type: 'bank' as const, label: t('banks'), accounts: bankAccounts.value },
+    { type: 'credit_card' as const, label: t('creditCards'), accounts: creditCardAccounts.value },
   ].filter((s) => s.accounts.length > 0),
+);
+const accountCopy = computed(() =>
+  language.value === 'he'
+    ? {
+        add: 'הוספת חשבון',
+        empty: 'אין חשבונות',
+        emptyHint: 'הוסיפו חשבון בנק או כרטיס אשראי כדי להתחיל.',
+        active: 'פעיל',
+        inactive: 'לא פעיל',
+        lastSync: 'סנכרון אחרון',
+        never: 'עדיין לא סונכרן',
+        unknownMember: 'בן בית לא ידוע',
+        noMember: 'ללא שיוך',
+        settings: 'הגדרות',
+        member: 'בן בית',
+        memberHint: 'עסקאות חדשות בחשבון ישויכו אליו',
+        selectMember: 'בחירת בן בית',
+        manualLogin: 'כניסה ידנית',
+        manualLoginHint: 'כניסה לבנק בחלון דפדפן גלוי',
+        showBrowser: 'הצגת דפדפן',
+        showBrowserHint: 'הצגת חלון הדפדפן בזמן הסנכרון',
+        manualOnly: 'סנכרון ידני בלבד',
+        manualOnlyHint: 'החשבון לא ייכלל בסנכרון המתוזמן',
+        staleAlert: 'התראה אם לא סונכרן במשך',
+        days: 'ימים',
+        credentials: 'עדכון פרטי כניסה',
+        credentialsHint: 'שינוי פרטי הכניסה לסנכרון',
+        update: 'עדכון',
+        importStatement: 'ייבוא דוח',
+        syncing: 'מסנכרן…',
+        sync: 'סנכרון',
+        disable: 'השבתה',
+        enable: 'הפעלה',
+        deleteQuestion: 'למחוק את החשבון',
+        deleteHint: 'החשבון וכל העסקאות שלו יימחקו לצמיתות.',
+        cancel: 'ביטול',
+        delete: 'מחיקה',
+      }
+    : {
+        add: 'Add account',
+        empty: 'No accounts',
+        emptyHint: 'Add a bank or credit card to start tracking.',
+        active: 'Active',
+        inactive: 'Inactive',
+        lastSync: 'Last sync',
+        never: 'Never synced',
+        unknownMember: 'Unknown member',
+        noMember: 'No member',
+        settings: 'Settings',
+        member: 'Member',
+        memberHint: 'New transactions inherit this owner',
+        selectMember: 'Select member',
+        manualLogin: 'Manual login',
+        manualLoginHint: 'Log in to the bank in a visible browser',
+        showBrowser: 'Show browser',
+        showBrowserHint: 'Display the browser during sync',
+        manualOnly: 'Manual sync only',
+        manualOnlyHint: 'Exclude from scheduled syncs',
+        staleAlert: 'Alert if not synced for',
+        days: 'days',
+        credentials: 'Update credentials',
+        credentialsHint: 'Change login details used for sync',
+        update: 'Update',
+        importStatement: 'Import statement',
+        syncing: 'Syncing…',
+        sync: 'Sync',
+        disable: 'Disable',
+        enable: 'Enable',
+        deleteQuestion: 'Delete account',
+        deleteHint: 'This permanently deletes the account and all its transactions.',
+        cancel: 'Cancel',
+        delete: 'Delete',
+      },
 );
 
 const activeMembers = computed(() => members.value.filter((m) => m.isActive));
@@ -133,120 +196,9 @@ watch(newCompanyId, () => {
   credentialFields.value = [{ key: '', value: '' }];
 });
 
-watch(oneZeroImportOpen, (open) => {
-  if (!open) resetOneZeroImport();
-});
-
-const oneZeroImportBlocked = computed(() => {
-  const preview = oneZeroImportPreview.value;
-  return !!preview && (preview.ambiguousCount > 0 || preview.invalidRows.length > 0);
-});
-
-const oneZeroImportCanCommit = computed(() => {
-  const preview = oneZeroImportPreview.value;
-  return (
-    !!preview &&
-    !!oneZeroImportAccount.value &&
-    !oneZeroImportLoading.value &&
-    !oneZeroImportCommitting.value &&
-    !oneZeroImportCommitted.value &&
-    !oneZeroImportBlocked.value &&
-    !!oneZeroImportFile.value
-  );
-});
-
-const oneZeroImportStats = computed(() => {
-  const preview = oneZeroImportPreview.value;
-  if (!preview) return [];
-  return [
-    ['New', preview.newCount],
-    ['Already imported', preview.duplicateCount],
-    ['Matched scraped', preview.matchedExistingCount],
-    ['Ambiguous', preview.ambiguousCount],
-  ] as const;
-});
-
-function importErrorMessage(err: unknown): string {
-  return err instanceof Error
-    ? err.message
-    : 'The import could not be completed. Please try again.';
-}
-
-function formatImportDate(value: string | null | undefined): string {
-  if (!value) return '';
-  const date = new Date(value);
-  return Number.isNaN(date.getTime()) ? value : date.toLocaleDateString('he-IL');
-}
-
-function importDateRangeLabel(range: OneZeroImportPreview['dateRange']): string {
-  if (!range) return 'Not provided';
-  return `${formatImportDate(range.from)} – ${formatImportDate(range.to)}`;
-}
-
-function resetOneZeroImport() {
-  oneZeroImportAccount.value = null;
-  resetOneZeroImportPreview();
-  oneZeroImportCommitting.value = false;
-  if (oneZeroImportInput.value) oneZeroImportInput.value.value = '';
-}
-
-function resetOneZeroImportPreview() {
-  oneZeroImportFile.value = null;
-  oneZeroImportPreview.value = null;
-  oneZeroImportLoading.value = false;
-  oneZeroImportError.value = '';
-  oneZeroImportSuccess.value = '';
-  oneZeroImportCommitted.value = false;
-}
-
 function openOneZeroImport(account: Account) {
-  resetOneZeroImport();
   oneZeroImportAccount.value = account;
   oneZeroImportOpen.value = true;
-}
-
-async function handleOneZeroImportFileChange(event: Event) {
-  const input = event.target as BrowserInput;
-  const file = input.files?.[0] ?? null;
-  resetOneZeroImportPreview();
-
-  if (!file || !oneZeroImportAccount.value) return;
-  if (!/\.xlsx?$/i.test(file.name)) {
-    oneZeroImportError.value = 'Choose a One Zero Excel statement (.xls or .xlsx).';
-    input.value = '';
-    return;
-  }
-
-  oneZeroImportFile.value = file;
-  oneZeroImportLoading.value = true;
-  try {
-    oneZeroImportPreview.value = await previewOneZeroImport(oneZeroImportAccount.value.id, file);
-  } catch (err) {
-    oneZeroImportError.value = importErrorMessage(err);
-  } finally {
-    oneZeroImportLoading.value = false;
-  }
-}
-
-async function commitOneZeroStatement() {
-  if (!oneZeroImportCanCommit.value || !oneZeroImportAccount.value || !oneZeroImportFile.value) {
-    return;
-  }
-
-  oneZeroImportCommitting.value = true;
-  oneZeroImportError.value = '';
-  try {
-    const result = await commitOneZeroImport(
-      oneZeroImportAccount.value.id,
-      oneZeroImportFile.value,
-    );
-    oneZeroImportCommitted.value = true;
-    oneZeroImportSuccess.value = `Imported ${result.imported} new transaction${result.imported === 1 ? '' : 's'} (${result.linked} matched existing, ${result.duplicates} already imported).`;
-  } catch (err) {
-    oneZeroImportError.value = importErrorMessage(err);
-  } finally {
-    oneZeroImportCommitting.value = false;
-  }
 }
 
 // SSE & OTP/Manual login
@@ -431,6 +383,7 @@ async function handleUpdateCreds() {
 }
 
 onMounted(() => {
+  if (route.query.add === '1') showAddDialog.value = true;
   fetchAccounts();
   connectSse();
 });
@@ -441,7 +394,7 @@ onMounted(() => {
     <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-1" />
-        Add Account
+        {{ accountCopy.add }}
       </Button>
     </Teleport>
 
@@ -457,16 +410,18 @@ onMounted(() => {
         <div class="w-16 h-16 rounded-2xl bg-primary/10 flex items-center justify-center mb-4">
           <Building2 class="h-8 w-8 text-primary" />
         </div>
-        <p class="text-[15px] font-medium text-text-primary mb-1">No Accounts</p>
+        <p class="text-[15px] font-medium text-text-primary mb-1">{{ accountCopy.empty }}</p>
         <p class="text-text-secondary text-[13px] mb-5">
-          Add a bank or credit card to start tracking
+          {{ accountCopy.emptyHint }}
         </p>
-        <Button @click="showAddDialog = true"> <Plus class="h-4 w-4 mr-2" /> Add Account </Button>
+        <Button @click="showAddDialog = true">
+          <Plus class="h-4 w-4 mr-2" /> {{ accountCopy.add }}
+        </Button>
       </div>
 
-      <div v-for="section in accountSections" :key="section.type" class="space-y-3">
+      <div v-for="section in accountSections" :key="section.type" class="account-section space-y-3">
         <h2 class="text-[15px] font-semibold text-text-primary">{{ section.label }}</h2>
-        <Card v-for="account in section.accounts" :key="account.id">
+        <Card v-for="account in section.accounts" :key="account.id" class="account-row">
           <CardContent class="p-5">
             <div class="flex items-start justify-between gap-4">
               <div class="flex-1 min-w-0">
@@ -507,13 +462,13 @@ onMounted(() => {
                     :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
                     class="text-[11px]"
                   >
-                    {{ account.isActive ? 'Active' : 'Inactive' }}
+                    {{ account.isActive ? accountCopy.active : accountCopy.inactive }}
                   </Badge>
                   <Badge variant="secondary" class="text-[11px]">
                     {{
                       account.memberId
-                        ? (memberMap.get(account.memberId) ?? 'Unknown member')
-                        : 'No member'
+                        ? (memberMap.get(account.memberId) ?? accountCopy.unknownMember)
+                        : accountCopy.noMember
                     }}
                   </Badge>
                 </div>
@@ -531,9 +486,14 @@ onMounted(() => {
                 </p>
                 <p class="text-[12px] text-text-tertiary mt-1.5">
                   <span v-if="account.lastScrapedAt">
-                    Last scraped: {{ new Date(account.lastScrapedAt).toLocaleString('he-IL') }}
+                    {{ accountCopy.lastSync }}:
+                    {{
+                      new Date(account.lastScrapedAt).toLocaleString(
+                        language === 'he' ? 'he-IL' : 'en-GB',
+                      )
+                    }}
                   </span>
-                  <span v-else>Never scraped</span>
+                  <span v-else>{{ accountCopy.never }}</span>
                 </p>
                 <button
                   class="flex items-center gap-1.5 mt-3 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
@@ -544,7 +504,7 @@ onMounted(() => {
                   "
                 >
                   <Settings class="h-3.5 w-3.5" />
-                  Settings
+                  {{ accountCopy.settings }}
                   <ChevronDown
                     class="h-3 w-3 transition-transform duration-200"
                     :class="{ 'rotate-180': expandedSettings.has(account.id) }"
@@ -557,9 +517,9 @@ onMounted(() => {
                 >
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Member</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.member }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        New transactions from this account inherit this owner
+                        {{ accountCopy.memberHint }}
                       </div>
                     </div>
                     <Select
@@ -567,7 +527,7 @@ onMounted(() => {
                       @update:model-value="patchAccount(account.id, { memberId: Number($event) })"
                     >
                       <SelectTrigger class="w-36 h-8">
-                        <SelectValue placeholder="Select member" />
+                        <SelectValue :placeholder="accountCopy.selectMember" />
                       </SelectTrigger>
                       <SelectContent>
                         <SelectItem
@@ -586,9 +546,9 @@ onMounted(() => {
                     class="px-4 py-3 flex items-center justify-between"
                   >
                     <div>
-                      <div class="text-[13px] text-text-primary">Manual login</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.manualLogin }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Log in to the bank yourself in a visible browser
+                        {{ accountCopy.manualLoginHint }}
                       </div>
                     </div>
                     <Switch
@@ -599,9 +559,9 @@ onMounted(() => {
 
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Show browser</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.showBrowser }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Display the browser window during scraping
+                        {{ accountCopy.showBrowserHint }}
                       </div>
                     </div>
                     <Switch
@@ -614,9 +574,11 @@ onMounted(() => {
                   <div class="px-4 py-3">
                     <div class="flex items-center justify-between">
                       <div>
-                        <div class="text-[13px] text-text-primary">Manual scrape only</div>
+                        <div class="text-[13px] text-text-primary">
+                          {{ accountCopy.manualOnly }}
+                        </div>
                         <div class="text-[11px] text-text-secondary mt-0.5">
-                          Exclude from scheduled scrapes — only scrape when you click the button
+                          {{ accountCopy.manualOnlyHint }}
                         </div>
                       </div>
                       <Switch
@@ -629,7 +591,7 @@ onMounted(() => {
                       class="flex items-center gap-2 mt-2.5 pl-1"
                     >
                       <label class="text-[12px] text-text-secondary whitespace-nowrap">
-                        Alert if not scraped for
+                        {{ accountCopy.staleAlert }}
                       </label>
                       <Input
                         type="number"
@@ -645,20 +607,20 @@ onMounted(() => {
                           })
                         "
                       />
-                      <span class="text-[12px] text-text-secondary">days</span>
+                      <span class="text-[12px] text-text-secondary">{{ accountCopy.days }}</span>
                     </div>
                   </div>
 
                   <div class="px-4 py-3 flex items-center justify-between">
                     <div>
-                      <div class="text-[13px] text-text-primary">Update credentials</div>
+                      <div class="text-[13px] text-text-primary">{{ accountCopy.credentials }}</div>
                       <div class="text-[11px] text-text-secondary mt-0.5">
-                        Change the login credentials used for scraping
+                        {{ accountCopy.credentialsHint }}
                       </div>
                     </div>
                     <Button variant="secondary" size="sm" @click="openUpdateCreds(account)">
                       <KeyRound class="h-3 w-3 mr-1.5" />
-                      Update
+                      {{ accountCopy.update }}
                     </Button>
                   </div>
                 </div>
@@ -672,7 +634,7 @@ onMounted(() => {
                   @click="openOneZeroImport(account)"
                 >
                   <FileSpreadsheet class="h-3 w-3 mr-1.5" />
-                  Import statement
+                  {{ accountCopy.importStatement }}
                 </Button>
 
                 <Button
@@ -686,7 +648,7 @@ onMounted(() => {
                     class="h-3 w-3 mr-1.5 animate-spin"
                   />
                   <RefreshCw v-else class="h-3 w-3 mr-1.5" />
-                  {{ scrapingAccounts.has(account.id) ? 'Scraping...' : 'Scrape' }}
+                  {{ scrapingAccounts.has(account.id) ? accountCopy.syncing : accountCopy.sync }}
                 </Button>
 
                 <Button
@@ -695,7 +657,7 @@ onMounted(() => {
                   @click="patchAccount(account.id, { isActive: !account.isActive })"
                 >
                   <Power class="h-3 w-3 mr-1.5" />
-                  {{ account.isActive ? 'Disable' : 'Enable' }}
+                  {{ account.isActive ? accountCopy.disable : accountCopy.enable }}
                 </Button>
 
                 <AlertDialog>
@@ -710,15 +672,20 @@ onMounted(() => {
                   </AlertDialogTrigger>
                   <AlertDialogContent>
                     <AlertDialogHeader>
-                      <AlertDialogTitle>Delete "{{ account.displayName }}"?</AlertDialogTitle>
+                      <AlertDialogTitle
+                        >{{ accountCopy.deleteQuestion }} "{{
+                          account.displayName
+                        }}"?</AlertDialogTitle
+                      >
                       <AlertDialogDescription>
-                        This will permanently delete the account and all its transactions. This
-                        action cannot be undone.
+                        {{ accountCopy.deleteHint }}
                       </AlertDialogDescription>
                     </AlertDialogHeader>
                     <AlertDialogFooter>
-                      <AlertDialogCancel>Cancel</AlertDialogCancel>
-                      <AlertDialogAction @click="handleDelete(account)"> Delete </AlertDialogAction>
+                      <AlertDialogCancel>{{ accountCopy.cancel }}</AlertDialogCancel>
+                      <AlertDialogAction @click="handleDelete(account)">{{
+                        accountCopy.delete
+                      }}</AlertDialogAction>
                     </AlertDialogFooter>
                   </AlertDialogContent>
                 </AlertDialog>
@@ -729,180 +696,11 @@ onMounted(() => {
       </div>
     </div>
 
-    <!-- One Zero statement import dialog -->
-    <Dialog v-model:open="oneZeroImportOpen">
-      <DialogContent
-        class="sm:max-w-lg flex max-h-[calc(100vh-2rem)] flex-col gap-0 overflow-hidden p-0"
-      >
-        <DialogHeader class="shrink-0 border-b border-separator/60 px-6 py-4 pr-14">
-          <DialogTitle>Import One Zero statement</DialogTitle>
-        </DialogHeader>
-
-        <div class="min-h-0 flex-1 overflow-y-auto px-6 py-4">
-          <div class="space-y-3">
-            <p class="text-[13px] text-text-secondary">
-              Upload an Excel statement to add transactions to
-              <span class="font-medium text-text-primary">{{
-                oneZeroImportAccount?.displayName
-              }}</span
-              >. The file is checked for duplicates and ambiguous matches before anything is saved.
-            </p>
-
-            <div class="space-y-2">
-              <span class="text-[13px] font-medium">Statement file</span>
-              <div
-                class="flex min-w-0 items-center gap-2 rounded-lg border border-separator/70 bg-bg-primary px-2.5 py-2"
-              >
-                <input
-                  id="one-zero-import-file"
-                  ref="oneZeroImportInput"
-                  type="file"
-                  accept=".xls,.xlsx,application/vnd.ms-excel,application/vnd.openxmlformats-officedocument.spreadsheetml.sheet"
-                  class="peer sr-only"
-                  :disabled="
-                    oneZeroImportLoading || oneZeroImportCommitting || oneZeroImportCommitted
-                  "
-                  aria-describedby="one-zero-import-file-help"
-                  @change="handleOneZeroImportFileChange"
-                />
-                <label
-                  for="one-zero-import-file"
-                  class="inline-flex shrink-0 cursor-pointer items-center justify-center rounded-md bg-primary/10 px-2.5 py-1.5 text-[12px] font-medium text-primary transition-colors hover:bg-primary/15 focus-visible:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 peer-focus-visible:ring-2 peer-focus-visible:ring-primary/30"
-                  :class="{
-                    'pointer-events-none opacity-50':
-                      oneZeroImportLoading || oneZeroImportCommitting || oneZeroImportCommitted,
-                  }"
-                >
-                  Choose file
-                </label>
-                <span
-                  class="min-w-0 flex-1 truncate text-[13px] text-text-primary"
-                  :title="oneZeroImportFile?.name || 'No file chosen'"
-                >
-                  {{ oneZeroImportFile?.name || 'No file chosen' }}
-                </span>
-              </div>
-              <p id="one-zero-import-file-help" class="text-[11px] text-text-tertiary">
-                Excel files only (.xls or .xlsx).
-              </p>
-            </div>
-
-            <div
-              v-if="oneZeroImportLoading"
-              class="flex items-center gap-2 rounded-lg border border-separator/60 bg-bg-secondary px-3 py-2.5 text-[13px] text-text-secondary"
-            >
-              <Loader2 class="h-4 w-4 animate-spin text-primary" />
-              Checking the statement…
-            </div>
-
-            <div
-              v-if="oneZeroImportError"
-              class="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[13px] text-destructive"
-              role="alert"
-            >
-              {{ oneZeroImportError }}
-            </div>
-
-            <div v-if="oneZeroImportPreview" class="space-y-3">
-              <div class="rounded-lg border border-separator/60 bg-bg-secondary p-3">
-                <div class="mb-2.5 flex items-center justify-between gap-3">
-                  <div class="min-w-0">
-                    <p
-                      class="truncate text-[13px] font-medium text-text-primary"
-                      :title="oneZeroImportFile?.name"
-                    >
-                      {{ oneZeroImportFile?.name }}
-                    </p>
-                    <p class="mt-0.5 text-[11px] text-text-tertiary">
-                      {{ oneZeroImportPreview.rowCount }} rows ·
-                      {{ importDateRangeLabel(oneZeroImportPreview.dateRange) }}
-                    </p>
-                  </div>
-                  <Badge variant="secondary" class="flex-shrink-0 text-[11px]">Preview</Badge>
-                </div>
-
-                <div class="grid grid-cols-2 gap-1.5 text-[12px]">
-                  <div
-                    v-for="[label, value] in oneZeroImportStats"
-                    :key="label"
-                    class="rounded-md bg-bg-primary px-2.5 py-1.5"
-                  >
-                    <div class="text-text-tertiary">{{ label }}</div>
-                    <div
-                      class="text-[15px] font-semibold text-text-primary"
-                      :class="{ 'text-destructive': label === 'Ambiguous' && value > 0 }"
-                    >
-                      {{ value }}
-                    </div>
-                  </div>
-                </div>
-              </div>
-
-              <div
-                v-if="
-                  oneZeroImportPreview.invalidRows.length || oneZeroImportPreview.ambiguousCount
-                "
-                class="rounded-lg border border-destructive/25 bg-destructive/5 px-3 py-2.5 text-[12px] text-destructive"
-                role="alert"
-              >
-                <p class="font-medium">This statement needs attention before it can be imported.</p>
-                <p v-if="oneZeroImportPreview.ambiguousCount" class="mt-1">
-                  {{ oneZeroImportPreview.ambiguousCount }} row{{
-                    oneZeroImportPreview.ambiguousCount === 1 ? '' : 's'
-                  }}
-                  matched more than one existing transaction.
-                </p>
-                <p v-if="oneZeroImportPreview.invalidRows.length" class="mt-1">
-                  {{ oneZeroImportPreview.invalidRows.length }} invalid row{{
-                    oneZeroImportPreview.invalidRows.length === 1 ? '' : 's'
-                  }}
-                  were found.
-                </p>
-                <ul
-                  v-if="oneZeroImportPreview.invalidRows.length"
-                  class="mt-1.5 list-disc space-y-0.5 pl-4 text-[11px]"
-                >
-                  <li
-                    v-for="invalid in oneZeroImportPreview.invalidRows.slice(0, 5)"
-                    :key="invalid.row"
-                  >
-                    Row {{ invalid.row }}: {{ invalid.reason }}
-                  </li>
-                </ul>
-                <p v-if="oneZeroImportPreview.invalidRows.length > 5" class="mt-1 text-[11px]">
-                  And {{ oneZeroImportPreview.invalidRows.length - 5 }} more invalid rows.
-                </p>
-              </div>
-
-              <div
-                v-if="oneZeroImportSuccess"
-                class="rounded-lg border border-success/25 bg-success/5 px-3 py-2.5 text-[13px] text-success"
-                role="status"
-              >
-                {{ oneZeroImportSuccess }}
-              </div>
-            </div>
-          </div>
-        </div>
-
-        <DialogFooter class="shrink-0 gap-2 border-t border-separator/60 px-6 py-4 sm:gap-2">
-          <DialogClose as-child>
-            <Button variant="secondary" class="w-full sm:w-auto">
-              {{ oneZeroImportCommitted ? 'Done' : 'Cancel' }}
-            </Button>
-          </DialogClose>
-          <Button
-            variant="filled"
-            class="w-full sm:w-auto"
-            :disabled="!oneZeroImportCanCommit"
-            @click="commitOneZeroStatement"
-          >
-            <Loader2 v-if="oneZeroImportCommitting" class="h-4 w-4 mr-2 animate-spin" />
-            {{ oneZeroImportCommitting ? 'Importing…' : 'Import reviewed rows' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
+    <OneZeroImportDialog
+      v-model:open="oneZeroImportOpen"
+      :account="oneZeroImportAccount"
+      @imported="fetchAccounts"
+    />
 
     <!-- Add Account Dialog -->
     <Dialog v-model:open="showAddDialog">

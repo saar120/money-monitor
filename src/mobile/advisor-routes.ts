@@ -102,7 +102,7 @@ export function registerMobileAdvisorRoutes(
               if (event.type === 'result') result = event.text;
             }
           }
-          if (result && !deps.append(request.params.id, 'assistant', result, chart))
+          if ((result || chart) && !deps.append(request.params.id, 'assistant', result, chart))
             emit('error', { text: 'Reply could not be saved.' });
         } catch {
           emit('error', { text: 'The advisor could not finish this reply.' });
