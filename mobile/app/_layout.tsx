@@ -75,6 +75,7 @@ function AppLayout() {
                 contentStyle: { backgroundColor: colors.background },
                 headerBackButtonDisplayMode: 'minimal',
                 headerStyle: { backgroundColor: colors.background },
+                headerTitle: '',
                 headerTintColor: colors.accent,
                 headerShadowVisible: false,
               }}

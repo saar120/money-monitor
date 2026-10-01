@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Activity,
@@ -7,7 +7,6 @@ import {
   Bot,
   Building2,
   CheckCircle2,
-  ChevronDown,
   Compass,
   Home,
   Receipt,
@@ -45,15 +44,6 @@ const manage = [
   { path: '/alerts', label: 'alerts', icon: Bell },
   { path: '/scraping', label: 'scraping', icon: Activity },
 ] as const;
-const planningOpen = ref(money.some((item) => route.path.startsWith(item.path)));
-const manageOpen = ref(manage.some((item) => route.path.startsWith(item.path)));
-watch(
-  () => route.path,
-  (path) => {
-    if (money.some((item) => path.startsWith(item.path))) planningOpen.value = true;
-    if (manage.some((item) => path.startsWith(item.path))) manageOpen.value = true;
-  },
-);
 const pageTitles: Record<string, LanguageLabel> = {
   '/': 'home',
   '/transactions': 'activity',
@@ -158,75 +148,43 @@ async function exitDemo() {
             ><kbd>{{ item.shortcut }}</kbd>
           </RouterLink>
         </div>
-        <div class="nav-group secondary-nav">
-          <button
-            type="button"
-            class="nav-disclosure"
-            :aria-expanded="planningOpen"
-            :aria-label="t('planning')"
-            :title="t('planning')"
-            @click="planningOpen = !planningOpen"
+        <div class="nav-group secondary-nav" role="group" :aria-label="t('planning')">
+          <p class="nav-heading" aria-hidden="true">{{ t('planning') }}</p>
+          <RouterLink
+            v-for="item in money"
+            :key="item.path"
+            :to="item.path"
+            class="nav-link"
+            :class="{ active: isActive(item.path) }"
+            :aria-current="isActive(item.path) ? 'page' : undefined"
+            :title="t(item.label)"
+            :aria-label="t(item.label)"
           >
-            <Wallet :size="17" /><span>{{ t('planning') }}</span
-            ><ChevronDown :size="15" :class="{ open: planningOpen }" />
-          </button>
-          <div class="nav-reveal" :class="{ open: planningOpen }" :inert="!planningOpen">
-            <div class="nav-subgroup">
-              <RouterLink
-                v-for="item in money"
-                :key="item.path"
-                :to="item.path"
-                class="nav-link"
-                :class="{ active: isActive(item.path) }"
-                :aria-current="isActive(item.path) ? 'page' : undefined"
-                :title="t(item.label)"
-                :aria-label="t(item.label)"
-              >
-                <component :is="item.icon" :size="17" :stroke-width="1.9" />
-                <span>{{ t(item.label) }}</span>
-                <span v-if="item.path === '/insights' && reviewCount" class="nav-count">{{
-                  reviewCount
-                }}</span>
-              </RouterLink>
-            </div>
-          </div>
+            <component :is="item.icon" :size="18" :stroke-width="2" />
+            <span>{{ t(item.label) }}</span>
+            <span v-if="item.path === '/insights' && reviewCount" class="nav-count">{{
+              reviewCount
+            }}</span>
+          </RouterLink>
         </div>
-        <div class="nav-group secondary-nav">
-          <button
-            type="button"
-            class="nav-disclosure"
-            :aria-expanded="manageOpen"
-            :aria-label="t('manage')"
-            :title="t('manage')"
-            @click="manageOpen = !manageOpen"
+        <div class="nav-group secondary-nav" role="group" :aria-label="t('manage')">
+          <p class="nav-heading" aria-hidden="true">{{ t('manage') }}</p>
+          <RouterLink
+            v-for="item in manage"
+            :key="item.path"
+            :to="item.path"
+            class="nav-link"
+            :class="{ active: isActive(item.path) }"
+            :aria-current="isActive(item.path) ? 'page' : undefined"
+            :title="t(item.label)"
+            :aria-label="t(item.label)"
           >
-            <Settings :size="17" /><span>{{ t('manage') }}</span
-            ><ChevronDown :size="15" :class="{ open: manageOpen }" />
-          </button>
-          <div class="nav-reveal" :class="{ open: manageOpen }" :inert="!manageOpen">
-            <div class="nav-subgroup">
-              <RouterLink
-                v-for="item in manage"
-                :key="item.path"
-                :to="item.path"
-                class="nav-link"
-                :class="{ active: isActive(item.path) }"
-                :aria-current="isActive(item.path) ? 'page' : undefined"
-                :title="t(item.label)"
-                :aria-label="t(item.label)"
-              >
-                <component :is="item.icon" :size="17" :stroke-width="1.9" /><span>{{
-                  t(item.label)
-                }}</span>
-              </RouterLink>
-            </div>
-          </div>
+            <component :is="item.icon" :size="18" :stroke-width="2" />
+            <span>{{ t(item.label) }}</span>
+          </RouterLink>
         </div>
       </nav>
       <div class="sidebar-bottom">
-        <RouterLink to="/scraping" class="sidebar-sync" :title="t('scraping')"
-          ><span class="sidebar-sync-dot" />{{ t('scraping') }}</RouterLink
-        >
         <RouterLink
           to="/settings"
           class="nav-link"
@@ -250,11 +208,13 @@ async function exitDemo() {
         class="content-toolbar"
         :style="isElectron ? '-webkit-app-region: drag' : undefined"
       >
-        <h2>{{ pageTitle }}</h2>
         <div id="toolbar-actions" class="toolbar-actions" style="-webkit-app-region: no-drag" />
       </div>
       <main ref="mainEl" class="content-scroll">
-        <div class="content-inner"><slot /></div>
+        <div class="content-inner">
+          <h1 v-if="!activityWorkspace" class="sr-only">{{ pageTitle }}</h1>
+          <slot />
+        </div>
       </main>
     </div>
   </div>

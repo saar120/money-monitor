@@ -318,10 +318,9 @@
   background: var(--glass-bg);
 }
 
-/* ─── Content Toolbar (macOS Settings-style header) ─── */
+/* ─── Shared page controls ─── */
 .content-toolbar {
-  height: 52px;
-  min-height: 52px;
+  min-height: 48px;
   background: var(--bg-primary);
   border-bottom: 0.5px solid var(--separator);
 }
@@ -485,6 +484,7 @@ html[dir='rtl'] .lucide-arrow-left {
   border-radius: 7px;
 }
 .sidebar-scroll {
+  flex: 1;
   overflow: auto;
   min-height: 0;
   padding: 0 12px 14px;
@@ -533,7 +533,7 @@ html[dir='rtl'] .lucide-arrow-left {
   flex: 0 0 auto;
 }
 .nav-link kbd {
-  margin-left: auto;
+  margin-inline-start: auto;
   opacity: 0;
   color: var(--text-secondary);
   font:
@@ -544,7 +544,7 @@ html[dir='rtl'] .lucide-arrow-left {
   opacity: 0.6;
 }
 .nav-count {
-  margin-left: auto;
+  margin-inline-start: auto;
   padding: 1px 6px;
   border-radius: 20px;
   color: white;
@@ -573,22 +573,13 @@ html[dir='rtl'] .lucide-arrow-left {
 .content-toolbar {
   display: flex;
   align-items: center;
-  gap: 16px;
+  gap: 8px;
   padding: 0 28px;
-}
-.content-toolbar h2 {
-  overflow: hidden;
-  color: var(--text-primary);
-  font-size: 14px;
-  font-weight: 700;
-  text-overflow: ellipsis;
-  white-space: nowrap;
 }
 .toolbar-actions {
   display: flex;
   align-items: center;
   gap: 8px;
-  margin-left: auto;
 }
 .toolbar-controls {
   display: flex;
@@ -1956,8 +1947,8 @@ html[dir='rtl'] .lucide-arrow-left {
   height: 28px;
 }
 .app-brand {
-  min-height: 64px;
-  margin: 0 10px 16px;
+  min-height: 56px;
+  margin: 0 10px 8px;
   padding-inline: 10px;
   font-size: 15px;
 }
@@ -1969,11 +1960,15 @@ html[dir='rtl'] .lucide-arrow-left {
   padding: 0 10px 12px;
 }
 .nav-group + .nav-group {
-  margin-top: 10px;
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
 }
-.nav-link,
-.nav-disclosure {
-  min-height: 42px;
+.nav-heading {
+  margin: 0 11px 6px;
+}
+.nav-link {
+  min-height: 40px;
   border-radius: 10px;
   font-size: 13px;
   text-align: start;
@@ -1987,57 +1982,9 @@ html[dir='rtl'] .lucide-arrow-left {
 .nav-link kbd {
   display: none;
 }
-.nav-disclosure {
-  display: flex;
-  align-items: center;
-  gap: 11px;
-  width: 100%;
-  padding: 0 11px;
-  color: var(--text-secondary);
-  font-weight: 600;
-}
-.nav-disclosure:hover {
-  background: var(--bg-tertiary);
-  color: var(--text-primary);
-}
-.nav-disclosure svg:last-child {
-  margin-inline-start: auto;
-  transition: transform 160ms ease-out;
-}
-.nav-disclosure svg:last-child.open {
-  transform: rotate(180deg);
-}
-.nav-subgroup {
-  padding-block: 4px;
-  padding-inline-start: 14px;
-}
-.nav-subgroup .nav-link {
-  min-height: 37px;
-  font-size: 12px;
-}
 .sidebar-bottom {
   display: grid;
-  gap: 4px;
   padding: 12px 10px 16px;
-}
-.sidebar-sync {
-  display: flex;
-  align-items: center;
-  gap: 8px;
-  min-height: 34px;
-  padding-inline: 12px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  text-decoration: none;
-}
-.sidebar-sync:hover {
-  color: var(--accent);
-}
-.sidebar-sync-dot {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #0aa779;
 }
 .app-content,
 .in-electron .app-content {
@@ -2047,10 +1994,15 @@ html[dir='rtl'] .lucide-arrow-left {
   background: var(--bg-primary);
 }
 .content-toolbar {
-  min-height: 74px;
-  height: 74px;
+  min-height: 48px;
+  height: auto;
   padding-inline: max(28px, calc((100% - var(--content-column-width, 1124px)) / 2));
+  padding-block: 8px;
   border-bottom: 1px solid var(--separator);
+}
+/* Browser pages without controls have no header; Electron keeps its drag region. */
+.app-shell:not(.in-electron) .content-toolbar:not(:has(.toolbar-actions > *)) {
+  display: none;
 }
 :root.platform-darwin .in-electron .content-toolbar {
   background: color-mix(in srgb, var(--bg-primary) 78%, transparent);
@@ -2090,21 +2042,15 @@ html[dir='rtl'] .lucide-arrow-left {
 :root.platform-darwin .in-electron .toolbar-icon-button:hover {
   background: color-mix(in srgb, var(--bg-primary) 95%, transparent);
 }
-.content-toolbar h2 {
-  margin: 0;
-  font-size: 20px;
-  font-weight: 720;
-  letter-spacing: -0.025em;
-}
 .toolbar-actions {
-  margin-left: 0;
-  margin-inline-start: auto;
+  min-width: 0;
+  flex-wrap: wrap;
 }
 .content-inner {
   width: min(100%, 1180px);
   min-height: 100%;
   margin-inline: auto;
-  padding: 30px 28px 44px;
+  padding: 20px 28px 44px;
 }
 .app-content:has(.explore-page, .category-detail-page, .monthly-comparison-page) {
   --content-column-width: 970px;
@@ -2961,19 +2907,12 @@ html[dir='rtl'] .lucide-arrow-left {
   }
   .app-brand span,
   .nav-link span,
-  .nav-disclosure span,
-  .nav-disclosure svg:last-child,
-  .sidebar-sync,
   .nav-heading {
     display: none;
   }
-  .nav-link,
-  .nav-disclosure {
+  .nav-link {
     justify-content: center;
     padding: 0;
-  }
-  .nav-subgroup {
-    padding-inline: 0;
   }
   .content-inner {
     padding-inline: 18px;
@@ -3007,9 +2946,7 @@ html[dir='rtl'] .lucide-arrow-left {
   }
 }
 @media (prefers-reduced-motion: reduce) {
-  .nav-disclosure svg:last-child,
   .nav-link,
-  .nav-disclosure,
   .category-list-row {
     transition: none;
   }
@@ -3336,24 +3273,7 @@ html[dir='rtl'] .lucide-arrow-left {
   }
 }
 
-/* Navigation and transaction-detail continuity. */
-.nav-reveal {
-  display: grid;
-  grid-template-rows: 0fr;
-  visibility: hidden;
-  transition:
-    grid-template-rows 200ms cubic-bezier(0.16, 1, 0.3, 1),
-    visibility 200ms;
-}
-.nav-reveal.open {
-  grid-template-rows: 1fr;
-  visibility: visible;
-}
-.nav-reveal > .nav-subgroup {
-  min-height: 0;
-  overflow: hidden;
-  padding-block: 0;
-}
+/* Transaction-detail continuity. */
 .detail-panel-enter-active,
 .detail-panel-leave-active {
   transition:

@@ -265,14 +265,10 @@ export default function AdvisorScreen() {
           styles.header,
           {
             backgroundColor: colors.background,
-            paddingTop: insets.top + 12,
+            paddingTop: insets.top + 4,
           },
         ]}
       >
-        <View>
-          <Text style={[styles.title, { color: colors.text }]}>{t('advisor')}</Text>
-          <Text style={[styles.subtitle, { color: colors.secondary }]}>{t('advisorSubtitle')}</Text>
-        </View>
         <GlassSurface
           {...(supportsGlass ? { glassEffectStyle: 'regular' as const } : {})}
           style={[
@@ -735,14 +731,13 @@ const styles = StyleSheet.create({
   root: { flex: 1 },
   header: {
     paddingHorizontal: 20,
-    paddingTop: 16,
-    paddingBottom: 14,
+    paddingTop: 4,
+    paddingBottom: 4,
     flexDirection: 'row',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     alignItems: 'center',
   },
   title: { fontSize: 27, fontWeight: '700' },
-  subtitle: { fontSize: 12, marginTop: 2 },
   actions: {
     flexDirection: 'row',
     padding: 3,

@@ -13,7 +13,7 @@ name: Hebrew setting persists and root screens remain reachable in RTL
     id: open-settings
 - tapOn:
     id: language-he
-- assertVisible: בוקר טוב
+- assertVisible: שפת האפליקציה
 - stopApp
 - launchApp:
     arguments:
@@ -34,4 +34,4 @@ name: Hebrew setting persists and root screens remain reachable in RTL
 - tapOn: 'יועץ, לשונית 4 מתוך 4'
 - assertVisible:
     id: advisor-screen
-- assertVisible: 'על מה הוצאתי הכי הרבה בחודש 2026-09?'
+- assertVisible: 'הוצאות לפי קטגוריה · 2026-09'

@@ -435,7 +435,7 @@ watch(search, () => {
 
       <div class="proto-content">
         <div class="proto-title">
-          <h1>{{ t('activity') }}</h1>
+          <h1 class="sr-only">{{ t('activity') }}</h1>
           <span>{{ total }} {{ t('transactions') }}</span>
         </div>
         <div v-if="error" class="proto-error" role="alert">
@@ -699,8 +699,8 @@ watch(search, () => {
   display: flex;
   align-items: center;
   gap: 12px;
-  min-height: 82px;
-  padding: 0 25px;
+  min-height: 48px;
+  padding: 8px 25px;
   border-bottom: 1px solid var(--separator);
 }
 .proto-month {
@@ -903,21 +903,10 @@ watch(search, () => {
   width: 100%;
   max-width: 1120px;
   margin-inline: auto;
-  padding: 29px 25px 0;
+  padding: 20px 25px 0;
 }
 .proto-title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  padding-block-end: 20px;
-}
-.proto-title h1 {
-  margin: 0;
-  color: var(--text-primary);
-  font-size: 32px;
-  line-height: 1.18;
-  font-weight: 750;
-  letter-spacing: -0.04em;
+  padding-block-end: 12px;
 }
 .proto-title span {
   color: var(--text-tertiary);

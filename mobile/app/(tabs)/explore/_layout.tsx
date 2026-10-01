@@ -1,10 +1,9 @@
 import { Stack } from 'expo-router';
 import { useAppColors } from '@/theme';
-import { t, useLanguage } from '@/localization';
+import { t } from '@/localization';
 
 export default function ExploreLayout() {
   const colors = useAppColors();
-  const { language } = useLanguage();
   return (
     <Stack
       screenOptions={{
@@ -13,7 +12,7 @@ export default function ExploreLayout() {
         headerStyle: { backgroundColor: colors.background },
         headerLargeStyle: { backgroundColor: colors.background },
         headerLargeTitleStyle: { color: colors.text },
-        headerTitleStyle: { color: colors.text },
+        headerTitle: '',
         headerTintColor: colors.accent,
         contentStyle: { backgroundColor: colors.background },
       }}
@@ -21,9 +20,7 @@ export default function ExploreLayout() {
       <Stack.Screen
         name="index"
         options={{
-          title: t('explore'),
-          headerLargeTitleEnabled: false,
-          headerTitleAlign: language === 'he' ? 'center' : 'left',
+          headerShown: false,
         }}
       />
       <Stack.Screen name="categories" options={{ title: t('categories') }} />
