@@ -31,7 +31,13 @@
     "format": "prettier --write .",
     "format:check": "prettier --check .",
     "prepare": "husky",
-    "postinstall": "patch-package"
+    "postinstall": "patch-package",
+    "typecheck": "tsc --emitDeclarationOnly && tsc --noEmit -p electron/tsconfig.json && npm exec --workspace dashboard -- vue-tsc -b --noEmit",
+    "test:electron": "vitest run --config electron/mobile-access/vitest.config.ts",
+    "check": "npm run lint && npm run check:docs && npm run typecheck && npm run mobile:bootstrap-schema:check && npm test && npm run test:electron",
+    "backup": "node scripts/backup.mjs",
+    "restore": "node scripts/restore.mjs",
+    "check:docs": "node scripts/check-docs.mjs"
   },
   "lint-staged": {
     "*.{js,ts}": [

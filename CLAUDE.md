@@ -1,5 +1,5 @@
-# CLAUDE.md
+# Claude entry point
 
-## Pre-commit Hooks
+Read [AGENTS.md](AGENTS.md) for repository navigation and screenshot guidance. Setup and checks are in [docs/development.md](docs/development.md).
 
-Pre-commit hooks run automatically on `git commit` (TypeScript type-checking, ESLint, Prettier, gitleaks). If a hook fails, fix the underlying issue and retry the commit — never skip hooks with `--no-verify`.
+Commit hooks run the desktop/backend typecheck, staged lint/format, and gitleaks. Fix failing checks before retrying the commit.

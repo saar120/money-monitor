@@ -34,7 +34,10 @@ try {
           return transition;
         };
     });
-    page.on('pageerror', (e) => errors.push(e.message));
+    page.on('pageerror', (e) => {
+      errors.push(e.message);
+      console.error(`Browser error: ${e.message}`);
+    });
     await page.setRequestInterception(true);
     page.on('request', (req) => {
       const u = new URL(req.url());
@@ -225,12 +228,16 @@ try {
     await page.waitForFunction(
       () => document.querySelectorAll('.month-stepper-current > span').length === 1,
     );
-    await page.click('.nav-disclosure');
-    await new Promise((r) => setTimeout(r, 250));
-    assert.equal(await page.$eval('.nav-reveal', (el) => el.inert), false);
-    await page.click('.nav-disclosure');
-    await new Promise((r) => setTimeout(r, 250));
-    assert.equal(await page.$eval('.nav-reveal', (el) => el.inert), true);
+    assert.equal(
+      await page.$$eval('.secondary-nav .nav-link', (els) => els.length),
+      8,
+      'Planning and management links are directly available',
+    );
+    assert.equal(
+      await page.$eval('.nav-link[href="/explore"]', (el) => el.getAttribute('aria-current')),
+      'page',
+      'Navigation identifies the active page',
+    );
     assert(
       await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth),
       'No horizontal page overflow',
