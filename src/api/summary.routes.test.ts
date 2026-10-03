@@ -8,6 +8,12 @@ import { config } from '../config.js';
 const { evaluateTypeSafeMock } = vi.hoisted(() => ({ evaluateTypeSafeMock: vi.fn() }));
 vi.mock('../ai/typesafe/client.js', () => ({ evaluateTypeSafe: evaluateTypeSafeMock }));
 
+// Keep monthly charges in the past while preserving real timers for timeout checks.
+vi.mock('../shared/dates.js', async (importOriginal) => ({
+  ...(await importOriginal<typeof import('../shared/dates.js')>()),
+  todayInIsrael: () => '2026-09-15',
+}));
+
 let testDb: TestDb;
 let configKeySequence = 0;
 
