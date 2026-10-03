@@ -61,6 +61,8 @@ npm --prefix mobile test
 
 Root `check` runs lint, documentation link/script checks, backend/Electron/dashboard typechecks, the bootstrap schema drift check, backend tests, and Electron tests. The desktop/backend typecheck emits backend declarations because Electron imports `dist/` modules. Mobile checks use its separate package. CI runs these on pushes and PRs targeting `main` or `mm_revamped`. Native UI E2E remains a macOS check.
 
+Commit hooks run the desktop/backend typecheck, staged lint/format, and gitleaks. Fix failing checks before retrying the commit.
+
 After changing the bootstrap contract, use `npm run mobile:bootstrap-schema:generate` and include the generated schema; `check` verifies it is current.
 
 ## Synthetic UI QA
