@@ -2,9 +2,9 @@ name: Tests
 
 on:
   push:
-    branches: [main]
+    branches: [main, mm_revamped]
   pull_request:
-    branches: [main]
+    branches: [main, mm_revamped]
 
 jobs:
   test:
@@ -20,9 +20,9 @@ jobs:
 
       - run: npm ci
 
-      - run: npm test
+      - run: npm run check
 
-      - run: npx vitest run --config electron/mobile-access/vitest.config.ts
+      - run: npm run build
 
   mobile:
     runs-on: ubuntu-latest
