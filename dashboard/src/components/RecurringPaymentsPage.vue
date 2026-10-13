@@ -124,11 +124,11 @@ onUnmounted(() => {
 
 <template>
   <section
-    class="subscriptions-page w-full max-w-5xl mx-auto space-y-7"
+    class="subscriptions-page min-w-0 w-full max-w-5xl mx-auto space-y-8"
     :aria-label="t('subscriptionsAndServices')"
   >
     <header>
-      <p class="text-[13px] text-text-secondary">
+      <p class="text-[14px] text-text-secondary">
         {{ t('recurringIntro') }}
       </p>
     </header>
@@ -137,7 +137,7 @@ onUnmounted(() => {
       <Skeleton class="h-20 w-full" />
       <Skeleton class="h-60 w-full" />
     </div>
-    <div v-else-if="error && !result" class="rounded-xl border border-separator p-6 text-center">
+    <div v-else-if="error && !result" class="py-12 px-6 text-center">
       <p class="text-sm text-text-secondary">{{ error }}</p>
       <Button class="mt-4" variant="secondary" @click="load">{{ t('tryAgain') }}</Button>
     </div>
@@ -159,7 +159,7 @@ onUnmounted(() => {
 
       <div
         v-if="!result.payments.length && !result.suggestions.length"
-        class="rounded-xl border border-separator/60 px-6 py-12 text-center"
+        class="px-6 py-12 text-center"
       >
         <p class="font-medium text-text-primary">{{ t('noSubscriptions') }}</p>
         <p class="mt-1 text-sm text-text-secondary">
@@ -168,14 +168,16 @@ onUnmounted(() => {
       </div>
       <div
         v-else-if="result.payments.length"
-        class="subscriptions-ledger overflow-x-auto rounded-xl border border-separator/60 bg-bg-primary"
+        tabindex="0"
+        :aria-label="t('subscriptions')"
+        class="subscriptions-ledger overflow-x-auto border-y border-separator/60"
       >
-        <table class="w-full text-left text-[13px]">
-          <thead class="bg-bg-secondary text-[12px] text-text-secondary">
+        <table class="w-full min-w-[760px] text-start text-[14px]">
+          <thead class="text-[12px] text-text-secondary">
             <tr>
               <th scope="col" class="px-5 py-3 font-medium">{{ t('payment') }}</th>
               <th scope="col" class="px-4 py-3 font-medium">{{ t('pattern') }}</th>
-              <th scope="col" class="px-4 py-3 font-medium text-right">{{ t('usualCharge') }}</th>
+              <th scope="col" class="px-4 py-3 font-medium text-end">{{ t('usualCharge') }}</th>
               <th scope="col" class="px-4 py-3 font-medium">{{ t('lastCharged') }}</th>
               <th scope="col" class="px-5 py-3 font-medium">{{ t('nextExpected') }}</th>
               <th scope="col" class="px-5 py-3 font-medium">{{ t('actions') }}</th>
@@ -187,10 +189,10 @@ onUnmounted(() => {
               :key="`${payment.accountName}-${payment.name}-${index}`"
               class="border-t border-separator/60"
             >
-              <td class="px-5 py-3.5">
+              <td class="px-4 py-4">
                 <button
                   type="button"
-                  class="font-medium text-text-primary hover:text-accent text-left"
+                  class="font-medium text-text-primary hover:text-accent text-start"
                   dir="auto"
                   @click="openDetail(payment)"
                 >
@@ -200,20 +202,20 @@ onUnmounted(() => {
                   {{ payment.accountName }}
                 </p>
               </td>
-              <td class="px-4 py-3.5 text-text-secondary">
+              <td class="px-4 py-4 text-text-secondary">
                 <span>{{ frequencyLabel(payment.frequency) }}</span>
                 <span class="ml-2 text-[11px]">{{ payment.occurrences }} {{ t('charges') }}</span>
               </td>
-              <td class="px-4 py-3.5 text-right tabular-nums font-medium text-text-primary">
+              <td class="px-4 py-4 text-end tabular-nums font-medium text-text-primary" dir="ltr">
                 {{ formatAmount(payment.usualAmount, payment.currencyCode) }}
               </td>
-              <td class="px-4 py-3.5 whitespace-nowrap text-text-secondary">
+              <td class="px-4 py-4 whitespace-nowrap text-text-secondary">
                 {{ shortDate(payment.lastChargeDate) }}
               </td>
-              <td class="px-5 py-3.5 whitespace-nowrap text-text-secondary">
+              <td class="px-4 py-4 whitespace-nowrap text-text-secondary">
                 {{ t('around') }} {{ shortDate(payment.nextExpectedDate) }}
               </td>
-              <td class="px-5 py-3.5">
+              <td class="px-4 py-4">
                 <Button
                   size="sm"
                   variant="ghost"
@@ -235,12 +237,12 @@ onUnmounted(() => {
           <div
             v-for="payment in result.suggestions"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"
-            class="flex flex-wrap items-center justify-between gap-3 px-5 py-3.5"
+            class="flex flex-wrap items-center justify-between gap-3 px-4 py-4"
           >
             <div>
               <button
                 type="button"
-                class="font-medium text-text-primary hover:text-accent text-left"
+                class="font-medium text-text-primary hover:text-accent text-start"
                 dir="auto"
                 @click="openDetail(payment)"
               >
@@ -273,11 +275,11 @@ onUnmounted(() => {
           <div
             v-for="payment in result.excluded"
             :key="`${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`"
-            class="flex items-center justify-between gap-3 px-5 py-2"
+            class="flex flex-wrap items-center justify-between gap-3 px-4 py-3"
           >
             <button
               type="button"
-              class="text-sm text-text-secondary hover:text-accent text-left"
+              class="text-sm text-text-secondary hover:text-accent text-start"
               dir="auto"
               @click="openDetail(payment)"
             >
@@ -307,7 +309,7 @@ onUnmounted(() => {
           <p class="text-sm text-text-secondary" dir="auto">
             {{ detail.payment.accountName }} · {{ frequencyLabel(detail.payment.frequency) }}
           </p>
-          <div class="grid grid-cols-2 gap-3 rounded-xl bg-bg-secondary p-4">
+          <div class="grid grid-cols-1 sm:grid-cols-2 gap-6 border-y border-separator py-6">
             <div>
               <p class="text-xs text-text-secondary">{{ t('usualCharge') }}</p>
               <p class="text-lg font-semibold tabular-nums text-text-primary">
@@ -335,18 +337,18 @@ onUnmounted(() => {
             <h3 class="mb-2 text-sm font-semibold text-text-primary">
               {{ t('chargesInPattern') }}
             </h3>
-            <div class="divide-y divide-separator/60 rounded-xl border border-separator/60">
+            <div class="divide-y divide-separator/60 border-y border-separator/60">
               <RouterLink
                 v-for="row in matchedCharges"
                 :key="row.id"
                 :to="{ path: '/transactions', query: { transactionId: row.id } }"
-                class="flex justify-between gap-4 px-4 py-3 text-sm hover:bg-bg-secondary"
+                class="flex flex-wrap justify-between gap-4 px-4 py-3 text-sm hover:bg-bg-secondary"
               >
                 <div>
                   <p class="text-text-primary" dir="auto">{{ row.description }}</p>
                   <p class="text-xs text-text-secondary">{{ shortDate(row.date) }}</p>
                 </div>
-                <span class="tabular-nums text-text-primary whitespace-nowrap">{{
+                <span dir="ltr" class="tabular-nums text-text-primary whitespace-nowrap">{{
                   formatAmount(row.amount, detail.payment.currencyCode)
                 }}</span>
               </RouterLink>
@@ -356,18 +358,18 @@ onUnmounted(() => {
             <summary class="cursor-pointer font-medium text-text-secondary">
               {{ t('otherMerchantCharges') }} ({{ otherCharges.length }})
             </summary>
-            <div class="mt-2 divide-y divide-separator/60 rounded-xl border border-separator/60">
+            <div class="mt-2 divide-y divide-separator/60 border-y border-separator/60">
               <RouterLink
                 v-for="row in otherCharges"
                 :key="row.id"
                 :to="{ path: '/transactions', query: { transactionId: row.id } }"
-                class="flex justify-between gap-4 px-4 py-3 hover:bg-bg-secondary"
+                class="flex flex-wrap justify-between gap-4 px-4 py-3 hover:bg-bg-secondary"
               >
                 <div>
                   <p class="text-text-primary" dir="auto">{{ row.description }}</p>
                   <p class="text-xs text-text-secondary">{{ shortDate(row.date) }}</p>
                 </div>
-                <span class="tabular-nums text-text-primary whitespace-nowrap">{{
+                <span dir="ltr" class="tabular-nums text-text-primary whitespace-nowrap">{{
                   formatAmount(row.amount, detail.payment.currencyCode)
                 }}</span>
               </RouterLink>
@@ -378,3 +380,36 @@ onUnmounted(() => {
     </Dialog>
   </section>
 </template>
+
+<style scoped>
+.subscriptions-page > header {
+  max-width: 70ch;
+}
+.subscriptions-page > section > h2 {
+  margin-block-end: 12px;
+  font-size: 20px;
+  line-height: 1.3;
+}
+.subscription-totals {
+  padding: 24px 16px;
+  gap: 32px;
+  border-block: 1px solid var(--separator);
+}
+.subscription-total {
+  padding: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.subscriptions-ledger th,
+.subscriptions-ledger td {
+  padding-inline: 16px;
+}
+.subscriptions-ledger th {
+  padding-block: 12px;
+}
+.subscriptions-ledger td {
+  padding-block: 16px;
+}
+</style>

@@ -137,14 +137,14 @@ async function testAlert() {
 </script>
 
 <template>
-  <div class="alerts-page max-w-2xl mx-auto space-y-7 overflow-y-auto flex-1">
+  <div class="alerts-page w-full min-w-0 max-w-2xl mx-auto space-y-7 pb-6">
     <Teleport to="#toolbar-actions">
-      <div class="flex items-center gap-2">
-        <div v-if="success" class="flex items-center gap-1.5 text-[13px] text-success">
+      <div class="flex flex-wrap items-center gap-2">
+        <div v-if="success" class="flex items-center gap-1.5 text-[14px] text-success">
           <CheckCircle class="h-3.5 w-3.5" />
           {{ success }}
         </div>
-        <div v-if="error" class="flex items-center gap-1.5 text-[13px] text-destructive">
+        <div v-if="error" class="flex items-center gap-1.5 text-[14px] text-destructive">
           <AlertCircle class="h-3.5 w-3.5" />
           {{ error }}
         </div>
@@ -178,7 +178,7 @@ async function testAlert() {
           <Input
             v-model.number="settings.largeChargeThreshold"
             type="number"
-            class="w-28 h-8 text-[13px]"
+            class="w-28 h-8 text-[14px]"
             min="0"
           />
         </SettingsRow>
@@ -186,7 +186,7 @@ async function testAlert() {
           <Input
             v-model.number="settings.unusualSpendingPercent"
             type="number"
-            class="w-28 h-8 text-[13px]"
+            class="w-28 h-8 text-[14px]"
             min="10"
             max="200"
           />
@@ -208,7 +208,7 @@ async function testAlert() {
           <Input
             v-model.number="settings.monthlySummary.dayOfMonth"
             type="number"
-            class="w-28 h-8 text-[13px]"
+            class="w-28 h-8 text-[14px]"
             min="1"
             max="28"
           />
@@ -222,3 +222,12 @@ async function testAlert() {
     </template>
   </div>
 </template>
+
+<style scoped>
+.alerts-page {
+  line-height: 1.6;
+}
+.alerts-page :deep(input) {
+  min-height: 38px;
+}
+</style>

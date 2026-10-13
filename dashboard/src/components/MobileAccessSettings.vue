@@ -318,7 +318,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <SettingsGroup :title="copy.title" :description="copy.hint">
+  <SettingsGroup class="mobile-access-settings" :title="copy.title" :description="copy.hint">
     <SettingsRow :label="copy.enabled" :description="copy.enabledHint">
       <Switch
         :model-value="snapshot?.enabled ?? false"
@@ -328,9 +328,9 @@ onUnmounted(() => {
     </SettingsRow>
 
     <SettingsRow :label="copy.status">
-      <div class="flex items-center gap-3">
-        <div class="flex flex-col items-end gap-1">
-          <div class="flex items-center gap-2 text-[13px]" :class="statusTone">
+      <div class="flex min-w-0 flex-wrap items-center gap-3">
+        <div class="flex min-w-0 flex-col gap-1 sm:items-end">
+          <div class="flex items-center gap-2 text-[14px]" :class="statusTone">
             <LoaderCircle
               v-if="loading || changingEnabled || retrying"
               class="h-3.5 w-3.5 animate-spin"
@@ -338,7 +338,10 @@ onUnmounted(() => {
             <ShieldCheck v-else class="h-3.5 w-3.5" />
             <span>{{ supported ? statusLabel : copy.available }}</span>
           </div>
-          <p v-if="statusDetail" class="max-w-[280px] text-right text-[11px] text-text-secondary">
+          <p
+            v-if="statusDetail"
+            class="max-w-[280px] break-words sm:text-end text-[12px] text-text-secondary"
+          >
             {{ statusDetail }}
           </p>
         </div>
@@ -355,8 +358,8 @@ onUnmounted(() => {
     </SettingsRow>
 
     <SettingsRow v-if="snapshot?.enabled" :label="copy.pair" vertical>
-      <div class="w-full space-y-3">
-        <div class="flex items-center justify-between gap-3">
+      <div class="w-full space-y-5">
+        <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-[12px] text-text-secondary">
             The code expires after five minutes and still requires approval on this Mac.
           </p>
@@ -371,14 +374,14 @@ onUnmounted(() => {
           </Button>
         </div>
 
-        <div v-if="qrImage" class="flex flex-col items-center gap-2 rounded-xl bg-white p-4">
+        <div v-if="qrImage" class="flex flex-col items-center gap-3 bg-white px-6 py-6">
           <img
             :src="qrImage"
-            class="h-[232px] w-[232px]"
+            class="h-auto w-[232px] max-w-full"
             :alt="`Short-lived iPhone pairing code. Expires ${formatDate(qrExpiresAt)}.`"
           />
-          <p class="text-[11px] text-slate-500">Expires {{ formatDate(qrExpiresAt) }}</p>
-          <p v-if="qrDeviceName" class="text-center text-[11px] text-slate-500">
+          <p class="text-[12px] text-slate-500">Expires {{ formatDate(qrExpiresAt) }}</p>
+          <p v-if="qrDeviceName" class="text-center text-[12px] text-slate-500">
             Re-pairing {{ qrDeviceName }} replaces its current access only after approval.
           </p>
         </div>
@@ -390,13 +393,13 @@ onUnmounted(() => {
         <div
           v-for="request in activeRequests"
           :key="request.pairingId"
-          class="flex items-center justify-between gap-3 rounded-lg bg-bg-secondary/60 px-3 py-2.5"
+          class="flex flex-wrap items-center justify-between gap-4 border-b border-separator/60 px-4 py-4"
         >
           <div class="min-w-0">
-            <p class="truncate text-[13px] font-medium text-text-primary">
+            <p class="truncate text-[14px] font-medium text-text-primary">
               {{ request.deviceName || 'iPhone' }}
             </p>
-            <p class="text-[11px] text-text-secondary">
+            <p class="text-[12px] text-text-secondary">
               Approval expires {{ formatDate(request.expiresAt) }}
             </p>
           </div>
@@ -426,13 +429,13 @@ onUnmounted(() => {
         <div
           v-for="device in snapshot.devices"
           :key="device.id"
-          class="flex items-center justify-between gap-3 py-3 first:pt-0 last:pb-0"
+          class="flex flex-wrap items-center justify-between gap-4 px-4 py-4"
         >
           <div class="flex min-w-0 items-center gap-2.5">
             <Smartphone class="h-4 w-4 shrink-0 text-text-secondary" />
             <div class="min-w-0">
-              <p class="truncate text-[13px] font-medium text-text-primary">{{ device.name }}</p>
-              <p class="text-[11px] text-text-secondary">
+              <p class="truncate text-[14px] font-medium text-text-primary">{{ device.name }}</p>
+              <p class="text-[12px] text-text-secondary">
                 <span v-if="device.revokedAt" class="text-destructive">
                   Revoked {{ formatDate(device.revokedAt) }}
                 </span>
@@ -465,7 +468,7 @@ onUnmounted(() => {
     <SettingsRow v-if="snapshot?.transport.publicUrl" :label="copy.connection" vertical>
       <details class="w-full text-[12px] text-text-secondary">
         <summary class="cursor-pointer select-none">Show private address</summary>
-        <code class="mt-2 block break-all rounded bg-bg-secondary px-2.5 py-2 text-[11px]">
+        <code class="mt-2 block break-all rounded bg-bg-secondary px-2.5 py-2 text-[12px]">
           {{ snapshot.transport.publicUrl }}
         </code>
       </details>
@@ -476,3 +479,9 @@ onUnmounted(() => {
     </SettingsRow>
   </SettingsGroup>
 </template>
+
+<style scoped>
+.mobile-access-settings :deep(p) {
+  line-height: 1.6;
+}
+</style>

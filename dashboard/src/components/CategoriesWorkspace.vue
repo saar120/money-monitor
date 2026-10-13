@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Plus, Trash2, X } from 'lucide-vue-next';
+import { Plus, Trash2, X, Pencil } from 'lucide-vue-next';
 import {
   createCategory,
   deleteCategory,
@@ -225,11 +225,17 @@ onMounted(load);
           <span class="category-list-name"
             ><i :style="{ background: item.color ?? DEFAULT_CATEGORY_COLOR }" />
             <span
-              ><strong dir="auto">{{ item.label }}</strong
-              ><small dir="auto">{{ item.rules || copy.noRules }}</small></span
+              ><strong
+                ><bdi dir="auto">{{ item.label }}</bdi></strong
+              ><small :title="item.rules || copy.noRules"
+                ><bdi dir="auto">{{ item.rules || copy.noRules }}</bdi></small
+              ></span
             >
           </span>
-          <span class="category-list-owner">{{ ownerLabel(ownerValue(item)) }}</span>
+          <span class="category-list-owner"
+            ><bdi dir="auto">{{ ownerLabel(ownerValue(item)) }}</bdi
+            ><Pencil :size="14" aria-hidden="true"
+          /></span>
         </button>
         <p v-if="loading" class="category-list-empty">{{ t('loadingTransactions') }}</p>
         <p v-else-if="!categories.length" class="category-list-empty">{{ copy.empty }}</p>
@@ -243,7 +249,9 @@ onMounted(load);
       />
       <aside v-if="selectedId !== null" class="category-inspector" :aria-label="t('details')">
         <div class="category-inspector-head">
-          <h3>{{ selectedId === 'new' ? copy.newTitle : label }}</h3>
+          <h3>
+            <bdi dir="auto">{{ selectedId === 'new' ? copy.newTitle : label }}</bdi>
+          </h3>
           <button type="button" :aria-label="copy.cancel" @click="selectedId = null">
             <X :size="18" />
           </button>
@@ -306,3 +314,98 @@ onMounted(load);
     </div>
   </div>
 </template>
+
+<style scoped>
+.category-workspace-top {
+  padding: 16px 16px 24px;
+  font-size: 14px;
+}
+.category-list-head,
+.category-list-row {
+  padding-inline: 16px;
+}
+.category-list-head {
+  font-size: 12px;
+}
+.category-list-row {
+  padding-block: 16px;
+}
+.category-list-name strong {
+  font-size: 14px;
+}
+.category-list-name small {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.category-inspector-head,
+.category-inspector-body,
+.category-inspector-actions {
+  padding-inline: 24px;
+}
+.category-inspector-head {
+  min-height: 72px;
+}
+.category-inspector-head h3 {
+  font-size: 20px;
+  font-weight: 650;
+}
+.category-inspector-body {
+  padding-block: 24px;
+}
+.category-inspector-body label {
+  margin: 0;
+}
+.category-inspector-actions {
+  padding-block: 20px;
+}
+.category-inspector-head button {
+  width: 36px;
+  height: 36px;
+  flex-shrink: 0;
+}
+.category-inspector-body input:not([type='checkbox']),
+.category-inspector-body select,
+.category-inspector-body textarea {
+  min-height: 40px;
+  font-size: 14px;
+}
+.category-inspector-body small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.category-inspector-actions button {
+  min-height: 40px;
+  font-size: 14px;
+}
+.category-list-row {
+  border-bottom-color: color-mix(in srgb, var(--separator) 55%, transparent);
+}
+.category-list-row:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+}
+.category-list-empty,
+.category-inspector-placeholder,
+.category-list-owner {
+  font-size: 14px;
+}
+
+.category-list-owner {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  min-width: 0;
+}
+.category-list-owner bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.category-list-owner svg {
+  flex-shrink: 0;
+}
+.category-inspector-head h3 {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+</style>

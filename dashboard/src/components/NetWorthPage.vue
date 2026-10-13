@@ -47,7 +47,6 @@ import {
 } from '@/lib/net-worth-constants';
 import { getAssetCategory } from '@/lib/asset-categories';
 import { useChartTheme } from '@/composables/useChartTheme';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -695,9 +694,9 @@ const fullLiabilityMap = computed(() => {
 </script>
 
 <template>
-  <div class="networth-page space-y-5">
+  <div class="networth-page min-w-0 space-y-8">
     <Teleport to="#toolbar-actions">
-      <div class="networth-add-wrap">
+      <div class="networth-add-wrap" @keydown.esc="addMenuOpen = false">
         <Button size="sm" :aria-expanded="addMenuOpen" @click="addMenuOpen = !addMenuOpen"
           ><Plus class="h-4 w-4" />{{ t('add') }}</Button
         >
@@ -733,10 +732,13 @@ const fullLiabilityMap = computed(() => {
       <span>{{ t('staleExchangeRates') }}</span>
     </div>
 
-    <!-- Hero Card -->
-    <Card class="networth-hero">
-      <CardContent class="pt-6">
-        <div v-if="netWorth.loading.value && !nw" class="grid grid-cols-[1fr_auto] gap-6">
+    <!-- Net worth summary -->
+    <section class="networth-hero">
+      <div class="finance-section-content pt-6">
+        <div
+          v-if="netWorth.loading.value && !nw"
+          class="grid grid-cols-1 sm:grid-cols-[1fr_auto] gap-6"
+        >
           <Skeleton class="h-12 w-48" />
           <div class="space-y-2">
             <Skeleton class="h-6 w-32" />
@@ -745,10 +747,13 @@ const fullLiabilityMap = computed(() => {
         </div>
         <div v-else-if="nw" class="grid grid-cols-[1fr_auto] gap-6 items-start max-md:grid-cols-1">
           <div>
-            <p class="text-[11px] font-semibold text-text-secondary mb-1">
+            <p class="text-[12px] font-semibold text-text-secondary mb-1">
               {{ t('totalNetWorth') }}
             </p>
-            <p class="text-4xl font-semibold tabular-nums text-text-primary" dir="ltr">
+            <p
+              class="text-3xl sm:text-4xl font-semibold tabular-nums break-words text-text-primary"
+              dir="ltr"
+            >
               {{
                 nw.total !== 0 || nw.assets.length > 0 || nw.banks.length > 0
                   ? signedCurrency(nw.total)
@@ -757,21 +762,21 @@ const fullLiabilityMap = computed(() => {
             </p>
             <p
               v-if="nw.total === 0 && nw.assets.length === 0"
-              class="text-[13px] text-text-secondary mt-2"
+              class="text-[14px] text-text-secondary mt-2"
             >
               {{ t('addFirstAsset') }}
               <Button size="sm" class="ml-2" @click="openAddAsset">{{ t('addAsset') }}</Button>
             </p>
           </div>
-          <div class="space-y-2 text-right max-md:text-left">
+          <div class="space-y-4 text-end max-md:text-start">
             <div>
-              <p class="text-[11px] text-text-secondary">{{ t('liquidNetWorth') }}</p>
-              <p class="text-[15px] font-semibold tabular-nums" dir="ltr">
+              <p class="text-[12px] text-text-secondary">{{ t('liquidNetWorth') }}</p>
+              <p class="text-[16px] font-semibold tabular-nums" dir="ltr">
                 {{ signedCurrency(nw.liquidTotal) }}
               </p>
             </div>
             <div v-if="lastMonthDelta">
-              <p class="text-[11px] text-text-secondary">{{ t('vsLastMonth') }}</p>
+              <p class="text-[12px] text-text-secondary">{{ t('vsLastMonth') }}</p>
               <Badge
                 :class="
                   lastMonthDelta.diff >= 0
@@ -790,16 +795,16 @@ const fullLiabilityMap = computed(() => {
             </div>
           </div>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
     <!-- Charts Row -->
     <div id="networth-charts" class="networth-charts grid grid-cols-1 lg:grid-cols-2 gap-4">
-      <Card id="chart-networth-allocation">
-        <CardHeader>
-          <CardTitle class="text-[15px]">{{ t('allocationByType') }}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section id="chart-networth-allocation" class="finance-section finance-ledger">
+        <header class="finance-section-heading">
+          <h2 class="text-[20px]">{{ t('allocationByType') }}</h2>
+        </header>
+        <div class="finance-section-content">
           <div class="h-[220px]">
             <VChart
               v-if="doughnutOption"
@@ -808,7 +813,7 @@ const fullLiabilityMap = computed(() => {
               class="h-full w-full"
             />
             <Skeleton v-else-if="netWorth.loading.value" class="h-full w-full rounded-lg" />
-            <p v-else class="text-text-secondary text-[13px] text-center py-12">
+            <p v-else class="text-text-secondary text-[14px] text-center py-12">
               {{ t('noDataYet') }}
             </p>
           </div>
@@ -826,13 +831,15 @@ const fullLiabilityMap = computed(() => {
               <strong dir="ltr">{{ formatCurrency(slice.value) }}</strong>
             </li>
           </ul>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
-      <Card id="chart-networth-trend">
-        <CardHeader class="flex flex-row items-center justify-between space-y-0 pb-2">
-          <CardTitle class="text-[15px]">{{ t('netWorthTrend') }}</CardTitle>
-          <div class="flex items-center gap-2 text-[11px]">
+      <section id="chart-networth-trend" class="finance-section finance-ledger">
+        <header
+          class="finance-section-heading flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-2"
+        >
+          <h2 class="text-[20px]">{{ t('netWorthTrend') }}</h2>
+          <div class="flex flex-wrap items-center gap-2 text-[12px]">
             <div class="comparison-range" role="group" :aria-label="t('timeRange')">
               <button
                 v-for="count in [3, 6, 12] as const"
@@ -848,20 +855,20 @@ const fullLiabilityMap = computed(() => {
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'ghost' : 'secondary'"
-              class="h-7 px-2 text-[11px]"
+              class="h-7 px-2 text-[12px]"
               @click="showLiquidOnly = false"
               >{{ t('total') }}</Button
             >
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'secondary' : 'ghost'"
-              class="h-7 px-2 text-[11px]"
+              class="h-7 px-2 text-[12px]"
               @click="showLiquidOnly = true"
               >{{ t('liquid') }}</Button
             >
           </div>
-        </CardHeader>
-        <CardContent>
+        </header>
+        <div class="finance-section-content">
           <div v-if="trendDatasets" class="h-64">
             <EChartsLineChart
               :labels="trendLabels"
@@ -871,20 +878,20 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
           <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-lg" />
-          <p v-else class="text-[13px] text-text-secondary text-center py-12">
+          <p v-else class="text-[14px] text-text-secondary text-center py-12">
             {{ t('startTrackingAssets') }}
           </p>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
 
     <!-- Lists section -->
-    <div class="space-y-5">
+    <div class="space-y-8">
       <!-- Assets Section -->
-      <div class="space-y-5 animate-fade-in-up stagger-3">
-        <h2 class="text-[15px] font-semibold">{{ t('assets') }}</h2>
+      <div class="space-y-4 animate-fade-in-up stagger-3">
+        <h2 class="text-[20px] font-semibold">{{ t('assets') }}</h2>
 
-        <Card v-if="assets.length > 0">
+        <section v-if="assets.length > 0" class="finance-section finance-ledger">
           <div
             v-for="(asset, idx) in assets"
             :key="asset.id"
@@ -892,7 +899,7 @@ const fullLiabilityMap = computed(() => {
           >
             <!-- Asset Row (collapsed) -->
             <div
-              class="flex items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
+              class="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
               @click="toggleExpand(asset.id)"
             >
               <div
@@ -900,13 +907,14 @@ const fullLiabilityMap = computed(() => {
                 :style="{ backgroundColor: ASSET_TYPE_COLORS[asset.type] ?? '#71717a' }"
               />
               <div class="flex-1 min-w-0">
-                <p
-                  class="text-[13px] font-medium hover:underline cursor-pointer"
+                <button
+                  type="button"
+                  class="text-start text-[14px] font-medium hover:underline cursor-pointer break-words"
                   @click.stop="router.push(`/net-worth/assets/${asset.id}`)"
                 >
                   {{ asset.name }}
-                </p>
-                <p class="text-[11px] text-text-secondary">
+                </button>
+                <p class="text-[12px] text-text-secondary">
                   {{ ASSET_TYPE_LABELS[asset.type] ?? asset.type }}
                   <template v-if="getFullAsset(asset.id)?.institution">
                     &middot; {{ getFullAsset(asset.id)!.institution }}</template
@@ -920,60 +928,69 @@ const fullLiabilityMap = computed(() => {
                   </Badge>
                 </p>
               </div>
-              <div class="text-right flex-shrink-0">
-                <p class="text-[15px] font-semibold tabular-nums">
+              <div class="text-end min-w-0 break-words max-sm:w-full max-sm:order-last">
+                <p class="text-[16px] font-semibold tabular-nums">
                   {{ assetNativeDisplay(asset) }}
                 </p>
-                <p class="text-[11px] text-text-secondary">
+                <p class="text-[12px] text-text-secondary">
                   {{ pctOfTotal(asset.totalValueIls) }}
                   {{ language === 'he' ? 'מתוך הנכסים' : 'of assets' }}
                 </p>
               </div>
-              <!-- Hover actions -->
-              <div
-                class="flex items-center gap-0.5 invisible group-hover:visible flex-shrink-0"
-                @click.stop
-              >
+              <!-- Asset actions -->
+              <div class="flex items-center gap-0.5 flex-shrink-0" @click.stop>
                 <button
-                  class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                   @click="openEditAsset(getFullAsset(asset.id)!)"
                 >
                   <Pencil class="h-3 w-3" />
                 </button>
                 <button
-                  class="h-6 w-6 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="deletingAsset = { id: asset.id, name: asset.name }"
                 >
                   <Trash2 class="h-3 w-3 text-destructive" />
                 </button>
               </div>
-              <ChevronDown
-                class="h-4 w-4 text-text-secondary transition-transform duration-150 flex-shrink-0"
-                :class="{ 'rotate-180': expandedAssets.has(asset.id) }"
-              />
+              <button
+                type="button"
+                class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary shrink-0"
+                :aria-label="`${language === 'he' ? 'החזקות' : 'Holdings'}: ${asset.name}`"
+                :aria-expanded="expandedAssets.has(asset.id)"
+                @click.stop="toggleExpand(asset.id)"
+              >
+                <ChevronDown
+                  class="h-4 w-4 text-text-secondary"
+                  :class="{ 'rotate-180': expandedAssets.has(asset.id) }"
+                />
+              </button>
             </div>
 
             <!-- Expanded Holdings -->
-            <div
-              class="overflow-hidden transition-all duration-200 ease-out"
-              :style="{ maxHeight: expandedAssets.has(asset.id) ? '1000px' : '0px' }"
-            >
-              <div v-if="getFullAsset(asset.id)" class="pl-8 pr-4 pb-3">
+            <div v-if="expandedAssets.has(asset.id)" class="min-w-0">
+              <div
+                v-if="getFullAsset(asset.id)"
+                class="px-4 pb-3 min-w-0 overflow-x-auto"
+                tabindex="0"
+                :aria-label="language === 'he' ? 'החזקות' : 'Holdings'"
+              >
                 <!-- Quick Update Mode -->
                 <template v-if="editingAssetId === asset.id">
                   <div class="flex items-center justify-between mb-2">
-                    <p class="text-[11px] font-medium text-text-secondary">Holdings (editing):</p>
+                    <p class="text-[12px] font-medium text-text-secondary">Holdings (editing):</p>
                     <div class="flex gap-1.5">
                       <Button
                         variant="secondary"
                         size="sm"
-                        class="h-7 text-[11px]"
+                        class="h-7 text-[12px]"
                         @click="cancelQuickUpdate"
                         >Cancel</Button
                       >
                       <Button
                         size="sm"
-                        class="h-7 text-[11px]"
+                        class="h-7 text-[12px]"
                         @click="saveQuickUpdate(getFullAsset(asset.id)!)"
                         >Save Changes</Button
                       >
@@ -983,13 +1000,13 @@ const fullLiabilityMap = computed(() => {
                     <div
                       v-for="h in getFullAsset(asset.id)!.holdings"
                       :key="h.id"
-                      class="flex items-center gap-2 text-[11px]"
+                      class="flex items-center gap-2 text-[12px] min-w-[480px]"
                     >
                       <span class="w-24 truncate font-medium">{{ h.name }}</span>
                       <Input
                         type="number"
                         step="any"
-                        class="h-7 text-[11px] w-24"
+                        class="h-7 text-[12px] w-24"
                         :model-value="editedHoldings.get(h.id)?.quantity"
                         @update:model-value="
                           (v: string | number) => {
@@ -1002,7 +1019,7 @@ const fullLiabilityMap = computed(() => {
                         <Input
                           type="number"
                           step="any"
-                          class="h-7 text-[11px] w-24"
+                          class="h-7 text-[12px] w-24"
                           :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
                           @update:model-value="
                             (v: string | number) => {
@@ -1034,10 +1051,10 @@ const fullLiabilityMap = computed(() => {
 
                 <!-- View Mode -->
                 <template v-else>
-                  <p class="text-[11px] font-medium text-text-secondary mb-2">Holdings:</p>
+                  <p class="text-[12px] font-medium text-text-secondary mb-2">Holdings:</p>
                   <div
                     v-if="getFullAsset(asset.id)!.holdings.length === 0"
-                    class="text-[11px] text-text-secondary py-2"
+                    class="text-[12px] text-text-secondary py-2"
                   >
                     <template
                       v-if="
@@ -1049,7 +1066,7 @@ const fullLiabilityMap = computed(() => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        class="h-6 text-[11px] ml-2"
+                        class="h-6 text-[12px] ml-2"
                         @click.stop="openAddHolding(asset.id)"
                       >
                         <Plus class="h-3 w-3 mr-1" /> Add
@@ -1061,7 +1078,7 @@ const fullLiabilityMap = computed(() => {
                     <div
                       v-for="h in getFullAsset(asset.id)!.holdings"
                       :key="h.id"
-                      class="flex items-center gap-2 text-[11px] group/holding"
+                      class="flex items-center gap-2 text-[12px] group/holding min-w-[520px]"
                     >
                       <span class="w-24 truncate font-medium">{{ h.name }}</span>
                       <span class="w-20 text-text-secondary tabular-nums">
@@ -1098,14 +1115,12 @@ const fullLiabilityMap = computed(() => {
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                       <span v-else class="w-14" />
-                      <div
-                        class="flex items-center gap-1 opacity-0 group-hover/holding:opacity-100 transition-opacity ml-auto"
-                        @click.stop
-                      >
+                      <div class="flex items-center gap-1 transition-opacity ml-auto" @click.stop>
                         <Button
                           variant="ghost"
                           size="icon"
                           class="h-6 w-6"
+                          :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                           @click="openEditHolding(asset.id, h)"
                         >
                           <Pencil class="h-3 w-3" />
@@ -1114,6 +1129,7 @@ const fullLiabilityMap = computed(() => {
                           variant="ghost"
                           size="icon"
                           class="h-6 w-6"
+                          :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                           @click="
                             deletingHolding = { id: h.id, name: h.name, assetName: asset.name }
                           "
@@ -1132,7 +1148,7 @@ const fullLiabilityMap = computed(() => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        class="h-6 text-[11px]"
+                        class="h-6 text-[12px]"
                         @click.stop="openAddHolding(asset.id)"
                       >
                         <Plus class="h-3 w-3 mr-1" /> Add Holding
@@ -1140,7 +1156,7 @@ const fullLiabilityMap = computed(() => {
                       <Button
                         variant="secondary"
                         size="sm"
-                        class="h-6 text-[11px]"
+                        class="h-6 text-[12px]"
                         @click.stop="startQuickUpdate(getFullAsset(asset.id)!)"
                       >
                         Update Values
@@ -1151,40 +1167,38 @@ const fullLiabilityMap = computed(() => {
               </div>
             </div>
           </div>
-        </Card>
+        </section>
 
         <p
           v-else-if="!netWorth.loading.value"
-          class="text-text-secondary text-[13px] text-center py-6"
+          class="text-text-secondary text-[14px] text-center py-6"
         >
           {{ t('noAssetsTracked') }}
         </p>
       </div>
 
       <!-- Bank Balances -->
-      <div v-if="banks.length > 0" class="space-y-5 animate-fade-in-up stagger-4">
-        <h2 class="text-[15px] font-semibold">{{ t('bankBalances') }}</h2>
-        <div
-          class="grid gap-3 grid-cols-[repeat(auto-fill,minmax(140px,1fr))] sm:grid-cols-[repeat(auto-fill,minmax(180px,1fr))]"
-        >
-          <Card v-for="bank in banks" :key="bank.id">
-            <CardHeader class="pb-1">
-              <CardTitle class="text-[13px] font-medium truncate">{{ bank.name }}</CardTitle>
-            </CardHeader>
-            <CardContent>
+      <div v-if="banks.length > 0" class="space-y-4 animate-fade-in-up stagger-4">
+        <h2 class="text-[20px] font-semibold">{{ t('bankBalances') }}</h2>
+        <div class="networth-banks grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
+          <section v-for="bank in banks" :key="bank.id" class="finance-section finance-ledger">
+            <header class="finance-section-heading pb-1">
+              <h2 class="text-[14px] font-medium truncate">{{ bank.name }}</h2>
+            </header>
+            <div class="finance-section-content">
               <div class="text-[17px] font-semibold tabular-nums">
                 {{ formatCurrency(bank.balanceIls) }}
               </div>
-            </CardContent>
-          </Card>
+            </div>
+          </section>
         </div>
       </div>
 
       <!-- Liabilities Section -->
-      <div class="space-y-5 animate-fade-in-up stagger-5">
-        <h2 class="text-[15px] font-semibold">{{ t('liabilities') }}</h2>
+      <div class="space-y-4 animate-fade-in-up stagger-5">
+        <h2 class="text-[20px] font-semibold">{{ t('liabilities') }}</h2>
 
-        <Card v-if="liabilities.length > 0">
+        <section v-if="liabilities.length > 0" class="finance-section finance-ledger">
           <template v-for="(liab, idx) in liabilities" :key="liab.id">
             <div
               :class="[
@@ -1192,25 +1206,23 @@ const fullLiabilityMap = computed(() => {
                 idx < liabilities.length - 1 ? 'border-b border-separator' : '',
               ]"
             >
-              <div class="flex items-start justify-between">
+              <div class="flex flex-wrap items-start justify-between gap-3">
                 <div class="flex-1 min-w-0">
-                  <p class="text-[13px] font-medium">{{ liab.name }}</p>
-                  <p class="text-[11px] text-text-secondary">
+                  <p class="text-[14px] font-medium">{{ liab.name }}</p>
+                  <p class="text-[12px] text-text-secondary">
                     {{ liab.full ? (LIABILITY_TYPE_LABELS[liab.full.type] ?? liab.full.type) : '' }}
                     <template v-if="liab.full?.currency">
                       &middot; {{ liab.full.currency }}
                     </template>
                   </p>
                 </div>
-                <div
-                  class="flex items-center gap-1.5 opacity-0 group-hover:opacity-100 transition-opacity"
-                  @click.stop
-                >
+                <div class="flex items-center gap-1.5 transition-opacity" @click.stop>
                   <Button
                     v-if="liab.full"
                     variant="ghost"
                     size="icon"
                     class="h-7 w-7"
+                    :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                     @click="openEditLiability(liab.full)"
                   >
                     <Pencil class="h-3.5 w-3.5" />
@@ -1219,18 +1231,19 @@ const fullLiabilityMap = computed(() => {
                     variant="ghost"
                     size="icon"
                     class="h-7 w-7"
+                    :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                     @click="deletingLiability = { id: liab.id, name: liab.name }"
                   >
                     <Trash2 class="h-3.5 w-3.5 text-destructive" />
                   </Button>
                 </div>
               </div>
-              <p class="text-[15px] font-semibold tabular-nums mt-1">
+              <p class="text-[20px] font-semibold tabular-nums mt-1">
                 {{ formatCurrency(liab.currentBalanceIls) }}
-                <span v-if="liab.full" class="text-[11px] text-text-secondary font-normal">
+                <span v-if="liab.full" class="text-[12px] text-text-secondary font-normal">
                   remaining of {{ formatCurrency(liab.full.originalAmount) }}
                 </span>
-                <span v-else class="text-[11px] text-text-secondary font-normal">remaining</span>
+                <span v-else class="text-[12px] text-text-secondary font-normal">remaining</span>
               </p>
               <!-- Progress bar -->
               <div v-if="liab.full" class="mt-2">
@@ -1243,14 +1256,14 @@ const fullLiabilityMap = computed(() => {
                       }"
                     />
                   </div>
-                  <span class="text-[11px] text-text-secondary">
+                  <span class="text-[12px] text-text-secondary">
                     {{ paidOffPct(liab.full.originalAmount, liab.full.currentBalance).toFixed(0) }}%
                     paid off
                   </span>
                 </div>
                 <p
                   v-if="liab.full.interestRate || liab.full.startDate"
-                  class="text-[11px] text-text-secondary mt-1"
+                  class="text-[12px] text-text-secondary mt-1"
                 >
                   <template v-if="liab.full.interestRate">
                     {{ liab.full.interestRate }}% interest
@@ -1271,10 +1284,10 @@ const fullLiabilityMap = computed(() => {
               </div>
             </div>
           </template>
-        </Card>
+        </section>
         <p
           v-else-if="!netWorth.loading.value"
-          class="text-text-secondary text-[13px] text-center py-6"
+          class="text-text-secondary text-[14px] text-center py-6"
         >
           {{ t('noLiabilitiesTracked') }}
         </p>
@@ -1284,17 +1297,17 @@ const fullLiabilityMap = computed(() => {
 
     <!-- ─── Asset Dialog ─── -->
     <Dialog v-model:open="showAssetDialog">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{{ editingAsset ? 'Edit Asset' : 'Add Asset' }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Name</label>
+            <label class="text-[14px] font-medium">Name</label>
             <Input v-model="assetForm.name" placeholder="e.g. OneZero Portfolio" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Type</label>
+            <label class="text-[14px] font-medium">Type</label>
             <Select v-model="assetForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -1310,7 +1323,7 @@ const fullLiabilityMap = computed(() => {
             v-if="assetCategory === 'brokerage' || assetCategory === 'real_estate'"
             class="space-y-1.5"
           >
-            <label class="text-[13px] font-medium">Currency</label>
+            <label class="text-[14px] font-medium">Currency</label>
             <Select v-model="assetForm.currency">
               <SelectTrigger>
                 <SelectValue />
@@ -1324,7 +1337,7 @@ const fullLiabilityMap = computed(() => {
           </div>
           <template v-if="assetCategory === 'real_estate' && !editingAsset">
             <div class="space-y-1.5">
-              <label class="text-[13px] font-medium"
+              <label class="text-[14px] font-medium"
                 >Property Value ({{ assetForm.currency }})</label
               >
               <Input
@@ -1334,7 +1347,7 @@ const fullLiabilityMap = computed(() => {
               />
             </div>
             <div class="space-y-1.5">
-              <label class="text-[13px] font-medium">Purchase Price (ILS)</label>
+              <label class="text-[14px] font-medium">Purchase Price (ILS)</label>
               <Input
                 v-model.number="assetForm.initialCostBasis"
                 type="number"
@@ -1343,11 +1356,11 @@ const fullLiabilityMap = computed(() => {
             </div>
           </template>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Institution</label>
+            <label class="text-[14px] font-medium">Institution</label>
             <Input v-model="assetForm.institution" placeholder="e.g. oneZero, excelence" />
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-[13px] font-medium">Liquidity</label>
+            <label class="text-[14px] font-medium">Liquidity</label>
             <Select v-model="assetForm.liquidity">
               <SelectTrigger>
                 <SelectValue />
@@ -1360,7 +1373,7 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-[13px] font-medium">Linked Bank Account</label>
+            <label class="text-[14px] font-medium">Linked Bank Account</label>
             <Select v-model="assetForm.linkedAccountId">
               <SelectTrigger>
                 <SelectValue />
@@ -1375,7 +1388,7 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Notes</label>
+            <label class="text-[14px] font-medium">Notes</label>
             <Textarea v-model="assetForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>
@@ -1393,7 +1406,7 @@ const fullLiabilityMap = computed(() => {
 
     <!-- ─── Holding Dialog ─── -->
     <Dialog v-model:open="showHoldingDialog">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>
             {{
@@ -1405,11 +1418,11 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Name</label>
+            <label class="text-[14px] font-medium">Name</label>
             <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit shkalit" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Type</label>
+            <label class="text-[14px] font-medium">Type</label>
             <Select v-model="holdingForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -1422,29 +1435,29 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Currency</label>
+            <label class="text-[14px] font-medium">Currency</label>
             <Input v-model="holdingForm.currency" placeholder="USD" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Quantity</label>
+            <label class="text-[14px] font-medium">Quantity</label>
             <Input v-model="holdingForm.quantity" type="number" step="any" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Cost Basis</label>
+            <label class="text-[14px] font-medium">Cost Basis</label>
             <Input v-model="holdingForm.costBasis" type="number" step="any" />
           </div>
           <div v-if="holdingShowPrice" class="space-y-1.5">
-            <label class="text-[13px] font-medium">Last Price (per unit)</label>
+            <label class="text-[14px] font-medium">Last Price (per unit)</label>
             <Input v-model="holdingForm.lastPrice" type="number" step="any" />
           </div>
           <div
             v-if="holdingDoubleCount"
-            class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[13px] text-destructive"
+            class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[14px] text-destructive"
           >
             ILS cash for this institution is already tracked via the linked bank account.
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Notes</label>
+            <label class="text-[14px] font-medium">Notes</label>
             <Textarea v-model="holdingForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>
@@ -1466,17 +1479,17 @@ const fullLiabilityMap = computed(() => {
 
     <!-- ─── Liability Dialog ─── -->
     <Dialog v-model:open="showLiabilityDialog">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{{ editingLiability ? 'Edit Liability' : 'Add Liability' }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Name</label>
+            <label class="text-[14px] font-medium">Name</label>
             <Input v-model="liabilityForm.name" placeholder="e.g. Poalim Loan" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Type</label>
+            <label class="text-[14px] font-medium">Type</label>
             <Select v-model="liabilityForm.type">
               <SelectTrigger>
                 <SelectValue placeholder="Select type..." />
@@ -1489,19 +1502,19 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Currency</label>
+            <label class="text-[14px] font-medium">Currency</label>
             <Input v-model="liabilityForm.currency" placeholder="ILS" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Original Amount</label>
+            <label class="text-[14px] font-medium">Original Amount</label>
             <Input v-model="liabilityForm.originalAmount" type="number" step="any" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Current Balance</label>
+            <label class="text-[14px] font-medium">Current Balance</label>
             <Input v-model="liabilityForm.currentBalance" type="number" step="any" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Interest Rate (%)</label>
+            <label class="text-[14px] font-medium">Interest Rate (%)</label>
             <Input
               v-model="liabilityForm.interestRate"
               type="number"
@@ -1510,11 +1523,11 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Start Date</label>
+            <label class="text-[14px] font-medium">Start Date</label>
             <Input v-model="liabilityForm.startDate" type="date" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[13px] font-medium">Notes</label>
+            <label class="text-[14px] font-medium">Notes</label>
             <Textarea v-model="liabilityForm.notes" placeholder="Optional notes..." :rows="2" />
           </div>
         </div>
@@ -1611,3 +1624,57 @@ const fullLiabilityMap = computed(() => {
     </AlertDialog>
   </div>
 </template>
+
+<style scoped>
+.networth-hero {
+  padding: 24px;
+  border-block: 1px solid var(--separator);
+}
+.finance-section {
+  min-width: 0;
+}
+.finance-section-heading {
+  padding: 24px 24px 16px;
+}
+.finance-section-content {
+  min-width: 0;
+  padding: 0 24px 24px;
+}
+.networth-hero > .finance-section-content {
+  padding: 0;
+}
+.finance-section-heading h2 {
+  font-weight: 600;
+  line-height: 1.3;
+}
+.networth-charts {
+  gap: 24px;
+}
+.finance-ledger {
+  border-block: 1px solid var(--separator);
+}
+.networth-banks {
+  gap: 24px;
+  padding: 24px 16px;
+  border-block: 1px solid var(--separator);
+}
+.networth-banks .finance-section {
+  border: 0;
+}
+.networth-banks .finance-section-heading,
+.networth-banks .finance-section-content {
+  padding: 0;
+}
+.networth-banks .finance-section-heading {
+  margin-block-end: 8px;
+}
+@media (max-width: 640px) {
+  .networth-hero {
+    padding: 24px 16px;
+  }
+  .finance-section-heading,
+  .finance-section-content {
+    padding-inline: 16px;
+  }
+}
+</style>

@@ -222,7 +222,6 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   <Dialog :open="open" @update:open="close">
     <DialogContent class="import-dialog">
       <div class="import-dialog-header">
-        <span class="import-eyebrow">{{ copy.eyebrow }}</span>
         <DialogTitle class="import-title">{{ copy.title }}</DialogTitle>
         <p>
           {{ copy.intro }}
@@ -247,7 +246,9 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
           >
             <FileSpreadsheet :size="16" /> {{ copy.choose }}
           </label>
-          <span class="import-file-name" dir="auto">{{ file?.name || copy.noFile }}</span>
+          <span class="import-file-name" dir="auto" :title="file?.name">{{
+            file?.name || copy.noFile
+          }}</span>
         </div>
         <p class="import-file-hint">{{ copy.fileHint }}</p>
 
@@ -289,7 +290,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
               <div v-for="row in preview.rows" :key="row.row" class="import-row">
                 <span class="import-row-number">{{ row.row }}</span>
                 <span class="import-row-main"
-                  ><strong dir="auto">{{ row.description }}</strong
+                  ><strong dir="auto" :title="row.description">{{ row.description }}</strong
                   ><small>{{ date(row.date) }} · {{ statusLabel(row.status) }}</small></span
                 >
                 <span class="import-row-amount" dir="ltr">{{ amount(row.amount) }}</span>
@@ -327,32 +328,28 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   gap: 0;
   width: min(620px, calc(100vw - 24px));
   max-width: none;
-  max-height: min(790px, calc(100vh - 24px));
+  max-height: min(790px, calc(100dvh - 24px));
   overflow: hidden;
   padding: 0;
   border-radius: 12px;
 }
 .import-dialog-header {
-  padding: 26px 28px 20px;
+  flex-shrink: 0;
+  overflow-wrap: anywhere;
+  padding: 24px;
   border-bottom: 1px solid var(--separator);
   padding-inline-end: 60px;
 }
-.import-eyebrow {
-  color: var(--accent);
-  font-size: 10px;
-  font-weight: 750;
-  letter-spacing: 0.09em;
-}
 .import-title {
-  margin: 7px 0 5px;
-  font-size: 22px;
+  margin: 0 0 8px;
+  font-size: 20px;
   font-weight: 730;
   line-height: 1.25;
 }
 .import-dialog-header p {
   margin: 0;
   color: var(--text-secondary);
-  font-size: 13px;
+  font-size: 14px;
   line-height: 1.6;
 }
 .import-dialog-header strong {
@@ -363,18 +360,22 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   margin-top: 3px;
 }
 .import-dialog-body {
+  overflow-wrap: anywhere;
   min-height: 0;
   overflow-y: auto;
-  padding: 22px 28px;
+  padding: 24px;
 }
 .import-file-row {
   display: flex;
   align-items: center;
   gap: 12px;
   min-height: 48px;
-  border: 1px solid var(--separator);
-  border-radius: 8px;
-  padding: 6px;
+  border-bottom: 1px solid var(--separator);
+  padding: 0 0 16px;
+}
+.import-file-row input:focus-visible + label {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .import-file-row label {
   display: inline-flex;
@@ -411,7 +412,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
 .import-file-hint {
   margin: 7px 0 0;
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .import-progress,
 .import-error,
@@ -452,14 +453,12 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
 }
 .import-preview-head span {
   color: var(--text-tertiary);
-  font-size: 11px;
+  font-size: 12px;
 }
 .import-outcomes {
   display: grid;
   grid-template-columns: repeat(4, minmax(0, 1fr));
-  border: 1px solid var(--separator);
-  border-radius: 8px;
-  overflow: hidden;
+  border-block: 1px solid var(--separator);
 }
 .import-outcome {
   display: grid;
@@ -473,16 +472,17 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   border-inline-end: 0;
 }
 .import-outcome strong {
-  font-size: 22px;
-  line-height: 1;
+  font-size: 20px;
+  line-height: 1.3;
+  font-variant-numeric: tabular-nums;
 }
 .import-outcome span {
-  font-size: 11px;
+  font-size: 12px;
   font-weight: 700;
 }
 .import-outcome small {
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
   line-height: 1.3;
 }
 .import-outcome.new strong {
@@ -494,7 +494,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
 .import-invalid {
   margin-top: 14px;
   color: var(--destructive);
-  font-size: 11px;
+  font-size: 12px;
 }
 .import-invalid p {
   margin: 4px 0 0;
@@ -511,12 +511,13 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   grid-template-columns: 27px minmax(0, 1fr) auto;
   align-items: center;
   gap: 10px;
-  min-height: 56px;
+  min-height: 64px;
+  padding: 12px 0;
   border-bottom: 1px solid var(--separator);
 }
 .import-row-number {
   color: var(--text-tertiary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .import-row-main {
   display: grid;
@@ -527,23 +528,25 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 .import-row-main small {
   color: var(--text-secondary);
-  font-size: 10px;
+  font-size: 12px;
 }
 .import-row-amount {
   white-space: nowrap;
-  font-size: 12px;
+  font-size: 14px;
   font-weight: 650;
 }
 .import-dialog-footer {
+  flex-shrink: 0;
+  flex-wrap: wrap;
   display: flex;
   justify-content: flex-end;
   gap: 8px;
-  padding: 16px 28px;
+  padding: 20px 24px;
   border-top: 1px solid var(--separator);
 }
 .import-dialog-footer button {

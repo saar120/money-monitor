@@ -11,13 +11,11 @@ const props = defineProps<{
 
 <template>
   <div :class="cn('', props.class)">
-    <div v-if="title" class="px-1 mb-2 text-start">
-      <h3 class="text-[13px] font-semibold text-text-primary">{{ title }}</h3>
+    <div v-if="title" class="px-1 mb-4 text-start">
+      <h3 class="text-base font-semibold text-text-primary">{{ title }}</h3>
       <p v-if="description" class="text-[12px] text-text-secondary mt-0.5">{{ description }}</p>
     </div>
-    <div
-      class="rounded-xl border border-separator/60 bg-bg-primary shadow-[var(--shadow-sm)] divide-y divide-separator/40"
-    >
+    <div class="border-y border-separator/60 bg-bg-primary divide-y divide-separator/40">
       <slot />
     </div>
   </div>

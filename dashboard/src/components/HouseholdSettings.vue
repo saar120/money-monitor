@@ -31,7 +31,7 @@ import {
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Badge } from '@/components/ui/badge';
 import { Check, Plus, Trash2, X } from 'lucide-vue-next';
-import { language } from '@/lib/language';
+import { language, t } from '@/lib/language';
 
 const copy = computed(() =>
   language.value === 'he'
@@ -253,37 +253,42 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsGroup :title="copy.title" :description="copy.hint">
+  <SettingsGroup class="household-settings" :title="copy.title" :description="copy.hint">
     <SettingsRow :label="copy.members" vertical>
-      <div v-if="loading" class="text-[13px] text-text-secondary">
+      <div v-if="loading" class="text-[14px] text-text-secondary">
         {{ copy.loading }}
       </div>
       <div v-else class="space-y-2">
         <div
           v-for="member in members"
           :key="member.id"
-          class="flex items-center gap-2 rounded-lg border border-separator/60 px-3 py-2"
+          class="household-member flex flex-wrap items-center gap-3 border-b border-separator/60 px-4 py-4"
           :class="{ 'opacity-50': !member.isActive }"
         >
           <template v-if="editingMemberId === member.id">
             <Input
               v-model="editingMemberName"
-              class="h-8 max-w-56"
+              class="h-8 min-w-0 flex-1 max-w-56"
               @keyup.enter="saveMember(member)"
             />
-            <Button size="icon-sm" variant="ghost" @click="saveMember(member)">
+            <Button
+              size="icon-sm"
+              variant="ghost"
+              :aria-label="language === 'he' ? 'שמירת שם' : 'Save name'"
+              @click="saveMember(member)"
+            >
               <Check class="h-4 w-4 text-success" />
             </Button>
-            <Button size="icon-sm" variant="ghost" @click="cancelEdit">
+            <Button size="icon-sm" variant="ghost" :aria-label="t('cancel')" @click="cancelEdit">
               <X class="h-4 w-4" />
             </Button>
           </template>
           <template v-else>
-            <span class="text-[13px] font-medium">{{ member.name }}</span>
+            <span class="min-w-0 break-words text-[14px] font-medium">{{ member.name }}</span>
             <Badge v-if="!member.isActive" variant="secondary" class="text-[10px]">{{
               copy.inactive
             }}</Badge>
-            <Button size="sm" variant="secondary" class="ml-auto" @click="startEdit(member)">
+            <Button size="sm" variant="secondary" class="ms-auto" @click="startEdit(member)">
               {{ copy.rename }}
             </Button>
             <Button
@@ -291,14 +296,19 @@ onMounted(load);
               size="icon-sm"
               variant="ghost"
               class="text-text-tertiary hover:text-destructive"
+              :aria-label="`${language === 'he' ? 'השבתת בן בית' : 'Deactivate member'}: ${member.name}`"
               @click="deactivateMember(member)"
             >
               <Trash2 class="h-3.5 w-3.5" />
             </Button>
           </template>
         </div>
-        <div class="flex gap-2">
-          <Input v-model="newMemberName" :placeholder="copy.newMember" class="max-w-64" />
+        <div class="flex flex-col gap-3 pt-4 sm:flex-row">
+          <Input
+            v-model="newMemberName"
+            :placeholder="copy.newMember"
+            class="min-w-0 sm:max-w-64"
+          />
           <Button size="sm" :disabled="saving || !newMemberName.trim()" @click="addMember">
             <Plus class="h-4 w-4 mr-1" />
             {{ copy.addMember }}
@@ -312,12 +322,12 @@ onMounted(load);
         <div
           v-for="rule in rules"
           :key="rule.id"
-          class="grid grid-cols-[1fr_auto_auto] gap-3 items-center rounded-lg border border-separator/60 px-3 py-2"
+          class="grid grid-cols-[minmax(0,1fr)_auto_auto] gap-3 items-center border-b border-separator/60 px-4 py-4"
           :class="{ 'opacity-50': !rule.enabled }"
         >
           <div class="min-w-0">
-            <div class="text-[13px] font-medium truncate">{{ rule.name }}</div>
-            <div class="text-[11px] text-text-secondary truncate">
+            <div class="text-[14px] font-medium truncate">{{ rule.name }}</div>
+            <div class="mt-1 text-[12px] leading-relaxed text-text-secondary break-words">
               {{ rule.descriptionContains || copy.anyDescription }} ·
               {{ rule.categoryName || copy.anyCategory }} · {{ memberName(rule.accountMemberId) }} →
               {{ targetLabel(rule.targetOwnerType, rule.targetOwnerMemberId) }}
@@ -328,76 +338,127 @@ onMounted(load);
             size="icon-sm"
             variant="ghost"
             class="text-text-tertiary hover:text-destructive"
+            :aria-label="`${language === 'he' ? 'מחיקת כלל' : 'Delete rule'}: ${rule.name}`"
             @click="removeRule(rule)"
           >
             <Trash2 class="h-3.5 w-3.5" />
           </Button>
         </div>
 
-        <div class="grid grid-cols-2 gap-2 rounded-lg border border-separator/60 p-3">
-          <Input v-model="newRule.name" :placeholder="copy.ruleName" />
-          <Input v-model="newRule.descriptionContains" :placeholder="copy.descriptionContains" />
-          <Select v-model="newRule.accountId">
-            <SelectTrigger><SelectValue :placeholder="copy.anyAccount" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">{{ copy.anyAccount }}</SelectItem>
-              <SelectItem v-for="account in accounts" :key="account.id" :value="String(account.id)">
-                {{ account.displayName }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select v-model="newRule.accountMemberId">
-            <SelectTrigger><SelectValue :placeholder="copy.anyMember" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">{{ copy.anyMember }}</SelectItem>
-              <SelectItem
-                v-for="member in activeMembers"
-                :key="member.id"
-                :value="String(member.id)"
-              >
-                {{ member.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select v-model="newRule.categoryName">
-            <SelectTrigger><SelectValue :placeholder="copy.anyCategory" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="any">{{ copy.anyCategory }}</SelectItem>
-              <SelectItem
-                v-for="category in categories"
-                :key="category.name"
-                :value="category.name"
-              >
-                {{ category.label }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <Select v-model="newRule.target">
-            <SelectTrigger><SelectValue :placeholder="copy.target" /></SelectTrigger>
-            <SelectContent>
-              <SelectItem value="shared">{{ copy.together }}</SelectItem>
-              <SelectItem value="unassigned">{{ copy.unassigned }}</SelectItem>
-              <SelectItem
-                v-for="member in activeMembers"
-                :key="member.id"
-                :value="`member:${member.id}`"
-              >
-                {{ member.name }}
-              </SelectItem>
-            </SelectContent>
-          </Select>
-          <div class="col-span-2 flex items-center gap-2">
+        <div class="household-rule-form grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
+          <label class="household-rule-field">
+            <span>{{ copy.ruleName }}</span>
+            <Input v-model="newRule.name" :placeholder="copy.ruleName" />
+          </label>
+          <label class="household-rule-field">
+            <span>{{ copy.descriptionContains }}</span>
+            <Input v-model="newRule.descriptionContains" :placeholder="copy.descriptionContains" />
+          </label>
+          <div class="household-rule-field">
+            <span>{{ copy.anyAccount }}</span>
+            <Select v-model="newRule.accountId">
+              <SelectTrigger :aria-label="copy.anyAccount"
+                ><SelectValue :placeholder="copy.anyAccount"
+              /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">{{ copy.anyAccount }}</SelectItem>
+                <SelectItem
+                  v-for="account in accounts"
+                  :key="account.id"
+                  :value="String(account.id)"
+                >
+                  {{ account.displayName }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="household-rule-field">
+            <span>{{ copy.anyMember }}</span>
+            <Select v-model="newRule.accountMemberId">
+              <SelectTrigger :aria-label="copy.anyMember"
+                ><SelectValue :placeholder="copy.anyMember"
+              /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">{{ copy.anyMember }}</SelectItem>
+                <SelectItem
+                  v-for="member in activeMembers"
+                  :key="member.id"
+                  :value="String(member.id)"
+                >
+                  {{ member.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="household-rule-field">
+            <span>{{ copy.anyCategory }}</span>
+            <Select v-model="newRule.categoryName">
+              <SelectTrigger :aria-label="copy.anyCategory"
+                ><SelectValue :placeholder="copy.anyCategory"
+              /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="any">{{ copy.anyCategory }}</SelectItem>
+                <SelectItem
+                  v-for="category in categories"
+                  :key="category.name"
+                  :value="category.name"
+                >
+                  {{ category.label }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="household-rule-field">
+            <span>{{ copy.target }}</span>
+            <Select v-model="newRule.target">
+              <SelectTrigger :aria-label="copy.target"
+                ><SelectValue :placeholder="copy.target"
+              /></SelectTrigger>
+              <SelectContent>
+                <SelectItem value="shared">{{ copy.together }}</SelectItem>
+                <SelectItem value="unassigned">{{ copy.unassigned }}</SelectItem>
+                <SelectItem
+                  v-for="member in activeMembers"
+                  :key="member.id"
+                  :value="`member:${member.id}`"
+                >
+                  {{ member.name }}
+                </SelectItem>
+              </SelectContent>
+            </Select>
+          </div>
+          <div class="sm:col-span-2 flex flex-wrap items-center gap-3 pt-2">
             <Button size="sm" :disabled="saving || !newRule.name.trim()" @click="addRule">
               {{ copy.addRule }}
             </Button>
             <Button size="sm" variant="secondary" :disabled="applying" @click="applyRules">
               {{ applying ? copy.applying : copy.applyRules }}
             </Button>
-            <span v-if="message" class="text-[13px] text-success">{{ message }}</span>
-            <span v-if="error" class="text-[13px] text-destructive">{{ error }}</span>
+            <span v-if="message" class="text-[14px] text-success">{{ message }}</span>
+            <span v-if="error" class="text-[14px] text-destructive">{{ error }}</span>
           </div>
         </div>
       </div>
     </SettingsRow>
   </SettingsGroup>
 </template>
+
+<style scoped>
+.household-settings :deep(input),
+.household-settings :deep([data-slot='select-trigger']) {
+  min-height: 38px;
+}
+.household-member > span:first-child {
+  font-size: 14px;
+}
+.household-rule-field {
+  display: flex;
+  min-width: 0;
+  flex-direction: column;
+  gap: 8px;
+}
+.household-rule-field > span {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+</style>

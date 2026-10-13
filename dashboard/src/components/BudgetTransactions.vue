@@ -53,8 +53,8 @@ onUnmounted(() => requestId++);
 </script>
 
 <template>
-  <div class="budget-transactions">
-    <p class="budget-transactions-title">{{ t('transactionsCounted') }}</p>
+  <div class="budget-transactions" :aria-busy="loading">
+    <h4 class="budget-transactions-title">{{ t('transactionsCounted') }}</h4>
     <p v-if="loading" class="ledger-empty">{{ t('loadingTransactions') }}</p>
     <p v-else-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -71,9 +71,9 @@ onUnmounted(() => requestId++);
     >
       <span
         ><strong dir="auto">{{ transaction.description }}</strong
-        ><small>{{ transaction.reportingDate }}</small></span
+        ><small dir="ltr">{{ transaction.reportingDate }}</small></span
       >
-      <b>{{ formatAmount(transaction.chargedAmount, transaction.chargedCurrency) }}</b>
+      <b dir="ltr">{{ formatAmount(transaction.chargedAmount, transaction.chargedCurrency) }}</b>
     </RouterLink>
     <button
       v-if="rows.length > visibleCount"
@@ -85,3 +85,32 @@ onUnmounted(() => requestId++);
     </button>
   </div>
 </template>
+
+<style scoped>
+.budget-transactions {
+  margin-block-start: 20px;
+  padding: 20px 0 0;
+  border-radius: 0;
+  background: transparent;
+  border-block-start: 1px solid var(--separator);
+}
+.budget-transactions-title {
+  margin-block-end: 12px;
+  font-size: 12px;
+  font-weight: 600;
+}
+.budget-transaction-row {
+  padding: 16px 0;
+}
+.budget-transaction-row strong {
+  font-size: 14px;
+  font-weight: 500;
+}
+.budget-transaction-row small {
+  font-size: 12px;
+}
+.budget-transaction-row b {
+  font-size: 14px;
+  font-weight: 600;
+}
+</style>

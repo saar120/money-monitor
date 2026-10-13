@@ -72,12 +72,12 @@ defineExpose({ loadSessions });
 </script>
 
 <template>
-  <div class="flex flex-col h-full">
-    <div class="p-3 border-b border-separator">
+  <div class="flex flex-col h-full min-h-0">
+    <div class="p-4 border-b border-separator">
       <Button
         variant="secondary"
         size="sm"
-        class="w-full justify-start gap-2"
+        class="w-full justify-start gap-2 bg-transparent border-separator/60 shadow-none"
         :disabled="loading"
         @click="handleNewChat"
       >
@@ -86,35 +86,44 @@ defineExpose({ loadSessions });
       </Button>
     </div>
 
-    <div class="flex-1 overflow-y-auto py-2">
-      <button
+    <div class="flex-1 min-h-0 overflow-y-auto py-2">
+      <div
         v-for="session in sessions"
         :key="session.id"
-        class="group w-full text-left px-3 py-2.5 text-[13px] transition-colors hover:bg-bg-tertiary flex items-start gap-2"
+        class="flex items-center gap-2 px-4 hover:bg-bg-tertiary"
         :class="
           session.id === activeSessionId ? 'bg-primary/10 text-primary' : 'text-text-secondary'
         "
-        @click="$emit('select', session)"
       >
-        <MessageSquare class="h-4 w-4 mt-0.5 flex-shrink-0 opacity-50" />
-        <div class="flex-1 min-w-0">
-          <div class="truncate text-[13px] font-medium">{{ session.title }}</div>
-          <div class="text-[11px] opacity-60 mt-0.5">{{ formatDate(session.updatedAt) }}</div>
-        </div>
-        <div
-          role="button"
-          tabindex="0"
-          class="opacity-0 group-hover:opacity-100 p-1 rounded hover:bg-destructive/10 hover:text-destructive transition-all flex-shrink-0 cursor-pointer"
+        <button
+          type="button"
+          class="flex min-w-0 flex-1 items-start gap-3 py-4 text-start"
+          :aria-current="session.id === activeSessionId ? 'true' : undefined"
+          @click="$emit('select', session)"
+        >
+          <MessageSquare class="h-4 w-4 mt-0.5 shrink-0 opacity-50" />
+          <span class="flex-1 min-w-0">
+            <span class="block truncate text-[14px] font-medium" :title="session.title">{{
+              session.title
+            }}</span>
+            <span class="block text-[12px] text-text-secondary mt-1">{{
+              formatDate(session.updatedAt)
+            }}</span>
+          </span>
+        </button>
+        <button
+          type="button"
+          class="p-2 rounded hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+          :aria-label="`${language === 'he' ? 'מחיקת שיחה' : 'Delete conversation'}: ${session.title}`"
           @click="handleDelete(session.id, $event)"
-          @keydown.enter="handleDelete(session.id, $event)"
         >
           <Trash2 class="h-3.5 w-3.5" />
-        </div>
-      </button>
+        </button>
+      </div>
 
       <div
         v-if="sessions.length === 0"
-        class="px-3 py-6 text-center text-text-secondary text-[11px]"
+        class="px-4 py-8 text-center text-text-secondary text-[12px] leading-relaxed"
       >
         {{ t('noConversations') }}
       </div>

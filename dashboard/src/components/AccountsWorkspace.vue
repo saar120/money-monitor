@@ -189,7 +189,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="category-workspace-page account-workspace-page">
+  <div class="category-workspace-page account-workspace-page" @keydown.esc="selectedId = null">
     <Teleport to="#toolbar-actions">
       <RouterLink class="category-add-button" to="/accounts/advanced?add=1"
         ><Plus :size="16" />{{ copy.add }}</RouterLink
@@ -201,7 +201,7 @@ onMounted(load);
       >
       <RouterLink to="/accounts/advanced">{{ copy.advanced }}</RouterLink>
     </div>
-    <p v-if="error" class="ledger-notice" role="alert">
+    <p v-if="error && !selected" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </p>
     <div class="category-workspace">
@@ -220,7 +220,7 @@ onMounted(load);
             <span class="category-list-name"
               ><span class="account-list-icon"><component :is="section.icon" :size="17" /></span>
               <span
-                ><strong dir="auto">{{ account.displayName }}</strong
+                ><strong dir="auto" :title="account.displayName">{{ account.displayName }}</strong
                 ><small
                   >{{ memberName(account.memberId) }} · {{ date(account.lastScrapedAt) }}</small
                 ></span
@@ -249,6 +249,7 @@ onMounted(load);
           </button>
         </div>
         <div class="category-inspector-body">
+          <p v-if="error" class="ledger-notice" role="alert">{{ error }}</p>
           <p class="account-inspector-balance" dir="ltr">
             {{
               selected.accountType === 'bank' ? balance(selected) : (selected.accountNumber ?? '—')
@@ -322,3 +323,77 @@ onMounted(load);
     <OneZeroImportDialog v-model:open="importOpen" :account="selected" @imported="load" />
   </div>
 </template>
+
+<style scoped>
+.account-list-row {
+  min-width: 0;
+}
+.category-inspector-head h3,
+.account-import-link span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+.category-inspector-actions {
+  flex-wrap: wrap;
+  flex-shrink: 0;
+}
+
+.account-list-section h3 {
+  padding: 24px 16px 12px;
+  margin: 0;
+  font-size: 14px;
+}
+.account-list-row {
+  padding: 16px;
+  min-height: 80px;
+}
+.category-list-name strong {
+  font-size: 14px;
+}
+.category-list-name small {
+  margin-top: 6px;
+  font-size: 12px;
+}
+.account-list-icon {
+  background: transparent;
+  border-radius: 0;
+}
+.category-inspector-head {
+  padding: 24px;
+}
+.category-inspector-head h3 {
+  font-size: 20px;
+}
+.category-inspector-body {
+  padding: 24px;
+  gap: 24px;
+}
+.category-inspector-actions {
+  padding: 20px 24px;
+}
+.category-inspector-body input:not([type='checkbox']),
+.category-inspector-body select {
+  min-height: 40px;
+  font-size: 14px;
+}
+.category-inspector-body .category-check {
+  min-height: 32px;
+}
+.account-import-link small {
+  font-size: 12px;
+  line-height: 1.5;
+}
+.account-import-link {
+  padding: 16px 0;
+  border-radius: 0;
+  background: transparent;
+  border-block: 1px solid var(--separator);
+}
+@media (max-width: 600px) {
+  .category-inspector-head,
+  .category-inspector-body,
+  .category-inspector-actions {
+    padding-inline: 20px;
+  }
+}
+</style>

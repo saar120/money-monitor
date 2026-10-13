@@ -210,7 +210,7 @@ async function finish() {
 
 <template>
   <div
-    class="setup-page min-h-screen bg-bg-secondary flex items-center justify-center p-8"
+    class="setup-page min-h-dvh bg-bg-primary flex items-center justify-center px-4 py-12 sm:px-8"
     :dir="language === 'he' ? 'rtl' : 'ltr'"
   >
     <!-- macOS drag region for Electron -->
@@ -224,7 +224,7 @@ async function finish() {
           <Wallet class="h-7 w-7 text-primary" />
         </div>
         <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
-        <p class="text-text-secondary mt-1">{{ copy.intro }}</p>
+        <p class="text-[14px] text-text-secondary mt-2">{{ copy.intro }}</p>
       </div>
 
       <!-- Progress -->
@@ -238,9 +238,9 @@ async function finish() {
       </div>
 
       <!-- Step 1: AI Provider -->
-      <Card v-if="step === 1">
-        <CardHeader>
-          <div class="flex items-center gap-3">
+      <Card v-if="step === 1" class="setup-step">
+        <CardHeader class="px-0 pb-0">
+          <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
               <Bot class="h-4 w-4 text-primary" />
             </div>
@@ -250,14 +250,14 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-4">
+        <CardContent class="space-y-6 px-0 py-6">
           <!-- Provider buttons -->
-          <div class="grid grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
             <Button
               v-for="p in providers"
               :key="p.id"
               :variant="selectedProvider === p.id ? 'default' : 'secondary'"
-              class="justify-start"
+              class="justify-start h-auto whitespace-normal py-2 text-start"
               @click="
                 selectedProvider = p.id;
                 selectedModel = '';
@@ -270,7 +270,7 @@ async function finish() {
 
           <!-- API Key -->
           <div class="space-y-1">
-            <label class="text-[13px] font-medium text-text-primary block"
+            <label class="text-[14px] font-medium text-text-primary block"
               >{{ currentProvider?.name ?? 'API' }} {{ copy.key }}</label
             >
             <Input
@@ -280,7 +280,7 @@ async function finish() {
             />
             <p
               v-if="selectedProvider === 'opencode-go'"
-              class="text-[11px] leading-relaxed text-text-secondary"
+              class="text-[12px] leading-relaxed text-text-secondary"
             >
               {{ copy.opencodeHint }}
               <a
@@ -302,7 +302,7 @@ async function finish() {
 
             <div
               v-if="oauthConnected && oauthStep === 'idle'"
-              class="flex items-center gap-2 text-[13px]"
+              class="flex items-center gap-2 text-[14px]"
             >
               <CheckCircle class="h-4 w-4 text-green-500" />
               <span class="text-text-secondary">{{ copy.connected }}</span>
@@ -312,7 +312,7 @@ async function finish() {
               <Button variant="secondary" size="sm" class="w-full" @click="startOAuth">
                 {{ copy.login }}
               </Button>
-              <p class="text-[11px] text-text-secondary">
+              <p class="text-[12px] text-text-secondary">
                 {{ copy.loginHint }}
               </p>
             </div>
@@ -321,7 +321,7 @@ async function finish() {
               <p class="text-[12px] text-text-secondary">
                 {{ copy.codeHint }}
               </p>
-              <div class="flex gap-2">
+              <div class="flex flex-wrap gap-2">
                 <Input
                   v-model="oauthCode"
                   :placeholder="copy.pasteCode"
@@ -332,7 +332,7 @@ async function finish() {
                   {{ copy.submit }}
                 </Button>
               </div>
-              <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">
+              <button class="text-[12px] text-text-secondary underline" @click="cancelOAuth">
                 {{ copy.cancel }}
               </button>
             </div>
@@ -341,15 +341,15 @@ async function finish() {
               {{ copy.verifying }}
             </div>
 
-            <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
+            <p v-if="oauthError" class="text-[12px] text-destructive">{{ oauthError }}</p>
 
             <!-- Manual OAuth token paste -->
             <div class="space-y-1">
-              <label class="text-[13px] font-medium text-text-primary block">{{
+              <label class="text-[14px] font-medium text-text-primary block">{{
                 copy.oauthToken
               }}</label>
               <Input v-model="oauthToken" type="password" placeholder="oat-..." />
-              <p class="text-[11px] text-text-secondary mt-1">
+              <p class="text-[12px] text-text-secondary mt-1">
                 {{ copy.tokenHint }}
               </p>
             </div>
@@ -357,7 +357,7 @@ async function finish() {
 
           <!-- Model selection -->
           <div class="space-y-1">
-            <label class="text-[13px] font-medium text-text-primary block">{{ copy.model }}</label>
+            <label class="text-[14px] font-medium text-text-primary block">{{ copy.model }}</label>
             <Select v-model="selectedModel">
               <SelectTrigger>
                 <SelectValue :placeholder="copy.selectModel" />
@@ -370,16 +370,16 @@ async function finish() {
             </Select>
           </div>
 
-          <p class="text-[11px] text-text-secondary">
+          <p class="text-[12px] text-text-secondary">
             {{ copy.skipLater }}
           </p>
         </CardContent>
       </Card>
 
       <!-- Step 2: Master Key -->
-      <Card v-if="step === 2">
-        <CardHeader>
-          <div class="flex items-center gap-3">
+      <Card v-if="step === 2" class="setup-step">
+        <CardHeader class="px-0 pb-0">
+          <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
               <Key class="h-4 w-4 text-primary" />
             </div>
@@ -389,8 +389,8 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-4">
-          <div class="flex gap-2">
+        <CardContent class="space-y-6 px-0 py-6">
+          <div class="flex flex-wrap gap-2">
             <Button
               :variant="masterKeyMode === 'auto' ? 'default' : 'secondary'"
               size="sm"
@@ -409,11 +409,11 @@ async function finish() {
 
           <div v-if="masterKeyMode === 'auto'">
             <div
-              class="p-3 rounded-lg bg-bg-secondary border border-separator font-mono text-[11px] break-all text-text-secondary"
+              class="p-3 rounded-lg bg-bg-secondary border border-separator font-mono text-[12px] break-all text-text-secondary"
             >
               {{ autoMasterKey }}
             </div>
-            <p class="text-[11px] text-text-secondary mt-1.5">
+            <p class="text-[12px] text-text-secondary mt-1.5">
               {{ copy.storageHint }}
             </p>
           </div>
@@ -425,9 +425,9 @@ async function finish() {
       </Card>
 
       <!-- Step 3: Optional -->
-      <Card v-if="step === 3">
-        <CardHeader>
-          <div class="flex items-center gap-3">
+      <Card v-if="step === 3" class="setup-step">
+        <CardHeader class="px-0 pb-0">
+          <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
               <Check class="h-4 w-4 text-primary" />
             </div>
@@ -437,21 +437,21 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-4">
+        <CardContent class="space-y-6 px-0 py-6">
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
               copy.schedule
             }}</label>
             <Input v-model="scrapeCron" placeholder="0 6 * * *" />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
               copy.timezone
             }}</label>
             <Input v-model="scrapeTimezone" placeholder="Asia/Jerusalem" />
           </div>
           <div>
-            <label class="text-[13px] font-medium text-text-primary block mb-1.5">{{
+            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
               copy.telegram
             }}</label>
             <Input
@@ -464,7 +464,7 @@ async function finish() {
       </Card>
 
       <!-- Error -->
-      <p v-if="error" class="text-[13px] text-destructive mt-3">{{ error }}</p>
+      <p v-if="error" class="text-[14px] text-destructive mt-3">{{ error }}</p>
 
       <!-- Navigation -->
       <div class="flex items-center justify-between mt-6">
@@ -474,7 +474,7 @@ async function finish() {
         </Button>
         <div v-else />
 
-        <div class="flex gap-2">
+        <div class="flex flex-wrap gap-2">
           <Button
             v-if="step === 1"
             variant="ghost"
@@ -500,3 +500,23 @@ async function finish() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.setup-step {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.setup-page :deep(input),
+.setup-page :deep([data-slot='select-trigger']) {
+  min-height: 40px;
+}
+.setup-page :deep(label) {
+  margin-bottom: 8px;
+  font-size: 12px;
+}
+.setup-page :deep(p) {
+  line-height: 1.6;
+}
+</style>

@@ -390,7 +390,7 @@ onMounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="account-management flex flex-col h-full min-h-0 animate-fade-in-up">
     <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showAddDialog = true">
         <Plus class="h-4 w-4 mr-1" />
@@ -411,7 +411,7 @@ onMounted(() => {
           <Building2 class="h-8 w-8 text-primary" />
         </div>
         <p class="text-[15px] font-medium text-text-primary mb-1">{{ accountCopy.empty }}</p>
-        <p class="text-text-secondary text-[13px] mb-5">
+        <p class="text-text-secondary text-[14px] mb-5">
           {{ accountCopy.emptyHint }}
         </p>
         <Button @click="showAddDialog = true">
@@ -419,39 +419,46 @@ onMounted(() => {
         </Button>
       </div>
 
-      <div v-for="section in accountSections" :key="section.type" class="account-section space-y-3">
-        <h2 class="text-[15px] font-semibold text-text-primary">{{ section.label }}</h2>
+      <div v-for="section in accountSections" :key="section.type" class="account-section space-y-0">
+        <h2 class="px-4 mb-2 text-[20px] font-semibold text-text-primary">{{ section.label }}</h2>
         <Card v-for="account in section.accounts" :key="account.id" class="account-row">
-          <CardContent class="p-5">
-            <div class="flex items-start justify-between gap-4">
+          <CardContent class="px-4 py-6">
+            <div
+              class="flex flex-col items-stretch justify-between gap-4 xl:flex-row xl:items-start"
+            >
               <div class="flex-1 min-w-0">
-                <div class="flex items-center gap-2.5 mb-1">
+                <div class="flex flex-wrap items-center gap-2.5 mb-1">
                   <template v-if="editingNameId === account.id">
                     <div class="flex items-center gap-1.5">
                       <Input
                         v-model="editNameValue"
-                        class="h-7 text-[13px] w-48"
+                        class="h-7 text-[14px] min-w-0 w-40 sm:w-48"
                         @keyup.enter="saveEditName(account)"
                         @keyup.escape="cancelEditName"
                       />
                       <button
                         class="p-1.5 rounded-lg text-success hover:bg-success/10 transition-colors"
+                        :aria-label="language === 'he' ? 'שמירת שם' : 'Save name'"
                         @click="saveEditName(account)"
                       >
                         <Check class="h-4 w-4" />
                       </button>
                       <button
                         class="p-1.5 rounded-lg text-text-secondary hover:bg-bg-tertiary transition-colors"
+                        :aria-label="accountCopy.cancel"
                         @click="cancelEditName"
                       >
                         <X class="h-4 w-4" />
                       </button>
                     </div>
                   </template>
-                  <div v-else class="flex items-center gap-1.5 group">
-                    <CardTitle class="text-[15px]">{{ account.displayName }}</CardTitle>
+                  <div v-else class="flex min-w-0 items-center gap-1.5 group">
+                    <CardTitle class="text-[15px] break-words min-w-0">{{
+                      account.displayName
+                    }}</CardTitle>
                     <button
-                      class="p-1 rounded-lg opacity-0 group-hover:opacity-100 hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-all duration-150"
+                      class="p-1.5 shrink-0 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary transition-all duration-150"
+                      :aria-label="`${language === 'he' ? 'שינוי שם' : 'Rename'}: ${account.displayName}`"
                       @click="startEditName(account)"
                     >
                       <Pencil class="h-3.5 w-3.5" />
@@ -460,11 +467,11 @@ onMounted(() => {
                   <Badge
                     :variant="account.isActive ? 'default' : 'secondary'"
                     :class="account.isActive ? 'bg-success/10 text-success border-0' : ''"
-                    class="text-[11px]"
+                    class="text-[12px]"
                   >
                     {{ account.isActive ? accountCopy.active : accountCopy.inactive }}
                   </Badge>
-                  <Badge variant="secondary" class="text-[11px]">
+                  <Badge variant="secondary" class="text-[12px]">
                     {{
                       account.memberId
                         ? (memberMap.get(account.memberId) ?? accountCopy.unknownMember)
@@ -472,7 +479,7 @@ onMounted(() => {
                     }}
                   </Badge>
                 </div>
-                <CardDescription class="text-[13px]">
+                <CardDescription class="text-[14px]">
                   {{ PROVIDERS.find((p) => p.id === account.companyId)?.name ?? account.companyId }}
                   <span v-if="account.accountNumber"> · {{ account.accountNumber }}</span>
                 </CardDescription>
@@ -496,6 +503,7 @@ onMounted(() => {
                   <span v-else>{{ accountCopy.never }}</span>
                 </p>
                 <button
+                  :aria-expanded="expandedSettings.has(account.id)"
                   class="flex items-center gap-1.5 mt-3 text-[12px] text-text-secondary hover:text-text-primary transition-colors"
                   @click="
                     expandedSettings.has(account.id)
@@ -513,12 +521,12 @@ onMounted(() => {
 
                 <div
                   v-if="expandedSettings.has(account.id)"
-                  class="mt-3 rounded-lg border border-separator/60 divide-y divide-separator/40 overflow-hidden"
+                  class="account-settings mt-5 border-t border-separator/60 divide-y divide-separator/40"
                 >
-                  <div class="px-4 py-3 flex items-center justify-between">
+                  <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div class="text-[13px] text-text-primary">{{ accountCopy.member }}</div>
-                      <div class="text-[11px] text-text-secondary mt-0.5">
+                      <div class="text-[14px] text-text-primary">{{ accountCopy.member }}</div>
+                      <div class="text-[12px] text-text-secondary mt-0.5">
                         {{ accountCopy.memberHint }}
                       </div>
                     </div>
@@ -543,11 +551,11 @@ onMounted(() => {
 
                   <div
                     v-if="MANUAL_LOGIN_COMPANY_IDS.has(account.companyId)"
-                    class="px-4 py-3 flex items-center justify-between"
+                    class="px-4 py-3 flex flex-wrap items-center justify-between gap-3"
                   >
                     <div>
-                      <div class="text-[13px] text-text-primary">{{ accountCopy.manualLogin }}</div>
-                      <div class="text-[11px] text-text-secondary mt-0.5">
+                      <div class="text-[14px] text-text-primary">{{ accountCopy.manualLogin }}</div>
+                      <div class="text-[12px] text-text-secondary mt-0.5">
                         {{ accountCopy.manualLoginHint }}
                       </div>
                     </div>
@@ -557,10 +565,10 @@ onMounted(() => {
                     />
                   </div>
 
-                  <div class="px-4 py-3 flex items-center justify-between">
+                  <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div class="text-[13px] text-text-primary">{{ accountCopy.showBrowser }}</div>
-                      <div class="text-[11px] text-text-secondary mt-0.5">
+                      <div class="text-[14px] text-text-primary">{{ accountCopy.showBrowser }}</div>
+                      <div class="text-[12px] text-text-secondary mt-0.5">
                         {{ accountCopy.showBrowserHint }}
                       </div>
                     </div>
@@ -572,12 +580,12 @@ onMounted(() => {
                   </div>
 
                   <div class="px-4 py-3">
-                    <div class="flex items-center justify-between">
+                    <div class="flex items-center justify-between gap-3">
                       <div>
-                        <div class="text-[13px] text-text-primary">
+                        <div class="text-[14px] text-text-primary">
                           {{ accountCopy.manualOnly }}
                         </div>
-                        <div class="text-[11px] text-text-secondary mt-0.5">
+                        <div class="text-[12px] text-text-secondary mt-0.5">
                           {{ accountCopy.manualOnlyHint }}
                         </div>
                       </div>
@@ -588,7 +596,7 @@ onMounted(() => {
                     </div>
                     <div
                       v-if="account.manualScrapeOnly"
-                      class="flex items-center gap-2 mt-2.5 pl-1"
+                      class="flex flex-wrap items-center gap-2 mt-2.5 pl-1"
                     >
                       <label class="text-[12px] text-text-secondary whitespace-nowrap">
                         {{ accountCopy.staleAlert }}
@@ -611,10 +619,10 @@ onMounted(() => {
                     </div>
                   </div>
 
-                  <div class="px-4 py-3 flex items-center justify-between">
+                  <div class="px-4 py-3 flex flex-wrap items-center justify-between gap-3">
                     <div>
-                      <div class="text-[13px] text-text-primary">{{ accountCopy.credentials }}</div>
-                      <div class="text-[11px] text-text-secondary mt-0.5">
+                      <div class="text-[14px] text-text-primary">{{ accountCopy.credentials }}</div>
+                      <div class="text-[12px] text-text-secondary mt-0.5">
                         {{ accountCopy.credentialsHint }}
                       </div>
                     </div>
@@ -626,7 +634,7 @@ onMounted(() => {
                 </div>
               </div>
 
-              <div class="flex items-center gap-2 flex-shrink-0">
+              <div class="flex flex-wrap items-center gap-2 shrink-0">
                 <Button
                   v-if="account.companyId === 'oneZero'"
                   variant="secondary"
@@ -666,6 +674,7 @@ onMounted(() => {
                       variant="ghost"
                       size="icon-sm"
                       class="text-text-tertiary hover:text-destructive"
+                      :aria-label="`${accountCopy.delete}: ${account.displayName}`"
                     >
                       <Trash2 class="h-3.5 w-3.5" />
                     </Button>
@@ -704,14 +713,14 @@ onMounted(() => {
 
     <!-- Add Account Dialog -->
     <Dialog v-model:open="showAddDialog">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add New Account</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-5 py-2">
           <div class="flex flex-col gap-2">
-            <label class="text-[13px] font-medium">Provider</label>
+            <label class="text-[14px] font-medium">Provider</label>
             <Select v-model="newCompanyId">
               <SelectTrigger>
                 <SelectValue placeholder="Select provider..." />
@@ -738,12 +747,12 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-[13px] font-medium">Display Name</label>
+            <label class="text-[14px] font-medium">Display Name</label>
             <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-[13px] font-medium">Member</label>
+            <label class="text-[14px] font-medium">Member</label>
             <Select v-model="newMemberId">
               <SelectTrigger>
                 <SelectValue placeholder="Select member..." />
@@ -764,7 +773,7 @@ onMounted(() => {
             <!-- OTP note banner (e.g. OneZero) -->
             <div
               v-if="selectedProvider?.otpNote"
-              class="rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-[13px] text-primary"
+              class="rounded-lg border border-primary/20 bg-primary/5 px-3.5 py-2.5 text-[14px] text-primary"
             >
               {{ selectedProvider.otpNote }}
             </div>
@@ -776,22 +785,26 @@ onMounted(() => {
                 :key="field.key"
                 class="flex flex-col gap-2"
               >
-                <label class="text-[13px] font-medium">{{ field.label }}</label>
+                <label class="text-[14px] font-medium">{{ field.label }}</label>
                 <Input
                   v-model="credentialValues[field.key]"
                   :type="field.type"
                   :placeholder="field.placeholder ?? ''"
                   :autocomplete="field.type === 'password' ? 'current-password' : 'off'"
                 />
-                <p v-if="field.hint" class="text-[11px] text-text-tertiary">{{ field.hint }}</p>
+                <p v-if="field.hint" class="text-[12px] text-text-tertiary">{{ field.hint }}</p>
               </div>
             </template>
 
             <!-- Unknown provider: generic key-value fallback -->
             <template v-else>
               <div class="space-y-2">
-                <label class="text-[13px] font-medium">Credentials</label>
-                <div v-for="(field, i) in credentialFields" :key="i" class="flex gap-2">
+                <label class="text-[14px] font-medium">Credentials</label>
+                <div
+                  v-for="(field, i) in credentialFields"
+                  :key="i"
+                  class="flex flex-col gap-2 sm:flex-row"
+                >
                   <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
                   <Input v-model="field.value" type="password" placeholder="Value" />
                 </div>
@@ -834,7 +847,7 @@ onMounted(() => {
         </DialogHeader>
 
         <div class="space-y-4 py-2">
-          <p class="text-[13px] text-text-secondary">{{ otpMessage }}</p>
+          <p class="text-[14px] text-text-secondary">{{ otpMessage }}</p>
           <Input
             v-model="otpCode"
             inputmode="numeric"
@@ -874,8 +887,8 @@ onMounted(() => {
         </DialogHeader>
 
         <div class="space-y-4 py-2">
-          <p class="text-[13px] text-text-secondary">{{ manualLoginMessage }}</p>
-          <p class="text-[13px] text-text-secondary">
+          <p class="text-[14px] text-text-secondary">{{ manualLoginMessage }}</p>
+          <p class="text-[14px] text-text-secondary">
             Once you've successfully logged in, click the button below to continue scraping.
           </p>
         </div>
@@ -896,13 +909,13 @@ onMounted(() => {
 
     <!-- Update Credentials Dialog -->
     <Dialog v-model:open="showUpdateCredsDialog">
-      <DialogContent class="sm:max-w-md">
+      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Update Credentials</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-5 py-2">
-          <p class="text-[13px] text-text-secondary">
+          <p class="text-[14px] text-text-secondary">
             Enter new credentials for
             <span class="font-medium text-text-primary">{{ updateCredsAccount?.displayName }}</span
             >. Only fields you fill in will be updated.
@@ -915,22 +928,26 @@ onMounted(() => {
               :key="field.key"
               class="flex flex-col gap-2"
             >
-              <label class="text-[13px] font-medium">{{ field.label }}</label>
+              <label class="text-[14px] font-medium">{{ field.label }}</label>
               <Input
                 v-model="updateCredsValues[field.key]"
                 type="password"
                 :placeholder="field.placeholder ?? ''"
                 autocomplete="off"
               />
-              <p v-if="field.hint" class="text-[11px] text-text-tertiary">{{ field.hint }}</p>
+              <p v-if="field.hint" class="text-[12px] text-text-tertiary">{{ field.hint }}</p>
             </div>
           </template>
 
           <!-- Unknown provider: generic key-value fallback -->
           <template v-else>
             <div class="space-y-2">
-              <label class="text-[13px] font-medium">Credentials</label>
-              <div v-for="(field, i) in updateCredsFields" :key="i" class="flex gap-2">
+              <label class="text-[14px] font-medium">Credentials</label>
+              <div
+                v-for="(field, i) in updateCredsFields"
+                :key="i"
+                class="flex flex-col gap-2 sm:flex-row"
+              >
                 <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
                 <Input v-model="field.value" type="password" placeholder="Value" />
               </div>
@@ -955,3 +972,22 @@ onMounted(() => {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.account-management .account-row {
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+  box-shadow: none;
+}
+.account-management .account-row > div {
+  padding-inline: 16px;
+}
+.account-settings > div {
+  padding-inline: 0;
+  padding-block: 16px;
+}
+.account-management :deep(input) {
+  min-height: 36px;
+}
+</style>

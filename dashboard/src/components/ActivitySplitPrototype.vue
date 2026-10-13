@@ -5,6 +5,7 @@ import {
   Bot,
   ChevronLeft,
   ChevronRight,
+  ChevronDown,
   Compass,
   Home,
   Receipt,
@@ -263,16 +264,16 @@ async function saveTransaction() {
   }
 }
 function onKeys(event: KeyboardEvent) {
-  if (
-    event.target instanceof HTMLElement &&
-    event.target.closest('input, select, textarea, button, [contenteditable]')
-  )
-    return;
   if (event.key === 'Escape') {
     filterOpen.value = false;
     closeDetails();
     return;
   }
+  if (
+    event.target instanceof HTMLElement &&
+    event.target.closest('input, select, textarea, button, [contenteditable]')
+  )
+    return;
   if (event.key !== 'ArrowUp' && event.key !== 'ArrowDown') return;
   const index = rows.value.findIndex((row) => row.id === selectedId.value);
   const next = Math.max(
@@ -466,20 +467,28 @@ watch(search, () => {
                 :aria-selected="selectedId === row.id"
                 tabindex="0"
                 @click="selectRow(row)"
-                @keydown.enter="selectRow(row)"
+                @keydown.enter.self="selectRow(row)"
+                @keydown.space.self.prevent="selectRow(row)"
               >
                 <td>
                   <bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi>
                 </td>
                 <td class="proto-merchant">
-                  <span dir="auto">{{ row.description }}</span
+                  <button
+                    type="button"
+                    class="proto-row-open"
+                    :title="row.description"
+                    @click.stop="selectRow(row)"
+                  >
+                    <bdi dir="auto">{{ row.description }}</bdi
+                    ><ChevronDown :size="12" aria-hidden="true" /></button
                   ><small v-if="row.needsReview">{{ t('needsReview') }}</small>
                   <small class="proto-mobile-date"
                     ><bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi></small
                   >
                 </td>
                 <td class="proto-category">
-                  {{ categoryLabel(row.category) }}
+                  <bdi dir="auto">{{ categoryLabel(row.category) }}</bdi>
                 </td>
                 <td class="proto-amount" :class="row.chargedAmount >= 0 ? 'positive' : 'negative'">
                   <bdi dir="ltr">{{ signedAmount(row) }}</bdi>
@@ -530,7 +539,9 @@ watch(search, () => {
             :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
             ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
           >
-          <h3>{{ selected.description }}</h3>
+          <h3>
+            <bdi dir="auto">{{ selected.description }}</bdi>
+          </h3>
           <p class="proto-detail-meta">
             {{ accountMap.get(selected.accountId) ?? copy.account }} ·
             <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
@@ -588,6 +599,7 @@ watch(search, () => {
   position: relative;
   width: 100%;
   height: 100dvh;
+  min-width: 0;
   overflow: hidden;
   color: var(--text-primary);
   background: var(--bg-primary);
@@ -700,7 +712,9 @@ watch(search, () => {
   align-items: center;
   gap: 12px;
   min-height: 48px;
-  padding: 8px 25px;
+  flex-shrink: 0;
+  flex-wrap: wrap;
+  padding: 12px 24px;
   border-bottom: 1px solid var(--separator);
 }
 .proto-month {
@@ -709,10 +723,11 @@ watch(search, () => {
   justify-content: space-between;
   gap: 8px;
   min-width: 190px;
-  padding: 6px 8px;
-  border: 1px solid var(--separator);
-  border-radius: 12px;
-  background: var(--bg-secondary);
+  flex-shrink: 0;
+  padding: 4px 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
   font-weight: 650;
   white-space: nowrap;
 }
@@ -721,8 +736,8 @@ watch(search, () => {
 .proto-inspector-head button {
   display: grid;
   place-items: center;
-  width: 26px;
-  height: 26px;
+  width: 32px;
+  height: 32px;
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -743,7 +758,7 @@ watch(search, () => {
   min-height: 39px;
   padding: 0 13px;
   border: 1px solid var(--separator);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-weight: 650;
@@ -777,9 +792,9 @@ watch(search, () => {
   display: grid;
   gap: 14px;
   width: 285px;
-  padding: 17px;
+  padding: 20px;
   border: 1px solid var(--separator);
-  border-radius: 14px;
+  border-radius: 10px;
   background: var(--bg-primary);
   box-shadow: 0 16px 40px #24365425;
 }
@@ -843,7 +858,7 @@ watch(search, () => {
 .proto-fields input:not([type='checkbox']),
 .proto-fields textarea {
   width: 100%;
-  min-height: 35px;
+  min-height: 40px;
   padding: 6px 10px;
   border: 1px solid var(--separator);
   border-radius: 9px;
@@ -860,7 +875,7 @@ watch(search, () => {
   align-items: center;
   gap: 8px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
 }
 .proto-clear {
   justify-self: start;
@@ -876,10 +891,12 @@ watch(search, () => {
   gap: 10px;
   width: min(310px, 30vw);
   min-height: 39px;
+  min-width: 160px;
+  flex: 1 1 180px;
   margin-inline-start: auto;
   padding: 0 12px;
   border: 1px solid var(--separator);
-  border-radius: 11px;
+  border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-tertiary);
 }
@@ -893,7 +910,8 @@ watch(search, () => {
 }
 .proto-search:focus-within {
   border-color: var(--accent);
-  box-shadow: 0 0 0 3px var(--accent) 18;
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .proto-content {
   display: flex;
@@ -903,14 +921,17 @@ watch(search, () => {
   width: 100%;
   max-width: 1120px;
   margin-inline: auto;
-  padding: 20px 25px 0;
+  padding: 24px 24px 0;
 }
 .proto-title {
-  padding-block-end: 12px;
+  display: flex;
+  align-items: baseline;
+  gap: 12px;
+  padding: 0 16px 24px;
 }
 .proto-title span {
   color: var(--text-tertiary);
-  font-size: 13px;
+  font-size: 14px;
 }
 .proto-error {
   margin-block-end: 12px;
@@ -933,10 +954,11 @@ watch(search, () => {
   scrollbar-gutter: stable;
   padding-inline-end: 16px;
   margin-inline-end: -16px;
-  outline: none;
+  outline-offset: -2px;
 }
 .proto-table {
   width: 100%;
+  min-width: 580px;
   border-collapse: collapse;
   table-layout: fixed;
 }
@@ -957,7 +979,7 @@ watch(search, () => {
   top: 0;
   z-index: 1;
   height: 39px;
-  padding-inline: 12px;
+  padding-inline: 16px;
   border-bottom: 1px solid var(--separator);
   background: var(--bg-primary);
   color: var(--text-secondary);
@@ -970,7 +992,7 @@ watch(search, () => {
 }
 .proto-table td {
   height: 60px;
-  padding: 10px 12px;
+  padding: 16px;
   overflow: hidden;
   border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
   color: var(--text-primary);
@@ -993,7 +1015,7 @@ watch(search, () => {
   outline-offset: -2px;
 }
 .proto-table td:first-child {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-tertiary);
 }
 .proto-merchant {
@@ -1001,15 +1023,30 @@ watch(search, () => {
   color: var(--text-primary) !important;
   font-weight: 500;
 }
-.proto-merchant span {
-  display: inline-block;
-  max-width: 90%;
+.proto-row-open {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  width: 100%;
+  min-width: 0;
+  padding: 0;
+  color: inherit;
+  font: inherit;
+  text-align: start;
+}
+.proto-row-open bdi {
+  min-width: 0;
   overflow: hidden;
   text-overflow: ellipsis;
-  vertical-align: middle;
+  white-space: nowrap;
+}
+.proto-row-open svg {
+  flex: none;
+  color: var(--text-tertiary);
 }
 .proto-merchant small {
-  margin-inline-start: 8px;
+  display: block;
+  margin-block-start: 3px;
   color: var(--destructive);
   font-size: 11px;
 }
@@ -1017,7 +1054,7 @@ watch(search, () => {
   display: none;
 }
 .proto-category {
-  font-size: 12px;
+  font-size: 14px;
   color: var(--text-secondary) !important;
 }
 .proto-amount {
@@ -1065,19 +1102,20 @@ watch(search, () => {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 82px;
-  padding: 0 21px;
+  min-height: 64px;
+  flex-shrink: 0;
+  padding: 0 24px;
   border-bottom: 1px solid var(--separator);
 }
 .proto-inspector-head h2 {
   margin: 0;
-  font-size: 16px;
-  font-weight: 700;
+  font-size: 20px;
+  font-weight: 650;
 }
 .proto-inspector-content {
   flex: 1;
   overflow: auto;
-  padding: 21px;
+  padding: 24px;
 }
 .proto-review {
   display: inline-flex;
@@ -1098,6 +1136,7 @@ watch(search, () => {
 }
 .proto-inspector-content h3 {
   margin: 11px 0 4px;
+  overflow-wrap: anywhere;
   font-size: 18px;
   line-height: 1.35;
 }
@@ -1110,24 +1149,14 @@ watch(search, () => {
 }
 .proto-fields {
   display: grid;
-  gap: 15px;
-}
-.proto-fields label:not(.proto-include) {
-  grid-template-columns: 72px minmax(0, 1fr);
-  align-items: center;
-}
-.proto-fields label:not(.proto-include) > span {
-  grid-column: 1;
-}
-.proto-fields label:not(.proto-include) > :last-child {
-  grid-column: 2;
+  gap: 20px;
 }
 .proto-fields label.proto-include {
   display: flex;
   align-items: center;
   gap: 9px;
   color: var(--text-primary);
-  font-size: 13px;
+  font-size: 14px;
 }
 .proto-fields input[type='checkbox'],
 .proto-filter-popover input[type='checkbox'] {
@@ -1138,8 +1167,8 @@ watch(search, () => {
 }
 .proto-preview-note {
   margin-top: 17px;
-  color: var(--text-tertiary);
-  font-size: 11px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 .proto-saved {
   color: var(--success);
@@ -1147,7 +1176,8 @@ watch(search, () => {
   font-weight: 650;
 }
 .proto-inspector-actions {
-  padding: 18px 21px;
+  padding: 20px 24px;
+  flex-shrink: 0;
   border-top: 1px solid var(--separator);
 }
 .proto-save {
@@ -1218,10 +1248,10 @@ watch(search, () => {
     padding: 0;
   }
   .proto-toolbar {
-    padding-inline: 17px;
+    padding-inline: 16px;
   }
   .proto-content {
-    padding-inline: 17px;
+    padding-inline: 16px;
   }
   .proto-inspector {
     width: min(330px, 80vw);
@@ -1242,7 +1272,14 @@ watch(search, () => {
   }
 
   .proto-advanced {
-    display: none;
+    order: 3;
+  }
+  .proto-table {
+    min-width: 360px;
+  }
+  .proto-toolbar {
+    gap: 10px;
+    padding-block: 12px;
   }
   .proto-date-col {
     display: none;

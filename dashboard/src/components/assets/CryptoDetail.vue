@@ -19,7 +19,6 @@ import { useApi } from '@/composables/useApi';
 import { formatCurrency } from '@/lib/format';
 import { language, t } from '@/lib/language';
 import { HOLDING_TYPE_LABELS } from '@/lib/net-worth-constants';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Badge } from '@/components/ui/badge';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -355,7 +354,7 @@ const chartDatasets = computed(() =>
 </script>
 
 <template>
-  <div class="animate-fade-in-up space-y-6">
+  <div class="asset-view min-w-0 animate-fade-in-up">
     <!-- Loading skeleton -->
     <div v-if="assetApi.loading.value && !asset">
       <Skeleton class="h-8 w-64 mb-2" />
@@ -364,7 +363,7 @@ const chartDatasets = computed(() =>
 
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
-      <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
+      <p class="text-destructive text-[14px]">{{ assetApi.error.value }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
         t('retry')
       }}</Button>
@@ -373,57 +372,51 @@ const chartDatasets = computed(() =>
     <template v-else-if="asset">
       <!-- Header -->
       <div>
-        <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
-        <div class="flex items-center gap-2 mt-1">
+        <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+        <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
-            class="text-[11px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]"
+            class="text-[12px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]"
             >{{ copy.type }}</span
           >
-          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+          <span v-if="asset.institution" class="text-[14px] text-text-secondary">{{
             asset.institution
           }}</span>
         </div>
       </div>
 
-      <!-- Summary cards -->
-      <div class="grid grid-cols-1 md:grid-cols-3 gap-4">
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.value
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <!-- Asset summary -->
+      <div class="asset-metrics grid grid-cols-1 md:grid-cols-3 gap-4">
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.value }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <div class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(asset.totalValueIls) }}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.invested
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.invested }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <div
               v-if="asset.totalInvestedIls != null"
               class="text-[22px] font-semibold tabular-nums"
             >
               {{ formatCurrency(asset.totalInvestedIls) }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">{{ copy.noData }}</div>
-          </CardContent>
-        </Card>
+            <div v-else class="text-[14px] text-text-secondary">{{ copy.noData }}</div>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.return
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.return }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <template v-if="totalReturn">
               <div
                 :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'"
@@ -440,7 +433,7 @@ const chartDatasets = computed(() =>
                 />
                 <span
                   :class="totalReturn.amount >= 0 ? 'text-success' : 'text-destructive'"
-                  class="text-[13px]"
+                  class="text-[14px]"
                 >
                   {{ totalReturn.pct >= 0 ? '+' : '' }}{{ totalReturn.pct.toFixed(1) }}%
                 </span>
@@ -449,16 +442,16 @@ const chartDatasets = computed(() =>
             <div v-else class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(asset.totalValueIls) }}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
       </div>
 
       <!-- Coin holdings table -->
-      <Card>
-        <CardHeader>
-          <div class="flex items-center justify-between">
-            <CardTitle class="text-[15px]">{{ copy.holdings }}</CardTitle>
-            <div class="flex items-center gap-2">
+      <section class="finance-section">
+        <header class="finance-section-heading">
+          <div class="flex flex-wrap items-center justify-between gap-3">
+            <h2 class="text-[20px]">{{ copy.holdings }}</h2>
+            <div class="flex flex-wrap items-center gap-2">
               <template v-if="quickUpdateMode">
                 <Button variant="secondary" size="sm" @click="cancelQuickUpdate">{{
                   copy.cancel
@@ -485,15 +478,15 @@ const chartDatasets = computed(() =>
               </template>
             </div>
           </div>
-        </CardHeader>
-        <CardContent>
+        </header>
+        <div class="finance-section-content finance-section-ledger">
           <div v-if="assetApi.loading.value && holdings.length === 0" class="space-y-3">
             <Skeleton class="h-10 w-full" />
             <Skeleton class="h-10 w-full" />
           </div>
 
           <div v-else-if="holdings.length === 0" class="text-center py-8">
-            <p class="text-text-secondary text-[13px]">No coins yet</p>
+            <p class="text-text-secondary text-[14px]">No coins yet</p>
             <Button size="sm" class="mt-2" @click="openAddHolding">
               <Plus class="h-4 w-4 mr-1" />
               Add First Coin
@@ -501,8 +494,11 @@ const chartDatasets = computed(() =>
           </div>
 
           <!-- Desktop table -->
-          <div v-else class="hidden md:block">
-            <Table>
+          <div
+            v-else
+            :class="quickUpdateMode ? 'block overflow-x-auto' : 'hidden md:block overflow-x-auto'"
+          >
+            <Table class="min-w-[640px]">
               <TableHeader>
                 <TableRow>
                   <TableHead>Name</TableHead>
@@ -516,14 +512,14 @@ const chartDatasets = computed(() =>
               </TableHeader>
               <TableBody>
                 <TableRow v-for="h in holdings" :key="h.id" class="group">
-                  <TableCell class="font-medium text-[13px]">
+                  <TableCell class="font-medium text-[14px]">
                     {{ h.name }}
                     <div v-if="h.stale" class="flex items-center gap-1 text-text-secondary mt-0.5">
                       <AlertCircle class="h-3.5 w-3.5 text-[var(--warning)]" />
-                      <span class="text-[11px]">No price data</span>
+                      <span class="text-[12px]">No price data</span>
                     </div>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-[13px]">
+                  <TableCell class="text-right tabular-nums text-[14px]">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -539,7 +535,7 @@ const chartDatasets = computed(() =>
                     </template>
                     <template v-else>{{ h.quantity.toLocaleString() }}</template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-[13px] text-text-secondary">
+                  <TableCell class="text-right tabular-nums text-[14px] text-text-secondary">
                     <template v-if="quickUpdateMode">
                       <Input
                         type="number"
@@ -558,40 +554,38 @@ const chartDatasets = computed(() =>
                       <span v-else>-</span>
                     </template>
                   </TableCell>
-                  <TableCell class="text-right tabular-nums text-[13px] font-medium">{{
+                  <TableCell class="text-right tabular-nums text-[14px] font-medium">{{
                     formatCurrency(h.currentValueIls)
                   }}</TableCell>
                   <TableCell
-                    class="text-right tabular-nums text-[13px] text-text-secondary hidden lg:table-cell"
+                    class="text-right tabular-nums text-[14px] text-text-secondary hidden lg:table-cell"
                     >{{ formatCurrency(h.costBasis) }}</TableCell
                   >
                   <TableCell class="text-right">
                     <div v-if="h.gainLoss != null">
                       <span
                         :class="h.gainLoss >= 0 ? 'text-success' : 'text-destructive'"
-                        class="text-[13px] tabular-nums font-medium"
+                        class="text-[14px] tabular-nums font-medium"
                       >
                         {{ h.gainLoss >= 0 ? '+' : '' }}{{ formatCurrency(h.gainLoss) }}
                       </span>
                       <span
                         v-if="h.gainLossPercent != null"
                         :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
-                        class="text-[11px] block"
+                        class="text-[12px] block"
                       >
                         {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                       </span>
                     </div>
-                    <span v-else class="text-text-secondary text-[13px]">-</span>
+                    <span v-else class="text-text-secondary text-[14px]">-</span>
                   </TableCell>
                   <TableCell>
-                    <div
-                      v-if="!quickUpdateMode"
-                      class="flex gap-1 opacity-0 group-hover:opacity-100 transition-opacity"
-                    >
+                    <div v-if="!quickUpdateMode" class="flex gap-1 transition-opacity">
                       <Button
                         variant="ghost"
                         size="icon"
                         class="h-7 w-7"
+                        :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                         @click="holdingToDelete = h"
                       >
                         <Trash2 class="h-3.5 w-3.5 text-destructive" />
@@ -603,56 +597,66 @@ const chartDatasets = computed(() =>
             </Table>
           </div>
 
-          <!-- Mobile cards -->
-          <div v-if="holdings.length > 0" class="md:hidden space-y-2">
-            <div v-for="h in holdings" :key="h.id" class="p-3 border border-separator rounded-lg">
-              <div class="flex items-center justify-between">
-                <span class="font-medium text-[13px]">{{ h.name }}</span>
-                <Badge variant="outline" class="text-[11px]">{{
+          <!-- Mobile holdings ledger -->
+          <div
+            v-if="holdings.length > 0 && !quickUpdateMode"
+            class="finance-ledger md:hidden divide-y divide-separator"
+          >
+            <div v-for="h in holdings" :key="h.id" class="finance-ledger-row">
+              <div class="flex flex-wrap items-center justify-between gap-3">
+                <span class="font-medium text-[14px]">{{ h.name }}</span>
+                <Badge variant="outline" class="text-[12px]">{{
                   HOLDING_TYPE_LABELS[h.type] ?? h.type
                 }}</Badge>
               </div>
-              <div class="text-[11px] text-text-secondary mt-1">
+              <div class="text-[12px] text-text-secondary mt-1">
                 {{ h.quantity.toLocaleString() }} units
                 <span v-if="h.lastPrice != null"> @ {{ formatCurrency(h.lastPrice) }}</span>
               </div>
               <div class="flex items-center justify-between mt-1">
-                <span class="text-[13px] font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
+                <span class="text-[14px] font-medium">{{ formatCurrency(h.currentValueIls) }}</span>
                 <span
                   v-if="h.gainLossPercent != null"
                   :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
-                  class="text-[11px]"
+                  class="text-[12px]"
                 >
                   {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
                 </span>
               </div>
+              <div class="flex gap-2 mt-3">
+                <Button variant="ghost" size="sm" @click="holdingToDelete = h"
+                  ><Trash2 class="h-3.5 w-3.5 text-destructive" />{{
+                    language === 'he' ? 'מחיקה' : 'Delete'
+                  }}</Button
+                >
+              </div>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <!-- Value over time chart -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section class="finance-section">
+        <header class="finance-section-heading">
+          <h2 class="text-[20px]">{{ copy.history }}</h2>
+        </header>
+        <div class="finance-section-content">
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
             <Skeleton class="h-48 w-full rounded-md" />
           </div>
           <div v-else-if="chartDatasets" class="h-48">
             <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
-          <div v-else class="text-[13px] text-text-secondary text-center py-12">
+          <div v-else class="text-[14px] text-text-secondary text-center py-12">
             {{ copy.historyHint }}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <!-- Movement history -->
-      <div class="space-y-4">
-        <div class="flex items-center justify-between">
-          <h2 class="text-[15px] font-semibold">{{ copy.movements }}</h2>
+      <div class="finance-section space-y-4">
+        <div class="finance-movement-heading flex flex-wrap items-center justify-between gap-3">
+          <h2 class="text-[20px] font-semibold">{{ copy.movements }}</h2>
           <Button size="sm" @click="openAddMovement">
             <Plus class="h-4 w-4 mr-1" />
             {{ copy.addMovement }}
@@ -665,40 +669,41 @@ const chartDatasets = computed(() =>
         </div>
 
         <div v-else-if="buySellMovements.length === 0" class="text-center py-8">
-          <p class="text-text-secondary text-[13px]">No buy/sell movements recorded yet.</p>
+          <p class="text-text-secondary text-[14px]">No buy/sell movements recorded yet.</p>
         </div>
 
-        <div v-else class="space-y-0 border border-separator rounded-lg divide-y divide-separator">
-          <div v-for="m in buySellMovements" :key="m.id" class="px-4 py-3 group">
-            <div class="flex items-start justify-between">
+        <div v-else class="finance-ledger divide-y divide-separator">
+          <div v-for="m in buySellMovements" :key="m.id" class="finance-ledger-row group">
+            <div class="flex flex-wrap items-start justify-between gap-3">
               <div>
                 <div class="flex items-center gap-2">
                   <Badge
                     :class="MOVEMENT_BADGE_CLASSES[m.type] ?? 'bg-muted text-text-secondary'"
                     >{{ m.type }}</Badge
                   >
-                  <span class="text-[13px] text-text-secondary">{{
+                  <span class="text-[14px] text-text-secondary">{{
                     m.holdingName ?? 'General'
                   }}</span>
                 </div>
-                <div class="text-[13px] font-medium mt-1 tabular-nums">
+                <div class="text-[14px] font-medium mt-1 tabular-nums">
                   {{ m.quantity > 0 ? '+' : '' }}{{ m.quantity.toLocaleString() }} {{ m.currency }}
                   <span v-if="m.pricePerUnit" class="text-text-secondary">
                     @ {{ m.pricePerUnit.toLocaleString() }}/unit
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">
+                <p v-if="m.notes" class="text-[12px] text-text-secondary mt-0.5 italic">
                   {{ m.notes }}
                 </p>
               </div>
               <div class="flex items-center gap-2">
-                <span class="text-[11px] text-text-secondary">{{
+                <span class="text-[12px] text-text-secondary">{{
                   formatMovementDate(m.date)
                 }}</span>
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-7 w-7 opacity-0 group-hover:opacity-100 transition-opacity"
+                  class="h-7 w-7 transition-opacity"
+                  :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="movementToDelete = m"
                 >
                   <Trash2 class="h-3.5 w-3.5 text-destructive" />
@@ -712,29 +717,29 @@ const chartDatasets = computed(() =>
 
     <!-- Add Coin Dialog -->
     <Dialog v-model:open="showHoldingDialog">
-      <DialogContent>
+      <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Add Coin</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium">Name</label>
+            <label class="text-[14px] font-medium">Name</label>
             <Input v-model="holdingForm.name" placeholder="e.g. Bitcoin, Ethereum" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Currency / Ticker</label>
+            <label class="text-[14px] font-medium">Currency / Ticker</label>
             <Input v-model="holdingForm.currency" placeholder="BTC" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Quantity</label>
+            <label class="text-[14px] font-medium">Quantity</label>
             <Input v-model.number="holdingForm.quantity" type="number" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Cost Basis (ILS)</label>
+            <label class="text-[14px] font-medium">Cost Basis (ILS)</label>
             <Input v-model.number="holdingForm.costBasis" type="number" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Last Price (ILS)</label>
+            <label class="text-[14px] font-medium">Last Price (ILS)</label>
             <Input
               :model-value="holdingForm.lastPrice ?? ''"
               type="number"
@@ -793,17 +798,17 @@ const chartDatasets = computed(() =>
 
     <!-- Buy / Sell Movement Dialog -->
     <Dialog v-model:open="showMovementDialog">
-      <DialogContent>
+      <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record Buy / Sell</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium">Date</label>
+            <label class="text-[14px] font-medium">Date</label>
             <Input v-model="movementForm.date" type="date" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Type</label>
+            <label class="text-[14px] font-medium">Type</label>
             <Select v-model="movementForm.type">
               <SelectTrigger><SelectValue /></SelectTrigger>
               <SelectContent>
@@ -814,7 +819,7 @@ const chartDatasets = computed(() =>
             </Select>
           </div>
           <div>
-            <label class="text-[13px] font-medium">Coin</label>
+            <label class="text-[14px] font-medium">Coin</label>
             <Select v-model="movementForm.holdingId">
               <SelectTrigger><SelectValue placeholder="Select coin" /></SelectTrigger>
               <SelectContent>
@@ -826,11 +831,11 @@ const chartDatasets = computed(() =>
             </Select>
           </div>
           <div>
-            <label class="text-[13px] font-medium">Quantity</label>
+            <label class="text-[14px] font-medium">Quantity</label>
             <Input v-model.number="movementForm.quantity" type="number" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Price per Unit (ILS)</label>
+            <label class="text-[14px] font-medium">Price per Unit (ILS)</label>
             <Input
               :model-value="movementForm.pricePerUnit ?? ''"
               type="number"
@@ -840,10 +845,10 @@ const chartDatasets = computed(() =>
             />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Notes</label>
+            <label class="text-[14px] font-medium">Notes</label>
             <Textarea v-model="movementForm.notes" maxlength="500" />
           </div>
-          <p v-if="movementError" class="text-[13px] text-destructive">{{ movementError }}</p>
+          <p v-if="movementError" class="text-[14px] text-destructive">{{ movementError }}</p>
         </div>
         <DialogFooter>
           <DialogClose as-child>

@@ -14,17 +14,27 @@ const props = defineProps<{
   <div
     :class="
       cn(
-        'px-4 py-3 flex gap-4',
-        vertical ? 'flex-col' : 'items-center justify-between',
+        'px-5 py-4 flex gap-4',
+        vertical
+          ? 'flex-col'
+          : 'flex-col items-start sm:flex-row sm:items-center sm:justify-between',
         props.class,
       )
     "
   >
-    <div v-if="label" class="flex-shrink-0" :class="{ 'min-w-0': !vertical }">
-      <div class="text-[13px] text-text-primary">{{ label }}</div>
-      <div v-if="description" class="text-[11px] text-text-secondary mt-0.5">{{ description }}</div>
+    <div v-if="label" class="min-w-0 flex-1" :class="{ 'min-w-0': !vertical }">
+      <div class="text-sm text-text-primary">{{ label }}</div>
+      <div v-if="description" class="text-xs leading-relaxed text-text-secondary mt-1">
+        {{ description }}
+      </div>
     </div>
-    <div :class="vertical ? '' : 'flex items-center gap-2 ms-auto'">
+    <div
+      :class="
+        vertical
+          ? ''
+          : 'flex min-w-0 max-w-full flex-wrap items-center gap-2 sm:ms-auto [&>*]:max-w-full'
+      "
+    >
       <slot />
     </div>
   </div>

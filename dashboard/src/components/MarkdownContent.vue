@@ -160,7 +160,7 @@ const renderedBlocks = computed(() =>
   background: rgba(0, 0, 0, 0.02);
 }
 
-:global([data-theme='dark']) .markdown-content :deep(tbody tr:hover) {
+:global([data-theme='dark'] .markdown-content tbody tr:hover) {
   background: rgba(255, 255, 255, 0.03);
 }
 

@@ -328,12 +328,12 @@ function categoryLink(category: string) {
       <section class="home-main">
         <div class="home-hero">
           <div class="home-hero-top">
-            <span>{{ t('netCashFlow') }}</span
-            ><RouterLink :to="activityLink()"
+            <h2>{{ t('netCashFlow') }}</h2>
+            <RouterLink :to="activityLink()"
               >{{ t('viewActivity') }} <ArrowRight :size="15"
             /></RouterLink>
           </div>
-          <p class="home-total" aria-live="polite">
+          <p class="home-total" dir="ltr" aria-live="polite">
             <AnimatedAmount :value="netCashflow" />
           </p>
           <div class="home-chart-heading">
@@ -417,7 +417,7 @@ function categoryLink(category: string) {
                       background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
                     }" /></span
               ></span>
-              <strong>{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
+              <strong dir="ltr">{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
               ><ArrowRight :size="15" class="row-chevron" />
             </RouterLink>
             <p v-if="!loading && !topCategories.length" class="ledger-empty">
@@ -515,3 +515,31 @@ function categoryLink(category: string) {
     </div>
   </div>
 </template>
+
+<style scoped>
+.home-hero-top h2 {
+  font-size: 14px;
+  font-weight: 500;
+  color: var(--text-secondary);
+}
+.home-section {
+  margin-block-start: 32px;
+}
+.home-section .ledger-section-heading,
+.rail-section .ledger-section-heading {
+  margin-block-end: 16px;
+}
+.home-section h2,
+.rail-section h2 {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.category-ledger-row,
+.attention-row {
+  padding: 16px;
+}
+.rail-section {
+  padding-block: 24px;
+}
+</style>

@@ -1,5 +1,6 @@
 <script setup lang="ts">
 import { computed } from 'vue';
+import { language } from '@/lib/language';
 import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import {
   Select,
@@ -76,11 +77,12 @@ function onSelect(v: any) {
 </script>
 
 <template>
-  <div class="flex items-center gap-1.5">
+  <div class="flex flex-wrap items-center gap-1.5">
     <!-- Month nav arrows -->
     <div v-if="periodMode === 'month'" class="flex items-center gap-0.5">
       <button
-        class="p-0.5 rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        :aria-label="language === 'he' ? 'החודש הקודם' : 'Previous month'"
         @click="shiftMonth(-1)"
       >
         <ChevronLeft class="h-3.5 w-3.5" />
@@ -89,7 +91,8 @@ function onSelect(v: any) {
         monthLabel
       }}</span>
       <button
-        class="p-0.5 rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        class="h-8 w-8 inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        :aria-label="language === 'he' ? 'החודש הבא' : 'Next month'"
         @click="shiftMonth(1)"
       >
         <ChevronRight class="h-3.5 w-3.5" />
@@ -101,7 +104,10 @@ function onSelect(v: any) {
       :model-value="periodMode === 'month' ? 'month' : selectedDays"
       @update:model-value="onSelect"
     >
-      <SelectTrigger class="w-[80px] h-7 text-[12px]">
+      <SelectTrigger
+        class="w-[90px] h-8 text-[12px]"
+        :aria-label="language === 'he' ? 'טווח תאריכים' : 'Date range'"
+      >
         <SelectValue />
       </SelectTrigger>
       <SelectContent>

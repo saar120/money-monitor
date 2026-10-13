@@ -14,7 +14,6 @@ import { useApi } from '@/composables/useApi';
 import { formatCurrency, formatAmount } from '@/lib/format';
 import { language, t } from '@/lib/language';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -183,7 +182,7 @@ const chartDatasets = computed(() =>
 </script>
 
 <template>
-  <div class="animate-fade-in-up space-y-6">
+  <div class="asset-view min-w-0 animate-fade-in-up">
     <!-- Loading skeleton -->
     <div v-if="assetApi.loading.value && !asset">
       <Skeleton class="h-8 w-64 mb-2" />
@@ -192,7 +191,7 @@ const chartDatasets = computed(() =>
 
     <!-- Error state -->
     <div v-else-if="assetApi.error.value" class="text-center py-12">
-      <p class="text-destructive text-[13px]">{{ assetApi.error.value }}</p>
+      <p class="text-destructive text-[14px]">{{ assetApi.error.value }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
         t('retry')
       }}</Button>
@@ -201,72 +200,64 @@ const chartDatasets = computed(() =>
     <template v-else-if="asset">
       <!-- Asset header -->
       <div>
-        <h1 class="text-[22px] font-semibold tracking-tight">{{ asset.name }}</h1>
-        <div class="flex items-center gap-2 mt-1">
+        <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+        <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
-            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[11px] font-medium bg-pink-500/10 text-pink-500"
+            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-medium bg-pink-500/10 text-pink-500"
           >
             <Home class="h-3 w-3" />
             {{ copy.type }}
           </span>
-          <span v-if="asset.institution" class="text-[13px] text-text-secondary">{{
+          <span v-if="asset.institution" class="text-[14px] text-text-secondary">{{
             asset.institution
           }}</span>
         </div>
       </div>
 
-      <!-- Summary cards (2x2) -->
-      <div class="grid grid-cols-1 sm:grid-cols-2 gap-4">
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.value
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+      <!-- Asset summary -->
+      <div class="asset-metrics grid grid-cols-1 sm:grid-cols-2 gap-4">
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.value }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <div class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(currentValue) }}
             </div>
-            <div v-if="isMultiCurrency" class="text-[13px] text-text-secondary mt-0.5">
+            <div v-if="isMultiCurrency" class="text-[14px] text-text-secondary mt-0.5">
               {{ formatAmount(nativeValue, nativeCurrency) }}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.purchase
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.purchase }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <div v-if="purchasePrice" class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(purchasePrice) }}
             </div>
-            <div v-else class="text-[13px] text-text-secondary">{{ copy.notSet }}</div>
-          </CardContent>
-        </Card>
+            <div v-else class="text-[14px] text-text-secondary">{{ copy.notSet }}</div>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.rent
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.rent }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <div class="text-[22px] font-semibold tabular-nums">
               {{ formatCurrency(totalRent) }}
             </div>
-          </CardContent>
-        </Card>
+          </div>
+        </section>
 
-        <Card>
-          <CardHeader class="pb-2">
-            <CardTitle class="text-[13px] font-medium text-text-secondary">{{
-              copy.return
-            }}</CardTitle>
-          </CardHeader>
-          <CardContent>
+        <section class="asset-metric">
+          <header class="asset-metric-label">
+            <h2 class="text-[12px] font-medium text-text-secondary">{{ copy.return }}</h2>
+          </header>
+          <div class="asset-metric-value">
             <template v-if="pnl">
               <div
                 :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
@@ -283,19 +274,19 @@ const chartDatasets = computed(() =>
                 />
                 <span
                   :class="pnl.amount >= 0 ? 'text-success' : 'text-destructive'"
-                  class="text-[13px]"
+                  class="text-[14px]"
                 >
                   {{ pnl.pct >= 0 ? '+' : '' }}{{ pnl.pct.toFixed(1) }}%
                 </span>
               </div>
             </template>
-            <div v-else class="text-[13px] text-text-secondary">{{ copy.noPurchase }}</div>
-          </CardContent>
-        </Card>
+            <div v-else class="text-[14px] text-text-secondary">{{ copy.noPurchase }}</div>
+          </div>
+        </section>
       </div>
 
       <!-- Action buttons -->
-      <div class="flex gap-3">
+      <div class="flex flex-wrap gap-3">
         <Button @click="openUpdateDialog">{{ copy.update }}</Button>
         <Button variant="secondary" @click="openRentDialog">
           <Plus class="h-4 w-4 mr-1" />
@@ -304,47 +295,44 @@ const chartDatasets = computed(() =>
       </div>
 
       <!-- Value Over Time chart -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-[15px]">{{ copy.history }}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section class="finance-section">
+        <header class="finance-section-heading">
+          <h2 class="text-[20px]">{{ copy.history }}</h2>
+        </header>
+        <div class="finance-section-content">
           <div v-if="snapshotsApi.loading.value && !chartDatasets">
             <Skeleton class="h-48 w-full rounded-md" />
           </div>
           <div v-else-if="chartDatasets" class="h-48">
             <EChartsLineChart :labels="chartLabels" :datasets="chartDatasets" />
           </div>
-          <div v-else class="text-[13px] text-text-secondary text-center py-12">
+          <div v-else class="text-[14px] text-text-secondary text-center py-12">
             {{ copy.historyHint }}
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
 
       <!-- Rent Income History -->
-      <Card>
-        <CardHeader>
-          <CardTitle class="text-[15px]">{{ copy.rentHistory }}</CardTitle>
-        </CardHeader>
-        <CardContent>
+      <section class="finance-section">
+        <header class="finance-section-heading">
+          <h2 class="text-[20px]">{{ copy.rentHistory }}</h2>
+        </header>
+        <div class="finance-section-content">
           <div v-if="movementsApi.loading.value && rentMovements.length === 0" class="space-y-3">
             <Skeleton class="h-12 w-full" />
             <Skeleton class="h-12 w-full" />
           </div>
           <div v-else-if="rentMovements.length === 0" class="text-center py-8">
-            <p class="text-text-secondary text-[13px]">{{ copy.noRent }}</p>
+            <p class="text-text-secondary text-[14px]">{{ copy.noRent }}</p>
           </div>
-          <div
-            v-else
-            class="space-y-0 border border-separator rounded-lg divide-y divide-separator"
-          >
+          <div v-else class="finance-ledger divide-y divide-separator">
             <div
               v-for="m in rentMovements"
               :key="m.id"
-              class="px-4 py-3 flex items-center justify-between"
+              class="finance-ledger-row flex flex-wrap items-center justify-between gap-3"
             >
               <div>
-                <div class="text-[13px] font-medium tabular-nums">
+                <div class="text-[14px] font-medium tabular-nums">
                   {{
                     isMultiCurrency
                       ? formatAmount(Math.abs(m.quantity), nativeCurrency)
@@ -352,31 +340,31 @@ const chartDatasets = computed(() =>
                   }}
                   <span
                     v-if="isMultiCurrency && m.sourceAmount"
-                    class="text-text-secondary text-[11px] ml-1"
+                    class="text-text-secondary text-[12px] ml-1"
                   >
                     ({{ formatCurrency(Math.abs(m.sourceAmount)) }})
                   </span>
                 </div>
-                <p v-if="m.notes" class="text-[11px] text-text-secondary mt-0.5 italic">
+                <p v-if="m.notes" class="text-[12px] text-text-secondary mt-0.5 italic">
                   {{ m.notes }}
                 </p>
               </div>
-              <span class="text-[11px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
+              <span class="text-[12px] text-text-secondary">{{ formatMovementDate(m.date) }}</span>
             </div>
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </template>
 
     <!-- Update Value Dialog -->
     <Dialog v-model:open="showUpdateDialog">
-      <DialogContent>
+      <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Update Property Value</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium">Property Value ({{ nativeCurrency }})</label>
+            <label class="text-[14px] font-medium">Property Value ({{ nativeCurrency }})</label>
             <Input v-model.number="updateForm.currentValue" type="number" />
           </div>
         </div>
@@ -398,21 +386,21 @@ const chartDatasets = computed(() =>
 
     <!-- Record Rent Dialog -->
     <Dialog v-model:open="showRentDialog">
-      <DialogContent>
+      <DialogContent class="max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>Record Rent Income</DialogTitle>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[13px] font-medium">Amount ({{ nativeCurrency }})</label>
+            <label class="text-[14px] font-medium">Amount ({{ nativeCurrency }})</label>
             <Input v-model.number="rentForm.amount" type="number" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Date</label>
+            <label class="text-[14px] font-medium">Date</label>
             <Input v-model="rentForm.date" type="date" />
           </div>
           <div>
-            <label class="text-[13px] font-medium">Notes (optional)</label>
+            <label class="text-[14px] font-medium">Notes (optional)</label>
             <Input v-model="rentForm.notes" placeholder="e.g. January rent" />
           </div>
         </div>

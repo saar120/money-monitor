@@ -12,7 +12,6 @@ import {
   type BudgetProgress,
   type Category,
 } from '../api/client';
-import { Card, CardContent } from '@/components/ui/card';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -34,7 +33,7 @@ import {
 import { formatCurrency, buildCategoryMap, DEFAULT_CATEGORY_COLOR } from '@/lib/format';
 import { Plus, Pencil, Trash2, Wallet, Search, Check } from 'lucide-vue-next';
 import { isValidMonth } from '@/lib/month';
-import { t } from '@/lib/language';
+import { language, t } from '@/lib/language';
 import BudgetTransactions from './BudgetTransactions.vue';
 import MonthControl from './MonthControl.vue';
 
@@ -253,7 +252,7 @@ function progressColor(percentage: number, neutral = false): string {
 <template>
   <div class="budget-page flex flex-col h-full min-h-0">
     <Teleport to="#toolbar-actions">
-      <div class="flex items-center gap-2">
+      <div class="flex min-w-0 max-w-full flex-wrap items-center gap-2">
         <MonthControl v-model="selectedMonth" :max-month="today.slice(0, 7)" />
         <!-- Period picker — only if both types exist -->
         <ToggleGroupRoot
@@ -277,11 +276,11 @@ function progressColor(percentage: number, neutral = false): string {
       </div>
     </Teleport>
 
-    <p v-if="error" class="text-[13px] text-destructive mb-3">{{ error }}</p>
+    <p v-if="error" class="text-[14px] text-destructive mb-3">{{ error }}</p>
 
     <!-- Loading -->
     <div v-if="loading && progressData.length === 0" class="space-y-5">
-      <div class="grid grid-cols-3 gap-3">
+      <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
         <Skeleton class="h-[72px] rounded-xl" />
         <Skeleton class="h-[72px] rounded-xl" />
         <Skeleton class="h-[72px] rounded-xl" />
@@ -297,7 +296,7 @@ function progressColor(percentage: number, neutral = false): string {
       <Wallet class="h-10 w-10 text-text-tertiary" />
       <div class="text-center">
         <p class="text-[14px] font-medium text-text-primary">{{ t('noBudgetsYet') }}</p>
-        <p class="text-[13px] text-text-secondary mt-1.5">
+        <p class="text-[14px] text-text-secondary mt-1.5">
           {{ t('budgetEmptyHint') }}
         </p>
       </div>
@@ -307,25 +306,25 @@ function progressColor(percentage: number, neutral = false): string {
       </Button>
     </div>
 
-    <div v-else class="flex-1 min-h-0 overflow-y-auto space-y-5">
+    <div v-else class="flex-1 min-h-0 overflow-y-auto space-y-8">
       <!-- Summary -->
-      <div class="budget-summary grid grid-cols-3 gap-3">
-        <div class="rounded-xl border border-separator/50 px-4 py-3">
-          <p class="text-[11px] text-text-tertiary mb-1">
+      <div class="budget-summary grid grid-cols-1 sm:grid-cols-3 gap-6">
+        <div class="budget-metric">
+          <p class="text-[12px] text-text-tertiary mb-1">
             {{ isMonthly ? t('monthlyBudget') : t('yearlyBudget') }}
           </p>
           <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
             {{ formatCurrency(activeTotal) }}
           </p>
-          <p class="text-[11px] text-text-tertiary mt-1.5">
+          <p class="text-[12px] text-text-tertiary mt-1.5">
             {{ activeBudgets.length }} {{ t('budgets') }}
             <template v-if="!isMonthly">
               &middot; {{ formatCurrency(activeTotal / 12) }}/mo</template
             >
           </p>
         </div>
-        <div class="rounded-xl border border-separator/50 px-4 py-3">
-          <p class="text-[11px] text-text-tertiary mb-1">
+        <div class="budget-metric">
+          <p class="text-[12px] text-text-tertiary mb-1">
             {{ isMonthly ? t('spentSelectedMonth') : t('spentSelectedYear') }}
           </p>
           <div class="flex items-baseline gap-2">
@@ -351,71 +350,71 @@ function progressColor(percentage: number, neutral = false): string {
             />
           </div>
         </div>
-        <div class="rounded-xl border border-separator/50 px-4 py-3">
-          <p class="text-[11px] text-text-tertiary mb-1">{{ t('remaining') }}</p>
+        <div class="budget-metric">
+          <p class="text-[12px] text-text-tertiary mb-1">{{ t('remaining') }}</p>
           <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
             {{ formatCurrency(activeRemaining) }}
           </p>
           <p
             v-if="alertCount > 0"
-            class="text-[11px] text-[var(--warning)] mt-1.5 flex items-center gap-1"
+            class="text-[12px] text-[var(--warning)] mt-1.5 flex items-center gap-1"
           >
             <span class="w-1.5 h-1.5 rounded-full bg-[var(--warning)]" />
             {{ alertCount }} {{ t('needsAttention') }}
           </p>
-          <p v-else-if="!isMonthly" class="text-[11px] text-text-tertiary mt-1.5">
+          <p v-else-if="!isMonthly" class="text-[12px] text-text-tertiary mt-1.5">
             {{ formatCurrency(activeRemaining / 12) }}/mo
           </p>
-          <p v-else class="text-[11px] text-text-tertiary mt-1.5">{{ t('allOnTrack') }}</p>
+          <p v-else class="text-[12px] text-text-tertiary mt-1.5">{{ t('allOnTrack') }}</p>
         </div>
       </div>
 
       <!-- Budget list -->
-      <Card class="budget-list">
-        <CardContent class="p-0 divide-y divide-separator/40">
-          <div v-for="p in activeBudgets" :key="p.budget.id" class="group px-5 py-4">
-            <div class="flex items-center justify-between gap-4 mb-2.5 min-w-0">
+      <section class="budget-list">
+        <div class="divide-y divide-separator/40">
+          <div v-for="p in activeBudgets" :key="p.budget.id" class="budget-ledger-row group">
+            <div class="flex flex-wrap items-center justify-between gap-3 mb-2.5 min-w-0">
               <div class="flex items-center gap-2.5 min-w-0">
                 <span
                   class="w-2.5 h-2.5 rounded-full flex-shrink-0"
                   :style="{ backgroundColor: p.budget.color ?? 'var(--accent)' }"
                 />
-                <h3 class="text-[13px] font-medium text-text-primary truncate">
+                <h3 class="text-[14px] font-medium text-text-primary truncate">
                   {{ p.budget.name }}
                 </h3>
                 <span
                   v-if="p.isOverBudget"
-                  class="text-[11px] font-medium text-destructive flex-shrink-0"
+                  class="text-[12px] font-medium text-destructive flex-shrink-0"
                   >{{ t('overBudget') }}</span
                 >
                 <span
                   v-else-if="p.isAlertTriggered"
-                  class="text-[11px] font-medium text-[var(--warning)] flex-shrink-0"
+                  class="text-[12px] font-medium text-[var(--warning)] flex-shrink-0"
                   >{{ t('alert') }}</span
                 >
               </div>
               <div class="flex items-center gap-2 flex-shrink-0">
                 <span
-                  class="text-[13px] tabular-nums text-text-primary font-medium whitespace-nowrap"
+                  class="text-[14px] tabular-nums text-text-primary font-medium whitespace-nowrap"
                 >
                   {{ formatCurrency(p.spent) }}
                   <span class="text-text-tertiary font-normal"
                     >/ {{ formatCurrency(p.budget.amount) }}</span
                   >
                 </span>
-                <div
-                  class="flex items-center gap-0.5 opacity-0 group-hover:opacity-100 transition-opacity duration-150"
-                >
+                <div class="flex items-center gap-0.5 transition-opacity duration-150">
                   <button
                     type="button"
-                    class="p-1 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
+                    class="p-2 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
+                    :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                     @click="openEdit(p.budget)"
                   >
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
                   <button
                     type="button"
-                    class="p-1 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-destructive transition-all duration-150"
+                    class="p-2 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-destructive transition-all duration-150"
+                    :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                     @click="removeBudget(p.budget.id, p.budget.name)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
@@ -434,17 +433,17 @@ function progressColor(percentage: number, neutral = false): string {
                 />
               </div>
               <span
-                class="text-[11px] tabular-nums font-medium w-10 text-right flex-shrink-0"
+                class="text-[12px] tabular-nums font-medium w-10 text-right flex-shrink-0"
                 :style="{ color: progressColor(p.percentage) }"
                 >{{ p.percentage }}%</span
               >
             </div>
-            <div class="flex items-center justify-between gap-4 min-w-0">
-              <p class="text-[11px] text-text-tertiary truncate">
+            <div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
+              <p class="text-[12px] text-text-tertiary truncate">
                 {{ p.budget.categoryNames.map((n) => categoryMap.get(n)?.label ?? n).join(', ') }}
               </p>
               <span
-                class="text-[11px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
+                class="text-[12px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
               >
                 {{ formatCurrency(Math.max(p.remaining, 0)) }} {{ t('left') }}
                 <template v-if="!isMonthly">
@@ -469,21 +468,21 @@ function progressColor(percentage: number, neutral = false): string {
               :end-date="p.period.endDate"
             />
           </div>
-        </CardContent>
-      </Card>
+        </div>
+      </section>
     </div>
 
     <!-- Create/Edit Dialog -->
     <Dialog v-model:open="showDialog">
-      <DialogContent class="max-w-md">
+      <DialogContent class="max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
         <DialogHeader>
           <DialogTitle>{{ editingBudget ? t('editBudget') : t('newBudget') }}</DialogTitle>
         </DialogHeader>
 
         <div class="space-y-5">
           <!-- Name + Color row -->
-          <div class="flex gap-3 items-end">
-            <div class="flex-1">
+          <div class="flex flex-wrap gap-3 items-end">
+            <div class="flex-1 min-w-0">
               <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
                 t('name')
               }}</label>
@@ -498,6 +497,8 @@ function progressColor(percentage: number, neutral = false): string {
                   v-for="swatch in COLOR_SWATCHES"
                   :key="swatch"
                   type="button"
+                  :aria-label="swatch"
+                  :aria-pressed="formColor === swatch"
                   class="w-5 h-5 rounded-full transition-all duration-150 border-2 hover:scale-110"
                   :class="
                     formColor === swatch ? 'border-text-primary scale-110' : 'border-transparent'
@@ -537,7 +538,7 @@ function progressColor(percentage: number, neutral = false): string {
           <div class="border-t border-separator/30 pt-4">
             <div class="flex items-center justify-between mb-2">
               <span class="text-[12px] font-medium text-text-primary">{{ t('alerts') }}</span>
-              <Switch v-model="formAlertEnabled" />
+              <Switch v-model="formAlertEnabled" :aria-label="t('alerts')" />
             </div>
             <div
               class="flex items-center gap-2 text-[12px] transition-opacity duration-150"
@@ -582,7 +583,8 @@ function progressColor(percentage: number, neutral = false): string {
               <button
                 v-for="cat in filteredCategories"
                 :key="cat.name"
-                class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded text-left text-[13px] transition-colors"
+                :aria-pressed="formCategoryNames.includes(cat.name)"
+                class="flex items-center gap-2.5 w-full px-2.5 py-1.5 rounded text-start text-[14px] transition-colors"
                 :class="
                   formCategoryNames.includes(cat.name)
                     ? 'bg-[var(--glass-bg-heavy)] border border-[var(--glass-border)]'
@@ -624,3 +626,26 @@ function progressColor(percentage: number, neutral = false): string {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.budget-summary {
+  padding: 24px;
+  border-block: 1px solid var(--separator);
+}
+.budget-summary > .budget-metric {
+  min-width: 0;
+  padding: 0;
+  border: 0;
+}
+.budget-list {
+  border-block: 1px solid var(--separator);
+}
+.budget-ledger-row {
+  padding: 24px 16px;
+}
+@media (max-width: 640px) {
+  .budget-summary {
+    padding-inline: 16px;
+  }
+}
+</style>

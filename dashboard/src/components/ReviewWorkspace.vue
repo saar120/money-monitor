@@ -1,6 +1,6 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Check, X } from 'lucide-vue-next';
+import { Check, X, ChevronRight } from 'lucide-vue-next';
 import {
   getCategories,
   getMembers,
@@ -158,10 +158,10 @@ onMounted(async () => {
         <table>
           <thead>
             <tr>
-              <th>{{ t('date') }}</th>
-              <th>{{ t('description') }}</th>
-              <th>{{ t('category') }}</th>
-              <th>{{ t('amount') }}</th>
+              <th scope="col">{{ t('date') }}</th>
+              <th scope="col">{{ t('description') }}</th>
+              <th scope="col">{{ t('category') }}</th>
+              <th scope="col">{{ t('amount') }}</th>
             </tr>
           </thead>
           <tbody>
@@ -172,14 +172,27 @@ onMounted(async () => {
               tabindex="0"
               :aria-selected="selectedId === item.id"
               @click="select(item)"
-              @keydown.enter="select(item)"
+              @keydown.enter.self="select(item)"
+              @keydown.space.self.prevent="select(item)"
             >
               <td>
                 <bdi dir="ltr">{{ date(item) }}</bdi>
               </td>
-              <td dir="auto">{{ item.description }}</td>
               <td>
-                {{ categoryMap.get(item.category ?? '') ?? item.category ?? t('uncategorized') }}
+                <button
+                  type="button"
+                  class="review-row-open"
+                  :title="item.description"
+                  @click.stop="select(item)"
+                >
+                  <bdi dir="auto">{{ item.description }}</bdi>
+                  <ChevronRight :size="14" aria-hidden="true" />
+                </button>
+              </td>
+              <td>
+                <bdi dir="auto">{{
+                  categoryMap.get(item.category ?? '') ?? item.category ?? t('uncategorized')
+                }}</bdi>
               </td>
               <td class="review-amount" :class="item.chargedAmount >= 0 ? 'positive' : 'negative'">
                 <bdi dir="ltr">{{ amount(item) }}</bdi>
@@ -221,15 +234,15 @@ onMounted(async () => {
             </button>
           </div>
           <div class="review-inspector-body">
+            <h4 dir="auto">{{ selected.description }}</h4>
+            <p class="review-detail-date">
+              <bdi dir="ltr">{{ date(selected) }}</bdi>
+            </p>
             <strong
               class="review-detail-amount"
               :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
               ><bdi dir="ltr">{{ amount(selected) }}</bdi></strong
             >
-            <h4 dir="auto">{{ selected.description }}</h4>
-            <p class="review-detail-date">
-              <bdi dir="ltr">{{ date(selected) }}</bdi>
-            </p>
             <div class="review-reason">
               <span>{{ copy.reason }}</span>
               <p>{{ selected.reviewReason ?? t('needsReview') }}</p>
@@ -276,12 +289,16 @@ onMounted(async () => {
   display: flex;
   flex-direction: column;
   min-height: calc(100vh - 165px);
+  min-width: 0;
 }
 .review-toolbar {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 46px;
+  min-height: 56px;
+  padding-inline: 16px;
+  flex-wrap: wrap;
+  gap: 12px;
   border-bottom: 1px solid var(--separator);
 }
 .review-toolbar p {
@@ -302,6 +319,8 @@ onMounted(async () => {
   flex: 1;
   min-height: 0;
   position: relative;
+  gap: 24px;
+  align-items: flex-start;
 }
 .review-list {
   flex: 1;
@@ -309,7 +328,15 @@ onMounted(async () => {
   overflow: auto;
 }
 table {
+  width: 100%;
+  min-width: 620px;
+  border-collapse: collapse;
   table-layout: fixed;
+}
+th,
+td {
+  padding: 16px;
+  text-align: start;
 }
 th {
   position: sticky;
@@ -321,24 +348,48 @@ th {
   font-size: 12px;
 }
 th:first-child {
-  width: 16%;
+  width: 17%;
 }
 th:nth-child(2) {
-  width: 43%;
+  width: 39%;
 }
 th:nth-child(3) {
   width: 24%;
 }
 th:last-child {
-  width: 17%;
+  width: 20%;
   text-align: end;
 }
 td {
-  height: 51px;
+  height: 62px;
+  border-bottom: 1px solid var(--separator);
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
   color: var(--text-secondary);
+}
+.review-row-open {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  width: 100%;
+  min-width: 0;
+  text-align: start;
+  color: inherit;
+  font-weight: inherit;
+}
+.review-row-open bdi {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.review-row-open svg {
+  flex: none;
+  color: var(--text-tertiary);
+}
+:global([dir='rtl'] .review-row-open svg) {
+  transform: rotate(180deg);
 }
 td:nth-child(2) {
   color: var(--text-primary);
@@ -348,7 +399,7 @@ tbody tr {
   cursor: pointer;
 }
 tbody tr.selected {
-  background: var(--accent-15);
+  background: color-mix(in srgb, var(--accent) 5%, var(--bg-primary));
 }
 tbody tr:focus-visible {
   outline: 2px solid var(--accent);
@@ -377,10 +428,12 @@ tbody tr:focus-visible {
 .review-empty strong {
   color: var(--text-primary);
   font-size: 17px;
+  overflow-wrap: anywhere;
 }
 .review-pagination {
   display: flex;
   justify-content: space-between;
+  flex-wrap: wrap;
   gap: 16px;
   padding: 14px 0;
   color: var(--text-secondary);
@@ -396,49 +449,63 @@ tbody tr:focus-visible {
 }
 .review-inspector {
   display: flex;
-  flex: 0 0 315px;
+  position: sticky;
+  top: 20px;
+  flex: 0 0 320px;
+  min-width: 0;
   flex-direction: column;
-  border-inline-start: 1px solid var(--separator);
-  background: var(--bg-secondary);
+  padding: 20px 24px 24px;
+  border-inline-start: 1px solid color-mix(in srgb, var(--separator) 65%, transparent);
+  background: var(--bg-primary);
 }
 .review-inspector-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  height: 56px;
-  border-bottom: 1px solid var(--separator);
-  padding-inline: 20px;
+  min-height: 34px;
+  flex-shrink: 0;
+  margin-bottom: 24px;
 }
 .review-inspector-head h3 {
   margin: 0;
-  font-size: 15px;
+  font-size: 12px;
+  font-weight: 600;
+  color: var(--text-secondary);
 }
 .review-inspector-head button {
+  display: grid;
+  place-items: center;
+  width: 32px;
+  height: 32px;
+  border-radius: 6px;
   color: var(--text-secondary);
 }
 .review-inspector-body {
-  flex: 1;
+  min-height: 0;
   overflow: auto;
-  padding: 21px;
 }
 .review-detail-amount {
   display: block;
-  font-size: 31px;
+  margin-block: 22px 24px;
+  font-size: 28px;
+  letter-spacing: -0.02em;
+  line-height: 1.2;
   font-variant-numeric: tabular-nums;
 }
 .review-inspector-body h4 {
-  margin: 9px 0 2px;
-  font-size: 17px;
+  margin: 0 0 6px;
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.35;
+  overflow-wrap: anywhere;
 }
 .review-detail-date {
-  margin: 0 0 20px;
+  margin: 0;
   color: var(--text-secondary);
   font-size: 12px;
 }
 .review-reason {
-  margin-bottom: 22px;
-  padding: 14px 0;
-  border-block: 1px solid var(--separator);
+  margin-bottom: 24px;
 }
 .review-reason span,
 .review-inspector-body label > span {
@@ -448,26 +515,33 @@ tbody tr:focus-visible {
 }
 .review-reason p {
   margin: 8px 0;
-  font-size: 13px;
-  line-height: 1.5;
+  font-size: 14px;
+  line-height: 1.6;
 }
 .review-reason small {
   color: var(--text-tertiary);
 }
 .review-inspector-body label:not(.review-check) {
   display: grid;
-  gap: 6px;
-  margin-bottom: 17px;
+  grid-template-columns: 76px minmax(0, 1fr);
+  align-items: center;
+  gap: 12px;
+  padding-block: 8px;
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 65%, transparent);
 }
 .review-inspector-body select {
   width: 100%;
   min-height: 36px;
-  padding: 0 9px;
-  border: 1px solid var(--separator);
-  border-radius: 8px;
-  background: var(--bg-primary);
+  min-width: 0;
+  padding-inline: 4px;
+  border: 0;
+  border-radius: 4px;
+  background: transparent;
+  color: var(--text-primary);
+  text-align: end;
 }
 .review-check {
+  margin-top: 20px;
   display: flex;
   align-items: center;
   gap: 8px;
@@ -477,13 +551,13 @@ tbody tr:focus-visible {
   accent-color: var(--accent);
 }
 .review-inspector-footer {
-  padding: 17px 20px;
-  border-top: 1px solid var(--separator);
+  padding-top: 24px;
+  flex-shrink: 0;
 }
 .review-inspector-footer button {
-  width: 100%;
-  min-height: 40px;
-  border-radius: 9px;
+  min-height: 38px;
+  padding: 0 16px;
+  border-radius: 6px;
   background: var(--accent);
   color: var(--primary-foreground);
   font-weight: 700;
@@ -494,7 +568,16 @@ tbody tr:focus-visible {
 .review-backdrop {
   display: none;
 }
+.review-inspector-head button:hover {
+  background: var(--bg-secondary);
+}
 @media (max-width: 1120px) {
+  .review-inspector-body {
+    flex: 1;
+  }
+  .review-inspector-footer button {
+    width: 100%;
+  }
   .review-backdrop {
     display: block;
     position: fixed;
@@ -507,7 +590,9 @@ tbody tr:focus-visible {
     inset-block: 0;
     inset-inline-end: 0;
     z-index: 6;
-    width: min(315px, 100vw);
+    width: min(360px, 100vw);
+    padding: 20px 24px;
+    border: 0;
     box-shadow: 0 8px 36px #162b4833;
   }
 }

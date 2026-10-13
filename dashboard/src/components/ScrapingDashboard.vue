@@ -567,7 +567,7 @@ const latestSession = computed(() => sessions.value[0]);
           <DialogTitle>OTP Required — {{ otpAccountName }}</DialogTitle>
         </DialogHeader>
         <div class="space-y-4 py-2">
-          <p class="text-[13px] text-text-secondary">Enter the OTP code sent to your device.</p>
+          <p class="text-[14px] text-text-secondary">Enter the OTP code sent to your device.</p>
           <Input v-model="otpCode" placeholder="Enter OTP code" @keyup.enter="handleOtpSubmit" />
         </div>
         <DialogFooter>
@@ -586,7 +586,7 @@ const latestSession = computed(() => sessions.value[0]);
           <DialogTitle>Manual Login — {{ manualLoginAccountName }}</DialogTitle>
         </DialogHeader>
         <div class="py-2">
-          <p class="text-[13px] text-text-secondary">
+          <p class="text-[14px] text-text-secondary">
             A browser window should be open. Complete the login process there, then click "Done"
             below.
           </p>
@@ -605,3 +605,95 @@ const latestSession = computed(() => sessions.value[0]);
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.sync-account-row,
+.sync-session-button {
+  padding: 16px;
+}
+.sync-latest {
+  flex-wrap: wrap;
+  white-space: normal;
+}
+.sync-account-name strong,
+.sync-session-main strong {
+  overflow-wrap: anywhere;
+  white-space: normal;
+}
+.sync-session-main small {
+  white-space: normal;
+  line-height: 1.5;
+}
+.sync-section-heading h2 {
+  font-size: 20px;
+}
+.sync-account-icon {
+  background: transparent;
+  border-radius: 0;
+}
+.sync-account-name strong,
+.sync-session-main strong {
+  font-size: 14px;
+}
+.sync-running {
+  padding: 24px;
+  background: transparent;
+  border: 0;
+  border-block: 1px solid var(--separator);
+  border-radius: 0;
+}
+.sync-session-logs {
+  padding: 12px 24px;
+  background: transparent;
+}
+.sync-section-heading {
+  flex-wrap: wrap;
+  gap: 12px;
+}
+.sync-live-accounts > div,
+.sync-session-logs > div {
+  flex-wrap: wrap;
+  padding-block: 8px;
+}
+.sync-live-accounts > div > svg,
+.sync-session-logs > div > svg {
+  flex-shrink: 0;
+}
+.sync-live-accounts span,
+.sync-session-logs span {
+  min-width: 0;
+  overflow-wrap: anywhere;
+}
+@media (max-width: 600px) {
+  .sync-session-button {
+    display: grid;
+    grid-template-columns: 28px minmax(0, 1fr) 18px;
+    gap: 4px 8px;
+  }
+  .sync-status-icon {
+    grid-column: 1;
+    grid-row: 1 / 4;
+  }
+  .sync-session-main {
+    grid-column: 2;
+  }
+  .sync-session-result {
+    display: block;
+    grid-column: 2;
+  }
+  .sync-session-time {
+    grid-column: 2;
+    width: auto;
+    text-align: start;
+  }
+  .sync-session-chevron {
+    grid-column: 3;
+    grid-row: 1 / 4;
+  }
+  .sync-live-accounts > div > span,
+  .sync-session-logs > div > span {
+    flex-basis: 100%;
+    padding-inline-start: 26px;
+  }
+}
+</style>

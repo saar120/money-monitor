@@ -30,7 +30,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import { Check } from 'lucide-vue-next';
 import {
@@ -148,19 +147,19 @@ onMounted(loadAll);
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="advanced-review flex flex-col h-full min-h-0 min-w-0 animate-fade-in-up">
     <p v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="loadAll">{{ t('retry') }}</button>
     </p>
-    <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <CardHeader class="pb-2 flex-shrink-0">
-        <CardTitle class="text-[15px]">
+    <section class="advanced-ledger flex-1 min-h-0 flex flex-col overflow-hidden">
+      <header class="ledger-section-heading">
+        <h2>
           <template v-if="!loading"> {{ total }} {{ t('reviewTransactions') }} </template>
-        </CardTitle>
-      </CardHeader>
-      <CardContent class="p-0 flex-1 min-h-0">
+        </h2>
+      </header>
+      <div class="flex-1 min-h-0">
         <div class="overflow-auto h-full">
-          <Table>
+          <Table class="min-w-[1320px]">
             <TableHeader>
               <TableRow>
                 <TableHead>{{ t('date') }}</TableHead>
@@ -195,28 +194,31 @@ onMounted(loadAll);
                     <p class="text-text-primary text-[14px] font-medium mb-1">
                       {{ t('allClear') }}
                     </p>
-                    <p class="text-text-secondary text-[13px]">
+                    <p class="text-text-secondary text-[14px]">
                       {{ t('noTransactionsNeedReview') }}
                     </p>
                   </div>
                 </TableCell>
               </TableRow>
               <TableRow v-for="txn in items" v-else :key="txn.id">
-                <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
+                <TableCell class="text-[14px] text-text-secondary whitespace-nowrap">
                   {{ formatDate(txn.date) }}
                 </TableCell>
-                <TableCell class="max-w-xs truncate">{{ txn.description }}</TableCell>
                 <TableCell
-                  class="text-right font-medium tabular-nums"
+                  class="min-w-[220px] max-w-[320px] whitespace-normal break-words [overflow-wrap:anywhere]"
+                  ><bdi dir="auto">{{ txn.description }}</bdi></TableCell
+                >
+                <TableCell
+                  class="text-right font-medium tabular-nums whitespace-nowrap"
                   :class="txn.chargedAmount >= 0 ? 'text-success' : 'text-destructive'"
                 >
-                  {{ formatCurrency(txn.chargedAmount) }}
+                  <bdi dir="ltr">{{ formatCurrency(txn.chargedAmount) }}</bdi>
                 </TableCell>
                 <TableCell>
                   <Badge
                     v-if="txn.category"
                     variant="secondary"
-                    class="text-[11px]"
+                    class="text-[12px]"
                     :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                   >
                     {{ categoryMap.get(txn.category)?.label ?? txn.category }}
@@ -253,15 +255,17 @@ onMounted(loadAll);
                     {{ txn.ignored ? t('excluded') : t('included') }}
                   </button>
                 </TableCell>
-                <TableCell class="max-w-sm text-[13px] text-text-secondary">
-                  {{ txn.reviewReason }}
+                <TableCell
+                  class="min-w-[200px] max-w-sm whitespace-normal break-words text-[14px] text-text-secondary"
+                >
+                  <bdi dir="auto">{{ txn.reviewReason }}</bdi>
                 </TableCell>
                 <TableCell class="text-center">
                   <Badge
                     v-if="txn.confidence != null"
                     :variant="txn.confidence >= 0.8 ? 'default' : 'secondary'"
                     :class="[
-                      'text-[11px] tabular-nums',
+                      'text-[12px] tabular-nums',
                       txn.confidence < 0.5
                         ? 'bg-destructive/15 text-destructive'
                         : txn.confidence < 0.8
@@ -286,7 +290,7 @@ onMounted(loadAll);
                       "
                     >
                       <SelectTrigger
-                        class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
+                        class="h-9 text-[14px] w-40 border-0 bg-transparent hover:bg-bg-tertiary px-2"
                         :class="resolvingId === txn.id ? 'opacity-50' : ''"
                       >
                         <SelectValue :placeholder="t('recategorize')" />
@@ -307,12 +311,13 @@ onMounted(loadAll);
                       v-if="txn.category"
                       variant="ghost"
                       size="sm"
-                      class="h-7 w-7 p-0"
+                      class="h-8 gap-1.5 px-2 whitespace-nowrap"
                       :disabled="resolvingId === txn.id"
                       :title="t('confirmCurrentCategory')"
                       @click="resolve(txn, txn.category!)"
                     >
                       <Check class="h-4 w-4 text-success" />
+                      {{ t('confirmCategory') }}
                     </Button>
                   </div>
                 </TableCell>
@@ -320,15 +325,15 @@ onMounted(loadAll);
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
     <!-- Pagination -->
     <div
       v-if="total > 0"
-      class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40"
+      class="ledger-pagination flex flex-wrap items-center justify-between gap-3 flex-shrink-0 border-t border-separator/40"
     >
-      <p class="text-[13px] text-text-secondary">
+      <p class="text-[14px] text-text-secondary">
         {{ t('page') }} {{ currentPage() }} {{ t('of') }} {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
         {{ offset + 1 }}–{{ Math.min(offset + limit, total) }} {{ t('of') }} {{ total }}
@@ -344,3 +349,38 @@ onMounted(loadAll);
     </div>
   </div>
 </template>
+
+<style scoped>
+.ledger-section-heading {
+  padding: 20px 16px;
+  flex-shrink: 0;
+}
+.ledger-section-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.advanced-ledger {
+  border-block-start: 1px solid var(--separator);
+}
+.advanced-ledger :deep(th),
+.advanced-ledger :deep(td) {
+  padding: 16px;
+}
+.advanced-ledger :deep(th) {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.advanced-ledger :deep(td) {
+  font-size: 14px;
+}
+.ledger-pagination {
+  padding: 20px 16px;
+}
+.advanced-ledger :deep(tbody tr) {
+  border-bottom-color: color-mix(in srgb, var(--separator) 55%, transparent);
+}
+</style>

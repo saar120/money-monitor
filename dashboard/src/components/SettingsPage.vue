@@ -13,7 +13,6 @@ import {
 import { useOAuth } from '../composables/useOAuth';
 import HouseholdSettings from './HouseholdSettings.vue';
 import MobileAccessSettings from './MobileAccessSettings.vue';
-import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
@@ -399,11 +398,11 @@ async function save() {
 </script>
 
 <template>
-  <div class="settings-page max-w-2xl mx-auto pb-20 space-y-5">
+  <div class="settings-page w-full min-w-0 max-w-2xl mx-auto pb-20 space-y-8">
     <div v-if="loading" class="text-text-secondary">{{ sectionCopy.loading }}</div>
 
     <template v-else>
-      <nav class="settings-index" :aria-label="t('settings')">
+      <nav class="settings-index gap-x-5 gap-y-3 pb-6" :aria-label="t('settings')">
         <a href="#settings-household">{{ sectionCopy.household }}</a>
         <a href="#settings-general">{{ sectionCopy.general }}</a>
         <a href="#settings-ai">{{ sectionCopy.ai }}</a>
@@ -444,25 +443,21 @@ async function save() {
       </SettingsGroup>
 
       <template v-if="!isElectron">
-        <Card>
-          <CardContent class="pt-6">
-            <p class="text-text-secondary">
-              Settings are managed via the <code class="text-text-primary">.env</code> file in
-              standalone mode. Edit <code class="text-text-primary">.env</code> and restart the
-              server to apply changes.
-            </p>
-          </CardContent>
-        </Card>
+        <p class="border-y border-separator px-5 py-6 text-sm leading-relaxed text-text-secondary">
+          Settings are managed via the <code class="text-text-primary">.env</code> file in
+          standalone mode. Edit <code class="text-text-primary">.env</code> and restart the server
+          to apply changes.
+        </p>
       </template>
 
       <template v-else>
         <Teleport to="#toolbar-actions">
-          <div class="flex items-center gap-2">
-            <div v-if="success" class="flex items-center gap-1.5 text-[13px] text-success">
+          <div class="flex flex-wrap items-center gap-2">
+            <div v-if="success" class="flex items-center gap-1.5 text-[14px] text-success">
               <CheckCircle class="h-3.5 w-3.5" />
               {{ success }}
             </div>
-            <div v-if="error" class="flex items-center gap-1.5 text-[13px] text-destructive">
+            <div v-if="error" class="flex items-center gap-1.5 text-[14px] text-destructive">
               <AlertCircle class="h-3.5 w-3.5" />
               {{ error }}
             </div>
@@ -477,7 +472,7 @@ async function save() {
         <SettingsGroup id="settings-ai" :title="sectionCopy.ai" :description="sectionCopy.aiHint">
           <SettingsRow class="bg-bg-secondary/50">
             <div
-              class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[11px] text-text-secondary"
+              class="flex flex-wrap items-center gap-x-4 gap-y-1 text-[12px] text-text-secondary"
             >
               <span
                 >Provider:
@@ -535,7 +530,7 @@ async function save() {
           >
             <Input
               type="password"
-              class="w-52"
+              class="w-full sm:w-52"
               :model-value="form[currentApiKeyField] as string"
               :placeholder="
                 data?.settings?.[currentApiKeyField]
@@ -551,7 +546,7 @@ async function save() {
             />
             <p
               v-if="form.AI_PROVIDER === 'opencode-go'"
-              class="mt-1 text-[11px] leading-relaxed text-text-secondary"
+              class="mt-1 text-[12px] leading-relaxed text-text-secondary"
             >
               Use your OpenCode Go API key. Models use OpenCode’s OpenAI-compatible Go endpoint.
               <a
@@ -574,7 +569,7 @@ async function save() {
 
               <div
                 v-if="oauthConnected && oauthStep === 'idle'"
-                class="flex items-center gap-2 text-[13px]"
+                class="flex items-center gap-2 text-[14px]"
               >
                 <CheckCircle class="h-4 w-4 text-green-500" />
                 <span class="text-text-secondary">Anthropic OAuth connected</span>
@@ -584,7 +579,7 @@ async function save() {
                 <Button variant="secondary" size="sm" class="w-full" @click="startOAuth">
                   Login with Anthropic
                 </Button>
-                <p class="text-[11px] text-text-secondary">
+                <p class="text-[12px] text-text-secondary">
                   Use your Anthropic account instead of an API key
                 </p>
               </div>
@@ -593,7 +588,7 @@ async function save() {
                 <p class="text-[12px] text-text-secondary">
                   A browser window has been opened. After authorizing, paste the code below:
                 </p>
-                <div class="flex gap-2">
+                <div class="flex flex-col gap-2 sm:flex-row">
                   <Input
                     v-model="oauthCode"
                     placeholder="Paste authorization code..."
@@ -604,7 +599,7 @@ async function save() {
                     Submit
                   </Button>
                 </div>
-                <button class="text-[11px] text-text-secondary underline" @click="cancelOAuth">
+                <button class="text-[12px] text-text-secondary underline" @click="cancelOAuth">
                   Cancel
                 </button>
               </div>
@@ -613,11 +608,11 @@ async function save() {
                 Verifying authorization...
               </div>
 
-              <p v-if="oauthError" class="text-[11px] text-destructive">{{ oauthError }}</p>
+              <p v-if="oauthError" class="text-[12px] text-destructive">{{ oauthError }}</p>
 
               <!-- Manual OAuth token paste -->
               <div class="space-y-1.5">
-                <label class="text-[13px] font-medium text-text-primary block">OAuth Token</label>
+                <label class="text-[14px] font-medium text-text-primary block">OAuth Token</label>
                 <Input
                   v-model="form.ANTHROPIC_OAUTH_TOKEN"
                   type="password"
@@ -628,7 +623,7 @@ async function save() {
                   "
                   @input="markDirty('ANTHROPIC_OAUTH_TOKEN')"
                 />
-                <p class="text-[11px] text-text-secondary mt-1">
+                <p class="text-[12px] text-text-secondary mt-1">
                   Paste an OAuth token directly (e.g. from Claude Code CLI)
                 </p>
               </div>
@@ -639,7 +634,7 @@ async function save() {
           <template v-if="form.AI_PROVIDER === 'openai-codex'">
             <SettingsRow vertical>
               <div v-if="openaiCodexOAuthConnected && openaiOAuthStep === 'idle'" class="space-y-2">
-                <div class="flex items-center gap-2 text-[13px]">
+                <div class="flex items-center gap-2 text-[14px]">
                   <CheckCircle class="h-4 w-4 text-green-500" />
                   <span class="text-text-secondary">ChatGPT subscription connected</span>
                 </div>
@@ -658,7 +653,7 @@ async function save() {
                 <Button variant="secondary" size="sm" class="w-full" @click="startOpenaiOAuth">
                   Login with ChatGPT
                 </Button>
-                <p class="text-[11px] text-text-secondary">
+                <p class="text-[12px] text-text-secondary">
                   Use your ChatGPT Plus or Pro subscription
                 </p>
               </div>
@@ -667,7 +662,7 @@ async function save() {
                 <p class="text-[12px] text-text-secondary">
                   A browser window has been opened. After authorizing, paste the code below:
                 </p>
-                <div class="flex gap-2">
+                <div class="flex flex-col gap-2 sm:flex-row">
                   <Input
                     v-model="openaiOAuthCode"
                     placeholder="Paste authorization code or redirect URL..."
@@ -683,7 +678,7 @@ async function save() {
                   </Button>
                 </div>
                 <button
-                  class="text-[11px] text-text-secondary underline"
+                  class="text-[12px] text-text-secondary underline"
                   @click="cancelOpenaiOAuth"
                 >
                   Cancel
@@ -697,7 +692,7 @@ async function save() {
                 Verifying authorization...
               </div>
 
-              <p v-if="openaiOAuthError" class="text-[11px] text-destructive">
+              <p v-if="openaiOAuthError" class="text-[12px] text-destructive">
                 {{ openaiOAuthError }}
               </p>
             </SettingsRow>
@@ -748,7 +743,7 @@ async function save() {
             <Input
               v-model="form.TYPESAFE_API_KEY"
               type="password"
-              class="w-52"
+              class="w-full sm:w-52"
               :placeholder="
                 data?.settings.TYPESAFE_API_KEY ? String(data.settings.TYPESAFE_API_KEY) : 'Not set'
               "
@@ -780,7 +775,7 @@ async function save() {
             >
               <Input
                 type="password"
-                class="w-52"
+                class="w-full sm:w-52"
                 :model-value="form[batchApiKeyField] as string"
                 :placeholder="
                   data?.settings?.[batchApiKeyField]
@@ -850,7 +845,7 @@ async function save() {
             <Input
               v-model="form.CREDENTIALS_MASTER_KEY"
               type="password"
-              class="w-52"
+              class="w-full sm:w-52"
               :placeholder="
                 data?.settings.CREDENTIALS_MASTER_KEY
                   ? String(data.settings.CREDENTIALS_MASTER_KEY)
@@ -894,7 +889,7 @@ async function save() {
             <Input
               v-model="form.TELEGRAM_BOT_TOKEN"
               type="password"
-              class="w-52"
+              class="w-full sm:w-52"
               :placeholder="
                 data?.settings.TELEGRAM_BOT_TOKEN
                   ? String(data.settings.TELEGRAM_BOT_TOKEN)
@@ -907,7 +902,7 @@ async function save() {
             <Input
               v-model="form.TELEGRAM_ALLOWED_USERS"
               placeholder="Comma-separated user IDs"
-              class="w-52"
+              class="w-full sm:w-52"
             />
           </SettingsRow>
         </SettingsGroup>
@@ -919,7 +914,7 @@ async function save() {
           description="Automatic update settings"
         >
           <SettingsRow v-if="appVersion" label="Current Version">
-            <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded"
+            <code class="text-[12px] text-text-primary bg-bg-secondary px-2 py-1 rounded break-all"
               >v{{ appVersion }}</code
             >
           </SettingsRow>
@@ -930,7 +925,7 @@ async function save() {
             <Switch :model-value="autoUpdateEnabled" @update:model-value="toggleAutoUpdate" />
           </SettingsRow>
           <SettingsRow label="Check for Updates">
-            <div class="flex items-center gap-3">
+            <div class="flex flex-wrap items-center gap-3">
               <Button
                 variant="secondary"
                 size="sm"
@@ -971,9 +966,10 @@ async function save() {
           :description="sectionCopy.dataHint"
         >
           <SettingsRow label="Data Directory">
-            <code class="text-[11px] text-text-primary bg-bg-secondary px-2 py-1 rounded">{{
-              data?.dataDir
-            }}</code>
+            <code
+              class="text-[12px] text-text-primary bg-bg-secondary px-2 py-1 rounded break-all"
+              >{{ data?.dataDir }}</code
+            >
           </SettingsRow>
         </SettingsGroup>
       </template>
@@ -993,3 +989,20 @@ async function save() {
     </div>
   </div>
 </template>
+
+<style scoped>
+.settings-page {
+  line-height: 1.6;
+}
+.settings-index {
+  margin-bottom: 32px;
+}
+.settings-page :deep(input),
+.settings-page :deep(select),
+.settings-page :deep([data-slot='select-trigger']) {
+  min-height: 38px;
+}
+.settings-page :deep(code) {
+  line-height: 1.7;
+}
+</style>

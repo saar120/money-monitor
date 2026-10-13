@@ -21,7 +21,6 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Card, CardContent } from '@/components/ui/card';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import {
   Table,
@@ -207,7 +206,7 @@ onMounted(load);
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="advanced-categories flex flex-col h-full min-h-0 min-w-0 animate-fade-in-up">
     <Teleport to="#toolbar-actions">
       <Button size="sm" @click="showNewForm = !showNewForm">
         <Plus class="h-4 w-4 mr-1" />
@@ -215,10 +214,10 @@ onMounted(load);
       </Button>
     </Teleport>
 
-    <p v-if="error" class="text-[13px] text-destructive">{{ error }}</p>
+    <p v-if="error" role="alert" class="text-[14px] text-destructive">{{ error }}</p>
 
     <!-- New category form -->
-    <SettingsGroup v-if="showNewForm" title="New Category" class="mb-5">
+    <SettingsGroup v-if="showNewForm" title="New Category" class="category-form mb-8">
       <SettingsRow label="Name (slug)">
         <Input v-model="newName" placeholder="e.g. groceries" class="w-44" />
       </SettingsRow>
@@ -264,9 +263,9 @@ onMounted(load);
     </SettingsGroup>
 
     <!-- Table -->
-    <Card class="category-ledger flex-1 min-h-0 flex flex-col overflow-hidden">
-      <CardContent class="p-0 flex-1 min-h-0 overflow-auto">
-        <Table>
+    <section class="category-ledger flex-1 min-h-[240px] flex flex-col overflow-hidden">
+      <div class="flex-1 min-h-0 overflow-auto">
+        <Table class="min-w-[960px]">
           <TableHeader>
             <TableRow>
               <TableHead class="w-8">Color</TableHead>
@@ -286,6 +285,7 @@ onMounted(load);
                 <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
                 <TableCell><Skeleton class="h-4 w-40" /></TableCell>
                 <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
+                <TableCell><Skeleton class="h-5 w-9" /></TableCell>
                 <TableCell class="text-right"><Skeleton class="h-4 w-14 ml-auto" /></TableCell>
               </TableRow>
             </template>
@@ -300,22 +300,31 @@ onMounted(load);
                   :style="{ backgroundColor: cat.color ?? DEFAULT_CATEGORY_COLOR }"
                 />
               </TableCell>
-              <TableCell class="font-mono text-[13px]">{{ cat.name }}</TableCell>
+              <TableCell class="font-mono text-[14px]"
+                ><bdi dir="ltr">{{ cat.name }}</bdi></TableCell
+              >
               <TableCell>
                 <template v-if="editingId === cat.id">
                   <div class="space-y-2">
-                    <div class="flex gap-2 items-center">
-                      <Input v-model="editLabel" class="w-32 h-7 text-[13px]" />
+                    <div class="flex flex-wrap gap-2 items-center">
+                      <Input v-model="editLabel" class="w-32 h-7 text-[14px]" />
                       <input
                         v-model="editColor"
                         type="color"
                         class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer"
                       />
-                      <button class="text-success hover:text-success/80" @click="saveEdit(cat)">
+                      <button
+                        aria-label="Save category"
+                        title="Save category"
+                        class="p-2 text-success hover:text-success/80"
+                        @click="saveEdit(cat)"
+                      >
                         <Check class="h-4 w-4" />
                       </button>
                       <button
-                        class="text-text-secondary hover:text-text-primary"
+                        aria-label="Cancel editing"
+                        title="Cancel editing"
+                        class="p-2 text-text-secondary hover:text-text-primary"
                         @click="cancelEdit"
                       >
                         <X class="h-4 w-4" />
@@ -324,7 +333,7 @@ onMounted(load);
                     <Textarea
                       v-model="editRules"
                       placeholder="LLM categorization rules..."
-                      class="text-[11px] min-h-[40px] resize-y"
+                      class="text-[12px] min-h-[40px] resize-y"
                     />
                     <Select v-model="editOwner">
                       <SelectTrigger class="h-8 w-44">
@@ -351,32 +360,37 @@ onMounted(load);
                 </template>
               </TableCell>
               <TableCell
-                class="text-[11px] text-text-secondary max-w-[200px] truncate"
+                class="text-[12px] text-text-secondary min-w-[200px] max-w-[320px] whitespace-normal break-words [overflow-wrap:anywhere]"
                 :title="cat.rules ?? ''"
               >
-                {{ cat.rules ?? '—' }}
+                <bdi dir="auto">{{ cat.rules ?? '—' }}</bdi>
               </TableCell>
               <TableCell>
-                <Badge variant="secondary" class="text-[11px]">
+                <Badge variant="secondary" class="text-[12px]">
                   {{ ownerLabel(ownerValue(cat)) }}
                 </Badge>
               </TableCell>
               <TableCell>
                 <Switch
                   :model-value="cat.ignoredFromStats"
+                  :aria-label="`Exclude ${cat.label} from reports`"
                   @update:model-value="toggleIgnored(cat)"
                 />
               </TableCell>
               <TableCell class="text-right">
                 <div v-if="editingId !== cat.id" class="flex gap-1 justify-end">
                   <button
-                    class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-text-primary"
+                    class="p-2.5 rounded-md hover:bg-bg-tertiary text-text-secondary hover:text-text-primary"
+                    :aria-label="`Edit ${cat.label}`"
+                    :title="`Edit ${cat.label}`"
                     @click="startEdit(cat)"
                   >
                     <Pencil class="h-3.5 w-3.5" />
                   </button>
                   <button
-                    class="p-1.5 rounded-lg hover:bg-bg-tertiary text-text-secondary hover:text-destructive"
+                    class="p-2.5 rounded-md hover:bg-bg-tertiary text-text-secondary hover:text-destructive"
+                    :aria-label="`Delete ${cat.label}`"
+                    :title="`Delete ${cat.label}`"
                     @click="remove(cat)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
@@ -386,8 +400,8 @@ onMounted(load);
             </TableRow>
           </TableBody>
         </Table>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
     <!-- Re-categorize section -->
     <details class="category-advanced">
@@ -403,15 +417,62 @@ onMounted(load);
           <Input v-model="recatEndDate" type="date" class="w-36" />
         </SettingsRow>
         <SettingsRow>
-          <div class="flex items-center gap-2">
+          <div class="flex flex-wrap items-center gap-2">
             <Button size="sm" :disabled="recatLoading" @click="runRecategorize">
               {{ recatLoading ? 'Running…' : 'Re-categorize All' }}
             </Button>
-            <span v-if="recatResult" class="text-[13px] text-success">{{ recatResult }}</span>
-            <span v-if="recatError" class="text-[13px] text-destructive">{{ recatError }}</span>
+            <span v-if="recatResult" class="text-[14px] text-success">{{ recatResult }}</span>
+            <span v-if="recatError" class="text-[14px] text-destructive">{{ recatError }}</span>
           </div>
         </SettingsRow>
       </SettingsGroup>
     </details>
   </div>
 </template>
+
+<style scoped>
+.category-ledger {
+  border-block-start: 1px solid var(--separator) !important;
+}
+.category-ledger :deep(th),
+.category-ledger :deep(td) {
+  padding: 16px;
+}
+.category-ledger :deep(th) {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.category-ledger :deep(td) {
+  font-size: 14px;
+}
+.category-form,
+.category-advanced {
+  padding-inline: 24px;
+}
+.category-form :deep(h3),
+.category-advanced :deep(h3) {
+  font-size: 20px;
+  margin-bottom: 8px;
+}
+.category-advanced {
+  margin-top: 32px;
+  padding-top: 24px;
+}
+.category-advanced summary {
+  font-size: 14px;
+  cursor: pointer;
+  padding-block: 12px;
+}
+.category-advanced[open] > summary {
+  margin-bottom: 24px;
+}
+.category-ledger :deep(tbody tr) {
+  border-bottom-color: color-mix(in srgb, var(--separator) 55%, transparent);
+}
+@media (max-width: 600px) {
+  .category-form,
+  .category-advanced {
+    padding-inline: 16px;
+  }
+}
+</style>

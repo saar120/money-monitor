@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, onUnmounted, watch } from 'vue';
+import { ref, computed, onMounted, onUnmounted, watch, nextTick } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   getTransactions,
@@ -37,7 +37,6 @@ import {
   TableHeader,
   TableRow,
 } from '@/components/ui/table';
-import { Card, CardContent, CardHeader, CardTitle } from '@/components/ui/card';
 import { Skeleton } from '@/components/ui/skeleton';
 import {
   Dialog,
@@ -47,7 +46,14 @@ import {
   DialogHeader,
   DialogTitle,
 } from '@/components/ui/dialog';
-import { ChevronUp, ChevronDown, ChevronsUpDown, AlertCircle, Receipt } from 'lucide-vue-next';
+import {
+  ChevronUp,
+  ChevronDown,
+  ChevronsUpDown,
+  AlertCircle,
+  Receipt,
+  MoreHorizontal,
+} from 'lucide-vue-next';
 import {
   formatCurrency,
   formatAmount,
@@ -132,6 +138,8 @@ async function openLinkedTransaction(value: unknown) {
 
 // Context menu state
 const contextMenu = ref<{ x: number; y: number; txn: Transaction } | null>(null);
+const menuElement = ref<HTMLElement | null>(null);
+let menuTrigger: HTMLElement | null = null;
 const effectiveDateTxn = ref<Transaction | null>(null);
 const effectiveDateValue = ref('');
 const effectiveDateSaving = ref(false);
@@ -250,7 +258,20 @@ const totalPages = () => Math.ceil(total.value / (filters.value.limit ?? 50));
 
 function openContextMenu(event: globalThis.MouseEvent, txn: Transaction) {
   event.preventDefault();
-  contextMenu.value = { x: event.clientX, y: event.clientY, txn };
+  menuTrigger = event.currentTarget as HTMLElement;
+  const rect = menuTrigger.getBoundingClientRect();
+  contextMenu.value = {
+    x: Math.max(
+      8,
+      Math.min(event.type === 'click' ? rect.right - 224 : event.clientX, window.innerWidth - 232),
+    ),
+    y: Math.max(
+      8,
+      Math.min(event.type === 'click' ? rect.bottom + 4 : event.clientY, window.innerHeight - 128),
+    ),
+    txn,
+  };
+  nextTick(() => menuElement.value?.querySelector<globalThis.HTMLButtonElement>('button')?.focus());
 }
 
 function closeContextMenu() {
@@ -359,7 +380,21 @@ async function saveEffectiveDate(effectiveDate: string | null) {
 }
 
 function handleKeydown(e: KeyboardEvent) {
-  if (e.key === 'Escape') closeContextMenu();
+  if (e.key === 'Escape' && contextMenu.value) {
+    closeContextMenu();
+    menuTrigger?.focus();
+  }
+  if (e.key === 'Tab') closeContextMenu();
+  if (contextMenu.value && (e.key === 'ArrowDown' || e.key === 'ArrowUp')) {
+    e.preventDefault();
+    const buttons = Array.from(
+      menuElement.value?.querySelectorAll<globalThis.HTMLButtonElement>('button') ?? [],
+    );
+    const current = buttons.indexOf(document.activeElement as globalThis.HTMLButtonElement);
+    buttons[
+      (current + (e.key === 'ArrowDown' ? 1 : -1) + buttons.length) % buttons.length
+    ]?.focus();
+  }
 }
 
 onMounted(async () => {
@@ -384,7 +419,7 @@ onUnmounted(() => {
 </script>
 
 <template>
-  <div class="flex flex-col h-full min-h-0 animate-fade-in-up">
+  <div class="advanced-transactions flex flex-col h-full min-h-0 min-w-0 animate-fade-in-up">
     <!-- Filters -->
     <div class="flex-shrink-0 mb-4 space-y-3 activity-filters">
       <div class="flex flex-wrap items-center gap-2.5">
@@ -513,13 +548,13 @@ onUnmounted(() => {
     </div>
 
     <!-- Table -->
-    <Card class="flex-1 min-h-0 flex flex-col overflow-hidden">
-      <CardHeader class="pb-2 flex-shrink-0">
-        <CardTitle class="text-[15px]"> {{ total }} {{ t('transactions') }} </CardTitle>
-      </CardHeader>
-      <CardContent class="p-0 flex-1 min-h-0">
+    <section class="advanced-ledger flex-1 min-h-0 flex flex-col overflow-hidden">
+      <header class="ledger-section-heading">
+        <h2>{{ total }} {{ t('transactions') }}</h2>
+      </header>
+      <div class="flex-1 min-h-0">
         <div class="overflow-auto h-full">
-          <Table>
+          <Table class="min-w-[1100px]">
             <TableHeader>
               <TableRow>
                 <TableHead
@@ -544,7 +579,7 @@ onUnmounted(() => {
                     <ChevronsUpDown v-else class="h-3 w-3 opacity-40" />
                   </button>
                 </TableHead>
-                <TableHead>{{ t('description') }}</TableHead>
+                <TableHead class="w-[26%]">{{ t('description') }}</TableHead>
                 <TableHead
                   class="text-right"
                   :aria-sort="
@@ -576,6 +611,9 @@ onUnmounted(() => {
                 <TableHead>{{ t('owner') }}</TableHead>
                 <TableHead>{{ t('status') }}</TableHead>
                 <TableHead>{{ t('account') }}</TableHead>
+                <TableHead class="w-12"
+                  ><span class="sr-only">{{ t('actions') }}</span></TableHead
+                >
               </TableRow>
             </TableHeader>
             <TableBody>
@@ -588,16 +626,17 @@ onUnmounted(() => {
                   <TableCell><Skeleton class="h-5 w-20 rounded-full" /></TableCell>
                   <TableCell><Skeleton class="h-5 w-16 rounded-full" /></TableCell>
                   <TableCell><Skeleton class="h-4 w-12" /></TableCell>
+                  <TableCell><Skeleton class="h-8 w-8" /></TableCell>
                 </TableRow>
               </template>
               <TableRow v-else-if="transactions.length === 0">
-                <TableCell colspan="7" class="text-center py-16">
+                <TableCell colspan="8" class="text-center py-16">
                   <div class="flex flex-col items-center">
                     <Receipt class="h-10 w-10 text-text-tertiary mb-3" />
                     <p class="text-text-primary text-[14px] font-medium mb-1">
                       {{ t('noTransactionsFound') }}
                     </p>
-                    <p class="text-text-secondary text-[13px]">{{ t('adjustFilters') }}</p>
+                    <p class="text-text-secondary text-[14px]">{{ t('adjustFilters') }}</p>
                   </div>
                 </TableCell>
               </TableRow>
@@ -614,26 +653,30 @@ onUnmounted(() => {
                 @keydown.space.self.prevent="openDetail(txn)"
                 @contextmenu="openContextMenu($event, txn)"
               >
-                <TableCell class="text-[13px] text-text-secondary whitespace-nowrap">
+                <TableCell class="text-[14px] text-text-secondary whitespace-nowrap">
                   <div class="text-text-primary">{{ formatDate(txn.reportingDate) }}</div>
-                  <div v-if="txn.effectiveDate" class="text-[11px] text-text-secondary">
+                  <div v-if="txn.effectiveDate" class="text-[12px] text-text-secondary">
                     {{ t('bankDate') }} {{ formatDate(txn.date) }}
                   </div>
                 </TableCell>
-                <TableCell class="max-w-xs truncate">
-                  <span class="flex items-center gap-1.5">
+                <TableCell class="min-w-[220px] max-w-[360px]">
+                  <span class="flex min-w-0 items-center gap-1.5">
                     <AlertCircle
                       v-if="txn.needsReview"
                       class="h-3.5 w-3.5 text-[var(--warning)] flex-shrink-0"
                     />
-                    {{ txn.description }}
+                    <bdi
+                      dir="auto"
+                      class="min-w-0 whitespace-normal break-words [overflow-wrap:anywhere]"
+                      >{{ txn.description }}</bdi
+                    >
                   </span>
                 </TableCell>
                 <TableCell
-                  class="text-right font-medium tabular-nums"
+                  class="text-right font-medium tabular-nums whitespace-nowrap"
                   :class="txn.chargedAmount >= 0 ? 'text-success' : 'text-destructive'"
                 >
-                  {{ formatCurrency(txn.chargedAmount) }}
+                  <bdi dir="ltr">{{ formatCurrency(txn.chargedAmount) }}</bdi>
                 </TableCell>
                 <TableCell @click.stop>
                   <!-- Inline Select only for the row being edited -->
@@ -650,14 +693,14 @@ onUnmounted(() => {
                     "
                   >
                     <SelectTrigger
-                      class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
+                      class="h-7 text-[12px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
                       :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''"
                     >
                       <SelectValue>
                         <Badge
                           v-if="txn.category"
                           variant="secondary"
-                          class="text-[11px]"
+                          class="text-[12px]"
                           :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                         >
                           {{ categoryMap.get(txn.category)?.label ?? txn.category }}
@@ -687,19 +730,21 @@ onUnmounted(() => {
                   <!-- Lightweight clickable display for all other rows -->
                   <button
                     v-else
-                    class="h-7 text-[11px] w-36 flex items-center px-1 rounded-lg hover:bg-bg-tertiary transition-colors duration-150"
+                    class="h-9 text-[14px] w-40 flex items-center gap-2 px-2 rounded-lg hover:bg-bg-tertiary transition-colors duration-150"
+                    :aria-label="t('category')"
                     :class="updatingCategoryFor === txn.id ? 'opacity-50 pointer-events-none' : ''"
                     @click="editingCategoryFor = txn.id"
                   >
                     <Badge
                       v-if="txn.category"
                       variant="secondary"
-                      class="text-[11px]"
+                      class="text-[12px]"
                       :style="getCategoryStyle(categoryMap.get(txn.category)?.color)"
                     >
                       {{ categoryMap.get(txn.category)?.label ?? txn.category }}
                     </Badge>
-                    <span v-else class="text-text-tertiary">—</span>
+                    <span v-else class="text-text-secondary">{{ t('uncategorized') }}</span>
+                    <ChevronDown class="ms-auto h-3 w-3 shrink-0 text-text-secondary" />
                   </button>
                 </TableCell>
                 <TableCell @click.stop>
@@ -709,11 +754,11 @@ onUnmounted(() => {
                     @update:model-value="(val) => updateOwner(txn, String(val))"
                   >
                     <SelectTrigger
-                      class="h-7 text-[11px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
+                      class="h-7 text-[12px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
                       :class="updatingOwnerFor === txn.id ? 'opacity-50' : ''"
                     >
                       <SelectValue>
-                        <Badge variant="secondary" class="text-[11px]">
+                        <Badge variant="secondary" class="text-[12px]">
                           {{ ownerLabel(txn) }}
                         </Badge>
                       </SelectValue>
@@ -734,7 +779,7 @@ onUnmounted(() => {
                 <TableCell>
                   <Badge
                     :variant="txn.status === 'completed' ? 'default' : 'secondary'"
-                    class="text-[11px]"
+                    class="text-[12px]"
                     :class="
                       txn.status === 'pending' ? 'bg-[var(--warning)]/10 text-[var(--warning)]' : ''
                     "
@@ -742,21 +787,36 @@ onUnmounted(() => {
                     {{ txn.status === 'completed' ? t('completed') : t('pending') }}
                   </Badge>
                 </TableCell>
-                <TableCell class="text-[13px] text-text-secondary">{{
-                  accountMap.get(txn.accountId) ?? txn.accountId
-                }}</TableCell>
+                <TableCell class="min-w-[120px] text-[14px] text-text-secondary">
+                  <bdi dir="auto">{{ accountMap.get(txn.accountId) ?? txn.accountId }}</bdi>
+                </TableCell>
+                <TableCell @click.stop>
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    class="h-8 w-8 p-0"
+                    :aria-label="`${t('actions')}: ${txn.description}`"
+                    :title="t('actions')"
+                    aria-haspopup="menu"
+                    :aria-expanded="contextMenu?.txn.id === txn.id"
+                    aria-controls="transaction-actions-menu"
+                    @click.stop="openContextMenu($event, txn)"
+                  >
+                    <MoreHorizontal class="h-4 w-4" />
+                  </Button>
+                </TableCell>
               </TableRow>
             </TableBody>
           </Table>
         </div>
-      </CardContent>
-    </Card>
+      </div>
+    </section>
 
     <!-- Pagination -->
     <div
-      class="flex items-center justify-between flex-shrink-0 pt-3 mt-1 border-t border-separator/40"
+      class="ledger-pagination flex flex-wrap items-center justify-between gap-3 flex-shrink-0 border-t border-separator/40"
     >
-      <p class="text-[13px] text-text-secondary">
+      <p class="text-[14px] text-text-secondary">
         {{ t('page') }} {{ currentPage() }} {{ t('of') }} {{ totalPages() || 1 }}
         &nbsp;·&nbsp;
         {{ total ? (filters.offset ?? 0) + 1 : 0 }}–{{
@@ -908,19 +968,25 @@ onUnmounted(() => {
     <Teleport to="body">
       <div
         v-if="contextMenu"
-        class="fixed z-50 min-w-[160px] border border-separator/50 bg-bg-primary text-text-primary shadow-[var(--shadow-lg)] rounded-xl py-1 animate-scale-in backdrop-blur-xl"
+        id="transaction-actions-menu"
+        ref="menuElement"
+        role="menu"
+        :aria-label="t('actions')"
+        class="fixed z-50 w-56 border border-separator/50 bg-bg-primary text-text-primary shadow-[var(--shadow-lg)] rounded-lg p-1 animate-scale-in"
         :style="{ top: `${contextMenu.y}px`, left: `${contextMenu.x}px` }"
         @click.stop
       >
         <button
-          class="w-full px-3.5 py-2 text-[13px] text-left hover:bg-primary/10 hover:text-primary rounded-lg mx-0.5 transition-colors duration-150"
+          role="menuitem"
+          class="w-full px-3.5 py-2 text-[14px] text-start focus-visible:bg-primary/10 focus-visible:outline-none hover:bg-primary/10 hover:text-primary rounded-md transition-colors duration-150"
           style="width: calc(100% - 4px)"
           @click="openEffectiveDateDialog"
         >
           {{ t('setEffectiveDate') }}
         </button>
         <button
-          class="w-full px-3.5 py-2 text-[13px] text-left hover:bg-primary/10 hover:text-primary rounded-lg mx-0.5 transition-colors duration-150"
+          role="menuitem"
+          class="w-full px-3.5 py-2 text-[14px] text-start focus-visible:bg-primary/10 focus-visible:outline-none hover:bg-primary/10 hover:text-primary rounded-md transition-colors duration-150"
           style="width: calc(100% - 4px)"
           @click="toggleIgnore"
         >
@@ -983,3 +1049,50 @@ onUnmounted(() => {
     </Dialog>
   </div>
 </template>
+
+<style scoped>
+.ledger-section-heading {
+  padding: 20px 16px;
+  flex-shrink: 0;
+}
+.ledger-section-heading h2 {
+  margin: 0;
+  color: var(--text-primary);
+  font-size: 20px;
+  font-weight: 650;
+  line-height: 1.35;
+}
+.advanced-ledger {
+  border-block-start: 1px solid var(--separator);
+}
+.advanced-ledger :deep(th),
+.advanced-ledger :deep(td) {
+  padding: 16px;
+}
+.advanced-ledger :deep(th) {
+  font-size: 12px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+.advanced-ledger :deep(td) {
+  font-size: 14px;
+}
+.activity-filters {
+  padding: 0 16px 24px;
+  margin-bottom: 0;
+  border: 0;
+  border-radius: 0;
+  background: transparent;
+}
+.activity-filters :deep(input),
+.activity-filters :deep(button),
+.activity-filters :deep(select) {
+  min-height: 36px;
+}
+.ledger-pagination {
+  padding: 20px 16px;
+}
+.advanced-ledger :deep(tbody tr) {
+  border-bottom-color: color-mix(in srgb, var(--separator) 55%, transparent);
+}
+</style>

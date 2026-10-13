@@ -34,9 +34,10 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
 </script>
 
 <template>
-  <div class="asset-detail-page animate-fade-in-up space-y-6">
+  <div class="asset-detail-page min-w-0 animate-fade-in-up space-y-8">
     <button
-      class="flex items-center gap-1.5 text-[13px] text-text-secondary hover:text-text-primary transition-colors"
+      type="button"
+      class="inline-flex min-h-8 items-center gap-2 text-[14px] text-text-secondary hover:text-text-primary transition-colors"
       @click="router.push('/net-worth')"
     >
       <ArrowLeft class="h-4 w-4" />
@@ -49,7 +50,7 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
     </div>
 
     <div v-else-if="error" class="text-center py-12">
-      <p class="text-destructive text-[13px]">{{ error }}</p>
+      <p class="text-destructive text-[14px]">{{ error }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="$router.go(0)">{{
         t('retry')
       }}</Button>
@@ -71,3 +72,72 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
     </template>
   </div>
 </template>
+
+<style scoped>
+.asset-detail-page :deep(.asset-view) {
+  display: grid;
+  gap: 32px;
+}
+.asset-detail-page :deep(.finance-section) {
+  min-width: 0;
+  padding-block: 24px;
+  border-block-start: 1px solid var(--separator);
+}
+.asset-detail-page :deep(.finance-section-heading) {
+  padding: 0 24px 20px;
+}
+.asset-detail-page :deep(.finance-section-heading h2),
+.asset-detail-page :deep(.finance-section > h2) {
+  font-size: 20px;
+  font-weight: 600;
+  line-height: 1.3;
+}
+.asset-detail-page :deep(.finance-section > h2),
+.asset-detail-page :deep(.finance-section > .finance-movement-heading) {
+  padding-inline: 24px;
+}
+.asset-detail-page :deep(.finance-section-content) {
+  min-width: 0;
+  padding-inline: 24px;
+}
+.asset-detail-page :deep(.finance-section-ledger) {
+  padding-inline: 0;
+}
+.asset-detail-page :deep(.asset-metrics) {
+  gap: 24px;
+  padding: 24px;
+  border-block: 1px solid var(--separator);
+}
+.asset-detail-page :deep(.asset-metric) {
+  min-width: 0;
+}
+.asset-detail-page :deep(.asset-metric-label) {
+  margin-block-end: 8px;
+}
+.asset-detail-page :deep(.asset-metric-label h2) {
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 500;
+}
+.asset-detail-page :deep(.asset-metric-value) {
+  overflow-wrap: anywhere;
+}
+.asset-detail-page :deep(.finance-ledger-row) {
+  padding: 16px;
+}
+.asset-detail-page :deep(.finance-ledger) {
+  border-block: 1px solid var(--separator);
+}
+@media (max-width: 640px) {
+  .asset-detail-page :deep(.finance-section-heading),
+  .asset-detail-page :deep(.finance-section-content),
+  .asset-detail-page :deep(.finance-section > h2),
+  .asset-detail-page :deep(.finance-section > .finance-movement-heading),
+  .asset-detail-page :deep(.asset-metrics) {
+    padding-inline: 16px;
+  }
+  .asset-detail-page :deep(.finance-section-ledger) {
+    padding-inline: 0;
+  }
+}
+</style>
