@@ -4,11 +4,13 @@ Production-candidate Expo application for the private Money Monitor client. The 
 
 ## Run
 
+For shared services, Advisor delivery, dependency setup, and all repository checks, read [the development guide](../docs/development.md). Mobile has its own lockfile and is not a root npm workspace.
+
 Requirements: Node.js, Xcode with an iPhone simulator, and CocoaPods.
 
 ```bash
 cd mobile
-npm install
+npm ci
 npm run ios
 ```
 
@@ -18,11 +20,12 @@ Physical-device builds support Xcode 27 through Expo SDK 57's official `ios.enab
 
 ## Product and architecture
 
-Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remains authoritative for financial data, calculations, scraping, AI, credentials, and administration; the phone consumes its authenticated mobile API and stores only its device credential in the iOS Keychain.
+Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remains authoritative for financial data, calculations, scraping, AI, credentials, and administration; the phone consumes its authenticated mobile API and stores its device credential in the iOS Keychain.
 
 - **Home** gives a five-second view of spending, income, pace, budgets, and attention items.
 - **Activity** provides searchable, filterable transactions and opens the focused Review workflow.
 - **Explore** follows changes through categories, merchants, transactions, cash flow, budgets, and net worth.
+- **Advisor** streams Mac-generated replies and charts and reopens saved conversations.
 - `MoneyDataProvider` owns pairing state, shared overview data, fixture selection, and invalidation after review actions. Feature screens call typed API helpers directly; there is no app-wide state framework or client-side financial calculation layer.
 
 ## UI rules
@@ -39,7 +42,6 @@ Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remai
 Open the gear on Home (or **Settings** on the connection screen) to choose **System default**, **English**, or **עברית**. The choice is saved on the iPhone. Restart the app after switching between left-to-right and right-to-left navigation so the native tab bar and navigation controls follow the new direction. iOS permission dialogs follow the app language selected in iPhone Settings.
 
 Interface copy lives in `src/translations.ts`. Add an English and Hebrew value for each new message key, then call `t(key)` at the point of use. Pass variable values and counts as options so the two languages can use their own word order and plural forms. System language comes from `expo-localization`.
-
 
 ## Deterministic E2E
 
@@ -63,7 +65,7 @@ Maestro selects a scenario with the iOS launch argument `MM_FIXTURE_SCENARIO`. T
       MM_FIXTURE_SCENARIO: needs-attention
 ```
 
-Available scenarios are `normal`, `needs-attention`, `light-data`, `review-heavy`, `inbox-zero`, `no-budget`, `no-transactions`, `category-shift`, `slower-spending`, and `mixed-currency`. In development builds only, a deep link can also select a scenario: `moneymonitor:///home?fixture=needs-attention`. Release builds ignore fixture URL parameters.
+The typed scenario catalog is `fixtureScenarios` in `src/fixtures.ts`. In development builds only, a deep link can also select a scenario: `moneymonitor:///home?fixture=needs-attention`. Release builds ignore fixture URL parameters.
 
 ## Real Mac integration check
 

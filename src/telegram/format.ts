@@ -1,8 +1,5 @@
 function escapeHtml(text: string): string {
-  return text
-    .replace(/&/g, '&amp;')
-    .replace(/</g, '&lt;')
-    .replace(/>/g, '&gt;');
+  return text.replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;');
 }
 
 /** Convert a markdown table into a padded monospace <pre> block. */
@@ -10,21 +7,25 @@ function formatTable(tableBlock: string): string {
   const lines = tableBlock.trim().split('\n');
   // Parse rows, skip separator lines (|---|---|)
   const rows = lines
-    .filter(l => !/^\|[\s-:|]+\|$/.test(l))
-    .map(l =>
-      l.replace(/^\|/, '').replace(/\|$/, '').split('|').map(c => c.trim()),
+    .filter((l) => !/^\|[\s-:|]+\|$/.test(l))
+    .map((l) =>
+      l
+        .replace(/^\|/, '')
+        .replace(/\|$/, '')
+        .split('|')
+        .map((c) => c.trim()),
     );
   if (rows.length === 0) return escapeHtml(tableBlock);
 
   // Compute max width per column
   const colCount = rows[0].length;
   const widths = Array.from({ length: colCount }, (_, col) =>
-    Math.max(...rows.map(r => (r[col] ?? '').length)),
+    Math.max(...rows.map((r) => (r[col] ?? '').length)),
   );
 
   // Precompute which columns are numeric so we right-align them
   const isNumericCol = Array.from({ length: colCount }, (_, col) =>
-    rows.slice(1).every(r => /^[₪\d,.%\s-]+$/.test(r[col] ?? '')),
+    rows.slice(1).every((r) => /^[₪\d,.%\s-]+$/.test(r[col] ?? '')),
   );
   const pad = (s: string, w: number, col: number) =>
     isNumericCol[col] ? s.padStart(w) : s.padEnd(w);
@@ -36,7 +37,7 @@ function formatTable(tableBlock: string): string {
 
   // Insert a separator after the header
   if (formatted.length > 1) {
-    const sep = widths.map(w => '─'.repeat(w)).join('──');
+    const sep = widths.map((w) => '─'.repeat(w)).join('──');
     formatted.splice(1, 0, sep);
   }
 
@@ -64,14 +65,11 @@ export function markdownToTelegramHtml(md: string): string {
   });
 
   // 1b. Convert markdown tables to monospace <pre> blocks (use same placeholder array)
-  text = text.replace(
-    /(?:^|\n)((?:\|.+\|\n?){2,})/g,
-    (match) => {
-      const idx = codeBlocks.length;
-      codeBlocks.push(formatTable(match.trim()));
-      return `\n\x00CB${idx}\x00\n`;
-    },
-  );
+  text = text.replace(/(?:^|\n)((?:\|.+\|\n?){2,})/g, (match) => {
+    const idx = codeBlocks.length;
+    codeBlocks.push(formatTable(match.trim()));
+    return `\n\x00CB${idx}\x00\n`;
+  });
 
   // 2. Extract inline code
   const inlineCodes: string[] = [];
@@ -95,8 +93,10 @@ export function markdownToTelegramHtml(md: string): string {
   text = text.replace(/^&gt;\s?(.+)$/gm, '<blockquote>$1</blockquote>');
   text = text.replace(/<\/blockquote>\n<blockquote>/g, '\n');
 
-  // 5. Restore protected code blocks and inline code
+  // 5. Restore code protected by NUL-delimited placeholders.
+  // eslint-disable-next-line no-control-regex -- Matches the internal NUL placeholders above.
   text = text.replace(/\x00CB(\d+)\x00/g, (_, idx) => codeBlocks[Number(idx)]);
+  // eslint-disable-next-line no-control-regex -- Matches the internal NUL placeholders above.
   text = text.replace(/\x00IC(\d+)\x00/g, (_, idx) => inlineCodes[Number(idx)]);
 
   return text;

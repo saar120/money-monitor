@@ -1,11 +1,12 @@
 # Money Monitor
 
-A self-hosted personal finance platform that automatically scrapes transaction data from Israeli banks and credit cards, stores everything locally, and provides AI-powered analytics through an interactive dashboard. Available as a desktop app (macOS, Windows, Linux) or a standalone Node.js server.
+A self-hosted personal finance platform that automatically scrapes transaction data from Israeli banks and credit cards, stores everything locally, and provides AI-powered analytics through an interactive dashboard. Available as a desktop app (macOS, Windows, Linux), a paired iPhone client, or a standalone Node.js server.
 
 ## Features
 
 - **Desktop App** — Native Electron app with system tray, OS-level secret storage (Keychain / DPAPI / libsecret), and a guided setup wizard
-- **Automatic Bank Scraping** — Connects to 10 Israeli banks and 7 credit card providers via headless browser automation
+- **iPhone App** — Expo/React Native client with Home, Activity, Explore, Advisor, Hebrew RTL, and authenticated pairing to the Mac. See [mobile/README.md](mobile/README.md).
+- **Automatic Bank Scraping** — Connects to Israeli banks and credit card providers via headless browser automation
 - **AI Financial Advisor** — Chat with your finances using natural language — get category suggestions, detect recurring charges, compare periods, and more
 - **Net Worth Tracking** — Track assets (brokerage accounts, crypto, real estate), liabilities (loans, mortgages), and view historical net worth trends with multi-currency support
 - **Interactive Dashboard** — Real-time charts, spending breakdowns, transaction search, insights, and account management
@@ -16,25 +17,7 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 - **Scheduled Scraping** — Configurable cron-based background scraping with live progress via SSE
 - **Encrypted Credentials** — Bank login details encrypted with AES-256-GCM, never stored in plaintext
 - **Demo Mode** — Try the app with seeded sample data, no bank credentials required
-- **Local-First** — All data stays on your machine in a SQLite database. No cloud, no third-party data sharing
-
-## Screenshots
-
-| Overview                                   | AI Chat                               |
-| ------------------------------------------ | ------------------------------------- |
-| ![Overview](docs/screenshots/overview.png) | ![AI Chat](docs/screenshots/chat.png) |
-
-| Transactions                               | Accounts                                   |
-| ------------------------------------------ | ------------------------------------------ |
-| ![Transactions](docs/screenshots/txns.png) | ![Accounts](docs/screenshots/accounts.png) |
-
-| Net Worth                                    | Insights                                   |
-| -------------------------------------------- | ------------------------------------------ |
-| ![Net Worth](docs/screenshots/net_worth.png) | ![Insights](docs/screenshots/insights.png) |
-
-| Scraping                                   | Telegram Bot                               |
-| ------------------------------------------ | ------------------------------------------ |
-| ![Scraping](docs/screenshots/scraping.png) | ![Telegram](docs/screenshots/telegram.png) |
+- **Local-First** — The Mac stores the authoritative financial database. The paired iPhone uses its private API; configured AI providers receive the context needed for their requests.
 
 ## Tech Stack
 
@@ -42,27 +25,23 @@ A self-hosted personal finance platform that automatically scrapes transaction d
 | ----------------- | ----------------------------------------------------------------------------------- |
 | **Desktop**       | Electron (macOS, Windows, Linux)                                                    |
 | **Backend**       | Node.js + TypeScript, Fastify                                                       |
-| **Frontend**      | Vue 3 (Composition API), Vite, Tailwind CSS                                         |
+| **Desktop UI**    | Vue 3 (Composition API), Vite, Tailwind CSS                                         |
 | **Database**      | SQLite via better-sqlite3, Drizzle ORM                                              |
 | **Scraping**      | israeli-bank-scrapers, Puppeteer + Stealth Plugin                                   |
 | **AI**            | Pi AI multi-provider framework (Anthropic, OpenAI, OpenCode Go, Google, OpenRouter) |
 | **MCP**           | Model Context Protocol SDK (stdio transport)                                        |
 | **Telegram**      | grammy                                                                              |
 | **Scheduling**    | node-cron (Israel timezone)                                                         |
-| **Charts**        | Chart.js + vue-chartjs                                                              |
+| **Charts**        | ECharts + vue-echarts (desktop); Victory Native + Skia (iPhone)                     |
 | **UI Components** | Reka UI (headless), Lucide icons                                                    |
 | **Testing**       | Vitest                                                                              |
 | **Validation**    | Zod                                                                                 |
 
-## Architecture
+## Development and architecture
 
-### System Overview
+Read [docs/development.md](docs/development.md) for feature ownership, shared financial services, Advisor streaming, setup, native dependency recovery, validation, and synthetic UI QA. Desktop UI guidance is in [dashboard/README.md](dashboard/README.md); iPhone setup, fixtures, and pairing are in [mobile/README.md](mobile/README.md). [CONTEXT.md](CONTEXT.md) defines financial and synchronization terminology.
 
-![System Architecture](docs/architecture/system-architecture.png)
-
-### Data Flow
-
-![Data Flow](docs/architecture/data-flow.png)
+The desktop is Electron with a Vue dashboard and Fastify backend. The Mac owns calculations, credentials, scraping, and administration; the Expo/React Native iPhone client consumes a separate authenticated mobile API.
 
 ## Supported Institutions
 
@@ -81,10 +60,10 @@ Download the latest release for your platform, or build from source:
 ```bash
 git clone https://github.com/saar120/money-monitor.git
 cd money-monitor
-npm install
+npm ci
 
 # Build for your platform
-npm run electron:build          # macOS
+npm run electron:build          # macOS ZIP
 npm run electron:build:win      # Windows
 npm run electron:build:linux    # Linux
 ```
@@ -104,7 +83,7 @@ npm run electron:dev
 ```bash
 git clone https://github.com/saar120/money-monitor.git
 cd money-monitor
-npm install
+npm ci
 ```
 
 #### 2. Configure environment
@@ -113,40 +92,7 @@ npm install
 cp .env.example .env
 ```
 
-Edit `.env` with your values:
-
-```env
-# Server
-PORT=3000
-HOST=127.0.0.1
-
-# Authentication (recommended — protects all /api/* routes)
-API_TOKEN=<generate with: openssl rand -hex 32>
-
-# Credentials encryption
-CREDENTIALS_MASTER_KEY=<generate with: openssl rand -hex 32>
-
-# Scraping
-SCRAPE_CRON="0 6 * * *"
-SCRAPE_TIMEZONE=Asia/Jerusalem
-SCRAPE_START_DATE_MONTHS_BACK=3
-
-# AI (Anthropic by default — see config.ts for OpenAI, OpenCode Go, Google, OpenRouter options)
-ANTHROPIC_API_KEY=<your-api-key>
-ANTHROPIC_MODEL=claude-sonnet-4-6
-# Reasoning-capable models only: off, minimal, low, medium, high, xhigh, or max
-AI_THINKING_LEVEL=off
-# Batch model override: inherit, off, minimal, low, medium, high, xhigh, or max
-AI_BATCH_THINKING_LEVEL=inherit
-# OpenCode Go is also available through its OpenAI-compatible API:
-# OPENCODE_API_KEY=<your-opencode-go-api-key>
-# AI_PROVIDER=opencode-go
-# AI_CHAT_MODEL=qwen3.6-plus
-# The provider uses OpenCode's Go API at https://opencode.ai/zen/go/v1.
-
-# Dashboard API URL
-VITE_API_URL=http://localhost:3000
-```
+Configure `.env` using the comments in [.env.example](.env.example). Environment validation and provider choices live in `src/config.ts`. Vite proxies `/api` to the standalone backend; the dashboard does not use a separate `VITE_API_URL` setting.
 
 #### 3. Run in development
 
@@ -234,106 +180,45 @@ TELEGRAM_ALLOWED_USERS=<comma-separated-telegram-user-ids>
 
 The bot supports AI-powered financial chat, receipt/image scanning, session management, and spending alerts.
 
-## Project Structure
+## Project structure
 
-```
-money-monitor/
-├── src/                        # Backend source
-│   ├── index.ts                # Server entry point + scheduler
-│   ├── server.ts               # Fastify server setup
-│   ├── config.ts               # Zod-validated env config
-│   ├── mcp-server.ts           # MCP server (stdio transport)
-│   ├── api/                    # Route handlers
-│   │   ├── accounts.routes.ts
-│   │   ├── transactions.routes.ts
-│   │   ├── scrape.routes.ts
-│   │   ├── summary.routes.ts
-│   │   ├── ai.routes.ts
-│   │   ├── categories.routes.ts
-│   │   ├── assets.routes.ts
-│   │   ├── liabilities.routes.ts
-│   │   ├── net-worth.routes.ts
-│   │   ├── alerts.routes.ts
-│   │   ├── exchange-rates.routes.ts
-│   │   ├── settings.routes.ts
-│   │   └── demo.routes.ts
-│   ├── ai/                     # Multi-provider AI agent + financial tools
-│   ├── db/                     # Schema, connection, migrations
-│   ├── scraper/                # Bank scraping + credential encryption
-│   ├── services/               # Business logic (assets, net worth, etc.)
-│   ├── telegram/               # Telegram bot + alerts
-│   └── shared/                 # Shared types
-├── electron/                   # Electron main process
-│   ├── main.ts                 # Window management, tray, menus
-│   └── preload.mts             # Context bridge
-├── dashboard/                  # Vue 3 SPA
-│   └── src/
-│       ├── components/         # Pages and UI components
-│       ├── api/                # HTTP client
-│       ├── composables/        # Vue composables
-│       └── lib/                # Provider definitions, utilities
-├── scripts/                    # Backup, restore, icon generation
-├── .env.example                # Environment template
-├── drizzle.config.ts           # ORM configuration
-└── package.json
-```
+| Location                                  | Responsibility                                               |
+| ----------------------------------------- | ------------------------------------------------------------ |
+| `src/services/`, `src/db/`, `src/shared/` | Authoritative calculations, storage, shared semantics        |
+| `src/api/`, `src/server.ts`               | Desktop/standalone HTTP API                                  |
+| `src/mobile/`                             | Pairing, authenticated mobile API, contracts and projections |
+| `src/ai/`                                 | Advisor, charts, categorization and saved sessions           |
+| `src/scraper/`, `src/telegram/`           | Bank collection, schedules and messaging                     |
+| `electron/`                               | Desktop lifecycle, safe storage and Tailscale access         |
+| `dashboard/`                              | Vue desktop UI; installed by the root npm workspace          |
+| `mobile/`                                 | Expo iPhone client; separate npm install and lockfile        |
+| `scripts/`, `patches/`                    | Build/QA helpers and scraper compatibility patches           |
 
-## Available Scripts
-
-| Script                         | Description                                                        |
-| ------------------------------ | ------------------------------------------------------------------ |
-| `npm run dev`                  | Start backend with hot reload (tsx watch)                          |
-| `npm run dev:all`              | Start backend + frontend concurrently                              |
-| `npm run build`                | Compile TypeScript backend + build Vue dashboard                   |
-| `npm run start`                | Run production server                                              |
-| `npm run dashboard:dev`        | Start Vite dev server for the dashboard                            |
-| `npm run electron:dev`         | Build and launch the Electron desktop app                          |
-| `npm run electron:build`       | Package macOS desktop app (.dmg)                                   |
-| `npm run electron:build:win`   | Package Windows desktop app                                        |
-| `npm run electron:build:linux` | Package Linux desktop app                                          |
-| `npm run electron:build:all`   | Package for all platforms                                          |
-| `npm run mcp`                  | Start the MCP server (stdio)                                       |
-| `npm run db:generate`          | Generate Drizzle migration from schema changes                     |
-| `npm run db:studio`            | Open Drizzle Studio (interactive DB browser)                       |
-| `npm run test`                 | Run tests (Vitest)                                                 |
-| `npm run test:watch`           | Run tests in watch mode                                            |
-| `npm run test:coverage`        | Run tests with coverage report                                     |
-| `npm run lint`                 | Lint with ESLint                                                   |
-| `npm run format`               | Format with Prettier                                               |
-| `npm run backup`               | Back up database, credentials, and config to a timestamped archive |
-| `npm run restore`              | Restore from the latest backup (or specify an archive path)        |
-
-## Backup & Restore
-
-All your data lives in three files. The backup script bundles them into a single `.tar.gz` archive:
-
-| File                    | Contents                                                             |
-| ----------------------- | -------------------------------------------------------------------- |
-| `data/money-monitor.db` | Transactions, accounts, categories, assets, liabilities, scrape logs |
-| `data/credentials.enc`  | Encrypted bank login credentials                                     |
-| `.env`                  | Master key, API tokens, and configuration                            |
-
-### Create a backup
+## Validation
 
 ```bash
-npm run backup                        # saves to ./backups/
-npm run backup -- /path/to/usb/drive  # saves to a custom directory
+npm run check
+npm run build
+npm --prefix mobile ci
+npm --prefix mobile run typecheck
+npm --prefix mobile test
 ```
 
-### Restore on another machine
+The package.json scripts are the source of truth for commands. Native QA and synthetic browser checks are described in [the development guide](docs/development.md#synthetic-ui-qa).
+
+## Backup and restore
+
+The existing commands below handle **standalone repository data**: a consistent SQLite snapshot from `data/money-monitor.db`, `data/credentials.enc`, and `.env`. Install the `sqlite3` CLI before taking a snapshot. Archives contain secrets and should be stored privately.
 
 ```bash
-git clone https://github.com/saar120/money-monitor.git
-cd money-monitor
-npm install
-
-# Restore from archive
-npm run restore -- /path/to/money-monitor-backup-20260305_120000.tar.gz
-
-npm run dev
+npm run backup                         # writes to ./backups/
+npm run backup -- /path/to/backup-dir
+npm run restore -- /path/to/archive.tar.gz
 ```
 
-Running `npm run restore` with no arguments restores the latest archive from `./backups/`.
+Restore prompts before overwriting repository files; stop the standalone server first. With no archive argument, it selects the latest archive in `backups/`.
+
+These scripts do not back up the desktop app's OS user-data directory, encrypted `config.json`, or chat sessions. See [data and backups](docs/development.md#data-and-backups) for desktop paths and OS keychain constraints.
 
 ## License
 
