@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import type { HTMLAttributes } from 'vue';
+import { computed, provide, useId, type HTMLAttributes } from 'vue';
+import { settingsFieldKey } from './field';
 import { cn } from '@/lib/utils';
 
 const props = defineProps<{
@@ -8,6 +9,10 @@ const props = defineProps<{
   class?: HTMLAttributes['class'];
   vertical?: boolean;
 }>();
+const id = useId();
+const labelId = computed(() => (props.label ? `${id}-label` : undefined));
+const descriptionId = computed(() => (props.description ? `${id}-description` : undefined));
+provide(settingsFieldKey, { labelId, descriptionId });
 </script>
 
 <template>
@@ -23,8 +28,12 @@ const props = defineProps<{
     "
   >
     <div v-if="label" class="min-w-0 flex-1" :class="{ 'min-w-0': !vertical }">
-      <div class="text-sm text-text-primary">{{ label }}</div>
-      <div v-if="description" class="text-xs leading-relaxed text-text-secondary mt-1">
+      <div :id="labelId" class="text-sm text-text-primary">{{ label }}</div>
+      <div
+        v-if="description"
+        :id="descriptionId"
+        class="text-xs leading-relaxed text-text-secondary mt-1"
+      >
         {{ description }}
       </div>
     </div>

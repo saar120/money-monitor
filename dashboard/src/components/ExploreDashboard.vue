@@ -25,6 +25,7 @@ const monthSwipe = useMonthSwipe(month);
 const loading = ref(true);
 const error = ref('');
 const current = ref<SummaryItem[]>([]);
+const previousCategories = ref<SummaryItem[]>([]);
 const previousFlow = ref<CashflowItem | null>(null);
 const monthly = ref<SummaryItem[]>([]);
 const categories = ref<Category[]>([]);
@@ -49,15 +50,21 @@ async function load() {
   );
   const elapsedDays = Number(selectedRange.endDate.slice(-2));
   try {
-    const [thisMonth, lastMonth, history, categoryData, flow] = await Promise.all([
-      getSummary({ groupBy: 'spending-category', ...selectedRange }),
-      getCashflowSummary(monthRange(previousMonth, elapsedDays)),
-      getSummary({ groupBy: 'month', expensesOnly: true }),
-      getCategories(),
-      getCashflowSummary(selectedRange),
-    ]);
+    const [thisMonth, lastMonth, history, categoryData, flow, previousCategoryData] =
+      await Promise.all([
+        getSummary({ groupBy: 'spending-category', ...selectedRange }),
+        getCashflowSummary(monthRange(previousMonth, elapsedDays)),
+        getSummary({ groupBy: 'month', expensesOnly: true }),
+        getCategories(),
+        getCashflowSummary(selectedRange),
+        getSummary({
+          groupBy: 'spending-category',
+          ...monthRange(previousMonth, elapsedDays),
+        }).catch(() => ({ summary: [] })),
+      ]);
     if (id !== requestId) return;
     current.value = thisMonth.summary;
+    previousCategories.value = previousCategoryData.summary;
     previousFlow.value = lastMonth.summary[0] ?? null;
     monthly.value = history.summary;
     categories.value = categoryData.categories;
@@ -97,11 +104,30 @@ const mix = computed(() =>
   sortedCategories.value
     .filter((item) => item.totalAmount < 0)
     .map((item) => ({
-      name: categoryMap.value.get(item.category ?? '')?.label ?? item.category ?? t('categories'),
+      name:
+        categoryMap.value.get(item.category ?? '')?.label ??
+        (item.category === 'uncategorized' ? t('uncategorized') : item.category) ??
+        t('categories'),
       color: categoryMap.value.get(item.category ?? '')?.color ?? 'var(--accent)',
       share: Math.abs(item.totalAmount) / Math.max(total.value, 1),
     })),
 );
+const largestChange = computed(() => {
+  if (!current.value.length || !previousCategories.value.length) return null;
+  const before = new Map(
+    previousCategories.value.map((item) => [item.category, Math.max(0, -item.totalAmount)]),
+  );
+  const now = new Map(current.value.map((item) => [item.category, Math.max(0, -item.totalAmount)]));
+  return (
+    [...new Set([...before.keys(), ...now.keys()])]
+      .map((category) => ({
+        category: category ?? 'uncategorized',
+        delta: (now.get(category) ?? 0) - (before.get(category) ?? 0),
+      }))
+      .filter((item) => item.delta !== 0)
+      .sort((a, b) => Math.abs(b.delta) - Math.abs(a.delta))[0] ?? null
+  );
+});
 </script>
 
 <template>
@@ -116,14 +142,36 @@ const mix = computed(() =>
     </div>
     <section class="explore-summary">
       <div>
-        <span>{{ t('totalSpending') }}</span
-        ><strong><AnimatedAmount :value="total" /></strong>
-        <small :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
+        <h2>{{ t('whereItWent') }}</h2>
+        <strong v-if="loading">—</strong>
+        <strong v-else><AnimatedAmount :value="total" /></strong>
+        <small v-if="!loading">{{
           delta === 0
             ? t('sameAsLastMonth')
-            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${t('thanLastMonth')}`
+            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
         }}</small>
       </div>
+      <RouterLink
+        v-if="!loading && largestChange"
+        class="explore-change"
+        :to="{
+          path: `/explore/category/${encodeURIComponent(largestChange.category)}`,
+          query: { month },
+        }"
+      >
+        <span>{{ t('largestCategoryChange') }}</span>
+        <strong>{{
+          categoryMap.get(largestChange.category)?.label ?? largestChange.category
+        }}</strong>
+        <span
+          >{{ formatCurrency(Math.abs(largestChange.delta)) }}
+          {{ largestChange.delta > 0 ? t('more') : t('less') }}
+          {{ month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth') }}
+          <ArrowRight :size="16"
+        /></span>
+      </RouterLink>
+    </section>
+    <div v-if="!loading && mix.length" class="explore-mix-summary">
       <div class="explore-mix" :aria-label="t('categories')">
         <span
           v-for="item in mix"
@@ -132,7 +180,12 @@ const mix = computed(() =>
           :style="{ flexGrow: Math.max(item.share * 100, 1), background: item.color }"
         />
       </div>
-    </section>
+      <div class="explore-mix-legend">
+        <span v-for="item in mix" :key="item.name"
+          ><i :style="{ background: item.color }" />{{ item.name }}</span
+        >
+      </div>
+    </div>
     <nav class="explore-switcher" :aria-label="t('explore')">
       <RouterLink to="/explore" aria-current="page">{{ t('categories') }}</RouterLink>
       <RouterLink :to="{ path: '/explore/monthly-comparison', query: { month } }">{{
@@ -165,9 +218,17 @@ const mix = computed(() =>
                 background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
               }"
             />
-            <span class="explore-row-title">{{
-              categoryMap.get(item.category ?? '')?.label ?? item.category
-            }}</span>
+            <span class="explore-row-title"
+              >{{
+                categoryMap.get(item.category ?? '')?.label ??
+                (item.category === 'uncategorized' ? t('uncategorized') : item.category)
+              }}<span v-if="item.totalAmount < 0" class="explore-category-track"
+                ><span
+                  :style="{
+                    width: `${Math.min(100, (Math.abs(item.totalAmount) / Math.max(total, 1)) * 100)}%`,
+                    background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
+                  }" /></span
+            ></span>
             <small v-if="item.totalAmount > 0" class="is-positive">{{ t('netReceived') }}</small>
             <strong :class="item.totalAmount > 0 ? 'is-positive' : ''"
               >{{ item.totalAmount > 0 ? '+' : '' }}{{ formatCurrency(item.totalAmount) }}</strong

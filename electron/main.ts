@@ -122,6 +122,15 @@ function buildMenu() {
       submenu: [
         { role: 'about' },
         { type: 'separator' },
+        {
+          label: 'Settings…',
+          accelerator: 'CmdOrCtrl+,',
+          click: () => {
+            mainWindow?.show();
+            mainWindow?.webContents.send('open-settings');
+          },
+        },
+        { type: 'separator' },
         { role: 'hide' },
         { role: 'hideOthers' },
         { role: 'unhide' },
@@ -160,6 +169,10 @@ function buildMenu() {
               { role: 'toggleDevTools' as const },
               { type: 'separator' as const },
             ]),
+        { role: 'resetZoom' },
+        { role: 'zoomIn' },
+        { role: 'zoomOut' },
+        { type: 'separator' },
         { role: 'togglefullscreen' },
       ],
     },
@@ -455,12 +468,10 @@ function createWindow(port: number) {
   process.env.MM_RENDERER_ORIGIN = appOrigin;
   mainWindow.loadURL(appOrigin);
 
-  // Send accent color once page is ready + lock zoom level
+  // Send accent color once the page is ready; keep user zoom preferences.
   mainWindow.webContents.on('did-finish-load', () => {
     sendAccentColor();
-    // Lock zoom — desktop apps don't zoom like browsers
-    mainWindow?.webContents.setZoomFactor(1);
-    mainWindow?.webContents.setVisualZoomLevelLimits(1, 1);
+    mainWindow?.webContents.setVisualZoomLevelLimits(1, 3);
   });
 
   // ── Block browser-like navigation (back/forward, dropped URLs, ctrl+click) ──
@@ -481,17 +492,6 @@ function createWindow(port: number) {
     }
     return { action: 'deny' };
   });
-
-  // ── Block zoom keyboard shortcuts in production ─────────────────────────────
-  if (app.isPackaged) {
-    mainWindow.webContents.on('before-input-event', (event, input) => {
-      const isMeta = input.meta || input.control;
-      // Block zoom shortcuts (Cmd/Ctrl + =/-/0)
-      if (isMeta && ['+', '=', '-', '0'].includes(input.key)) {
-        event.preventDefault();
-      }
-    });
-  }
 
   // Track focus/blur for UI desaturation
   mainWindow.on('focus', () => {
@@ -547,7 +547,7 @@ function createTray(port: number) {
       },
     },
     {
-      label: 'Scrape Now',
+      label: 'Sync accounts now',
       click: () => {
         fetch(`http://localhost:${port}/api/scrape/all`, {
           method: 'POST',

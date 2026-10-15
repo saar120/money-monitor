@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { language, t } from '@/lib/language';
 import { ref, computed, watch, onMounted, onBeforeUnmount } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { useRoute } from 'vue-router';
@@ -110,7 +111,9 @@ function getCategoryColor(name: string): string {
 }
 
 function getCategoryLabel(name: string): string {
-  return categoryMap.value.get(name)?.label ?? name;
+  return (
+    categoryMap.value.get(name)?.label ?? (name === 'uncategorized' ? t('uncategorized') : name)
+  );
 }
 
 // ── Chart colors ──
@@ -229,6 +232,8 @@ function buildOption(interactive: boolean) {
 
   return {
     animation: !reduceMotion.value,
+    animationDuration: 0,
+    animationDurationUpdate: 220,
     tooltip: {
       trigger: 'item' as const,
       triggerOn: 'mousemove' as const,
@@ -252,7 +257,7 @@ function buildOption(interactive: boolean) {
         type: 'sankey',
         layoutIterations: 32,
         nodeWidth: 12,
-        nodeGap: 14,
+        nodeGap: 26,
         draggable: interactive,
         left: '12%',
         right: '20%',
@@ -394,12 +399,13 @@ onBeforeUnmount(() => {
 <template>
   <Card id="chart-cashflow">
     <CardHeader class="py-4 px-5 flex flex-row items-center justify-between">
-      <CardTitle class="text-[15px]">Cashflow</CardTitle>
+      <CardTitle class="text-[15px]">{{ t('cashFlow') }}</CardTitle>
       <div class="flex items-center gap-1.5">
         <button
           v-if="chartOption"
           class="p-1 rounded-md text-text-secondary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
-          title="Expand"
+          :aria-label="language === 'he' ? 'הרחבת תרשים' : 'Expand chart'"
+          :title="language === 'he' ? 'הרחבת תרשים' : 'Expand chart'"
           @click="dialogOpen = true"
         >
           <Expand class="h-4 w-4" />
@@ -423,8 +429,8 @@ onBeforeUnmount(() => {
           v-else-if="cashflowData.error.value || categoriesData.error.value"
           class="flex flex-col items-center justify-center h-full text-center"
         >
-          <BarChart3 class="h-8 w-8 text-red-400 mb-2" />
-          <p class="text-red-500 text-[13px] mb-1">Failed to load cashflow data</p>
+          <BarChart3 class="h-8 w-8 text-destructive mb-2" />
+          <p class="text-destructive text-[13px] mb-1">{{ t('couldNotLoad') }}</p>
           <button
             class="text-[12px] text-primary underline underline-offset-4 hover:no-underline transition-all duration-150"
             @click="
@@ -432,7 +438,7 @@ onBeforeUnmount(() => {
               categoriesData.execute();
             "
           >
-            Retry
+            {{ t('retry') }}
           </button>
         </div>
         <!-- Static chart -->
@@ -451,7 +457,7 @@ onBeforeUnmount(() => {
     <DialogContent class="max-w-[90vw] w-[90vw] h-[85vh] flex flex-col">
       <DialogHeader class="flex-shrink-0 flex flex-row items-center justify-between pr-10">
         <div>
-          <DialogTitle>Cashflow</DialogTitle>
+          <DialogTitle>{{ t('cashFlow') }}</DialogTitle>
           <DialogDescription class="text-[12px]">
             Drag nodes to rearrange. Scroll to zoom. Click and drag empty space to pan.
           </DialogDescription>

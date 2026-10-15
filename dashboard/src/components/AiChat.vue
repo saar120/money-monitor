@@ -12,7 +12,7 @@ import {
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
-import { SendHorizontal, Bot, User, PanelLeftClose, PanelLeft } from 'lucide-vue-next';
+import { SendHorizontal, MessageCircle, User, PanelLeftClose, PanelLeft } from 'lucide-vue-next';
 import MarkdownContent from './MarkdownContent.vue';
 import ChatSidebar from './ChatSidebar.vue';
 import AdvisorChartView from './AdvisorChartView.vue';
@@ -203,8 +203,8 @@ function handleKeydown(e: KeyboardEvent) {
               v-if="messages.length === 0"
               class="flex flex-col items-center justify-center min-h-full text-center py-8"
             >
-              <div class="w-12 h-12 flex items-center justify-center mb-6">
-                <Bot class="h-8 w-8 text-primary" />
+              <div class="w-12 h-12 flex items-center justify-center mb-4">
+                <MessageCircle class="h-8 w-8 text-primary" />
               </div>
               <p class="text-text-primary text-[20px] font-semibold mb-2">
                 {{ t('askAboutFinances') }}
@@ -237,7 +237,7 @@ function handleKeydown(e: KeyboardEvent) {
                 v-if="msg.role === 'assistant'"
                 class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"
               >
-                <Bot class="h-4 w-4 text-primary" />
+                <MessageCircle class="h-4 w-4 text-primary" />
               </div>
 
               <div
@@ -272,7 +272,7 @@ function handleKeydown(e: KeyboardEvent) {
               <div
                 class="w-7 h-7 rounded-full bg-primary/10 flex items-center justify-center flex-shrink-0 mt-0.5"
               >
-                <Bot class="h-4 w-4 text-primary" />
+                <MessageCircle class="h-4 w-4 text-primary" />
               </div>
               <div class="bg-bg-secondary rounded-2xl rounded-bl-md px-4 py-3">
                 <div class="flex items-center gap-2.5">
@@ -308,6 +308,7 @@ function handleKeydown(e: KeyboardEvent) {
             <div class="advisor-composer-inner flex gap-3 items-end">
               <Textarea
                 v-model="input"
+                :aria-label="t('askAboutFinances')"
                 :placeholder="t('advisorPlaceholder')"
                 class="resize-none min-w-0 min-h-[48px] max-h-32 text-[14px]"
                 rows="1"

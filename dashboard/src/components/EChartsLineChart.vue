@@ -44,7 +44,8 @@ const defaultYAxisFormatter = (v: number): string => {
 
 const option = computed(() => ({
   animation: !reduceMotion.value,
-  animationDurationUpdate: 520,
+  animationDuration: 0,
+  animationDurationUpdate: 220,
   animationEasingUpdate: 'cubicOut' as const,
   tooltip: {
     trigger: 'axis' as const,
@@ -67,7 +68,7 @@ const option = computed(() => ({
     ? {
         show: true,
         bottom: 0,
-        textStyle: { color: textSecondary.value, fontSize: 11 },
+        textStyle: { color: textSecondary.value, fontSize: 12 },
       }
     : { show: false },
   grid: {
@@ -80,7 +81,7 @@ const option = computed(() => ({
   xAxis: {
     type: 'category' as const,
     data: props.labels,
-    axisLabel: { color: textSecondary.value, fontSize: 11 },
+    axisLabel: { color: textSecondary.value, fontSize: 12 },
     axisLine: { lineStyle: { color: separator.value } },
     axisTick: { show: false },
   },
@@ -88,7 +89,7 @@ const option = computed(() => ({
     type: 'value' as const,
     axisLabel: {
       color: textSecondary.value,
-      fontSize: 11,
+      fontSize: 12,
       formatter: props.yAxisFormatter ?? defaultYAxisFormatter,
     },
     splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
@@ -98,11 +99,11 @@ const option = computed(() => ({
     name: ds.label,
     type: 'line' as const,
     data: ds.data,
-    smooth: 0.4,
+    smooth: false,
     symbol: 'circle',
-    symbolSize: 9,
-    emphasis: { scale: 1.6, itemStyle: { shadowBlur: 16, shadowColor: ds.color } },
-    showSymbol: true,
+    symbolSize: 6,
+    emphasis: { scale: 1.3 },
+    showSymbol: false,
     lineStyle: { width: 2.5, cap: 'round' as const, join: 'round' as const, color: ds.color },
     itemStyle: { color: ds.color },
     areaStyle: ds.areaColor ? { color: ds.areaColor } : undefined,

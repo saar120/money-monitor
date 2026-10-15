@@ -59,6 +59,7 @@ export default tseslint.config(
         URLSearchParams: 'readonly',
         EventSource: 'readonly',
         HTMLElement: 'readonly',
+        HTMLDetailsElement: 'readonly',
         KeyboardEvent: 'readonly',
         WheelEvent: 'readonly',
         PointerEvent: 'readonly',

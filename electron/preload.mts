@@ -45,6 +45,13 @@ contextBridge.exposeInMainWorld('electronAPI', {
   getAppVersion: () => process.env.MM_APP_VERSION ?? 'unknown',
   getAuthToken: () => (isTrustedDocument() ? (process.env.API_TOKEN ?? '') : ''),
   getDataPath: () => (isTrustedDocument() ? (process.env.MONEY_MONITOR_DATA_DIR ?? '') : ''),
+  onOpenSettings: (callback: () => void) => {
+    const listener = () => {
+      if (isTrustedDocument()) callback();
+    };
+    ipcRenderer.on('open-settings', listener);
+    return () => ipcRenderer.removeListener('open-settings', listener);
+  },
   // Auto-update
   checkForUpdates: () => ipcRenderer.invoke('auto-update:check'),
   installUpdate: () => ipcRenderer.invoke('auto-update:install'),

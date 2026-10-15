@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted } from 'vue';
 import {
   getAsset,
@@ -26,6 +27,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { TrendingUp, TrendingDown, Loader2, Plus } from 'lucide-vue-next';
+
+const { chartPrimary } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
@@ -132,8 +135,7 @@ const chartDatasets = computed(() =>
         {
           label: 'Value (ILS)',
           data: snapshots.value.map((s) => s.totalValueIls),
-          color: '#007AFF',
-          areaColor: 'rgba(0, 122, 255, 0.15)',
+          color: chartPrimary.value,
         },
       ],
 );
@@ -169,7 +171,7 @@ function formatMovementDate(iso: string) {
         <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
         <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
-            class="text-[12px] font-medium px-2 py-0.5 rounded-full bg-cyan-500/10 text-cyan-400"
+            class="text-[12px] font-medium px-2 py-0.5 rounded-full bg-bg-tertiary text-text-secondary"
           >
             {{ ASSET_TYPE_LABELS[asset.type] ?? asset.type }}
           </span>
@@ -300,12 +302,24 @@ function formatMovementDate(iso: string) {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Current Value (ILS)</label>
-            <Input v-model.number="updateForm.currentValue" type="number" />
+            <label for="simple-value-detail-field-1" class="text-[14px] font-medium"
+              >Current Value (ILS)</label
+            >
+            <Input
+              id="simple-value-detail-field-1"
+              v-model.number="updateForm.currentValue"
+              type="number"
+            />
           </div>
           <div>
-            <label class="text-[14px] font-medium">New Contribution (optional)</label>
-            <Input v-model.number="updateForm.contribution" type="number" />
+            <label for="simple-value-detail-field-2" class="text-[14px] font-medium"
+              >New Contribution (optional)</label
+            >
+            <Input
+              id="simple-value-detail-field-2"
+              v-model.number="updateForm.contribution"
+              type="number"
+            />
             <p class="text-[12px] text-text-secondary mt-1">Amount contributed since last update</p>
           </div>
         </div>

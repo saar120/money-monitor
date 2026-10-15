@@ -238,7 +238,8 @@ function endScrub() {
           :style="{ background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)' }"
         />
         <span class="explore-row-title">{{
-          categoryMap.get(item.category ?? '')?.label ?? item.category
+          categoryMap.get(item.category ?? '')?.label ??
+          (item.category === 'uncategorized' ? t('uncategorized') : item.category)
         }}</span>
         <small v-if="item.totalAmount > 0" class="is-positive">{{ t('netReceived') }}</small>
         <strong :class="item.totalAmount > 0 ? 'is-positive' : ''"

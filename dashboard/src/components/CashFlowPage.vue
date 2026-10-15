@@ -14,6 +14,7 @@ const initial = isValidMonth(route.query.month) ? route.query.month : today.slic
 const range = ref<3 | 6 | 12>(6);
 const selectedMonth = ref(initial);
 const rows = ref<CashflowItem[]>([]);
+const samePointPrevious = ref<CashflowItem | null>(null);
 const loading = ref(true);
 const error = ref('');
 
@@ -36,11 +37,22 @@ async function load() {
   try {
     const [year, month] = initial.split('-').map(Number) as [number, number];
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
-    const data = await getCashflowSummary({
-      startDate: `${monthKey(11)}-01`,
-      endDate: initial === today.slice(0, 7) ? today : `${initial}-${lastDay}`,
-    });
+    const priorMonth = monthKey(1);
+    const priorLastDay = new Date(Date.UTC(year, month - 1, 0)).getUTCDate();
+    const [data, prior] = await Promise.all([
+      getCashflowSummary({
+        startDate: `${monthKey(11)}-01`,
+        endDate: initial === today.slice(0, 7) ? today : `${initial}-${lastDay}`,
+      }),
+      initial === today.slice(0, 7)
+        ? getCashflowSummary({
+            startDate: `${priorMonth}-01`,
+            endDate: `${priorMonth}-${String(Math.min(priorLastDay, Number(today.slice(-2)))).padStart(2, '0')}`,
+          })
+        : Promise.resolve({ summary: [] }),
+    ]);
     rows.value = data.summary;
+    samePointPrevious.value = prior.summary[0] ?? null;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
@@ -65,7 +77,11 @@ const selected = computed(
 const selectedIndex = computed(() =>
   months.value.findIndex((row) => row.month === selected.value.month),
 );
-const previous = computed(() => months.value[selectedIndex.value - 1]);
+const previous = computed(() =>
+  selected.value.month === today.slice(0, 7)
+    ? (samePointPrevious.value ?? undefined)
+    : months.value[selectedIndex.value - 1],
+);
 const net = computed(() => selected.value.income - selected.value.expense);
 const previousNet = computed(() =>
   previous.value ? previous.value.income - previous.value.expense : null,
@@ -120,7 +136,9 @@ function chooseRange(count: 3 | 6 | 12) {
         >
         <small v-if="delta !== null"
           >{{ formatCurrency(delta) }} {{ delta >= 0 ? t('better') : t('worse') }}
-          {{ t('thanPreviousMonth') }}</small
+          {{
+            selected.month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanPreviousMonth')
+          }}</small
         >
         <small v-else>{{ t('postedIncomeMinusSpending') }}</small>
       </div>

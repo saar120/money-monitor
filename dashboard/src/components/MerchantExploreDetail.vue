@@ -117,7 +117,6 @@ const activityLink = (transaction: Transaction) => ({
     >
     <div class="home-head">
       <div>
-        <p class="home-context">{{ t('merchant') }}</p>
         <h1 dir="auto">{{ name }}</h1>
       </div>
       <label class="month-control"
@@ -131,10 +130,10 @@ const activityLink = (transaction: Transaction) => ({
     <section class="merchant-hero">
       <span>{{ t('netSpending') }}</span>
       <strong>{{ loading ? '—' : `${total < 0 ? '−' : ''}${formatCurrency(total)}` }}</strong>
-      <small :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
+      <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
         delta === 0
           ? t('sameAsLastMonth')
-          : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${t('thanLastMonth')}`
+          : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
       }}</small>
       <p>
         {{ categoryLabel }} · {{ currentRows.length }}

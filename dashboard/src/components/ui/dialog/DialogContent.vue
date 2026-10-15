@@ -11,6 +11,7 @@ import {
   useForwardPropsEmits,
 } from 'reka-ui';
 import { cn } from '@/lib/utils';
+import { language } from '@/lib/language';
 
 const props = defineProps<DialogContentProps & { class?: HTMLAttributes['class'] }>();
 const emits = defineEmits<DialogContentEmits>();
@@ -37,10 +38,10 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       <slot />
 
       <DialogClose
-        class="absolute end-4 top-4 rounded-md opacity-50 transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none"
+        class="absolute end-3 top-3 flex size-8 items-center justify-center rounded-md text-text-secondary transition-opacity hover:opacity-100 focus:outline-none focus:ring-2 focus:ring-ring/30 disabled:pointer-events-none"
       >
         <X class="w-4 h-4" />
-        <span class="sr-only">Close</span>
+        <span class="sr-only">{{ language === 'he' ? 'סגירה' : 'Close' }}</span>
       </DialogClose>
     </DialogContent>
   </DialogPortal>

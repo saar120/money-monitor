@@ -1,12 +1,12 @@
 // Asset type colors — consistent across all net worth pages
 export const ASSET_TYPE_COLORS: Record<string, string> = {
-  brokerage: '#8b5cf6',
-  pension: '#06b6d4',
-  keren_hishtalmut: '#14b8a6',
-  crypto: '#f59e0b',
-  fund: '#6366f1',
-  real_estate: '#ec4899',
-  banks: '#34d399',
+  brokerage: '#5b7890',
+  pension: '#547e83',
+  keren_hishtalmut: '#64826c',
+  crypto: '#a77b42',
+  fund: '#738099',
+  real_estate: '#947968',
+  banks: '#7b8b70',
 };
 
 // Human-readable labels

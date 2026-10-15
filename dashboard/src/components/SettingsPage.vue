@@ -187,7 +187,9 @@ onMounted(async () => {
     // Populate non-secret fields directly
     form.value.ANTHROPIC_MODEL = String(s.ANTHROPIC_MODEL || 'claude-sonnet-4-6');
     form.value.AI_PROVIDER = String(s.AI_PROVIDER || 'anthropic');
-    form.value.AI_CHAT_MODEL = String(s.AI_CHAT_MODEL || '');
+    form.value.AI_CHAT_MODEL = String(
+      s.AI_CHAT_MODEL || (form.value.AI_PROVIDER === 'anthropic' ? form.value.ANTHROPIC_MODEL : ''),
+    );
     form.value.AI_THINKING_LEVEL = String(s.AI_THINKING_LEVEL || 'off');
     form.value.AI_BATCH_PROVIDER = String(s.AI_BATCH_PROVIDER || '');
     form.value.AI_BATCH_MODEL_ID = String(s.AI_BATCH_MODEL_ID || '');
@@ -211,7 +213,11 @@ onMounted(async () => {
 
   // Auto-update listener
   if (electronAPI?.getAutoUpdateEnabled) {
-    autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
+    try {
+      autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
+    } catch {
+      updateStatus.value = 'unavailable';
+    }
     cleanupUpdateListener = electronAPI.onUpdateStatus((data) => {
       updateStatus.value = data.status;
       if (data.version) updateVersion.value = data.version;
@@ -253,7 +259,12 @@ onUnmounted(() => {
 
 async function toggleAutoUpdate(enabled: boolean) {
   autoUpdateEnabled.value = enabled;
-  await electronAPI?.setAutoUpdateEnabled(enabled);
+  try {
+    await electronAPI?.setAutoUpdateEnabled(enabled);
+  } catch (cause) {
+    autoUpdateEnabled.value = !enabled;
+    error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  }
 }
 
 async function manualCheckForUpdates() {
@@ -261,8 +272,9 @@ async function manualCheckForUpdates() {
   updateError.value = '';
   try {
     await electronAPI?.checkForUpdates();
-  } catch {
+  } catch (cause) {
     updateStatus.value = 'error';
+    updateError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   }
 }
 
@@ -282,6 +294,10 @@ const updateStatusText = computed(() => {
       return `v${updateVersion.value} ready to install`;
     case 'up-to-date':
       return 'App is up to date';
+    case 'unavailable':
+      return language.value === 'he'
+        ? 'עדכונים זמינים בגרסה המותקנת של האפליקציה.'
+        : 'Updates are available in the installed release.';
     case 'error':
       return `Update error: ${updateError.value}`;
     default:
@@ -612,8 +628,13 @@ async function save() {
 
               <!-- Manual OAuth token paste -->
               <div class="space-y-1.5">
-                <label class="text-[14px] font-medium text-text-primary block">OAuth Token</label>
+                <label
+                  for="settings-page-field-1"
+                  class="text-[14px] font-medium text-text-primary block"
+                  >OAuth Token</label
+                >
                 <Input
+                  id="settings-page-field-1"
                   v-model="form.ANTHROPIC_OAUTH_TOKEN"
                   type="password"
                   :placeholder="
@@ -913,23 +934,36 @@ async function save() {
           :title="sectionCopy.updates"
           description="Automatic update settings"
         >
+          <SettingsRow
+            v-if="!electronAPI"
+            :label="language === 'he' ? 'עדכוני האפליקציה' : 'App updates'"
+          >
+            <p class="text-sm text-text-secondary">
+              {{
+                language === 'he'
+                  ? 'ניהול עדכונים זמין באפליקציה למחשב.'
+                  : 'Manage updates in the desktop app.'
+              }}
+            </p>
+          </SettingsRow>
           <SettingsRow v-if="appVersion" label="Current Version">
             <code class="text-[12px] text-text-primary bg-bg-secondary px-2 py-1 rounded break-all"
               >v{{ appVersion }}</code
             >
           </SettingsRow>
           <SettingsRow
+            v-if="electronAPI"
             label="Auto-update"
             description="Automatically check for and download updates"
           >
             <Switch :model-value="autoUpdateEnabled" @update:model-value="toggleAutoUpdate" />
           </SettingsRow>
-          <SettingsRow label="Check for Updates">
+          <SettingsRow v-if="electronAPI" label="Check for Updates">
             <div class="flex flex-wrap items-center gap-3">
               <Button
                 variant="secondary"
                 size="sm"
-                :disabled="checkingForUpdates"
+                :disabled="checkingForUpdates || updateStatus === 'unavailable'"
                 @click="manualCheckForUpdates"
               >
                 <RefreshCw

@@ -14,7 +14,15 @@ import {
   SelectTrigger,
   SelectValue,
 } from '@/components/ui/select';
-import { Wallet, ArrowRight, ArrowLeft, Key, Bot, Check, CheckCircle } from 'lucide-vue-next';
+import {
+  Wallet,
+  ArrowRight,
+  ArrowLeft,
+  Key,
+  MessageCircle,
+  Check,
+  CheckCircle,
+} from 'lucide-vue-next';
 import { language } from '@/lib/language';
 
 const copy = computed(() =>
@@ -38,6 +46,7 @@ const copy = computed(() =>
         cancel: 'ביטול',
         verifying: 'מאמת גישה…',
         oauthToken: 'אסימון OAuth',
+        useToken: 'שימוש באסימון OAuth',
         tokenHint: 'אפשר להדביק אסימון ישירות, למשל מ־Claude Code.',
         skipLater: 'אפשר להגדיר זאת בהמשך בהגדרות.',
         encryption: 'מפתח הצפנה',
@@ -78,6 +87,7 @@ const copy = computed(() =>
         cancel: 'Cancel',
         verifying: 'Verifying authorization…',
         oauthToken: 'OAuth token',
+        useToken: 'Use an OAuth token',
         tokenHint: 'You can paste a token directly, for example from Claude Code.',
         skipLater: 'You can set this later in Settings.',
         encryption: 'Encryption key',
@@ -209,40 +219,48 @@ async function finish() {
 </script>
 
 <template>
-  <div
-    class="setup-page min-h-dvh bg-bg-primary flex items-center justify-center px-4 py-12 sm:px-8"
-    :dir="language === 'he' ? 'rtl' : 'ltr'"
-  >
+  <div class="setup-page" :dir="language === 'he' ? 'rtl' : 'ltr'">
     <!-- macOS drag region for Electron -->
     <div v-if="isElectron" class="fixed top-0 left-0 right-0 h-10 z-50" style="app-region: drag" />
-    <div class="w-full max-w-lg">
+    <div class="setup-shell">
       <!-- Header -->
-      <div class="text-center mb-8">
-        <div
-          class="inline-flex items-center justify-center w-14 h-14 rounded-2xl bg-primary/10 mb-4"
-        >
-          <Wallet class="h-7 w-7 text-primary" />
+      <header class="setup-header">
+        <div class="flex items-center justify-center w-10 h-10 rounded-lg bg-primary/10 shrink-0">
+          <Wallet class="h-5 w-5 text-primary" />
         </div>
-        <h1 class="text-[22px] font-semibold text-text-primary">Money Monitor</h1>
-        <p class="text-[14px] text-text-secondary mt-2">{{ copy.intro }}</p>
-      </div>
+        <div>
+          <p class="text-[12px] text-text-secondary">Money Monitor</p>
+          <h1 class="text-[18px] font-semibold text-text-primary">{{ copy.intro }}</h1>
+        </div>
+      </header>
 
       <!-- Progress -->
-      <div class="flex items-center justify-center gap-2 mb-8">
-        <div
-          v-for="s in 3"
-          :key="s"
-          class="h-2 w-2 rounded-full transition-all duration-200"
-          :class="[s <= step ? 'bg-primary' : 'bg-bg-tertiary', s === step ? 'scale-110' : '']"
-        />
-      </div>
+      <ol
+        :aria-label="language === 'he' ? `שלב ${step} מתוך 3` : `Step ${step} of 3`"
+        role="status"
+        class="setup-progress"
+      >
+        <li
+          v-for="(label, index) in [copy.provider, copy.encryption, copy.optional]"
+          :key="index"
+          :aria-current="step === index + 1 ? 'step' : undefined"
+          :class="{ current: step === index + 1, complete: step > index + 1 }"
+        >
+          <span class="setup-step-number"
+            ><Check v-if="step > index + 1" :size="12" /><template v-else>{{
+              index + 1
+            }}</template></span
+          >
+          <span>{{ label }}</span>
+        </li>
+      </ol>
 
       <!-- Step 1: AI Provider -->
       <Card v-if="step === 1" class="setup-step">
-        <CardHeader class="px-0 pb-0">
+        <CardHeader class="p-0">
           <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
-              <Bot class="h-4 w-4 text-primary" />
+              <MessageCircle class="h-4 w-4 text-primary" />
             </div>
             <div>
               <CardTitle>{{ copy.provider }}</CardTitle>
@@ -250,12 +268,13 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-6 px-0 py-6">
+        <CardContent class="space-y-5 px-0 pt-5 pb-0">
           <!-- Provider buttons -->
-          <div class="grid grid-cols-1 min-[400px]:grid-cols-2 gap-2">
+          <div class="grid grid-cols-1 min-[400px]:grid-cols-2 min-[640px]:grid-cols-3 gap-2">
             <Button
               v-for="p in providers"
               :key="p.id"
+              :aria-pressed="selectedProvider === p.id"
               :variant="selectedProvider === p.id ? 'default' : 'secondary'"
               class="justify-start h-auto whitespace-normal py-2 text-start"
               @click="
@@ -268,29 +287,52 @@ async function finish() {
             </Button>
           </div>
 
-          <!-- API Key -->
-          <div class="space-y-1">
-            <label class="text-[14px] font-medium text-text-primary block"
-              >{{ currentProvider?.name ?? 'API' }} {{ copy.key }}</label
-            >
-            <Input
-              v-model="apiKey"
-              type="password"
-              :placeholder="selectedProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'"
-            />
-            <p
-              v-if="selectedProvider === 'opencode-go'"
-              class="text-[12px] leading-relaxed text-text-secondary"
-            >
-              {{ copy.opencodeHint }}
-              <a
-                href="https://opencode.ai/zen/go"
-                target="_blank"
-                rel="noopener noreferrer"
-                class="underline"
-                >{{ copy.learnMore }}</a
+          <div class="setup-fields">
+            <!-- API Key -->
+            <div class="space-y-1">
+              <label
+                for="setup-wizard-field-1"
+                class="text-[14px] font-medium text-text-primary block"
+                >{{ currentProvider?.name ?? 'API' }} {{ copy.key }}</label
               >
-            </p>
+              <Input
+                id="setup-wizard-field-1"
+                v-model="apiKey"
+                type="password"
+                :placeholder="selectedProvider === 'anthropic' ? 'sk-ant-...' : 'sk-...'"
+              />
+              <p
+                v-if="selectedProvider === 'opencode-go'"
+                class="text-[12px] leading-relaxed text-text-secondary"
+              >
+                {{ copy.opencodeHint }}
+                <a
+                  href="https://opencode.ai/zen/go"
+                  target="_blank"
+                  rel="noopener noreferrer"
+                  class="underline"
+                  >{{ copy.learnMore }}</a
+                >
+              </p>
+            </div>
+            <!-- Model selection -->
+            <div class="space-y-1">
+              <label
+                for="setup-wizard-field-3"
+                class="text-[14px] font-medium text-text-primary block"
+                >{{ copy.model }}</label
+              >
+              <Select v-model="selectedModel">
+                <SelectTrigger id="setup-wizard-field-3">
+                  <SelectValue :placeholder="copy.selectModel" />
+                </SelectTrigger>
+                <SelectContent>
+                  <SelectItem v-for="m in currentProvider?.models ?? []" :key="m.id" :value="m.id">
+                    {{ m.name }}
+                  </SelectItem>
+                </SelectContent>
+              </Select>
+            </div>
           </div>
 
           <!-- Anthropic OAuth (alternative to API key) -->
@@ -344,31 +386,26 @@ async function finish() {
             <p v-if="oauthError" class="text-[12px] text-destructive">{{ oauthError }}</p>
 
             <!-- Manual OAuth token paste -->
-            <div class="space-y-1">
-              <label class="text-[14px] font-medium text-text-primary block">{{
-                copy.oauthToken
-              }}</label>
-              <Input v-model="oauthToken" type="password" placeholder="oat-..." />
-              <p class="text-[12px] text-text-secondary mt-1">
-                {{ copy.tokenHint }}
-              </p>
-            </div>
+            <details class="setup-token">
+              <summary>{{ copy.useToken }}</summary>
+              <div class="space-y-1 pt-3">
+                <label
+                  for="setup-wizard-field-2"
+                  class="text-[14px] font-medium text-text-primary block"
+                  >{{ copy.oauthToken }}</label
+                >
+                <Input
+                  id="setup-wizard-field-2"
+                  v-model="oauthToken"
+                  type="password"
+                  placeholder="oat-..."
+                />
+                <p class="text-[12px] text-text-secondary mt-1">
+                  {{ copy.tokenHint }}
+                </p>
+              </div>
+            </details>
           </template>
-
-          <!-- Model selection -->
-          <div class="space-y-1">
-            <label class="text-[14px] font-medium text-text-primary block">{{ copy.model }}</label>
-            <Select v-model="selectedModel">
-              <SelectTrigger>
-                <SelectValue :placeholder="copy.selectModel" />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="m in currentProvider?.models ?? []" :key="m.id" :value="m.id">
-                  {{ m.name }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
 
           <p class="text-[12px] text-text-secondary">
             {{ copy.skipLater }}
@@ -378,7 +415,7 @@ async function finish() {
 
       <!-- Step 2: Master Key -->
       <Card v-if="step === 2" class="setup-step">
-        <CardHeader class="px-0 pb-0">
+        <CardHeader class="p-0">
           <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
               <Key class="h-4 w-4 text-primary" />
@@ -389,7 +426,7 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-6 px-0 py-6">
+        <CardContent class="space-y-5 px-0 pt-5 pb-0">
           <div class="flex flex-wrap gap-2">
             <Button
               :variant="masterKeyMode === 'auto' ? 'default' : 'secondary'"
@@ -419,14 +456,19 @@ async function finish() {
           </div>
 
           <div v-else>
-            <Input v-model="customMasterKey" type="text" :placeholder="copy.customPlaceholder" />
+            <Input
+              v-model="customMasterKey"
+              :aria-label="language === 'he' ? 'מפתח הצפנה מותאם' : 'Custom encryption key'"
+              type="text"
+              :placeholder="copy.customPlaceholder"
+            />
           </div>
         </CardContent>
       </Card>
 
       <!-- Step 3: Optional -->
       <Card v-if="step === 3" class="setup-step">
-        <CardHeader class="px-0 pb-0">
+        <CardHeader class="p-0">
           <div class="flex items-center gap-3 [&>div:first-child]:shrink-0">
             <div class="flex items-center justify-center w-9 h-9 rounded-lg bg-primary/10">
               <Check class="h-4 w-4 text-primary" />
@@ -437,24 +479,35 @@ async function finish() {
             </div>
           </div>
         </CardHeader>
-        <CardContent class="space-y-6 px-0 py-6">
+        <CardContent class="space-y-5 px-0 pt-5 pb-0">
           <div>
-            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
-              copy.schedule
-            }}</label>
-            <Input v-model="scrapeCron" placeholder="0 6 * * *" />
+            <label
+              for="setup-wizard-field-4"
+              class="text-[14px] font-medium text-text-primary block mb-1.5"
+              >{{ copy.schedule }}</label
+            >
+            <Input id="setup-wizard-field-4" v-model="scrapeCron" placeholder="0 6 * * *" />
           </div>
           <div>
-            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
-              copy.timezone
-            }}</label>
-            <Input v-model="scrapeTimezone" placeholder="Asia/Jerusalem" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium text-text-primary block mb-1.5">{{
-              copy.telegram
-            }}</label>
+            <label
+              for="setup-wizard-field-5"
+              class="text-[14px] font-medium text-text-primary block mb-1.5"
+              >{{ copy.timezone }}</label
+            >
             <Input
+              id="setup-wizard-field-5"
+              v-model="scrapeTimezone"
+              placeholder="Asia/Jerusalem"
+            />
+          </div>
+          <div>
+            <label
+              for="setup-wizard-field-6"
+              class="text-[14px] font-medium text-text-primary block mb-1.5"
+              >{{ copy.telegram }}</label
+            >
+            <Input
+              id="setup-wizard-field-6"
               v-model="telegramBotToken"
               type="password"
               :placeholder="copy.optionalPlaceholder"
@@ -464,10 +517,10 @@ async function finish() {
       </Card>
 
       <!-- Error -->
-      <p v-if="error" class="text-[14px] text-destructive mt-3">{{ error }}</p>
+      <p v-if="error" class="setup-error text-[14px] text-destructive" role="alert">{{ error }}</p>
 
       <!-- Navigation -->
-      <div class="flex items-center justify-between mt-6">
+      <div class="setup-footer flex items-center justify-between">
         <Button v-if="step > 1" variant="ghost" @click="prev">
           <ArrowLeft class="setup-back-arrow h-4 w-4 mr-1" />
           {{ copy.back }}
@@ -502,14 +555,78 @@ async function finish() {
 </template>
 
 <style scoped>
+.setup-page {
+  display: grid;
+  place-items: center;
+  height: 100dvh;
+  padding: 24px 32px;
+  background: var(--bg-secondary);
+}
+.setup-shell {
+  display: flex;
+  flex-direction: column;
+  width: min(100%, 600px);
+  max-height: calc(100dvh - 48px);
+  overflow: hidden;
+  border: 1px solid var(--separator);
+  border-radius: 12px;
+  background: var(--bg-primary);
+}
+.setup-header {
+  display: flex;
+  align-items: center;
+  gap: 12px;
+  flex-shrink: 0;
+  padding: 20px 24px;
+}
+.setup-progress {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 12px;
+  flex-shrink: 0;
+  margin-inline: 24px;
+  padding-bottom: 16px;
+  border-bottom: 1px solid var(--separator);
+}
+.setup-progress li {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  line-height: 1.4;
+}
+.setup-progress .current {
+  color: var(--accent);
+  font-weight: 600;
+}
+.setup-step-number {
+  display: grid;
+  place-items: center;
+  flex: 0 0 24px;
+  height: 24px;
+  border: 1px solid var(--separator);
+  border-radius: 50%;
+  font-variant-numeric: tabular-nums;
+}
+.current .setup-step-number,
+.complete .setup-step-number {
+  border-color: transparent;
+  background: var(--accent-15);
+  color: var(--accent);
+}
 .setup-step {
+  padding: 24px;
+  min-height: 0;
+  overflow-y: auto;
+  scroll-padding-block: 24px;
   border: 0;
   border-radius: 0;
   background: transparent;
   box-shadow: none;
 }
 .setup-page :deep(input),
-.setup-page :deep([data-slot='select-trigger']) {
+.setup-page :deep(button[role='combobox']) {
   min-height: 40px;
 }
 .setup-page :deep(label) {
@@ -518,5 +635,46 @@ async function finish() {
 }
 .setup-page :deep(p) {
   line-height: 1.6;
+}
+
+.setup-fields {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 20px;
+}
+.setup-token summary {
+  width: fit-content;
+  color: var(--text-secondary);
+  font-size: 12px;
+  cursor: pointer;
+}
+.setup-error {
+  padding: 12px 24px;
+}
+.setup-footer {
+  flex-shrink: 0;
+  gap: 12px;
+  padding: 16px 24px;
+  border-top: 1px solid var(--separator);
+}
+@media (max-width: 600px) {
+  .setup-fields {
+    grid-template-columns: minmax(0, 1fr);
+  }
+  .setup-page {
+    padding: 16px;
+  }
+  .setup-shell {
+    max-height: calc(100dvh - 32px);
+  }
+  .setup-header,
+  .setup-step,
+  .setup-footer {
+    padding-inline: 20px;
+  }
+  .setup-progress {
+    margin-inline: 20px;
+    gap: 8px;
+  }
 }
 </style>

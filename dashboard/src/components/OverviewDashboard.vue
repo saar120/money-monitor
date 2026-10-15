@@ -37,7 +37,8 @@ import MonthControl from './MonthControl.vue';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
 const route = useRoute();
-const { textPrimary, textSecondary, bgPrimary, separator } = useChartTheme();
+const { textPrimary, textSecondary, bgPrimary, separator, chartPrimary, chartComparison } =
+  useChartTheme();
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 const selectedMonth = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
 const displayedMonth = ref(selectedMonth.value);
@@ -135,7 +136,7 @@ async function refresh() {
   reviewCount.value = value(results[8])?.count ?? 0;
   netWorth.value = value(results[9])?.total ?? null;
   if (results.slice(0, 4).some((result) => result.status === 'rejected')) {
-    error.value = 'Some financial data could not load. Try refreshing.';
+    error.value = t('couldNotLoad');
   }
   loading.value = false;
 }
@@ -194,53 +195,77 @@ const chartOption = computed(() => {
       displayedMonth.value === today.slice(0, 7) ? Number(today.slice(8, 10)) : undefined,
     ).endDate.slice(-2),
   );
-  const daily = new Map(dailySpending.value.map((item) => [item.day, Math.abs(item.totalAmount)]));
-  let cumulative = 0;
-  const days = Array.from({ length: end }, (_, index) => {
-    cumulative += daily.get(`${displayedMonth.value}-${String(index + 1).padStart(2, '0')}`) ?? 0;
-    return cumulative;
-  });
+  const cumulativeDays = (items: SummaryItem[], month: string) => {
+    const daily = new Map(items.map((item) => [item.day, Math.abs(item.totalAmount)]));
+    let cumulative = 0;
+    return Array.from({ length: end }, (_, index) => {
+      cumulative += daily.get(`${month}-${String(index + 1).padStart(2, '0')}`) ?? 0;
+      return cumulative;
+    });
+  };
+  const days = cumulativeDays(dailySpending.value, displayedMonth.value);
+  const previousDays = cumulativeDays(
+    previousSpending.value,
+    previousRange.value.startDate.slice(0, 7),
+  );
   return {
     animation: !reduceMotion.value,
-    animationDurationUpdate: 520,
+    animationDuration: 0,
+    animationDurationUpdate: 250,
     animationEasingUpdate: 'cubicOut' as const,
-    grid: { left: 8, right: 14, top: 18, bottom: 24, containLabel: true },
+    grid: { left: 0, right: 12, top: 16, bottom: 12, containLabel: true },
     tooltip: {
       trigger: 'axis' as const,
-      axisPointer: { type: 'line' as const, snap: true, lineStyle: { color: '#0B5DDD', width: 2 } },
+      axisPointer: {
+        type: 'line' as const,
+        snap: true,
+        lineStyle: { color: chartPrimary.value, width: 1 },
+      },
       backgroundColor: bgPrimary.value,
       borderColor: separator.value,
       textStyle: { color: textPrimary.value },
-      formatter: (items: Array<{ axisValue: string; value: number }>) =>
-        `${displayedMonth.value}-${items[0]?.axisValue}<br/><b>${formatCurrency(items[0]?.value ?? 0)}</b>`,
+      formatter: (items: Array<{ axisValue: string; value: number; seriesName: string }>) =>
+        `${displayedMonth.value}-${items[0]?.axisValue}<br/>${items
+          .map((item) => `${item.seriesName}: <b>${formatCurrency(item.value)}</b>`)
+          .join('<br/>')}`,
     },
     xAxis: {
       type: 'category' as const,
       boundaryGap: false,
       data: Array.from({ length: end }, (_, index) => String(index + 1).padStart(2, '0')),
-      axisLabel: { color: textSecondary.value, interval: 6 },
-      axisLine: { lineStyle: { color: separator.value } },
+      axisLabel: { color: textSecondary.value, interval: 6, fontSize: 12 },
+      axisLine: { show: false },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value' as const,
       axisLabel: {
         color: textSecondary.value,
+        fontSize: 12,
         formatter: (amount: number) => formatCompactCurrency(amount),
       },
-      splitLine: { lineStyle: { color: separator.value, type: 'dashed' as const } },
+      splitLine: { lineStyle: { color: separator.value } },
     },
     series: [
       {
         id: 'daily-spending',
+        name: t('thisMonth'),
         type: 'line' as const,
         data: days,
-        smooth: 0.25,
+        smooth: false,
         showSymbol: false,
         symbolSize: 12,
-        emphasis: { scale: 1.4, itemStyle: { shadowBlur: 18, shadowColor: '#0B5DDD' } },
-        lineStyle: { color: '#0B5DDD', width: 3 },
-        areaStyle: { color: 'rgba(11, 93, 221, 0.11)' },
+        itemStyle: { color: chartPrimary.value },
+        lineStyle: { color: chartPrimary.value, width: 3 },
+      },
+      {
+        id: 'previous-spending',
+        name: t('previousMonth'),
+        type: 'line' as const,
+        data: previousSpending.value.length ? previousDays : [],
+        showSymbol: false,
+        itemStyle: { color: chartComparison.value },
+        lineStyle: { color: chartComparison.value, width: 2, type: 'dashed' as const },
       },
     ],
   };
@@ -252,7 +277,7 @@ const scrubAmount = computed(() =>
 );
 const scrubDate = computed(() =>
   scrubIndex.value == null
-    ? t('totalSpending')
+    ? t('spendingOverTime')
     : `${displayedMonth.value}-${String(scrubIndex.value + 1).padStart(2, '0')}`,
 );
 function pointAt(event: { axesInfo?: Array<{ value: number | string }> }) {
@@ -328,19 +353,35 @@ function categoryLink(category: string) {
       <section class="home-main">
         <div class="home-hero">
           <div class="home-hero-top">
-            <h2>{{ t('netCashFlow') }}</h2>
+            <h2>{{ t('totalSpending') }}</h2>
             <RouterLink :to="activityLink()"
               >{{ t('viewActivity') }} <ArrowRight :size="15"
             /></RouterLink>
           </div>
-          <p class="home-total" dir="ltr" aria-live="polite">
-            <AnimatedAmount :value="netCashflow" />
+          <p
+            v-if="loading"
+            class="home-total home-amount-loading skeleton-shimmer"
+            aria-hidden="true"
+          />
+          <p v-else class="home-total" dir="ltr" aria-live="polite">
+            <AnimatedAmount :value="totalSpent" />
+          </p>
+          <p v-if="!loading" class="home-comparison">
+            {{
+              spendingDelta === 0
+                ? t('sameAsLastMonth')
+                : `${formatCurrency(Math.abs(spendingDelta))} ${spendingDelta > 0 ? t('more') : t('less')} ${selectedMonth === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
+            }}
           </p>
           <div class="home-chart-heading">
             <h2 class="home-chart-title">{{ scrubDate }}</h2>
-            <strong dir="ltr"
+            <strong v-if="scrubIndex != null" dir="ltr"
               ><AnimatedAmount :value="scrubAmount" :animate="scrubIndex == null"
             /></strong>
+            <div v-else class="home-chart-legend">
+              <span class="current">{{ t('thisMonth') }}</span>
+              <span v-if="previousSpending.length" class="previous">{{ t('previousMonth') }}</span>
+            </div>
           </div>
           <div
             class="home-chart"
@@ -352,9 +393,11 @@ function categoryLink(category: string) {
             :aria-valuemax="chartOption.series[0]!.data.length"
             :aria-valuenow="(scrubIndex ?? chartOption.series[0]!.data.length - 1) + 1"
             :aria-valuetext="`${scrubDate}: ${formatCurrency(scrubAmount)}`"
+            aria-describedby="home-chart-hint"
             @keydown="scrubWithKeyboard"
           >
-            <div v-if="!loading && !dailySpending.length" class="home-chart-empty">
+            <div v-if="loading" class="home-chart-loading skeleton-shimmer" aria-hidden="true" />
+            <div v-else-if="!dailySpending.length" class="home-chart-empty">
               <Receipt :size="28" />
               <span>{{ t('noPostedSpendingYet') }}</span>
             </div>
@@ -368,15 +411,9 @@ function categoryLink(category: string) {
               @globalout="scrubIndex = null"
             />
           </div>
-          <p class="home-comparison" :class="spendingDelta > 0 ? 'is-warning' : 'is-positive'">
-            {{
-              spendingDelta === 0
-                ? t('sameAsLastMonth')
-                : `${formatCurrency(Math.abs(spendingDelta))} ${spendingDelta > 0 ? t('more') : t('less')} ${t('thanLastMonth')}`
-            }}
-          </p>
-          <p v-if="loading || dailySpending.length" class="home-chart-hint">
+          <p id="home-chart-hint" class="home-chart-hint">
             {{ t('dailyChartHint') }}
+            <span>{{ t('chartKeyboardHint') }}</span>
           </p>
         </div>
         <div class="home-stats">
@@ -385,8 +422,16 @@ function categoryLink(category: string) {
             ><strong>{{ loading ? '—' : formatCurrency(income) }}</strong>
           </div>
           <div>
-            <span>{{ t('totalSpending') }}</span
-            ><strong><AnimatedAmount :value="totalSpent" /></strong>
+            <span>{{ t('netCashFlow') }}</span
+            ><strong
+              :class="{
+                'is-positive': !loading && netCashflow > 0,
+                'is-danger': !loading && netCashflow < 0,
+              }"
+            >
+              <template v-if="loading">—</template>
+              <AnimatedAmount v-else :value="netCashflow" />
+            </strong>
           </div>
         </div>
         <section class="home-section">
@@ -409,7 +454,10 @@ function categoryLink(category: string) {
                 :style="{ background: categoryMap.get(item.category ?? '')?.color ?? '#B8C2CC' }"
               />
               <span class="category-row-content"
-                ><span>{{ categoryMap.get(item.category ?? '')?.label ?? item.category }}</span
+                ><span>{{
+                  categoryMap.get(item.category ?? '')?.label ??
+                  (item.category === 'uncategorized' ? t('uncategorized') : item.category)
+                }}</span
                 ><span class="category-track"
                   ><span
                     :style="{
@@ -427,7 +475,7 @@ function categoryLink(category: string) {
         </section>
       </section>
       <aside class="home-rail">
-        <section class="rail-section">
+        <section class="rail-section home-attention">
           <h2>{{ t('needsAttention') }}</h2>
           <div class="ledger-list attention-list">
             <RouterLink v-if="sinceLastVisit?.transactions" to="/transactions" class="attention-row"
@@ -540,6 +588,6 @@ function categoryLink(category: string) {
   padding: 16px;
 }
 .rail-section {
-  padding-block: 24px;
+  padding-block: 20px 0;
 }
 </style>

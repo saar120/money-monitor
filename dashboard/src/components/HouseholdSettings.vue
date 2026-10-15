@@ -268,6 +268,7 @@ onMounted(load);
           <template v-if="editingMemberId === member.id">
             <Input
               v-model="editingMemberName"
+              :aria-label="copy.newMember"
               class="h-8 min-w-0 flex-1 max-w-56"
               @keyup.enter="saveMember(member)"
             />
@@ -306,6 +307,7 @@ onMounted(load);
         <div class="flex flex-col gap-3 pt-4 sm:flex-row">
           <Input
             v-model="newMemberName"
+            :aria-label="copy.newMember"
             :placeholder="copy.newMember"
             class="min-w-0 sm:max-w-64"
           />
@@ -333,7 +335,11 @@ onMounted(load);
               {{ targetLabel(rule.targetOwnerType, rule.targetOwnerMemberId) }}
             </div>
           </div>
-          <Switch :model-value="rule.enabled" @update:model-value="toggleRule(rule)" />
+          <Switch
+            :aria-label="rule.name"
+            :model-value="rule.enabled"
+            @update:model-value="toggleRule(rule)"
+          />
           <Button
             size="icon-sm"
             variant="ghost"
@@ -348,11 +354,19 @@ onMounted(load);
         <div class="household-rule-form grid grid-cols-1 sm:grid-cols-2 gap-4 pt-6">
           <label class="household-rule-field">
             <span>{{ copy.ruleName }}</span>
-            <Input v-model="newRule.name" :placeholder="copy.ruleName" />
+            <Input
+              v-model="newRule.name"
+              :aria-label="copy.ruleName"
+              :placeholder="copy.ruleName"
+            />
           </label>
           <label class="household-rule-field">
             <span>{{ copy.descriptionContains }}</span>
-            <Input v-model="newRule.descriptionContains" :placeholder="copy.descriptionContains" />
+            <Input
+              v-model="newRule.descriptionContains"
+              :aria-label="copy.descriptionContains"
+              :placeholder="copy.descriptionContains"
+            />
           </label>
           <div class="household-rule-field">
             <span>{{ copy.anyAccount }}</span>

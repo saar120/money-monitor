@@ -6,6 +6,8 @@ export function useChartTheme() {
   const textSecondary = ref('');
   const bgPrimary = ref('');
   const separator = ref('');
+  const chartPrimary = ref('');
+  const chartComparison = ref('');
   const mql = window.matchMedia('(prefers-color-scheme: dark)');
   let observer: MutationObserver | null = null;
 
@@ -15,6 +17,8 @@ export function useChartTheme() {
     textSecondary.value = style.getPropertyValue('--text-secondary').trim();
     bgPrimary.value = style.getPropertyValue('--bg-primary').trim();
     separator.value = style.getPropertyValue('--separator').trim();
+    chartPrimary.value = style.getPropertyValue('--chart-spending').trim();
+    chartComparison.value = style.getPropertyValue('--chart-comparison').trim();
   }
 
   onMounted(() => {
@@ -32,5 +36,5 @@ export function useChartTheme() {
     observer?.disconnect();
   });
 
-  return { textPrimary, textSecondary, bgPrimary, separator };
+  return { textPrimary, textSecondary, bgPrimary, separator, chartPrimary, chartComparison };
 }

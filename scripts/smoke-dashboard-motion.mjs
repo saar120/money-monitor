@@ -9,10 +9,11 @@ const browser = await puppeteer.launch({
 const baseUrl = process.env.MM_DASHBOARD_URL ?? 'http://127.0.0.1:5173';
 const errors = [];
 try {
-  for (const [width, language, motion] of [
-    [1440, 'en', 'no-preference'],
-    [390, 'he', 'no-preference'],
-    [390, 'en', 'reduce'],
+  for (const [width, language, motion, theme] of [
+    [1440, 'en', 'no-preference', 'light'],
+    [1440, 'en', 'no-preference', 'dark'],
+    [390, 'he', 'no-preference', 'light'],
+    [390, 'en', 'reduce', 'dark'],
   ]) {
     const page = await browser.newPage();
     await page.setViewport({ width, height: 900 });
@@ -20,6 +21,10 @@ try {
     await page.evaluateOnNewDocument(
       (lang) => localStorage.setItem('money-monitor-language', lang),
       language,
+    );
+    await page.evaluateOnNewDocument(
+      (choice) => localStorage.setItem('money-monitor-theme', choice),
+      theme,
     );
     await page.evaluateOnNewDocument(() => {
       window.motionTransitions = [];
@@ -57,7 +62,15 @@ try {
         reviewReason: 'Check category',
       };
       let data = {};
-      if (u.pathname === '/api/settings') data = { needsSetup: false, demoMode: true };
+      if (/^\/api\/transactions\/\d+$/.test(u.pathname) && req.method() === 'PATCH')
+        data = {
+          transaction: {
+            ...row,
+            id: Number(u.pathname.split('/').at(-1)),
+            ...JSON.parse(req.postData()),
+          },
+        };
+      else if (u.pathname === '/api/settings') data = { needsSetup: false, demoMode: true };
       else if (u.pathname === '/api/accounts')
         data = { accounts: [{ id: 1, displayName: 'Sample account', isActive: true }] };
       else if (u.pathname === '/api/categories')
@@ -136,10 +149,52 @@ try {
     });
     await page.goto(`${baseUrl}/transactions?month=2026-09`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('.proto-table tbody tr[tabindex]');
+    assert.equal(await page.$eval('html', (el) => el.dataset.theme), theme);
+    await page.click('.proto-table tbody tr[tabindex]');
+    await page.waitForSelector('.proto-inspector');
+    await page.waitForFunction(
+      () =>
+        !document.querySelector('.proto-inspector').classList.contains('detail-panel-enter-active'),
+    );
+    assert(
+      await page.$eval('.proto-save', (el) => el.disabled),
+      'Unchanged transaction cannot be saved',
+    );
+    assert(
+      !(await page.$eval('.proto-more-details', (el) => el.open)),
+      'Secondary fields start collapsed',
+    );
+    await page.click('.proto-more-details summary');
+    assert(
+      await page.$eval('.proto-more-details', (el) => el.open),
+      'Secondary fields remain available',
+    );
+    await page.select('.proto-fields > label select', 'dining');
+    await page.click('.proto-save');
+    await page.waitForSelector('.proto-saved');
+    assert(
+      await page.$eval('.proto-save', (el) => el.disabled),
+      'Save settles back to the unchanged state',
+    );
+    assert.equal(
+      await page.$eval('#proto-row-1 .proto-category', (el) => el.textContent.trim()),
+      language === 'he' ? 'מסעדות' : 'Dining',
+    );
+    await page.select('.proto-fields > label select', 'groceries');
+    await page.click('.proto-save');
+    await page.waitForFunction(() => document.querySelector('.proto-save').disabled);
+    if (width === 1440)
+      assert.equal(
+        await page.$eval('.proto-mobile-date', (el) => getComputedStyle(el).display),
+        'none',
+        'Desktop rows do not repeat their date',
+      );
+    await page.click('.proto-inspector-head button');
+    await page.waitForSelector('.proto-inspector', { hidden: true });
     assert(
       await page.$eval(
         '.proto-table-scroll',
-        (el) => el.clientWidth - el.querySelector('table').getBoundingClientRect().width >= 15,
+        (el) => el.scrollWidth - el.querySelector('table').getBoundingClientRect().width >= 15,
       ),
       'Scrollbar has space outside transaction cells',
     );
@@ -230,8 +285,20 @@ try {
     );
     assert.equal(
       await page.$$eval('.secondary-nav .nav-link', (els) => els.length),
-      8,
-      'Planning and management links are directly available',
+      9,
+      'Planning, management disclosure, and management destinations are available',
+    );
+    assert(
+      !(await page.$eval('.management-nav', (el) => el.open)),
+      'Administration stays collapsed on money views',
+    );
+    await page.click('.management-toggle');
+    assert(await page.$eval('.management-nav', (el) => el.open), 'Management opens on demand');
+    await page.click('.management-toggle');
+    await page.waitForSelector('.explore-change');
+    assert(
+      (await page.$eval('.explore-change', (el) => el.textContent)).includes('Groceries'),
+      'Explore highlights the largest category change from the fixture',
     );
     assert.equal(
       await page.$eval('.nav-link[href="/explore"]', (el) => el.getAttribute('aria-current')),
@@ -249,7 +316,12 @@ try {
       0,
       'No separate date slider',
     );
-    const endAmount = await page.$eval('.home-chart-heading strong', (el) => el.textContent);
+    assert.equal(
+      await page.$$eval('.home-chart-legend .previous', (els) => els.length),
+      1,
+      'Previous month is visibly distinguished on the chart',
+    );
+    const endAmount = await page.$eval('.home-total', (el) => el.textContent);
     await page.focus('.home-chart');
     await page.keyboard.press('Home');
     await page.keyboard.press('ArrowRight');
@@ -397,7 +469,7 @@ try {
       'Subscription total is not a filled box',
     );
     console.log(
-      `PASS ${width}px ${language} ${motion}: panels, reflow, scrub, morph navigation, month, range, overflow`,
+      `PASS ${width}px ${language} ${theme} ${motion}: save, disclosure, panels, reflow, scrub, morph navigation, month, range, overflow`,
     );
     await page.close();
   }

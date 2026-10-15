@@ -406,7 +406,7 @@ function progressColor(percentage: number, neutral = false): string {
                   <button
                     type="button"
                     class="p-2 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-text-primary transition-all duration-150"
-                    :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
+                    :aria-label="`${language === 'he' ? 'עריכת' : 'Edit'} ${p.budget.name}`"
                     @click="openEdit(p.budget)"
                   >
                     <Pencil class="h-3.5 w-3.5" />
@@ -414,7 +414,7 @@ function progressColor(percentage: number, neutral = false): string {
                   <button
                     type="button"
                     class="p-2 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-destructive transition-all duration-150"
-                    :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
+                    :aria-label="`${language === 'he' ? 'מחיקת' : 'Delete'} ${p.budget.name}`"
                     @click="removeBudget(p.budget.id, p.budget.name)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
@@ -483,10 +483,16 @@ function progressColor(percentage: number, neutral = false): string {
           <!-- Name + Color row -->
           <div class="flex flex-wrap gap-3 items-end">
             <div class="flex-1 min-w-0">
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
-                t('name')
-              }}</label>
-              <Input v-model="formName" placeholder="e.g. Living Expenses" />
+              <label
+                for="budgets-page-field-1"
+                class="text-[12px] font-medium text-text-secondary mb-1 block"
+                >{{ t('name') }}</label
+              >
+              <Input
+                id="budgets-page-field-1"
+                v-model="formName"
+                placeholder="e.g. Living Expenses"
+              />
             </div>
             <div>
               <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
@@ -513,17 +519,28 @@ function progressColor(percentage: number, neutral = false): string {
           <!-- Amount + Period row -->
           <div class="grid grid-cols-2 gap-3">
             <div>
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block"
+              <label
+                for="budgets-page-field-2"
+                class="text-[12px] font-medium text-text-secondary mb-1 block"
                 >{{ t('amount') }} (₪)</label
               >
-              <Input v-model="formAmount" type="number" placeholder="5000" min="0" step="100" />
+              <Input
+                id="budgets-page-field-2"
+                v-model="formAmount"
+                type="number"
+                placeholder="5000"
+                min="0"
+                step="100"
+              />
             </div>
             <div>
-              <label class="text-[12px] font-medium text-text-secondary mb-1 block">{{
-                t('period')
-              }}</label>
+              <label
+                for="budgets-page-field-3"
+                class="text-[12px] font-medium text-text-secondary mb-1 block"
+                >{{ t('period') }}</label
+              >
               <Select v-model="formPeriod">
-                <SelectTrigger>
+                <SelectTrigger id="budgets-page-field-3">
                   <SelectValue />
                 </SelectTrigger>
                 <SelectContent>
@@ -551,6 +568,8 @@ function progressColor(percentage: number, neutral = false): string {
               <span class="whitespace-nowrap">{{ t('notifyAt') }}</span>
               <Input
                 v-model.number="formAlertThreshold"
+                :aria-label="t('notifyAt')"
+                :disabled="!formAlertEnabled"
                 type="number"
                 min="0"
                 max="100"
@@ -575,6 +594,7 @@ function progressColor(percentage: number, neutral = false): string {
               />
               <Input
                 v-model="categorySearch"
+                :aria-label="`${t('search')} ${t('categories')}`"
                 :placeholder="t('search')"
                 class="!h-7 text-[12px] pl-8"
               />

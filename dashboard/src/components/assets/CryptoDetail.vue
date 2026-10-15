@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted, watch } from 'vue';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import {
@@ -65,6 +66,8 @@ import {
   Loader2,
   RefreshCw,
 } from 'lucide-vue-next';
+
+const { chartPrimary } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
@@ -346,8 +349,7 @@ const chartDatasets = computed(() =>
         {
           label: 'Value (ILS)',
           data: snapshots.value.map((s) => s.totalValueIls),
-          color: '#007AFF',
-          areaColor: 'rgba(0, 122, 255, 0.15)',
+          color: chartPrimary.value,
         },
       ],
 );
@@ -522,6 +524,7 @@ const chartDatasets = computed(() =>
                   <TableCell class="text-right tabular-nums text-[14px]">
                     <template v-if="quickUpdateMode">
                       <Input
+                        :aria-label="`${language === 'he' ? 'כמות' : 'Quantity'}: ${h.name}`"
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.quantity"
@@ -538,6 +541,7 @@ const chartDatasets = computed(() =>
                   <TableCell class="text-right tabular-nums text-[14px] text-text-secondary">
                     <template v-if="quickUpdateMode">
                       <Input
+                        :aria-label="`${language === 'he' ? 'מחיר ליחידה' : 'Price per unit'}: ${h.name}`"
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.lastPrice ?? ''"
@@ -550,7 +554,9 @@ const chartDatasets = computed(() =>
                       />
                     </template>
                     <template v-else>
-                      <span v-if="h.lastPrice != null">{{ formatCurrency(h.lastPrice) }}</span>
+                      <span v-if="h.quantity > 0">{{
+                        formatCurrency(h.currentValueIls / h.quantity)
+                      }}</span>
                       <span v-else>-</span>
                     </template>
                   </TableCell>
@@ -723,24 +729,39 @@ const chartDatasets = computed(() =>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Name</label>
-            <Input v-model="holdingForm.name" placeholder="e.g. Bitcoin, Ethereum" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Currency / Ticker</label>
-            <Input v-model="holdingForm.currency" placeholder="BTC" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Quantity</label>
-            <Input v-model.number="holdingForm.quantity" type="number" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Cost Basis (ILS)</label>
-            <Input v-model.number="holdingForm.costBasis" type="number" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Last Price (ILS)</label>
+            <label for="crypto-detail-field-1" class="text-[14px] font-medium">Name</label>
             <Input
+              id="crypto-detail-field-1"
+              v-model="holdingForm.name"
+              placeholder="e.g. Bitcoin, Ethereum"
+            />
+          </div>
+          <div>
+            <label for="crypto-detail-field-2" class="text-[14px] font-medium"
+              >Currency / Ticker</label
+            >
+            <Input id="crypto-detail-field-2" v-model="holdingForm.currency" placeholder="BTC" />
+          </div>
+          <div>
+            <label for="crypto-detail-field-3" class="text-[14px] font-medium">Quantity</label>
+            <Input id="crypto-detail-field-3" v-model.number="holdingForm.quantity" type="number" />
+          </div>
+          <div>
+            <label for="crypto-detail-field-4" class="text-[14px] font-medium"
+              >Cost Basis (ILS)</label
+            >
+            <Input
+              id="crypto-detail-field-4"
+              v-model.number="holdingForm.costBasis"
+              type="number"
+            />
+          </div>
+          <div>
+            <label for="crypto-detail-field-5" class="text-[14px] font-medium"
+              >Last Price (ILS)</label
+            >
+            <Input
+              id="crypto-detail-field-5"
               :model-value="holdingForm.lastPrice ?? ''"
               type="number"
               @update:model-value="
@@ -804,13 +825,13 @@ const chartDatasets = computed(() =>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Date</label>
-            <Input v-model="movementForm.date" type="date" />
+            <label for="crypto-detail-field-6" class="text-[14px] font-medium">Date</label>
+            <Input id="crypto-detail-field-6" v-model="movementForm.date" type="date" />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="crypto-detail-field-7" class="text-[14px] font-medium">Type</label>
             <Select v-model="movementForm.type">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="crypto-detail-field-7"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="t in CRYPTO_MOVEMENT_TYPES" :key="t" :value="t">{{
                   t
@@ -819,9 +840,11 @@ const chartDatasets = computed(() =>
             </Select>
           </div>
           <div>
-            <label class="text-[14px] font-medium">Coin</label>
+            <label for="crypto-detail-field-8" class="text-[14px] font-medium">Coin</label>
             <Select v-model="movementForm.holdingId">
-              <SelectTrigger><SelectValue placeholder="Select coin" /></SelectTrigger>
+              <SelectTrigger id="crypto-detail-field-8"
+                ><SelectValue placeholder="Select coin"
+              /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">General (no coin)</SelectItem>
                 <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{
@@ -831,12 +854,19 @@ const chartDatasets = computed(() =>
             </Select>
           </div>
           <div>
-            <label class="text-[14px] font-medium">Quantity</label>
-            <Input v-model.number="movementForm.quantity" type="number" />
+            <label for="crypto-detail-field-9" class="text-[14px] font-medium">Quantity</label>
+            <Input
+              id="crypto-detail-field-9"
+              v-model.number="movementForm.quantity"
+              type="number"
+            />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Price per Unit (ILS)</label>
+            <label for="crypto-detail-field-10" class="text-[14px] font-medium"
+              >Price per Unit (ILS)</label
+            >
             <Input
+              id="crypto-detail-field-10"
               :model-value="movementForm.pricePerUnit ?? ''"
               type="number"
               @update:model-value="
@@ -845,8 +875,8 @@ const chartDatasets = computed(() =>
             />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="movementForm.notes" maxlength="500" />
+            <label for="crypto-detail-field-11" class="text-[14px] font-medium">Notes</label>
+            <Textarea id="crypto-detail-field-11" v-model="movementForm.notes" maxlength="500" />
           </div>
           <p v-if="movementError" class="text-[14px] text-destructive">{{ movementError }}</p>
         </div>

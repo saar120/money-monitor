@@ -72,6 +72,13 @@ router.beforeEach(async (to) => {
 });
 
 installCardMotion(router);
+const desktopBridge = (
+  window as unknown as { electronAPI?: { onOpenSettings?: (callback: () => void) => void } }
+).electronAPI;
+desktopBridge?.onOpenSettings?.(() => {
+  void router.push('/settings');
+});
+
 const app = createApp(App);
 app.use(router);
 app.mount('#app');

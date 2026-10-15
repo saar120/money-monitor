@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useSettingsField } from '@/components/ui/settings-group/field';
 import type { HTMLAttributes } from 'vue';
 import { useVModel } from '@vueuse/core';
 import { cn } from '@/lib/utils';
@@ -17,10 +18,12 @@ const modelValue = useVModel(props, 'modelValue', emits, {
   passive: true,
   defaultValue: props.defaultValue,
 });
+const settingsField = useSettingsField();
 </script>
 
 <template>
   <input
+    v-bind="settingsField"
     v-model="modelValue"
     :class="
       cn(

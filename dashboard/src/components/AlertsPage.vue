@@ -177,6 +177,7 @@ async function testAlert() {
         <SettingsRow :label="copy.largeCharge">
           <Input
             v-model.number="settings.largeChargeThreshold"
+            :disabled="!settings.enabled"
             type="number"
             class="w-28 h-8 text-[14px]"
             min="0"
@@ -185,6 +186,7 @@ async function testAlert() {
         <SettingsRow :label="copy.unusual">
           <Input
             v-model.number="settings.unusualSpendingPercent"
+            :disabled="!settings.enabled"
             type="number"
             class="w-28 h-8 text-[14px]"
             min="10"
@@ -192,7 +194,7 @@ async function testAlert() {
           />
         </SettingsRow>
         <SettingsRow :label="copy.errors">
-          <Switch v-model="settings.reportScrapeErrors" />
+          <Switch v-model="settings.reportScrapeErrors" :disabled="!settings.enabled" />
         </SettingsRow>
       </SettingsGroup>
 
@@ -202,11 +204,12 @@ async function testAlert() {
         :class="{ 'opacity-50 pointer-events-none': !settings.enabled }"
       >
         <SettingsRow :label="copy.monthlyEnabled">
-          <Switch v-model="settings.monthlySummary.enabled" />
+          <Switch v-model="settings.monthlySummary.enabled" :disabled="!settings.enabled" />
         </SettingsRow>
         <SettingsRow v-if="settings.monthlySummary.enabled" :label="copy.day">
           <Input
             v-model.number="settings.monthlySummary.dayOfMonth"
+            :disabled="!settings.enabled"
             type="number"
             class="w-28 h-8 text-[14px]"
             min="1"

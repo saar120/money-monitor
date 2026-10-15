@@ -7,6 +7,8 @@ import { Switch } from '@/components/ui/switch';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
 import { language } from '@/lib/language';
 
+const localized = (en: string, he: string) => (language.value === 'he' ? he : en);
+
 const copy = computed(() =>
   language.value === 'he'
     ? {
@@ -107,35 +109,41 @@ const supported = computed(
 );
 
 const statusLabel = computed(() => {
-  if (!snapshot.value?.enabled) return 'Off';
+  if (!snapshot.value?.enabled) return localized('Off', 'כבוי');
   switch (snapshot.value.transport.status) {
     case 'running':
-      return 'Private connection ready';
+      return localized('Private connection ready', 'החיבור הפרטי מוכן');
     case 'notInstalled':
-      return 'Tailscale is not installed';
+      return localized('Tailscale is not installed', 'Tailscale אינו מותקן');
     case 'loggedOut':
-      return 'Sign in to Tailscale';
+      return localized('Sign in to Tailscale', 'יש להיכנס ל־Tailscale');
     case 'permissionRequired':
       return snapshot.value.transport.diagnostic === 'tailscaleHTTPSRequired'
-        ? 'Tailscale HTTPS setup required'
-        : 'Tailscale needs permission';
+        ? localized('Tailscale HTTPS setup required', 'נדרשת הגדרת HTTPS ב־Tailscale')
+        : localized('Tailscale needs permission', 'נדרשת הרשאה ל־Tailscale');
     case 'conflict':
-      return 'Private address is already in use';
+      return localized('Private address is already in use', 'הכתובת הפרטית כבר בשימוש');
     case 'failed':
       return snapshot.value.transport.diagnostic === 'tailscaleNotReady'
-        ? 'Connect this Mac in Tailscale'
-        : 'Private connection unavailable';
+        ? localized('Connect this Mac in Tailscale', 'יש לחבר את ה־Mac הזה ל־Tailscale')
+        : localized('Private connection unavailable', 'החיבור הפרטי אינו זמין');
     default:
-      return 'Starting private connection…';
+      return localized('Starting private connection…', 'מפעילים את החיבור הפרטי…');
   }
 });
 
 const statusDetail = computed(() => {
   if (snapshot.value?.transport.diagnostic === 'tailscaleHTTPSRequired') {
-    return 'Enable HTTPS certificates once in your Tailnet, then Retry.';
+    return localized(
+      'Enable HTTPS certificates once in your Tailnet, then Retry.',
+      'הפעילו אישורי HTTPS ב־Tailnet, ואז נסו שוב.',
+    );
   }
   if (snapshot.value?.transport.diagnostic === 'tailscaleNotReady') {
-    return 'Wait for Tailscale to finish connecting, then Retry.';
+    return localized(
+      'Wait for Tailscale to finish connecting, then Retry.',
+      'המתינו לחיבור של Tailscale, ואז נסו שוב.',
+    );
   }
   return '';
 });
@@ -143,7 +151,7 @@ const statusDetail = computed(() => {
 const statusTone = computed(() => {
   if (snapshot.value?.transport.status === 'running') return 'text-success';
   if (!snapshot.value?.enabled) return 'text-text-secondary';
-  return 'text-amber-500';
+  return 'text-[var(--warning)]';
 });
 
 const activeRequests = computed(() =>
@@ -155,30 +163,48 @@ const activeRequests = computed(() =>
 function friendlyError(code?: string): string {
   switch (code) {
     case 'invalid_request':
-      return 'The Mobile Access request was not valid.';
+      return localized(
+        'The Mobile Access request was not valid.',
+        'הבקשה לגישה מהטלפון אינה תקינה.',
+      );
     case 'settings_write_failed':
-      return 'Money Monitor could not save the Mobile Access setting.';
+      return localized(
+        'Money Monitor could not save the Mobile Access setting.',
+        'לא ניתן לשמור את הגדרת הגישה מהטלפון.',
+      );
     case 'pairing_unavailable':
-      return 'The private connection must be ready before pairing.';
+      return localized(
+        'The private connection must be ready before pairing.',
+        'החיבור הפרטי צריך להיות מוכן לפני חיבור האייפון.',
+      );
     case 'device_operation_failed':
-      return 'That device could not be updated. Refresh and try again.';
+      return localized(
+        'That device could not be updated. Refresh and try again.',
+        'לא ניתן לעדכן את המכשיר. רעננו ונסו שוב.',
+      );
     default:
-      return 'Mobile Access is temporarily unavailable.';
+      return localized(
+        'Mobile Access is temporarily unavailable.',
+        'הגישה מהטלפון אינה זמינה כרגע.',
+      );
   }
 }
 
 function formatDate(value: string | null): string {
-  if (!value) return 'Never';
+  if (!value) return localized('Never', 'מעולם לא');
   const date = new Date(value);
-  if (!Number.isFinite(date.getTime())) return 'Unknown';
-  return new Intl.DateTimeFormat(undefined, {
+  if (!Number.isFinite(date.getTime())) return localized('Unknown', 'לא ידוע');
+  return new Intl.DateTimeFormat(language.value === 'he' ? 'he-IL' : 'en', {
     dateStyle: 'medium',
     timeStyle: 'short',
   }).format(date);
 }
 
 async function refresh(): Promise<void> {
-  if (!electronAPI?.getMobileAccessState) return;
+  if (!electronAPI?.getMobileAccessState) {
+    loading.value = false;
+    return;
+  }
   try {
     snapshot.value = await electronAPI.getMobileAccessState();
     if (snapshot.value.pendingRequests.some((request) => request.status === 'pending_approval')) {
@@ -188,7 +214,10 @@ async function refresh(): Promise<void> {
       error.value = friendlyError(snapshot.value.lastActionError);
     }
   } catch {
-    error.value = 'Mobile Access status could not be loaded.';
+    error.value = localized(
+      'Mobile Access status could not be loaded.',
+      'לא ניתן לטעון את מצב הגישה מהטלפון.',
+    );
   } finally {
     loading.value = false;
   }
@@ -361,7 +390,12 @@ onUnmounted(() => {
       <div class="w-full space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-[12px] text-text-secondary">
-            The code expires after five minutes and still requires approval on this Mac.
+            {{
+              localized(
+                'The code expires after five minutes and still requires approval on this Mac.',
+                'הקוד תקף לחמש דקות ודורש אישור ב־Mac הזה.',
+              )
+            }}
           </p>
           <Button
             size="sm"
@@ -370,7 +404,11 @@ onUnmounted(() => {
             @click="createPairing()"
           >
             <QrCode class="mr-1.5 h-3.5 w-3.5" />
-            {{ qrImage ? 'Refresh code' : 'Pair iPhone' }}
+            {{
+              qrImage
+                ? localized('Refresh code', 'רענון קוד')
+                : localized('Pair iPhone', 'חיבור אייפון')
+            }}
           </Button>
         </div>
 
@@ -380,7 +418,9 @@ onUnmounted(() => {
             class="h-auto w-[232px] max-w-full"
             :alt="`Short-lived iPhone pairing code. Expires ${formatDate(qrExpiresAt)}.`"
           />
-          <p class="text-[12px] text-slate-500">Expires {{ formatDate(qrExpiresAt) }}</p>
+          <p class="text-[12px] text-slate-500">
+            {{ localized('Expires', 'בתוקף עד') }} {{ formatDate(qrExpiresAt) }}
+          </p>
           <p v-if="qrDeviceName" class="text-center text-[12px] text-slate-500">
             Re-pairing {{ qrDeviceName }} replaces its current access only after approval.
           </p>
@@ -400,7 +440,8 @@ onUnmounted(() => {
               {{ request.deviceName || 'iPhone' }}
             </p>
             <p class="text-[12px] text-text-secondary">
-              Approval expires {{ formatDate(request.expiresAt) }}
+              {{ localized('Approval expires', 'האישור בתוקף עד') }}
+              {{ formatDate(request.expiresAt) }}
             </p>
           </div>
           <div class="flex shrink-0 gap-2">
@@ -410,14 +451,14 @@ onUnmounted(() => {
               :disabled="actionId === request.pairingId"
               @click="decidePairing(request.pairingId, false)"
             >
-              <X class="mr-1 h-3.5 w-3.5" /> Reject
+              <X class="mr-1 h-3.5 w-3.5" /> {{ localized('Reject', 'דחייה') }}
             </Button>
             <Button
               size="sm"
               :disabled="actionId === request.pairingId"
               @click="decidePairing(request.pairingId, true)"
             >
-              <Check class="mr-1 h-3.5 w-3.5" /> Approve
+              <Check class="mr-1 h-3.5 w-3.5" /> {{ localized('Approve', 'אישור') }}
             </Button>
           </div>
         </div>
@@ -437,9 +478,12 @@ onUnmounted(() => {
               <p class="truncate text-[14px] font-medium text-text-primary">{{ device.name }}</p>
               <p class="text-[12px] text-text-secondary">
                 <span v-if="device.revokedAt" class="text-destructive">
-                  Revoked {{ formatDate(device.revokedAt) }}
+                  {{ localized('Revoked', 'הגישה בוטלה') }} {{ formatDate(device.revokedAt) }}
                 </span>
-                <span v-else>Last used {{ formatDate(device.lastUsedAt) }}</span>
+                <span v-else
+                  >{{ localized('Last used', 'שימוש אחרון') }}
+                  {{ formatDate(device.lastUsedAt) }}</span
+                >
               </p>
             </div>
           </div>
@@ -450,7 +494,7 @@ onUnmounted(() => {
               :disabled="pairing || !snapshot?.pairingAvailable"
               @click="createPairing(device)"
             >
-              <QrCode class="mr-1 h-3.5 w-3.5" /> Re-pair
+              <QrCode class="mr-1 h-3.5 w-3.5" /> {{ localized('Re-pair', 'חיבור מחדש') }}
             </Button>
             <Button
               size="sm"
@@ -458,7 +502,7 @@ onUnmounted(() => {
               :disabled="actionId === device.id"
               @click="revokeDevice(device)"
             >
-              Revoke
+              {{ localized('Revoke', 'ביטול גישה') }}
             </Button>
           </div>
         </div>
@@ -467,7 +511,9 @@ onUnmounted(() => {
 
     <SettingsRow v-if="snapshot?.transport.publicUrl" :label="copy.connection" vertical>
       <details class="w-full text-[12px] text-text-secondary">
-        <summary class="cursor-pointer select-none">Show private address</summary>
+        <summary class="cursor-pointer select-none">
+          {{ localized('Show private address', 'הצגת הכתובת הפרטית') }}
+        </summary>
         <code class="mt-2 block break-all rounded bg-bg-secondary px-2.5 py-2 text-[12px]">
           {{ snapshot.transport.publicUrl }}
         </code>
@@ -475,7 +521,7 @@ onUnmounted(() => {
     </SettingsRow>
 
     <SettingsRow v-if="error" vertical>
-      <p role="status" class="text-[12px] text-destructive">{{ error }}</p>
+      <p role="alert" class="text-[12px] text-destructive">{{ error }}</p>
     </SettingsRow>
   </SettingsGroup>
 </template>

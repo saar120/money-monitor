@@ -332,14 +332,18 @@ async function handleDelete(account: Account) {
   fetchAccounts();
 }
 
+const syncNotice = ref('');
+const syncError = ref('');
 async function handleScrape(account: Account) {
+  syncNotice.value = '';
+  syncError.value = '';
   if (scrapingAccounts.value.has(account.id)) return;
   try {
     const result = await triggerScrape(account.id);
-    window.alert(`Scrape started (session #${result.sessionId})`);
+    syncNotice.value = `Sync started for ${account.displayName} (session #${result.sessionId})`;
     fetchAccounts();
   } catch (err) {
-    window.alert(`Scrape failed: ${err instanceof Error ? err.message : err}`);
+    syncError.value = `Sync could not start: ${err instanceof Error ? err.message : err}`;
   }
 }
 
@@ -398,6 +402,8 @@ onMounted(() => {
       </Button>
     </Teleport>
 
+    <p v-if="syncNotice" role="status" class="text-sm text-text-secondary">{{ syncNotice }}</p>
+    <p v-if="syncError" role="alert" class="text-sm text-destructive">{{ syncError }}</p>
     <!-- Loading skeletons -->
     <div v-if="loading" class="space-y-4 flex-1 min-h-0 overflow-y-auto">
       <Skeleton v-for="i in 3" :key="i" class="h-28 w-full rounded-xl" />
@@ -598,10 +604,14 @@ onMounted(() => {
                       v-if="account.manualScrapeOnly"
                       class="flex flex-wrap items-center gap-2 mt-2.5 pl-1"
                     >
-                      <label class="text-[12px] text-text-secondary whitespace-nowrap">
+                      <label
+                        for="account-manager-field-1"
+                        class="text-[12px] text-text-secondary whitespace-nowrap"
+                      >
                         {{ accountCopy.staleAlert }}
                       </label>
                       <Input
+                        id="account-manager-field-1"
                         type="number"
                         :model-value="account.stalenessDays ?? undefined"
                         placeholder="—"
@@ -720,9 +730,9 @@ onMounted(() => {
 
         <div class="space-y-5 py-2">
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-medium">Provider</label>
+            <label for="account-manager-field-2" class="text-[14px] font-medium">Provider</label>
             <Select v-model="newCompanyId">
-              <SelectTrigger>
+              <SelectTrigger id="account-manager-field-2">
                 <SelectValue placeholder="Select provider..." />
               </SelectTrigger>
               <SelectContent>
@@ -747,14 +757,20 @@ onMounted(() => {
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-medium">Display Name</label>
-            <Input v-model="newDisplayName" placeholder="e.g. My Hapoalim Account" />
+            <label for="account-manager-field-3" class="text-[14px] font-medium"
+              >Display Name</label
+            >
+            <Input
+              id="account-manager-field-3"
+              v-model="newDisplayName"
+              placeholder="e.g. My Hapoalim Account"
+            />
           </div>
 
           <div class="flex flex-col gap-2">
-            <label class="text-[14px] font-medium">Member</label>
+            <label for="account-manager-field-4" class="text-[14px] font-medium">Member</label>
             <Select v-model="newMemberId">
-              <SelectTrigger>
+              <SelectTrigger id="account-manager-field-4">
                 <SelectValue placeholder="Select member..." />
               </SelectTrigger>
               <SelectContent>
@@ -788,6 +804,7 @@ onMounted(() => {
                 <label class="text-[14px] font-medium">{{ field.label }}</label>
                 <Input
                   v-model="credentialValues[field.key]"
+                  :aria-label="field.label"
                   :type="field.type"
                   :placeholder="field.placeholder ?? ''"
                   :autocomplete="field.type === 'password' ? 'current-password' : 'off'"
@@ -805,8 +822,17 @@ onMounted(() => {
                   :key="i"
                   class="flex flex-col gap-2 sm:flex-row"
                 >
-                  <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
-                  <Input v-model="field.value" type="password" placeholder="Value" />
+                  <Input
+                    v-model="field.key"
+                    aria-label="Credential field name"
+                    placeholder="Field name (e.g. userCode)"
+                  />
+                  <Input
+                    v-model="field.value"
+                    aria-label="Credential value"
+                    type="password"
+                    placeholder="Value"
+                  />
                 </div>
                 <Button variant="secondary" size="sm" @click="addCredentialField">
                   <Plus class="h-3 w-3 mr-1.5" />
@@ -850,6 +876,7 @@ onMounted(() => {
           <p class="text-[14px] text-text-secondary">{{ otpMessage }}</p>
           <Input
             v-model="otpCode"
+            :aria-label="language === 'he' ? 'קוד אימות' : 'Verification code'"
             inputmode="numeric"
             autocomplete="one-time-code"
             placeholder="Enter code..."
@@ -931,6 +958,7 @@ onMounted(() => {
               <label class="text-[14px] font-medium">{{ field.label }}</label>
               <Input
                 v-model="updateCredsValues[field.key]"
+                :aria-label="field.label"
                 type="password"
                 :placeholder="field.placeholder ?? ''"
                 autocomplete="off"
@@ -948,8 +976,17 @@ onMounted(() => {
                 :key="i"
                 class="flex flex-col gap-2 sm:flex-row"
               >
-                <Input v-model="field.key" placeholder="Field name (e.g. userCode)" />
-                <Input v-model="field.value" type="password" placeholder="Value" />
+                <Input
+                  v-model="field.key"
+                  aria-label="Credential field name"
+                  placeholder="Field name (e.g. userCode)"
+                />
+                <Input
+                  v-model="field.value"
+                  aria-label="Credential value"
+                  type="password"
+                  placeholder="Value"
+                />
               </div>
               <Button variant="secondary" size="sm" @click="addUpdateCredField">
                 <Plus class="h-3 w-3 mr-1.5" />

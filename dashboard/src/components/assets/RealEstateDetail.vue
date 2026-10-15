@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted } from 'vue';
 import {
   getAsset,
@@ -26,6 +27,8 @@ import {
   DialogClose,
 } from '@/components/ui/dialog';
 import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
+
+const { chartPrimary } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
@@ -174,8 +177,7 @@ const chartDatasets = computed(() =>
         {
           label: 'Value (ILS)',
           data: snapshots.value.map((s) => s.totalValueIls),
-          color: '#007AFF',
-          areaColor: 'rgba(0, 122, 255, 0.15)',
+          color: chartPrimary.value,
         },
       ],
 );
@@ -203,7 +205,7 @@ const chartDatasets = computed(() =>
         <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
         <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
-            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-medium bg-pink-500/10 text-pink-500"
+            class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-medium bg-bg-tertiary text-text-secondary"
           >
             <Home class="h-3 w-3" />
             {{ copy.type }}
@@ -364,8 +366,14 @@ const chartDatasets = computed(() =>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Property Value ({{ nativeCurrency }})</label>
-            <Input v-model.number="updateForm.currentValue" type="number" />
+            <label for="real-estate-detail-field-1" class="text-[14px] font-medium"
+              >Property Value ({{ nativeCurrency }})</label
+            >
+            <Input
+              id="real-estate-detail-field-1"
+              v-model.number="updateForm.currentValue"
+              type="number"
+            />
           </div>
         </div>
         <DialogFooter>
@@ -392,16 +400,24 @@ const chartDatasets = computed(() =>
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Amount ({{ nativeCurrency }})</label>
-            <Input v-model.number="rentForm.amount" type="number" />
+            <label for="real-estate-detail-field-2" class="text-[14px] font-medium"
+              >Amount ({{ nativeCurrency }})</label
+            >
+            <Input id="real-estate-detail-field-2" v-model.number="rentForm.amount" type="number" />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Date</label>
-            <Input v-model="rentForm.date" type="date" />
+            <label for="real-estate-detail-field-3" class="text-[14px] font-medium">Date</label>
+            <Input id="real-estate-detail-field-3" v-model="rentForm.date" type="date" />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Notes (optional)</label>
-            <Input v-model="rentForm.notes" placeholder="e.g. January rent" />
+            <label for="real-estate-detail-field-4" class="text-[14px] font-medium"
+              >Notes (optional)</label
+            >
+            <Input
+              id="real-estate-detail-field-4"
+              v-model="rentForm.notes"
+              placeholder="e.g. January rent"
+            />
           </div>
         </div>
         <DialogFooter>

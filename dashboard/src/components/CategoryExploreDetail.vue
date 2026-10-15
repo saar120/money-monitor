@@ -103,9 +103,7 @@ const delta = computed(() => current.value - previousSpent.value);
 const months = computed(() => {
   const [year, number] = month.value.split('-').map(Number) as [number, number];
   return Array.from({ length: range.value }, (_, index) => {
-    const key = new Date(Date.UTC(year, number - range.value + 1 + index, 1))
-      .toISOString()
-      .slice(0, 7);
+    const key = new Date(Date.UTC(year, number - range.value + index, 1)).toISOString().slice(0, 7);
     return {
       key,
       total: -(history.value.find((item) => item.month === key)?.totalAmount ?? 0),
@@ -141,7 +139,6 @@ const merchantLink = (name: string) => ({
     >
     <div class="home-head">
       <div>
-        <p class="home-context">{{ t('categorySpending') }}</p>
         <h1>{{ title }}</h1>
       </div>
       <label class="month-control"
@@ -162,11 +159,11 @@ const merchantLink = (name: string) => ({
       />
       <div>
         <span>{{ t('netCategorySpending') }}</span
-        ><strong><AnimatedAmount :value="current" /></strong>
-        <small :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
+        ><strong><span v-if="loading">—</span><AnimatedAmount v-else :value="current" /></strong>
+        <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
           delta === 0
             ? t('sameAsLastMonth')
-            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${t('thanLastMonth')}`
+            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
         }}</small>
       </div>
       <RouterLink :to="activityLink"

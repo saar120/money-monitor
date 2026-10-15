@@ -1,4 +1,11 @@
 <script setup lang="ts">
+import {
+  DropdownMenuRoot,
+  DropdownMenuTrigger,
+  DropdownMenuPortal,
+  DropdownMenuContent,
+  DropdownMenuItem,
+} from 'reka-ui';
 import { ref, computed, onMounted } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import { useRouter } from 'vue-router';
@@ -89,7 +96,7 @@ import {
   X,
 } from 'lucide-vue-next';
 
-const { textPrimary, bgPrimary, separator } = useChartTheme();
+const { textPrimary, bgPrimary, separator, chartPrimary, chartComparison } = useChartTheme();
 
 const router = useRouter();
 
@@ -189,6 +196,8 @@ const doughnutOption = computed(() => {
 
   return {
     animation: !reduceMotion.value,
+    animationDuration: 0,
+    animationDurationUpdate: 220,
     tooltip: {
       trigger: 'item' as const,
       backgroundColor: bgPrimary.value,
@@ -204,7 +213,7 @@ const doughnutOption = computed(() => {
       left: 'center',
       top: '45%',
       style: {
-        text: formatCompact(nwData.total),
+        text: formatCompact(slices.reduce((sum, slice) => sum + slice.value, 0)),
         fill: textPrimary.value,
         fontSize: 16,
         fontWeight: 'bold' as const,
@@ -255,8 +264,7 @@ const trendDatasets = computed(() => {
       {
         label: 'Liquid Net Worth',
         data: series.map((p) => p.liquidTotal),
-        color: '#5AC8FA',
-        areaColor: 'rgba(90, 200, 250, 0.15)',
+        color: chartComparison.value,
       },
     ];
   }
@@ -264,8 +272,7 @@ const trendDatasets = computed(() => {
     {
       label: 'Total Net Worth',
       data: series.map((p) => p.total),
-      color: '#007AFF',
-      areaColor: 'rgba(0, 122, 255, 0.15)',
+      color: chartPrimary.value,
     },
   ];
 });
@@ -696,31 +703,17 @@ const fullLiabilityMap = computed(() => {
 <template>
   <div class="networth-page min-w-0 space-y-8">
     <Teleport to="#toolbar-actions">
-      <div class="networth-add-wrap" @keydown.esc="addMenuOpen = false">
-        <Button size="sm" :aria-expanded="addMenuOpen" @click="addMenuOpen = !addMenuOpen"
-          ><Plus class="h-4 w-4" />{{ t('add') }}</Button
-        >
-        <div v-if="addMenuOpen" class="networth-add-options">
-          <button
-            type="button"
-            @click="
-              addMenuOpen = false;
-              openAddAsset();
-            "
-          >
-            {{ t('addAsset') }}
-          </button>
-          <button
-            type="button"
-            @click="
-              addMenuOpen = false;
-              openAddLiability();
-            "
-          >
-            {{ t('addLiability') }}
-          </button>
-        </div>
-      </div>
+      <DropdownMenuRoot v-model:open="addMenuOpen">
+        <DropdownMenuTrigger as-child>
+          <Button size="sm"><Plus class="h-4 w-4" />{{ t('add') }}</Button>
+        </DropdownMenuTrigger>
+        <DropdownMenuPortal>
+          <DropdownMenuContent align="end" :side-offset="6" class="networth-add-options">
+            <DropdownMenuItem @select="openAddAsset">{{ t('addAsset') }}</DropdownMenuItem>
+            <DropdownMenuItem @select="openAddLiability">{{ t('addLiability') }}</DropdownMenuItem>
+          </DropdownMenuContent>
+        </DropdownMenuPortal>
+      </DropdownMenuRoot>
     </Teleport>
 
     <!-- Stale rates warning -->
@@ -1004,6 +997,7 @@ const fullLiabilityMap = computed(() => {
                     >
                       <span class="w-24 truncate font-medium">{{ h.name }}</span>
                       <Input
+                        :aria-label="`${language === 'he' ? 'כמות' : 'Quantity'}: ${h.name}`"
                         type="number"
                         step="any"
                         class="h-7 text-[12px] w-24"
@@ -1017,6 +1011,7 @@ const fullLiabilityMap = computed(() => {
                       />
                       <template v-if="['stock', 'etf', 'crypto'].includes(h.type)">
                         <Input
+                          :aria-label="`${language === 'he' ? 'מחיר ליחידה' : 'Price per unit'}: ${h.name}`"
                           type="number"
                           step="any"
                           class="h-7 text-[12px] w-24"
@@ -1303,13 +1298,17 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Name</label>
-            <Input v-model="assetForm.name" placeholder="e.g. OneZero Portfolio" />
+            <label for="net-worth-page-field-1" class="text-[14px] font-medium">Name</label>
+            <Input
+              id="net-worth-page-field-1"
+              v-model="assetForm.name"
+              placeholder="e.g. OneZero Portfolio"
+            />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="net-worth-page-field-2" class="text-[14px] font-medium">Type</label>
             <Select v-model="assetForm.type">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-2">
                 <SelectValue placeholder="Select type..." />
               </SelectTrigger>
               <SelectContent>
@@ -1323,9 +1322,9 @@ const fullLiabilityMap = computed(() => {
             v-if="assetCategory === 'brokerage' || assetCategory === 'real_estate'"
             class="space-y-1.5"
           >
-            <label class="text-[14px] font-medium">Currency</label>
+            <label for="net-worth-page-field-3" class="text-[14px] font-medium">Currency</label>
             <Select v-model="assetForm.currency">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-3">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1337,18 +1336,22 @@ const fullLiabilityMap = computed(() => {
           </div>
           <template v-if="assetCategory === 'real_estate' && !editingAsset">
             <div class="space-y-1.5">
-              <label class="text-[14px] font-medium"
+              <label for="net-worth-page-field-4" class="text-[14px] font-medium"
                 >Property Value ({{ assetForm.currency }})</label
               >
               <Input
+                id="net-worth-page-field-4"
                 v-model.number="assetForm.initialValue"
                 type="number"
                 placeholder="e.g. 500000"
               />
             </div>
             <div class="space-y-1.5">
-              <label class="text-[14px] font-medium">Purchase Price (ILS)</label>
+              <label for="net-worth-page-field-5" class="text-[14px] font-medium"
+                >Purchase Price (ILS)</label
+              >
               <Input
+                id="net-worth-page-field-5"
                 v-model.number="assetForm.initialCostBasis"
                 type="number"
                 placeholder="e.g. 2000000"
@@ -1356,13 +1359,17 @@ const fullLiabilityMap = computed(() => {
             </div>
           </template>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Institution</label>
-            <Input v-model="assetForm.institution" placeholder="e.g. oneZero, excelence" />
+            <label for="net-worth-page-field-6" class="text-[14px] font-medium">Institution</label>
+            <Input
+              id="net-worth-page-field-6"
+              v-model="assetForm.institution"
+              placeholder="e.g. oneZero, excelence"
+            />
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-[14px] font-medium">Liquidity</label>
+            <label for="net-worth-page-field-7" class="text-[14px] font-medium">Liquidity</label>
             <Select v-model="assetForm.liquidity">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-7">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1373,9 +1380,11 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div v-if="assetCategory === 'brokerage'" class="space-y-1.5">
-            <label class="text-[14px] font-medium">Linked Bank Account</label>
+            <label for="net-worth-page-field-8" class="text-[14px] font-medium"
+              >Linked Bank Account</label
+            >
             <Select v-model="assetForm.linkedAccountId">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-8">
                 <SelectValue />
               </SelectTrigger>
               <SelectContent>
@@ -1388,8 +1397,13 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="assetForm.notes" placeholder="Optional notes..." :rows="2" />
+            <label for="net-worth-page-field-9" class="text-[14px] font-medium">Notes</label>
+            <Textarea
+              id="net-worth-page-field-9"
+              v-model="assetForm.notes"
+              placeholder="Optional notes..."
+              :rows="2"
+            />
           </div>
         </div>
         <DialogFooter>
@@ -1418,13 +1432,17 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Name</label>
-            <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit shkalit" />
+            <label for="net-worth-page-field-10" class="text-[14px] font-medium">Name</label>
+            <Input
+              id="net-worth-page-field-10"
+              v-model="holdingForm.name"
+              placeholder="e.g. TSLA, kaspit shkalit"
+            />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="net-worth-page-field-11" class="text-[14px] font-medium">Type</label>
             <Select v-model="holdingForm.type">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-11">
                 <SelectValue placeholder="Select type..." />
               </SelectTrigger>
               <SelectContent>
@@ -1435,20 +1453,37 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Currency</label>
-            <Input v-model="holdingForm.currency" placeholder="USD" />
+            <label for="net-worth-page-field-12" class="text-[14px] font-medium">Currency</label>
+            <Input id="net-worth-page-field-12" v-model="holdingForm.currency" placeholder="USD" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Quantity</label>
-            <Input v-model="holdingForm.quantity" type="number" step="any" />
+            <label for="net-worth-page-field-13" class="text-[14px] font-medium">Quantity</label>
+            <Input
+              id="net-worth-page-field-13"
+              v-model="holdingForm.quantity"
+              type="number"
+              step="any"
+            />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Cost Basis</label>
-            <Input v-model="holdingForm.costBasis" type="number" step="any" />
+            <label for="net-worth-page-field-14" class="text-[14px] font-medium">Cost Basis</label>
+            <Input
+              id="net-worth-page-field-14"
+              v-model="holdingForm.costBasis"
+              type="number"
+              step="any"
+            />
           </div>
           <div v-if="holdingShowPrice" class="space-y-1.5">
-            <label class="text-[14px] font-medium">Last Price (per unit)</label>
-            <Input v-model="holdingForm.lastPrice" type="number" step="any" />
+            <label for="net-worth-page-field-15" class="text-[14px] font-medium"
+              >Last Price (per unit)</label
+            >
+            <Input
+              id="net-worth-page-field-15"
+              v-model="holdingForm.lastPrice"
+              type="number"
+              step="any"
+            />
           </div>
           <div
             v-if="holdingDoubleCount"
@@ -1457,8 +1492,13 @@ const fullLiabilityMap = computed(() => {
             ILS cash for this institution is already tracked via the linked bank account.
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="holdingForm.notes" placeholder="Optional notes..." :rows="2" />
+            <label for="net-worth-page-field-16" class="text-[14px] font-medium">Notes</label>
+            <Textarea
+              id="net-worth-page-field-16"
+              v-model="holdingForm.notes"
+              placeholder="Optional notes..."
+              :rows="2"
+            />
           </div>
         </div>
         <DialogFooter>
@@ -1485,13 +1525,17 @@ const fullLiabilityMap = computed(() => {
         </DialogHeader>
         <div class="space-y-4 py-2">
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Name</label>
-            <Input v-model="liabilityForm.name" placeholder="e.g. Poalim Loan" />
+            <label for="net-worth-page-field-17" class="text-[14px] font-medium">Name</label>
+            <Input
+              id="net-worth-page-field-17"
+              v-model="liabilityForm.name"
+              placeholder="e.g. Poalim Loan"
+            />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="net-worth-page-field-18" class="text-[14px] font-medium">Type</label>
             <Select v-model="liabilityForm.type">
-              <SelectTrigger>
+              <SelectTrigger id="net-worth-page-field-18">
                 <SelectValue placeholder="Select type..." />
               </SelectTrigger>
               <SelectContent>
@@ -1502,20 +1546,41 @@ const fullLiabilityMap = computed(() => {
             </Select>
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Currency</label>
-            <Input v-model="liabilityForm.currency" placeholder="ILS" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Original Amount</label>
-            <Input v-model="liabilityForm.originalAmount" type="number" step="any" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Current Balance</label>
-            <Input v-model="liabilityForm.currentBalance" type="number" step="any" />
-          </div>
-          <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Interest Rate (%)</label>
+            <label for="net-worth-page-field-19" class="text-[14px] font-medium">Currency</label>
             <Input
+              id="net-worth-page-field-19"
+              v-model="liabilityForm.currency"
+              placeholder="ILS"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <label for="net-worth-page-field-20" class="text-[14px] font-medium"
+              >Original Amount</label
+            >
+            <Input
+              id="net-worth-page-field-20"
+              v-model="liabilityForm.originalAmount"
+              type="number"
+              step="any"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <label for="net-worth-page-field-21" class="text-[14px] font-medium"
+              >Current Balance</label
+            >
+            <Input
+              id="net-worth-page-field-21"
+              v-model="liabilityForm.currentBalance"
+              type="number"
+              step="any"
+            />
+          </div>
+          <div class="space-y-1.5">
+            <label for="net-worth-page-field-22" class="text-[14px] font-medium"
+              >Interest Rate (%)</label
+            >
+            <Input
+              id="net-worth-page-field-22"
               v-model="liabilityForm.interestRate"
               type="number"
               step="0.01"
@@ -1523,12 +1588,17 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Start Date</label>
-            <Input v-model="liabilityForm.startDate" type="date" />
+            <label for="net-worth-page-field-23" class="text-[14px] font-medium">Start Date</label>
+            <Input id="net-worth-page-field-23" v-model="liabilityForm.startDate" type="date" />
           </div>
           <div class="space-y-1.5">
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="liabilityForm.notes" placeholder="Optional notes..." :rows="2" />
+            <label for="net-worth-page-field-24" class="text-[14px] font-medium">Notes</label>
+            <Textarea
+              id="net-worth-page-field-24"
+              v-model="liabilityForm.notes"
+              placeholder="Optional notes..."
+              :rows="2"
+            />
           </div>
         </div>
         <DialogFooter>

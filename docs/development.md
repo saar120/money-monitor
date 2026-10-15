@@ -73,9 +73,10 @@ Start `npm run dashboard:dev`, then in another terminal:
 
 ```bash
 node scripts/smoke-dashboard-motion.mjs
+node scripts/smoke-dashboard-screens.mjs
 ```
 
-The script intercepts API requests with synthetic responses, so it needs no backend or personal database. It exercises desktop/narrow layouts, Hebrew, reduced motion, filters, and detail panels. It uses Chrome; set `CHROME_PATH` for another installation and `MM_DASHBOARD_URL` for another Vite URL.
+The script intercepts API requests with synthetic responses, so it needs no backend or personal database. It exercises desktop/narrow layouts, Hebrew, reduced motion, filters, and detail panels. The screen smoke starts a disposable demo API and checks every production route, asset editor, settings labels, setup, and sign-in dialogs in English/light and Hebrew/dark. It simulates Electron mobile access and updates and blocks external services. Both scripts use Chrome; set `CHROME_PATH` for another installation and `MM_DASHBOARD_URL` for another Vite URL.
 
 ### iPhone
 

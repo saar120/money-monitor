@@ -227,6 +227,7 @@ onMounted(load);
       <SettingsRow label="Color">
         <input
           v-model="newColor"
+          aria-label="Color"
           type="color"
           class="h-8 w-12 rounded-lg overflow-hidden border cursor-pointer"
         />
@@ -307,9 +308,14 @@ onMounted(load);
                 <template v-if="editingId === cat.id">
                   <div class="space-y-2">
                     <div class="flex flex-wrap gap-2 items-center">
-                      <Input v-model="editLabel" class="w-32 h-7 text-[14px]" />
+                      <Input
+                        v-model="editLabel"
+                        aria-label="Display name"
+                        class="w-32 h-7 text-[14px]"
+                      />
                       <input
                         v-model="editColor"
+                        aria-label="Color"
                         type="color"
                         class="h-7 w-10 rounded-lg overflow-hidden border cursor-pointer"
                       />
@@ -332,11 +338,12 @@ onMounted(load);
                     </div>
                     <Textarea
                       v-model="editRules"
+                      aria-label="Classification rules"
                       placeholder="LLM categorization rules..."
                       class="text-[12px] min-h-[40px] resize-y"
                     />
                     <Select v-model="editOwner">
-                      <SelectTrigger class="h-8 w-44">
+                      <SelectTrigger aria-label="Default owner" class="h-8 w-44">
                         <SelectValue placeholder="Default owner" />
                       </SelectTrigger>
                       <SelectContent>
@@ -363,7 +370,7 @@ onMounted(load);
                 class="text-[12px] text-text-secondary min-w-[200px] max-w-[320px] whitespace-normal break-words [overflow-wrap:anywhere]"
                 :title="cat.rules ?? ''"
               >
-                <bdi dir="auto">{{ cat.rules ?? '—' }}</bdi>
+                <bdi class="line-clamp-2" dir="auto">{{ cat.rules ?? '—' }}</bdi>
               </TableCell>
               <TableCell>
                 <Badge variant="secondary" class="text-[12px]">

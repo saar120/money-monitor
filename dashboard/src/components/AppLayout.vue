@@ -1,17 +1,20 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Activity,
   Bell,
-  Bot,
   Building2,
   CheckCircle2,
+  ChevronDown,
   Compass,
   Home,
+  MessageCircle,
   Receipt,
   Repeat2,
   Settings,
+  SlidersHorizontal,
   Tag,
   TrendingUp,
   Wallet,
@@ -30,7 +33,7 @@ const primary = [
   { path: '/', label: 'home', icon: Home, shortcut: '1' },
   { path: '/transactions', label: 'activity', icon: Receipt, shortcut: '2' },
   { path: '/explore', label: 'explore', icon: Compass, shortcut: '3' },
-  { path: '/chat', label: 'advisor', icon: Bot, shortcut: '4' },
+  { path: '/chat', label: 'advisor', icon: MessageCircle, shortcut: '4' },
 ] as const;
 const money = [
   { path: '/insights', label: 'review', icon: CheckCircle2 },
@@ -44,6 +47,16 @@ const manage = [
   { path: '/alerts', label: 'alerts', icon: Bell },
   { path: '/scraping', label: 'scraping', icon: Activity },
 ] as const;
+const managementEl = ref<HTMLDetailsElement | null>(null);
+function hideManagement() {
+  if (managementEl.value) managementEl.value.open = false;
+}
+function closeManagement() {
+  hideManagement();
+  managementEl.value?.querySelector('summary')?.focus();
+}
+onClickOutside(managementEl, hideManagement);
+watch(() => route.path, hideManagement);
 const pageTitles: Record<string, LanguageLabel> = {
   '/': 'home',
   '/transactions': 'activity',
@@ -167,24 +180,38 @@ async function exitDemo() {
             }}</span>
           </RouterLink>
         </div>
-        <div class="nav-group secondary-nav" role="group" :aria-label="t('manage')">
-          <p class="nav-heading" aria-hidden="true">{{ t('manage') }}</p>
-          <RouterLink
-            v-for="item in manage"
-            :key="item.path"
-            :to="item.path"
-            class="nav-link"
-            :class="{ active: isActive(item.path) }"
-            :aria-current="isActive(item.path) ? 'page' : undefined"
-            :title="t(item.label)"
-            :aria-label="t(item.label)"
-          >
-            <component :is="item.icon" :size="18" :stroke-width="2" />
-            <span>{{ t(item.label) }}</span>
-          </RouterLink>
-        </div>
       </nav>
       <div class="sidebar-bottom">
+        <details
+          ref="managementEl"
+          class="nav-group secondary-nav management-nav"
+          @keydown.esc.prevent="closeManagement"
+        >
+          <summary
+            class="nav-link management-toggle"
+            :class="{ active: manage.some((item) => isActive(item.path)) }"
+            :title="t('manage')"
+          >
+            <SlidersHorizontal :size="17" /><span>{{ t('manage') }}</span>
+            <ChevronDown :size="14" class="management-chevron" />
+          </summary>
+          <div class="management-links">
+            <RouterLink
+              v-for="item in manage"
+              :key="item.path"
+              :to="item.path"
+              class="nav-link"
+              :class="{ active: isActive(item.path) }"
+              :aria-current="isActive(item.path) ? 'page' : undefined"
+              :title="t(item.label)"
+              :aria-label="t(item.label)"
+              @click="hideManagement"
+            >
+              <component :is="item.icon" :size="18" :stroke-width="2" />
+              <span>{{ t(item.label) }}</span>
+            </RouterLink>
+          </div>
+        </details>
         <RouterLink
           to="/settings"
           class="nav-link"
@@ -208,6 +235,7 @@ async function exitDemo() {
         class="content-toolbar"
         :style="isElectron ? '-webkit-app-region: drag' : undefined"
       >
+        <span class="toolbar-title" aria-hidden="true">{{ pageTitle }}</span>
         <div id="toolbar-actions" class="toolbar-actions" style="-webkit-app-region: no-drag" />
       </div>
       <main ref="mainEl" class="content-scroll">

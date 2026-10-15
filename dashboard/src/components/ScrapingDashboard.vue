@@ -568,7 +568,14 @@ const latestSession = computed(() => sessions.value[0]);
         </DialogHeader>
         <div class="space-y-4 py-2">
           <p class="text-[14px] text-text-secondary">Enter the OTP code sent to your device.</p>
-          <Input v-model="otpCode" placeholder="Enter OTP code" @keyup.enter="handleOtpSubmit" />
+          <Input
+            v-model="otpCode"
+            :aria-label="language === 'he' ? 'קוד אימות' : 'Verification code'"
+            inputmode="numeric"
+            autocomplete="one-time-code"
+            placeholder="Enter OTP code"
+            @keyup.enter="handleOtpSubmit"
+          />
         </div>
         <DialogFooter>
           <Button variant="filled" :disabled="otpSubmitting || !otpCode" @click="handleOtpSubmit">

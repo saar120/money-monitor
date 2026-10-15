@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import {
   Bot,
@@ -32,6 +32,7 @@ import {
 import { formatAmount } from '@/lib/format';
 import { language, setLanguageChoice, t } from '@/lib/language';
 import { isValidMonth } from '@/lib/month';
+import { normalizeMerchant } from '@/lib/merchant';
 
 const route = useRoute();
 const isPreview = computed(() => route.name === 'split-prototype');
@@ -72,6 +73,7 @@ const copy = computed(() =>
         account: 'חשבון',
         notes: 'הערות',
         save: 'שמירה',
+        saving: 'שומר…',
         onlyPreview: 'אב טיפוס · השינויים נשמרים במסך הזה בלבד',
         saved: isPreview.value ? 'השינוי מוצג באב הטיפוס' : 'העסקה נשמרה',
         sync: 'מעודכן',
@@ -88,6 +90,7 @@ const copy = computed(() =>
         account: 'Account',
         notes: 'Notes',
         save: 'Save',
+        saving: 'Saving…',
         onlyPreview: 'Prototype · changes stay on this screen',
         saved: isPreview.value ? 'Change shown in prototype' : 'Transaction saved',
         sync: 'Up to date',
@@ -109,6 +112,16 @@ function preserveRowWidth(element: globalThis.Element) {
   });
 }
 const selected = computed(() => rows.value.find((row) => row.id === selectedId.value) ?? null);
+const hasChanges = computed(() => {
+  const row = selected.value;
+  return (
+    row != null &&
+    (draftCategory.value !== (row.category ?? '') ||
+      draftOwner.value !== ownerValue(row) ||
+      draftIncluded.value === row.ignored ||
+      (isPreview.value && draftMemo.value !== (row.memo ?? '')))
+  );
+});
 const accountMap = computed(
   () => new Map(accounts.value.map((account) => [account.id, account.displayName])),
 );
@@ -182,7 +195,10 @@ function selectRow(row: Transaction) {
   saved.value = false;
 }
 function closeDetails() {
+  const id = selectedId.value;
   selectedId.value = null;
+  if (id != null)
+    void nextTick(() => document.getElementById(`proto-row-${id}`)?.focus({ preventScroll: true }));
 }
 async function load(append = false) {
   const id = ++requestId;
@@ -436,7 +452,7 @@ watch(search, () => {
 
       <div class="proto-content">
         <div class="proto-title">
-          <h1 class="sr-only">{{ t('activity') }}</h1>
+          <h1>{{ t('activity') }}</h1>
           <span>{{ total }} {{ t('transactions') }}</span>
         </div>
         <div v-if="error" class="proto-error" role="alert">
@@ -480,9 +496,14 @@ watch(search, () => {
                     :title="row.description"
                     @click.stop="selectRow(row)"
                   >
-                    <bdi dir="auto">{{ row.description }}</bdi
-                    ><ChevronDown :size="12" aria-hidden="true" /></button
-                  ><small v-if="row.needsReview">{{ t('needsReview') }}</small>
+                    <bdi dir="auto">{{ normalizeMerchant(row.description) }}</bdi>
+                  </button>
+                  <span class="proto-merchant-meta">
+                    <span>{{ accountMap.get(row.accountId) ?? copy.account }}</span>
+                    <small v-if="row.needsReview" class="proto-review-flag">{{
+                      t('needsReview')
+                    }}</small>
+                  </span>
                   <small class="proto-mobile-date"
                     ><bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi></small
                   >
@@ -533,19 +554,19 @@ watch(search, () => {
           </button>
         </div>
         <div class="proto-inspector-content">
-          <span v-if="selected.needsReview" class="proto-review">{{ t('needsReview') }}</span>
+          <h3>
+            <bdi dir="auto">{{ selected.description }}</bdi>
+          </h3>
           <strong
             class="proto-detail-amount"
             :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
             ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
           >
-          <h3>
-            <bdi dir="auto">{{ selected.description }}</bdi>
-          </h3>
           <p class="proto-detail-meta">
             {{ accountMap.get(selected.accountId) ?? copy.account }} ·
             <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
           </p>
+          <span v-if="selected.needsReview" class="proto-review">{{ t('needsReview') }}</span>
           <div class="proto-fields">
             <label
               ><span>{{ t('category') }}</span
@@ -556,36 +577,43 @@ watch(search, () => {
                 </option>
               </select></label
             >
-            <label
-              ><span>{{ t('account') }}</span
-              ><input :value="accountMap.get(selected.accountId) ?? ''" readonly
-            /></label>
-            <label
-              ><span>{{ t('owner') }}</span
-              ><select v-model="draftOwner">
-                <option value="shared">{{ t('together') }}</option>
-                <option value="unassigned">{{ t('unassigned') }}</option>
-                <option v-for="item in members" :key="item.id" :value="`member:${item.id}`">
-                  {{ item.name }}
-                </option>
-              </select></label
-            >
-            <label class="proto-include"
-              ><input v-model="draftIncluded" type="checkbox" /><span>{{
-                t('includeInStatistics')
-              }}</span></label
-            >
-            <label v-if="isPreview || selected.memo"
-              ><span>{{ copy.notes }}</span
-              ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
-            </label>
+            <details :key="selected.id" class="proto-more-details">
+              <summary>{{ t('reviewDetails') }} <ChevronDown :size="15" /></summary>
+              <div class="proto-secondary-fields">
+                <label
+                  ><span>{{ t('owner') }}</span
+                  ><select v-model="draftOwner">
+                    <option value="shared">{{ t('together') }}</option>
+                    <option value="unassigned">{{ t('unassigned') }}</option>
+                    <option v-for="item in members" :key="item.id" :value="`member:${item.id}`">
+                      {{ item.name }}
+                    </option>
+                  </select></label
+                >
+                <label class="proto-include"
+                  ><input v-model="draftIncluded" type="checkbox" /><span>{{
+                    t('includeInStatistics')
+                  }}</span></label
+                >
+                <label v-if="isPreview || selected.memo"
+                  ><span>{{ copy.notes }}</span
+                  ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
+                </label>
+              </div>
+            </details>
           </div>
+          <p v-if="error" class="proto-error" role="alert">{{ error }}</p>
           <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
           <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
         </div>
         <div class="proto-inspector-actions">
-          <button type="button" class="proto-save" :disabled="saving" @click="saveTransaction">
-            {{ copy.save }}
+          <button
+            type="button"
+            class="proto-save"
+            :disabled="saving || !hasChanges"
+            @click="saveTransaction"
+          >
+            {{ saving ? copy.saving : copy.save }}
           </button>
         </div>
       </aside>
@@ -927,7 +955,13 @@ watch(search, () => {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 0 16px 24px;
+  padding: 4px 16px 28px;
+}
+.proto-title h1 {
+  margin: 0;
+  font-size: 28px;
+  font-weight: 650;
+  letter-spacing: -0.03em;
 }
 .proto-title span {
   color: var(--text-tertiary);
@@ -963,16 +997,16 @@ watch(search, () => {
   table-layout: fixed;
 }
 .proto-merchant-col {
-  width: 43%;
+  width: auto;
 }
 .proto-category-col {
-  width: 23%;
+  width: 20%;
 }
 .proto-date-col {
-  width: 17%;
+  width: 112px;
 }
 .proto-amount-col {
-  width: 17%;
+  width: 154px;
 }
 .proto-table thead th {
   position: sticky;
@@ -991,7 +1025,7 @@ watch(search, () => {
   text-align: end;
 }
 .proto-table td {
-  height: 60px;
+  height: 72px;
   padding: 16px;
   overflow: hidden;
   border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
@@ -1044,13 +1078,26 @@ watch(search, () => {
   flex: none;
   color: var(--text-tertiary);
 }
-.proto-merchant small {
-  display: block;
-  margin-block-start: 3px;
-  color: var(--destructive);
-  font-size: 11px;
+.proto-merchant-meta {
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  margin-block-start: 5px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  font-weight: 400;
 }
-.proto-mobile-date {
+.proto-merchant-meta > span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.proto-review-flag {
+  flex: none;
+  color: var(--warning);
+  font-size: 11px;
+  font-weight: 500;
+}
+.proto-merchant .proto-mobile-date {
   display: none;
 }
 .proto-category {
@@ -1066,7 +1113,7 @@ watch(search, () => {
   color: var(--text-primary) !important;
 }
 .proto-detail-amount.negative {
-  color: var(--destructive) !important;
+  color: var(--text-primary) !important;
 }
 .proto-amount.positive,
 .proto-detail-amount.positive {
@@ -1089,7 +1136,7 @@ watch(search, () => {
 }
 .proto-inspector {
   display: flex;
-  flex: 0 0 330px;
+  flex: 0 0 350px;
   flex-direction: column;
   min-width: 0;
   border-inline-start: 1px solid var(--separator);
@@ -1109,8 +1156,8 @@ watch(search, () => {
 }
 .proto-inspector-head h2 {
   margin: 0;
-  font-size: 20px;
-  font-weight: 650;
+  font-size: 15px;
+  font-weight: 600;
 }
 .proto-inspector-content {
   flex: 1;
@@ -1121,8 +1168,9 @@ watch(search, () => {
   display: inline-flex;
   padding: 5px 10px;
   border-radius: 7px;
-  background: color-mix(in srgb, var(--destructive) 12%, var(--bg-primary));
-  color: var(--destructive);
+  margin-block: 0 24px;
+  background: color-mix(in srgb, var(--warning) 10%, var(--bg-primary));
+  color: var(--warning);
   font-size: 12px;
   font-weight: 700;
 }
@@ -1135,14 +1183,14 @@ watch(search, () => {
   font-variant-numeric: tabular-nums;
 }
 .proto-inspector-content h3 {
-  margin: 11px 0 4px;
+  margin: 0 0 8px;
   overflow-wrap: anywhere;
-  font-size: 18px;
+  font-size: 22px;
   line-height: 1.35;
 }
 .proto-detail-meta {
-  margin: 0 0 20px;
-  padding-bottom: 20px;
+  margin: 12px 0 24px;
+  padding-bottom: 24px;
   border-bottom: 1px solid var(--separator);
   color: var(--text-secondary);
   font-size: 12px;
@@ -1150,6 +1198,36 @@ watch(search, () => {
 .proto-fields {
   display: grid;
   gap: 20px;
+}
+.proto-more-details {
+  border-block: 1px solid var(--separator);
+}
+.proto-more-details summary {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  min-height: 48px;
+  list-style: none;
+  color: var(--text-secondary);
+  font-size: 13px;
+  font-weight: 500;
+}
+.proto-more-details summary::-webkit-details-marker {
+  display: none;
+}
+.proto-more-details summary:hover {
+  color: var(--text-primary);
+}
+.proto-more-details[open] summary svg {
+  transform: rotate(180deg);
+}
+.proto-secondary-fields {
+  display: grid;
+  gap: 20px;
+  padding-block: 4px 20px;
+}
+.proto-fields + .proto-error {
+  margin-top: 16px;
 }
 .proto-fields label.proto-include {
   display: flex;
@@ -1294,13 +1372,13 @@ watch(search, () => {
     display: none;
   }
   .proto-merchant-col {
-    width: 48%;
+    width: auto;
   }
   .proto-category-col {
-    width: 25%;
+    width: 90px;
   }
   .proto-amount-col {
-    width: 27%;
+    width: 144px;
   }
   .proto-month {
     min-width: 135px;

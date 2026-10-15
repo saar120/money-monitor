@@ -440,7 +440,7 @@ onUnmounted(() => {
             }
           "
         >
-          <SelectTrigger class="w-40">
+          <SelectTrigger class="w-40" :aria-label="t('allTypes')">
             <SelectValue :placeholder="t('allTypes')" />
           </SelectTrigger>
           <SelectContent>
@@ -451,7 +451,7 @@ onUnmounted(() => {
         </Select>
 
         <Select v-model="selectedAccount" @update:model-value="applyFilters">
-          <SelectTrigger class="w-44">
+          <SelectTrigger class="w-44" :aria-label="t('allAccounts')">
             <SelectValue :placeholder="t('allAccounts')" />
           </SelectTrigger>
           <SelectContent>
@@ -463,7 +463,7 @@ onUnmounted(() => {
         </Select>
 
         <Select v-model="selectedCategory" @update:model-value="applyFilters">
-          <SelectTrigger class="w-40">
+          <SelectTrigger class="w-40" :aria-label="t('allCategories')">
             <SelectValue :placeholder="t('allCategories')" />
           </SelectTrigger>
           <SelectContent>
@@ -476,7 +476,7 @@ onUnmounted(() => {
         </Select>
 
         <Select v-model="selectedOwner" @update:model-value="applyFilters">
-          <SelectTrigger class="w-40">
+          <SelectTrigger class="w-40" :aria-label="t('allOwners')">
             <SelectValue :placeholder="t('allOwners')" />
           </SelectTrigger>
           <SelectContent>
@@ -693,6 +693,7 @@ onUnmounted(() => {
                     "
                   >
                     <SelectTrigger
+                      :aria-label="`${t('category')}: ${txn.description}`"
                       class="h-7 text-[12px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
                       :class="updatingCategoryFor === txn.id ? 'opacity-50' : ''"
                     >
@@ -754,6 +755,7 @@ onUnmounted(() => {
                     @update:model-value="(val) => updateOwner(txn, String(val))"
                   >
                     <SelectTrigger
+                      :aria-label="`${t('owner')}: ${txn.description}`"
                       class="h-7 text-[12px] w-36 border-0 bg-transparent hover:bg-bg-tertiary px-1"
                       :class="updatingOwnerFor === txn.id ? 'opacity-50' : ''"
                     >
@@ -882,7 +884,7 @@ onUnmounted(() => {
                     )
                 "
               >
-                <SelectTrigger class="w-full"
+                <SelectTrigger :aria-label="t('category')" class="w-full"
                   ><SelectValue :placeholder="t('uncategorized')"
                 /></SelectTrigger>
                 <SelectContent>

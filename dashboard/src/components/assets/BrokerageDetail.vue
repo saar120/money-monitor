@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted, watch } from 'vue';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
 import {
@@ -72,6 +73,8 @@ import {
   Pencil,
   RefreshCw,
 } from 'lucide-vue-next';
+
+const { chartPrimary } = useChartTheme();
 
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
@@ -261,8 +264,7 @@ const chartDatasets = computed(() => {
       data: snapshots.value.map((s) =>
         showingIls.value ? s.totalValueIls : (s.totalValue ?? s.totalValueIls),
       ),
-      color: '#007AFF',
-      areaColor: 'rgba(0, 122, 255, 0.15)',
+      color: chartPrimary.value,
     },
   ];
 });
@@ -731,6 +733,7 @@ async function confirmDeleteMovement() {
                   <TableCell class="text-right tabular-nums text-[14px]">
                     <template v-if="quickUpdateMode">
                       <Input
+                        :aria-label="`${language === 'he' ? 'כמות' : 'Quantity'}: ${h.name}`"
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.quantity"
@@ -747,6 +750,7 @@ async function confirmDeleteMovement() {
                   <TableCell class="text-right tabular-nums text-[14px] text-text-secondary">
                     <template v-if="quickUpdateMode">
                       <Input
+                        :aria-label="`${language === 'he' ? 'מחיר ליחידה' : 'Price per unit'}: ${h.name}`"
                         type="number"
                         class="w-24 text-right ml-auto"
                         :model-value="editedHoldings.get(h.id)?.lastPrice ?? ''"
@@ -983,13 +987,17 @@ async function confirmDeleteMovement() {
         </DialogHeader>
         <div class="space-y-4">
           <div v-if="!editingHolding">
-            <label class="text-[14px] font-medium">Name</label>
-            <Input v-model="holdingForm.name" placeholder="e.g. TSLA, kaspit" />
+            <label for="brokerage-detail-field-1" class="text-[14px] font-medium">Name</label>
+            <Input
+              id="brokerage-detail-field-1"
+              v-model="holdingForm.name"
+              placeholder="e.g. TSLA, kaspit"
+            />
           </div>
           <div v-if="!editingHolding">
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="brokerage-detail-field-2" class="text-[14px] font-medium">Type</label>
             <Select v-model="holdingForm.type">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="brokerage-detail-field-2"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="(label, key) in HOLDING_TYPE_LABELS" :key="key" :value="key">{{
                   label
@@ -998,20 +1006,29 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div v-if="!editingHolding">
-            <label class="text-[14px] font-medium">Currency</label>
-            <Input v-model="holdingForm.currency" placeholder="USD" />
+            <label for="brokerage-detail-field-3" class="text-[14px] font-medium">Currency</label>
+            <Input id="brokerage-detail-field-3" v-model="holdingForm.currency" placeholder="USD" />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Quantity</label>
-            <Input v-model.number="holdingForm.quantity" type="number" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Cost Basis</label>
-            <Input v-model.number="holdingForm.costBasis" type="number" />
-          </div>
-          <div>
-            <label class="text-[14px] font-medium">Last Price</label>
+            <label for="brokerage-detail-field-4" class="text-[14px] font-medium">Quantity</label>
             <Input
+              id="brokerage-detail-field-4"
+              v-model.number="holdingForm.quantity"
+              type="number"
+            />
+          </div>
+          <div>
+            <label for="brokerage-detail-field-5" class="text-[14px] font-medium">Cost Basis</label>
+            <Input
+              id="brokerage-detail-field-5"
+              v-model.number="holdingForm.costBasis"
+              type="number"
+            />
+          </div>
+          <div>
+            <label for="brokerage-detail-field-6" class="text-[14px] font-medium">Last Price</label>
+            <Input
+              id="brokerage-detail-field-6"
               :model-value="holdingForm.lastPrice ?? ''"
               type="number"
               @update:model-value="
@@ -1020,8 +1037,8 @@ async function confirmDeleteMovement() {
             />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="holdingForm.notes" />
+            <label for="brokerage-detail-field-7" class="text-[14px] font-medium">Notes</label>
+            <Textarea id="brokerage-detail-field-7" v-model="holdingForm.notes" />
           </div>
         </div>
         <DialogFooter>
@@ -1079,13 +1096,13 @@ async function confirmDeleteMovement() {
         </DialogHeader>
         <div class="space-y-4">
           <div>
-            <label class="text-[14px] font-medium">Date</label>
-            <Input v-model="movementForm.date" type="date" />
+            <label for="brokerage-detail-field-8" class="text-[14px] font-medium">Date</label>
+            <Input id="brokerage-detail-field-8" v-model="movementForm.date" type="date" />
           </div>
           <div>
-            <label class="text-[14px] font-medium">Type</label>
+            <label for="brokerage-detail-field-9" class="text-[14px] font-medium">Type</label>
             <Select v-model="movementForm.type">
-              <SelectTrigger><SelectValue /></SelectTrigger>
+              <SelectTrigger id="brokerage-detail-field-9"><SelectValue /></SelectTrigger>
               <SelectContent>
                 <SelectItem v-for="t in BROKERAGE_MOVEMENT_TYPES" :key="t" :value="t">{{
                   t
@@ -1094,9 +1111,13 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div>
-            <label class="text-[14px] font-medium">Holding (optional)</label>
+            <label for="brokerage-detail-field-10" class="text-[14px] font-medium"
+              >Holding (optional)</label
+            >
             <Select v-model="movementForm.holdingId">
-              <SelectTrigger><SelectValue placeholder="General (no holding)" /></SelectTrigger>
+              <SelectTrigger id="brokerage-detail-field-10"
+                ><SelectValue placeholder="General (no holding)"
+              /></SelectTrigger>
               <SelectContent>
                 <SelectItem value="none">General (no holding)</SelectItem>
                 <SelectItem v-for="h in holdings" :key="h.id" :value="String(h.id)">{{
@@ -1106,19 +1127,28 @@ async function confirmDeleteMovement() {
             </Select>
           </div>
           <div>
-            <label class="text-[14px] font-medium">{{ quantityLabel }}</label>
-            <Input v-model.number="movementForm.quantity" type="number" />
+            <label for="brokerage-detail-field-11" class="text-[14px] font-medium">{{
+              quantityLabel
+            }}</label>
+            <Input
+              id="brokerage-detail-field-11"
+              v-model.number="movementForm.quantity"
+              type="number"
+            />
             <p v-if="sellMaxWarning" class="text-[12px] text-[var(--warning)] mt-1">
               {{ sellMaxWarning }}
             </p>
           </div>
           <div>
-            <label class="text-[14px] font-medium">Currency</label>
-            <Input v-model="movementForm.currency" />
+            <label for="brokerage-detail-field-12" class="text-[14px] font-medium">Currency</label>
+            <Input id="brokerage-detail-field-12" v-model="movementForm.currency" />
           </div>
           <div v-if="showPricePerUnit">
-            <label class="text-[14px] font-medium">Price per Unit</label>
+            <label for="brokerage-detail-field-13" class="text-[14px] font-medium"
+              >Price per Unit</label
+            >
             <Input
+              id="brokerage-detail-field-13"
               :model-value="movementForm.pricePerUnit ?? ''"
               type="number"
               @update:model-value="
@@ -1128,8 +1158,11 @@ async function confirmDeleteMovement() {
           </div>
           <template v-if="isNonIls">
             <div>
-              <label class="text-[14px] font-medium">ILS Cost Basis (optional)</label>
+              <label for="brokerage-detail-field-14" class="text-[14px] font-medium"
+                >ILS Cost Basis (optional)</label
+              >
               <Input
+                id="brokerage-detail-field-14"
                 :model-value="movementForm.sourceAmount ?? ''"
                 type="number"
                 placeholder="What you paid in ILS"
@@ -1144,8 +1177,11 @@ async function confirmDeleteMovement() {
           </template>
           <template v-else>
             <div>
-              <label class="text-[14px] font-medium">Source Amount (what you paid)</label>
+              <label for="brokerage-detail-field-15" class="text-[14px] font-medium"
+                >Source Amount (what you paid)</label
+              >
               <Input
+                id="brokerage-detail-field-15"
                 :model-value="movementForm.sourceAmount ?? ''"
                 type="number"
                 @update:model-value="
@@ -1154,13 +1190,15 @@ async function confirmDeleteMovement() {
               />
             </div>
             <div>
-              <label class="text-[14px] font-medium">Source Currency</label>
-              <Input v-model="movementForm.sourceCurrency" />
+              <label for="brokerage-detail-field-16" class="text-[14px] font-medium"
+                >Source Currency</label
+              >
+              <Input id="brokerage-detail-field-16" v-model="movementForm.sourceCurrency" />
             </div>
           </template>
           <div>
-            <label class="text-[14px] font-medium">Notes</label>
-            <Textarea v-model="movementForm.notes" maxlength="500" />
+            <label for="brokerage-detail-field-17" class="text-[14px] font-medium">Notes</label>
+            <Textarea id="brokerage-detail-field-17" v-model="movementForm.notes" maxlength="500" />
           </div>
           <p v-if="movementError" class="text-[14px] text-destructive">{{ movementError }}</p>
         </div>
