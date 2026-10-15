@@ -12,6 +12,7 @@ import {
   type BudgetProgress,
   type Category,
 } from '../api/client';
+import ConfirmAction from './ConfirmAction.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import { Skeleton } from '@/components/ui/skeleton';
@@ -226,13 +227,26 @@ async function saveBudget() {
   }
 }
 
-async function removeBudget(id: number, name: string) {
-  if (!window.confirm(`Delete budget "${name}"?`)) return;
+const deleteOpen = ref(false);
+const deleteTarget = ref<{ id: number; name: string } | null>(null);
+const deleting = ref(false);
+function askDelete(id: number, name: string) {
+  deleteTarget.value = { id, name };
+  error.value = '';
+  deleteOpen.value = true;
+}
+async function removeBudget() {
+  if (!deleteTarget.value || deleting.value) return;
+  deleting.value = true;
+  const { id } = deleteTarget.value;
   try {
     await deleteBudgetApi(id);
+    deleteOpen.value = false;
     await loadData();
   } catch (e: unknown) {
     error.value = e instanceof Error ? e.message : 'Failed to delete budget';
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -415,7 +429,7 @@ function progressColor(percentage: number, neutral = false): string {
                     type="button"
                     class="p-2 rounded-md text-text-tertiary hover:bg-black/[0.04] dark:hover:bg-white/[0.06] hover:text-destructive transition-all duration-150"
                     :aria-label="`${language === 'he' ? 'מחיקת' : 'Delete'} ${p.budget.name}`"
-                    @click="removeBudget(p.budget.id, p.budget.name)"
+                    @click="askDelete(p.budget.id, p.budget.name)"
                   >
                     <Trash2 class="h-3.5 w-3.5" />
                   </button>
@@ -574,7 +588,7 @@ function progressColor(percentage: number, neutral = false): string {
                 min="0"
                 max="100"
                 step="5"
-                class="!h-7 w-16 text-center text-[12px] tabular-nums"
+                class="!h-7 w-16 text-center tabular-nums"
               />
               <span>{{ t('percentOfBudget') }}</span>
             </div>
@@ -596,7 +610,7 @@ function progressColor(percentage: number, neutral = false): string {
                 v-model="categorySearch"
                 :aria-label="`${t('search')} ${t('categories')}`"
                 :placeholder="t('search')"
-                class="!h-7 text-[12px] pl-8"
+                class="!h-7 pl-8"
               />
             </div>
             <div class="max-h-48 overflow-y-auto -mx-1 space-y-px">
@@ -644,6 +658,18 @@ function progressColor(percentage: number, neutral = false): string {
         </DialogFooter>
       </DialogContent>
     </Dialog>
+    <ConfirmAction
+      v-model:open="deleteOpen"
+      :title="language === 'he' ? 'למחוק את התקציב?' : 'Delete this budget?'"
+      :description="
+        language === 'he'
+          ? `התקציב ${deleteTarget?.name ?? ''} יימחק. העסקאות יישמרו.`
+          : `Remove ${deleteTarget?.name ?? 'this budget'}. Your transactions will be kept.`
+      "
+      :pending="deleting"
+      :error="error"
+      @confirm="removeBudget"
+    />
   </div>
 </template>
 

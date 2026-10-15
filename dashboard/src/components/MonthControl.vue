@@ -58,21 +58,21 @@ function choose(event: Event) {
   align-items: center;
   justify-content: space-between;
   min-width: 190px;
-  height: 39px;
-  padding: 4px 6px;
-  border: 1px solid var(--separator);
-  border-radius: 11px;
+  height: var(--control-height);
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
   background: var(--bg-secondary);
   color: var(--text-primary);
   font-size: 13px;
-  font-weight: 650;
+  font-weight: 600;
   white-space: nowrap;
 }
 button {
   display: grid;
   place-items: center;
-  width: 27px;
-  height: 27px;
+  width: var(--control-height);
+  height: var(--control-height);
   border-radius: 7px;
   color: var(--text-secondary);
 }

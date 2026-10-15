@@ -374,7 +374,7 @@ const chartDatasets = computed(() =>
     <template v-else-if="asset">
       <!-- Header -->
       <div>
-        <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+        <h1 class="text-[28px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
         <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
             class="text-[12px] font-medium px-2 py-0.5 rounded-full bg-[var(--warning)]/10 text-[var(--warning)]"
@@ -590,7 +590,7 @@ const chartDatasets = computed(() =>
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="h-7 w-7"
+                        class="w-7"
                         :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                         @click="holdingToDelete = h"
                       >
@@ -708,7 +708,7 @@ const chartDatasets = computed(() =>
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-7 w-7 transition-opacity"
+                  class="w-7 transition-opacity"
                   :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="movementToDelete = m"
                 >

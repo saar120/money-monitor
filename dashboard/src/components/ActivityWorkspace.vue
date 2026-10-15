@@ -1,11 +1,13 @@
 <script setup lang="ts">
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import { onClickOutside } from '@vueuse/core';
+import { Button } from '@/components/ui/button';
+import { useReviewCount } from '@/composables/useReviewCount';
 import { useRoute } from 'vue-router';
 import {
   Bot,
   ChevronLeft,
   ChevronRight,
-  ChevronDown,
   Compass,
   Home,
   Receipt,
@@ -18,7 +20,10 @@ import {
   getAccounts,
   getCategories,
   getMembers,
+  getTransaction,
   getTransactions,
+  resolveTransaction,
+  updateTransactionEffectiveDate,
   ignoreTransaction,
   updateTransactionCategory,
   updateTransactionOwner,
@@ -43,6 +48,70 @@ const filterOpen = ref(false);
 const filterCategory = ref(typeof route.query.category === 'string' ? route.query.category : 'all');
 const filterAccount = ref('all');
 const reviewOnly = ref(false);
+const filterOwner = ref('all');
+const filterType = ref('all');
+const filterStatus = ref('all');
+const filterDirection = ref('all');
+const filterInclusion = ref('all');
+const startDate = ref('');
+const endDate = ref('');
+const sortBy = ref('date');
+const sortOrder = ref<'asc' | 'desc'>('desc');
+const draftEffectiveDate = ref('');
+const { refresh: refreshReviewCount } = useReviewCount();
+const filterElement = ref<HTMLElement | null>(null);
+onClickOutside(filterElement, () => {
+  filterOpen.value = false;
+});
+const hasFilters = computed(
+  () =>
+    reviewOnly.value ||
+    filterCategory.value !== 'all' ||
+    filterAccount.value !== 'all' ||
+    filterOwner.value !== 'all' ||
+    filterType.value !== 'all' ||
+    filterStatus.value !== 'all' ||
+    filterDirection.value !== 'all' ||
+    filterInclusion.value !== 'all' ||
+    !!startDate.value ||
+    !!endDate.value,
+);
+function clearFilters() {
+  filterCategory.value =
+    filterAccount.value =
+    filterOwner.value =
+    filterType.value =
+    filterStatus.value =
+    filterDirection.value =
+    filterInclusion.value =
+      'all';
+  reviewOnly.value = false;
+  startDate.value = endDate.value = '';
+}
+function sort(column: string) {
+  if (sortBy.value === column) sortOrder.value = sortOrder.value === 'asc' ? 'desc' : 'asc';
+  else {
+    sortBy.value = column;
+    sortOrder.value = 'desc';
+  }
+}
+async function confirmReview() {
+  const row = selected.value;
+  const category = draftCategory.value;
+  if (!row || !category || saving.value) return;
+  await saveTransaction();
+  if (error.value) return;
+  saving.value = true;
+  try {
+    await resolveTransaction(row.id, category);
+    await refreshReviewCount();
+    await load();
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : copy.value.saveFailed;
+  } finally {
+    saving.value = false;
+  }
+}
 const rows = ref<Transaction[]>([]);
 const accounts = ref<Account[]>([]);
 const categories = ref<Category[]>([]);
@@ -52,6 +121,7 @@ const hasMore = ref(false);
 const loading = ref(true);
 const error = ref('');
 const selectedId = ref<number | null>(null);
+const linkedTransaction = ref<Transaction | null>(null);
 const requestedTransactionId = ref(
   typeof route.query.transactionId === 'string' ? Number(route.query.transactionId) : null,
 );
@@ -81,7 +151,6 @@ const copy = computed(() =>
         loadMore: 'טעינת עסקאות נוספות',
         noSelection: 'בחרו עסקה כדי לראות פרטים',
         localChanges: 'תצוגה מקדימה בלבד',
-        advanced: 'טבלה מתקדמת',
         saveFailed: 'לא ניתן לשמור את העסקה. נסו שוב.',
       }
     : {
@@ -98,7 +167,6 @@ const copy = computed(() =>
         loadMore: 'Load more transactions',
         noSelection: 'Select a transaction to see details',
         localChanges: 'Preview only',
-        advanced: 'Advanced table',
         saveFailed: 'Could not save the transaction. Try again.',
       },
 );
@@ -111,7 +179,11 @@ function preserveRowWidth(element: globalThis.Element) {
     (cell as HTMLElement).style.width = `${widths[index]}px`;
   });
 }
-const selected = computed(() => rows.value.find((row) => row.id === selectedId.value) ?? null);
+const selected = computed(
+  () =>
+    rows.value.find((row) => row.id === selectedId.value) ??
+    (linkedTransaction.value?.id === selectedId.value ? linkedTransaction.value : null),
+);
 const hasChanges = computed(() => {
   const row = selected.value;
   return (
@@ -119,6 +191,7 @@ const hasChanges = computed(() => {
     (draftCategory.value !== (row.category ?? '') ||
       draftOwner.value !== ownerValue(row) ||
       draftIncluded.value === row.ignored ||
+      draftEffectiveDate.value !== (row.effectiveDate ?? '') ||
       (isPreview.value && draftMemo.value !== (row.memo ?? '')))
   );
 });
@@ -192,6 +265,7 @@ function selectRow(row: Transaction) {
   draftOwner.value = ownerValue(row);
   draftIncluded.value = !row.ignored;
   draftMemo.value = row.memo ?? '';
+  draftEffectiveDate.value = row.effectiveDate ?? '';
   saved.value = false;
 }
 function closeDetails() {
@@ -206,14 +280,28 @@ async function load(append = false) {
   error.value = '';
   try {
     const filters: TransactionFilters = {
-      startDate: `${month.value}-01`,
-      endDate: monthEnd(month.value),
+      startDate: startDate.value || (endDate.value ? undefined : `${month.value}-01`),
+      endDate: endDate.value || (startDate.value ? undefined : monthEnd(month.value)),
       search: search.value || undefined,
       category: filterCategory.value === 'all' ? undefined : filterCategory.value,
       accountId: filterAccount.value === 'all' ? undefined : Number(filterAccount.value),
       needsReview: reviewOnly.value || undefined,
-      sortBy: 'date',
-      sortOrder: 'desc',
+      sortBy: sortBy.value,
+      sortOrder: sortOrder.value,
+      accountType:
+        filterType.value === 'all' ? undefined : (filterType.value as 'bank' | 'credit_card'),
+      status: filterStatus.value === 'all' ? undefined : filterStatus.value,
+      ignored: filterInclusion.value === 'all' ? undefined : filterInclusion.value === 'ignored',
+      minAmount: filterDirection.value === 'income' ? 0.01 : undefined,
+      maxAmount: filterDirection.value === 'expense' ? -0.01 : undefined,
+      ownerType: filterOwner.value.startsWith('member:')
+        ? 'member'
+        : filterOwner.value === 'all'
+          ? undefined
+          : (filterOwner.value as OwnerType),
+      ownerMemberId: filterOwner.value.startsWith('member:')
+        ? Number(filterOwner.value.slice(7))
+        : undefined,
       limit: 60,
       offset: append ? rows.value.length : 0,
     };
@@ -227,7 +315,11 @@ async function load(append = false) {
     hasMore.value = result.pagination.hasMore;
     if (!append && !rows.value.some((row) => row.id === selectedId.value)) {
       selectedId.value = null;
-      const requested = rows.value.find((row) => row.id === requestedTransactionId.value);
+      const requested =
+        rows.value.find((row) => row.id === requestedTransactionId.value) ??
+        (linkedTransaction.value?.id === requestedTransactionId.value
+          ? linkedTransaction.value
+          : null);
       if (requested) selectRow(requested);
       else if (rows.value[0] && window.innerWidth > 1120) selectRow(rows.value[0]);
       requestedTransactionId.value = null;
@@ -240,7 +332,7 @@ async function load(append = false) {
 }
 async function saveTransaction() {
   const row = selected.value;
-  if (!row) return;
+  if (!row || saving.value) return;
   const [ownerType, memberId] = draftOwner.value.startsWith('member:')
     ? (['member', Number(draftOwner.value.slice(7))] as const)
     : ([draftOwner.value as OwnerType, null] as const);
@@ -254,6 +346,7 @@ async function saveTransaction() {
         expenseOwnerMemberId: memberId,
         ignored: !draftIncluded.value,
         memo: draftMemo.value || null,
+        effectiveDate: draftEffectiveDate.value || null,
       };
       localEdits.set(row.id, edit);
       rows.value = rows.value.map((item) => (item.id === row.id ? { ...item, ...edit } : item));
@@ -270,9 +363,15 @@ async function saveTransaction() {
       if (draftIncluded.value === updated.ignored) {
         updated = (await ignoreTransaction(row.id, !draftIncluded.value)).transaction;
       }
+      if (draftEffectiveDate.value !== (row.effectiveDate ?? '')) {
+        updated = (await updateTransactionEffectiveDate(row.id, draftEffectiveDate.value || null))
+          .transaction;
+      }
       rows.value = rows.value.map((item) => (item.id === row.id ? updated : item));
+      if (linkedTransaction.value?.id === row.id) linkedTransaction.value = updated;
+      if (updated.reportingDate !== row.reportingDate) await load();
     }
-    saved.value = true;
+    saved.value = selectedId.value === row.id;
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : copy.value.saveFailed;
   } finally {
@@ -281,7 +380,10 @@ async function saveTransaction() {
 }
 function onKeys(event: KeyboardEvent) {
   if (event.key === 'Escape') {
-    filterOpen.value = false;
+    if (filterOpen.value) {
+      filterOpen.value = false;
+      return;
+    }
     closeDetails();
     return;
   }
@@ -321,14 +423,42 @@ onMounted(async () => {
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   }
+  if (requestedTransactionId.value) {
+    try {
+      const { transaction } = await getTransaction(requestedTransactionId.value);
+      linkedTransaction.value = transaction;
+      month.value = transaction.reportingDate.slice(0, 7);
+    } catch (cause) {
+      error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+    }
+  }
   await load();
 });
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeys);
   clearTimeout(searchTimer);
 });
-watch(month, () => void load());
-watch([filterCategory, filterAccount, reviewOnly], () => void load());
+watch(month, () => {
+  startDate.value = endDate.value = '';
+  void load();
+});
+watch(
+  [
+    filterCategory,
+    filterAccount,
+    reviewOnly,
+    filterOwner,
+    filterType,
+    filterStatus,
+    filterDirection,
+    filterInclusion,
+    startDate,
+    endDate,
+    sortBy,
+    sortOrder,
+  ],
+  () => void load(),
+);
 watch(search, () => {
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
@@ -383,7 +513,14 @@ watch(search, () => {
             <ChevronLeft v-if="language === 'he'" :size="17" /><ChevronRight v-else :size="17" />
           </button>
         </div>
-        <div class="proto-filter-wrap">
+        <div
+          ref="filterElement"
+          class="proto-filter-wrap"
+          @keydown.esc.stop="
+            filterOpen = false;
+            filterElement?.querySelector('button')?.focus();
+          "
+        >
           <button
             type="button"
             class="proto-filter-button"
@@ -391,10 +528,7 @@ watch(search, () => {
             @click="filterOpen = !filterOpen"
           >
             <SlidersHorizontal :size="17" />{{ copy.filter
-            }}<span
-              v-if="reviewOnly || filterCategory !== 'all' || filterAccount !== 'all'"
-              class="proto-filter-dot"
-            />
+            }}<span v-if="hasFilters" class="proto-filter-dot" />
           </button>
           <Transition name="filter-morph">
             <div v-if="filterOpen" class="proto-filter-popover">
@@ -422,26 +556,66 @@ watch(search, () => {
                   </option>
                 </select></label
               >
+              <label
+                ><span>{{ t('allTypes') }}</span
+                ><select v-model="filterType">
+                  <option value="all">{{ t('allTypes') }}</option>
+                  <option value="bank">{{ t('banks') }}</option>
+                  <option value="credit_card">{{ t('creditCards') }}</option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('owner') }}</span
+                ><select v-model="filterOwner">
+                  <option value="all">{{ t('allOwners') }}</option>
+                  <option value="shared">{{ t('together') }}</option>
+                  <option value="unassigned">{{ t('unassigned') }}</option>
+                  <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
+                    {{ member.name }}
+                  </option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('transactionStatus') }}</span
+                ><select v-model="filterStatus">
+                  <option value="all">{{ t('anyStatus') }}</option>
+                  <option value="completed">{{ t('completed') }}</option>
+                  <option value="pending">{{ t('pending') }}</option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('moneyDirection') }}</span
+                ><select v-model="filterDirection">
+                  <option value="all">{{ t('inAndOut') }}</option>
+                  <option value="expense">{{ t('spending') }}</option>
+                  <option value="income">{{ t('income') }}</option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('includeInStatistics') }}</span
+                ><select v-model="filterInclusion">
+                  <option value="all">{{ t('allActivity') }}</option>
+                  <option value="included">{{ t('included') }}</option>
+                  <option value="ignored">{{ t('excluded') }}</option>
+                </select></label
+              >
+              <label
+                ><span>{{ t('startDate') }}</span
+                ><input v-model="startDate" type="date" :max="endDate || undefined"
+              /></label>
+              <label
+                ><span>{{ t('endDate') }}</span
+                ><input v-model="endDate" type="date" :min="startDate || undefined"
+              /></label>
               <label class="proto-check"
                 ><input v-model="reviewOnly" type="checkbox" />{{ t('needsReview') }}</label
               >
-              <button
-                type="button"
-                class="proto-clear"
-                @click="
-                  filterCategory = 'all';
-                  filterAccount = 'all';
-                  reviewOnly = false;
-                "
-              >
+              <button type="button" class="proto-clear" @click="clearFilters">
                 {{ t('clear') }}
               </button>
             </div>
           </Transition>
         </div>
-        <RouterLink v-if="!isPreview" to="/transactions/advanced" class="proto-advanced">{{
-          copy.advanced
-        }}</RouterLink>
         <label class="proto-search"
           ><Search :size="18" /><input
             v-model="search"
@@ -468,10 +642,54 @@ watch(search, () => {
             </colgroup>
             <thead>
               <tr>
-                <th scope="col">{{ t('date') }}</th>
-                <th scope="col">{{ t('description') }}</th>
+                <th
+                  scope="col"
+                  :aria-sort="
+                    sortBy === 'date' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'
+                  "
+                >
+                  <button class="table-sort" @click="sort('date')">
+                    {{ t('date')
+                    }}<span v-if="sortBy === 'date'" aria-hidden="true">{{
+                      sortOrder === 'asc' ? '↑' : '↓'
+                    }}</span>
+                  </button>
+                </th>
+                <th
+                  scope="col"
+                  :aria-sort="
+                    sortBy === 'description'
+                      ? sortOrder === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  "
+                >
+                  <button class="table-sort" @click="sort('description')">
+                    {{ t('description')
+                    }}<span v-if="sortBy === 'description'" aria-hidden="true">{{
+                      sortOrder === 'asc' ? '↑' : '↓'
+                    }}</span>
+                  </button>
+                </th>
                 <th scope="col">{{ t('category') }}</th>
-                <th scope="col">{{ t('amount') }}</th>
+                <th
+                  scope="col"
+                  :aria-sort="
+                    sortBy === 'chargedAmount'
+                      ? sortOrder === 'asc'
+                        ? 'ascending'
+                        : 'descending'
+                      : 'none'
+                  "
+                >
+                  <button class="table-sort" @click="sort('chargedAmount')">
+                    {{ t('amount')
+                    }}<span v-if="sortBy === 'chargedAmount'" aria-hidden="true">{{
+                      sortOrder === 'asc' ? '↑' : '↓'
+                    }}</span>
+                  </button>
+                </th>
               </tr>
             </thead>
             <TransitionGroup tag="tbody" name="ledger-reflow" @before-leave="preserveRowWidth">
@@ -566,7 +784,31 @@ watch(search, () => {
             {{ accountMap.get(selected.accountId) ?? copy.account }} ·
             <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
           </p>
-          <span v-if="selected.needsReview" class="proto-review">{{ t('needsReview') }}</span>
+          <p v-if="selected.needsReview" class="proto-review">
+            {{ selected.reviewReason || t('needsReview') }}
+          </p>
+          <dl class="transaction-facts">
+            <div>
+              <dt>{{ t('status') }}</dt>
+              <dd>{{ selected.status === 'completed' ? t('completed') : t('pending') }}</dd>
+            </div>
+            <div v-if="selected.type">
+              <dt>{{ t('type') }}</dt>
+              <dd>{{ selected.type }}</dd>
+            </div>
+            <div v-if="selected.installmentTotal">
+              <dt>{{ t('installment') }}</dt>
+              <dd>
+                {{ selected.installmentNumber }} {{ t('of') }} {{ selected.installmentTotal }}
+              </dd>
+            </div>
+            <div v-if="selected.originalCurrency !== selected.chargedCurrency">
+              <dt>{{ t('originalAmount') }}</dt>
+              <dd dir="ltr">
+                {{ formatAmount(selected.originalAmount, selected.originalCurrency) }}
+              </dd>
+            </div>
+          </dl>
           <div class="proto-fields">
             <label
               ><span>{{ t('category') }}</span
@@ -577,8 +819,7 @@ watch(search, () => {
                 </option>
               </select></label
             >
-            <details :key="selected.id" class="proto-more-details">
-              <summary>{{ t('reviewDetails') }} <ChevronDown :size="15" /></summary>
+            <div class="proto-more-details">
               <div class="proto-secondary-fields">
                 <label
                   ><span>{{ t('owner') }}</span
@@ -600,13 +841,34 @@ watch(search, () => {
                   ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
                 </label>
               </div>
-            </details>
+              <label
+                ><span>{{ t('effectiveDate') }}</span
+                ><input v-model="draftEffectiveDate" type="date" /><small
+                  >{{ t('bankDate') }}: {{ dateLabel(selected.date) }}</small
+                ></label
+              >
+              <Button
+                v-if="draftEffectiveDate"
+                variant="link"
+                class="justify-start"
+                @click="draftEffectiveDate = ''"
+                >{{ language === 'he' ? 'שימוש בתאריך הבנק' : 'Use bank date' }}</Button
+              >
+            </div>
           </div>
           <p v-if="error" class="proto-error" role="alert">{{ error }}</p>
           <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
           <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
         </div>
         <div class="proto-inspector-actions">
+          <Button
+            v-if="selected.needsReview && !isPreview"
+            variant="secondary"
+            class="w-full mb-2"
+            :disabled="saving || !draftCategory"
+            @click="confirmReview"
+            >{{ language === 'he' ? 'אישור העסקה' : 'Confirm review' }}</Button
+          >
           <button
             type="button"
             class="proto-save"
@@ -622,6 +884,25 @@ watch(search, () => {
 </template>
 
 <style scoped>
+.transaction-facts {
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 16px;
+  margin-top: 20px;
+  padding-block: 16px;
+  border-block: 1px solid var(--separator);
+}
+.transaction-facts dt {
+  color: var(--text-secondary);
+  font-size: var(--type-caption);
+}
+.transaction-facts dd {
+  margin: 4px 0 0;
+  font-size: var(--type-control);
+  font-weight: 500;
+  overflow-wrap: anywhere;
+}
+
 .proto-shell {
   display: flex;
   position: relative;
@@ -631,11 +912,9 @@ watch(search, () => {
   overflow: hidden;
   color: var(--text-primary);
   background: var(--bg-primary);
-  font:
-    14px/1.45 -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--type-body);
+  line-height: 1.5;
 }
 .proto-shell.embedded {
   height: 100%;
@@ -736,6 +1015,7 @@ watch(search, () => {
   background: var(--bg-primary);
 }
 .proto-toolbar {
+  min-height: 64px;
   display: flex;
   align-items: center;
   gap: 12px;
@@ -764,8 +1044,8 @@ watch(search, () => {
 .proto-inspector-head button {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--control-height);
+  height: var(--control-height);
   border: 0;
   border-radius: 7px;
   background: transparent;
@@ -783,7 +1063,7 @@ watch(search, () => {
   display: flex;
   align-items: center;
   gap: 8px;
-  min-height: 39px;
+  height: var(--control-height);
   padding: 0 13px;
   border: 1px solid var(--separator);
   border-radius: 8px;
@@ -794,17 +1074,6 @@ watch(search, () => {
 }
 .proto-filter-button:hover {
   background: var(--bg-tertiary);
-}
-.proto-advanced {
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
-  text-decoration: none;
-  white-space: nowrap;
-}
-.proto-advanced:hover {
-  color: var(--accent);
-  text-decoration: underline;
 }
 .proto-filter-dot {
   width: 6px;
@@ -819,12 +1088,16 @@ watch(search, () => {
   z-index: 5;
   display: grid;
   gap: 14px;
-  width: 285px;
+  width: 360px;
+  max-width: calc(100vw - 32px);
+  max-height: calc(100dvh - 150px);
+  overflow-y: auto;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   padding: 20px;
   border: 1px solid var(--separator);
   border-radius: 10px;
   background: var(--bg-primary);
-  box-shadow: 0 16px 40px #24365425;
+  box-shadow: var(--shadow-lg);
 }
 .proto-filter-popover {
   transform-origin: 24px -24px;
@@ -834,7 +1107,7 @@ watch(search, () => {
 }
 .filter-morph-enter-active {
   transition:
-    transform 420ms cubic-bezier(0.18, 1.18, 0.3, 1),
+    transform 160ms ease-out,
     opacity 150ms ease-out;
 }
 .filter-morph-leave-active {
@@ -845,7 +1118,7 @@ watch(search, () => {
 }
 .filter-morph-enter-from,
 .filter-morph-leave-to {
-  transform: translateY(-14px) scale(0.28, 0.12);
+  transform: translateY(-4px);
   opacity: 0;
 }
 .filter-morph-enter-active > label,
@@ -869,6 +1142,7 @@ watch(search, () => {
   }
 }
 .proto-popover-head {
+  grid-column: 1 / -1;
   display: flex;
   align-items: center;
   justify-content: space-between;
@@ -881,22 +1155,20 @@ watch(search, () => {
   font-size: 12px;
   font-weight: 600;
 }
+.proto-filter-popover input:not([type='checkbox']),
 .proto-filter-popover select,
 .proto-fields select,
 .proto-fields input:not([type='checkbox']),
 .proto-fields textarea {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--control-height);
   padding: 6px 10px;
   border: 1px solid var(--separator);
   border-radius: 9px;
   background: var(--bg-primary);
   color: var(--text-primary);
-  font:
-    14px -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--type-body);
 }
 .proto-filter-popover .proto-check {
   display: flex;
@@ -918,7 +1190,7 @@ watch(search, () => {
   align-items: center;
   gap: 10px;
   width: min(310px, 30vw);
-  min-height: 39px;
+  height: var(--control-height);
   min-width: 160px;
   flex: 1 1 180px;
   margin-inline-start: auto;
@@ -927,6 +1199,10 @@ watch(search, () => {
   border-radius: 8px;
   background: var(--bg-secondary);
   color: var(--text-tertiary);
+}
+.proto-search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
 }
 .proto-search input {
   width: 100%;
@@ -1012,7 +1288,7 @@ watch(search, () => {
   position: sticky;
   top: 0;
   z-index: 1;
-  height: 39px;
+  height: var(--control-height);
   padding-inline: 16px;
   border-bottom: 1px solid var(--separator);
   background: var(--bg-primary);
@@ -1177,7 +1453,7 @@ watch(search, () => {
 .proto-detail-amount {
   display: block;
   margin-top: 17px;
-  font-size: 34px;
+  font-size: var(--type-title);
   line-height: 1.1;
   letter-spacing: -0.035em;
   font-variant-numeric: tabular-nums;
@@ -1185,7 +1461,7 @@ watch(search, () => {
 .proto-inspector-content h3 {
   margin: 0 0 8px;
   overflow-wrap: anywhere;
-  font-size: 22px;
+  font-size: var(--type-section);
   line-height: 1.35;
 }
 .proto-detail-meta {
@@ -1199,32 +1475,10 @@ watch(search, () => {
   display: grid;
   gap: 20px;
 }
-.proto-more-details {
-  border-block: 1px solid var(--separator);
-}
-.proto-more-details summary {
-  display: flex;
-  align-items: center;
-  justify-content: space-between;
-  min-height: 48px;
-  list-style: none;
-  color: var(--text-secondary);
-  font-size: 13px;
-  font-weight: 500;
-}
-.proto-more-details summary::-webkit-details-marker {
-  display: none;
-}
-.proto-more-details summary:hover {
-  color: var(--text-primary);
-}
-.proto-more-details[open] summary svg {
-  transform: rotate(180deg);
-}
 .proto-secondary-fields {
   display: grid;
   gap: 20px;
-  padding-block: 4px 20px;
+  padding-block: 0 20px;
 }
 .proto-fields + .proto-error {
   margin-top: 16px;
@@ -1260,16 +1514,13 @@ watch(search, () => {
 }
 .proto-save {
   width: 100%;
-  min-height: 40px;
+  min-height: var(--control-height);
   border: 0;
   border-radius: 9px;
   background: var(--accent);
   color: var(--primary-foreground);
-  font:
-    700 14px -apple-system,
-    BlinkMacSystemFont,
-    'Segoe UI',
-    sans-serif;
+  font-family: var(--font-ui);
+  font-size: var(--type-body);
   cursor: pointer;
 }
 .proto-save:hover {
@@ -1349,9 +1600,6 @@ watch(search, () => {
     transform-origin: top center;
   }
 
-  .proto-advanced {
-    order: 3;
-  }
   .proto-table {
     min-width: 360px;
   }

@@ -627,7 +627,7 @@ async function finish() {
 }
 .setup-page :deep(input),
 .setup-page :deep(button[role='combobox']) {
-  min-height: 40px;
+  min-height: var(--control-height);
 }
 .setup-page :deep(label) {
   margin-bottom: 8px;

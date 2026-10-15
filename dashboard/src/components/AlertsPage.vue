@@ -179,7 +179,7 @@ async function testAlert() {
             v-model.number="settings.largeChargeThreshold"
             :disabled="!settings.enabled"
             type="number"
-            class="w-28 h-8 text-[14px]"
+            class="w-28"
             min="0"
           />
         </SettingsRow>
@@ -188,7 +188,7 @@ async function testAlert() {
             v-model.number="settings.unusualSpendingPercent"
             :disabled="!settings.enabled"
             type="number"
-            class="w-28 h-8 text-[14px]"
+            class="w-28"
             min="10"
             max="200"
           />
@@ -211,7 +211,7 @@ async function testAlert() {
             v-model.number="settings.monthlySummary.dayOfMonth"
             :disabled="!settings.enabled"
             type="number"
-            class="w-28 h-8 text-[14px]"
+            class="w-28"
             min="1"
             max="28"
           />
@@ -231,6 +231,6 @@ async function testAlert() {
   line-height: 1.6;
 }
 .alerts-page :deep(input) {
-  min-height: 38px;
+  min-height: var(--control-height);
 }
 </style>

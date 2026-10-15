@@ -113,7 +113,7 @@ defineExpose({ loadSessions });
         </button>
         <button
           type="button"
-          class="p-2 rounded hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
+          class="icon-control grid place-items-center rounded hover:bg-destructive/10 hover:text-destructive transition-colors shrink-0"
           :aria-label="`${language === 'he' ? 'מחיקת שיחה' : 'Delete conversation'}: ${session.title}`"
           @click="handleDelete(session.id, $event)"
         >

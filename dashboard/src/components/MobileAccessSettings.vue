@@ -2,6 +2,7 @@
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import QRCode from 'qrcode';
 import { Check, LoaderCircle, QrCode, ShieldCheck, Smartphone, X } from 'lucide-vue-next';
+import ConfirmAction from './ConfirmAction.vue';
 import { Button } from '@/components/ui/button';
 import { Switch } from '@/components/ui/switch';
 import { SettingsGroup, SettingsRow } from '@/components/ui/settings-group';
@@ -212,6 +213,8 @@ async function refresh(): Promise<void> {
     }
     if (snapshot.value.lastActionError) {
       error.value = friendlyError(snapshot.value.lastActionError);
+    } else {
+      revokeOpen.value = false;
     }
   } catch {
     error.value = localized(
@@ -232,6 +235,8 @@ async function toggleEnabled(enabled: boolean): Promise<void> {
     snapshot.value = await electronAPI.setMobileAccessEnabled(enabled);
     if (snapshot.value.lastActionError) {
       error.value = friendlyError(snapshot.value.lastActionError);
+    } else {
+      revokeOpen.value = false;
     }
   } catch {
     error.value = 'Mobile Access could not be changed.';
@@ -301,12 +306,17 @@ async function decidePairing(pairingId: string, approve: boolean): Promise<void>
   }
 }
 
-async function revokeDevice(device: MobileAccessDevice): Promise<void> {
+const revokeOpen = ref(false);
+const revokeTarget = ref<MobileAccessDevice | null>(null);
+function askRevoke(device: MobileAccessDevice) {
+  revokeTarget.value = device;
+  error.value = '';
+  revokeOpen.value = true;
+}
+async function revokeDevice(): Promise<void> {
+  const device = revokeTarget.value;
+  if (!device) return;
   if (!electronAPI?.revokeMobileDevice || device.revokedAt) return;
-  const confirmed = window.confirm(
-    `Revoke ${device.name}? It will lose access on its next connected request.`,
-  );
-  if (!confirmed) return;
 
   actionId.value = device.id;
   error.value = '';
@@ -314,6 +324,8 @@ async function revokeDevice(device: MobileAccessDevice): Promise<void> {
     snapshot.value = await electronAPI.revokeMobileDevice(device.id);
     if (snapshot.value.lastActionError) {
       error.value = friendlyError(snapshot.value.lastActionError);
+    } else {
+      revokeOpen.value = false;
     }
   } catch {
     error.value = 'The device could not be revoked.';
@@ -500,7 +512,7 @@ onUnmounted(() => {
               size="sm"
               variant="secondary"
               :disabled="actionId === device.id"
-              @click="revokeDevice(device)"
+              @click="askRevoke(device)"
             >
               {{ localized('Revoke', 'ביטול גישה') }}
             </Button>
@@ -524,6 +536,20 @@ onUnmounted(() => {
       <p role="alert" class="text-[12px] text-destructive">{{ error }}</p>
     </SettingsRow>
   </SettingsGroup>
+  <ConfirmAction
+    v-model:open="revokeOpen"
+    :title="localized('Revoke device access?', 'לבטל את הגישה למכשיר?')"
+    :description="
+      localized(
+        `${revokeTarget?.name ?? 'This device'} will lose access on its next connection.`,
+        `הגישה של ${revokeTarget?.name ?? 'המכשיר'} תבוטל בחיבור הבא.`,
+      )
+    "
+    :label="localized('Revoke access', 'ביטול גישה')"
+    :pending="!!actionId"
+    :error="error"
+    @confirm="revokeDevice"
+  />
 </template>
 
 <style scoped>

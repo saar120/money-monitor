@@ -185,7 +185,7 @@ function handleKeydown(e: KeyboardEvent) {
           <Button
             variant="ghost"
             size="icon"
-            class="h-8 w-8"
+            class="w-8"
             :aria-label="historyLabel"
             :aria-expanded="sidebarOpen"
             aria-controls="advisor-history"
@@ -213,16 +213,15 @@ function handleKeydown(e: KeyboardEvent) {
                 {{ t('advisorDescription') }}
               </p>
               <div class="advisor-suggestions grid gap-0 w-full max-w-lg">
-                <Button
+                <button
                   v-for="key in suggestionKeys"
                   :key="key"
-                  variant="secondary"
-                  size="sm"
-                  class="advisor-suggestion whitespace-normal max-w-full text-start text-[14px] h-auto py-3 px-4"
+                  type="button"
+                  class="advisor-suggestion whitespace-normal max-w-full text-start h-auto py-3 px-4"
                   @click="sendMessage(t(key))"
                 >
                   {{ t(key) }}
-                </Button>
+                </button>
               </div>
             </div>
 
@@ -334,6 +333,10 @@ function handleKeydown(e: KeyboardEvent) {
 
 <style scoped>
 .advisor-suggestion {
+  display: flex;
+  align-items: center;
+  min-height: 48px;
+  font-size: var(--type-body);
   justify-content: flex-start;
   border: 0;
   border-bottom: 1px solid var(--separator);

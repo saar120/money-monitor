@@ -572,7 +572,7 @@ async function confirmDeleteMovement() {
       <!-- Asset header -->
       <div class="flex flex-wrap items-start justify-between gap-3">
         <div>
-          <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+          <h1 class="text-[28px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
           <div class="flex flex-wrap items-center gap-2 mt-1">
             <Badge :style="typeBadgeStyle">{{ typeLabel }}</Badge>
             <span v-if="asset.institution" class="text-[14px] text-text-secondary">{{
@@ -808,7 +808,7 @@ async function confirmDeleteMovement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="h-7 w-7"
+                        class="w-7"
                         :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                         @click="openEditHolding(h)"
                       >
@@ -817,7 +817,7 @@ async function confirmDeleteMovement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="h-7 w-7"
+                        class="w-7"
                         :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                         @click="holdingToDelete = h"
                       >
@@ -957,7 +957,7 @@ async function confirmDeleteMovement() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="h-7 w-7 transition-opacity"
+                  class="w-7 transition-opacity"
                   :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="movementToDelete = m"
                 >

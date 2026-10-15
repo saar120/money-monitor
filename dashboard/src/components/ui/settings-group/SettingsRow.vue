@@ -19,7 +19,7 @@ provide(settingsFieldKey, { labelId, descriptionId });
   <div
     :class="
       cn(
-        'px-5 py-4 flex gap-4',
+        'py-5 flex gap-6',
         vertical
           ? 'flex-col'
           : 'flex-col items-start sm:flex-row sm:items-center sm:justify-between',
@@ -28,7 +28,7 @@ provide(settingsFieldKey, { labelId, descriptionId });
     "
   >
     <div v-if="label" class="min-w-0 flex-1" :class="{ 'min-w-0': !vertical }">
-      <div :id="labelId" class="text-sm text-text-primary">{{ label }}</div>
+      <div :id="labelId" class="text-sm font-medium text-text-primary">{{ label }}</div>
       <div
         v-if="description"
         :id="descriptionId"

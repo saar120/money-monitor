@@ -202,7 +202,7 @@ const chartDatasets = computed(() =>
     <template v-else-if="asset">
       <!-- Asset header -->
       <div>
-        <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+        <h1 class="text-[28px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
         <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
             class="inline-flex items-center gap-1 rounded-full px-2.5 py-0.5 text-[12px] font-medium bg-bg-tertiary text-text-secondary"

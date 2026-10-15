@@ -342,7 +342,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
 }
 .import-title {
   margin: 0 0 8px;
-  font-size: 20px;
+  font-size: var(--type-section);
   font-weight: 730;
   line-height: 1.25;
 }
@@ -472,7 +472,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   border-inline-end: 0;
 }
 .import-outcome strong {
-  font-size: 20px;
+  font-size: var(--type-section);
   line-height: 1.3;
   font-variant-numeric: tabular-nums;
 }
@@ -554,7 +554,7 @@ function statusLabel(status: OneZeroImportPreview['rows'][number]['status']) {
   align-items: center;
   justify-content: center;
   gap: 6px;
-  min-height: 36px;
+  min-height: var(--control-height);
   padding: 0 15px;
   border-radius: 7px;
   font-size: 12px;

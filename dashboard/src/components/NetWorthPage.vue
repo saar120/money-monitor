@@ -28,9 +28,6 @@ import {
   createAsset,
   updateAsset,
   deleteAsset,
-  createHolding,
-  updateHolding,
-  deleteHolding,
   createLiability,
   updateLiability,
   deleteLiability,
@@ -38,7 +35,6 @@ import {
   type NetWorthHistory,
   type Account,
   type Asset,
-  type Holding,
   type Liability,
 } from '../api/client';
 import { useApi } from '../composables/useApi';
@@ -47,7 +43,6 @@ import { language, t } from '@/lib/language';
 import {
   ASSET_TYPE_COLORS,
   ASSET_TYPE_LABELS,
-  HOLDING_TYPE_LABELS,
   LIQUIDITY_LABELS,
   LIQUIDITY_STYLES,
   LIABILITY_TYPE_LABELS,
@@ -85,15 +80,13 @@ import {
 } from '@/components/ui/alert-dialog';
 import {
   Plus,
-  ChevronDown,
+  ChevronRight,
   Pencil,
   Trash2,
   TrendingUp,
   TrendingDown,
   AlertCircle,
   Loader2,
-  Check,
-  X,
 } from 'lucide-vue-next';
 
 const { textPrimary, bgPrimary, separator, chartPrimary, chartComparison } = useChartTheme();
@@ -285,78 +278,10 @@ const nwYAxisFormatter = (v: number): string => {
 
 const nwTooltipFormatter = (v: number): string => formatCurrency(v);
 
-// ─── Asset expand/collapse ───
-const expandedAssets = ref(new Set<number>());
-
-function toggleExpand(assetId: number) {
-  if (expandedAssets.value.has(assetId)) {
-    expandedAssets.value.delete(assetId);
-  } else {
-    expandedAssets.value.add(assetId);
-  }
-}
-
-// ─── Quick update (inline editing) ───
-const editingAssetId = ref<number | null>(null);
-const editedHoldings = ref(new Map<number, { quantity: number; lastPrice: number | null }>());
-const savingHoldings = ref(new Set<number>());
-const savedHoldings = ref(new Set<number>());
-const failedHoldings = ref(new Map<number, string>());
-
-function startQuickUpdate(asset: Asset) {
-  editingAssetId.value = asset.id;
-  expandedAssets.value.add(asset.id);
-  editedHoldings.value.clear();
-  savingHoldings.value.clear();
-  savedHoldings.value.clear();
-  failedHoldings.value.clear();
-  for (const h of asset.holdings) {
-    editedHoldings.value.set(h.id, {
-      quantity: h.quantity,
-      lastPrice: h.lastPrice,
-    });
-  }
-}
-
-function cancelQuickUpdate() {
-  editingAssetId.value = null;
-  editedHoldings.value.clear();
-}
-
-async function saveQuickUpdate(asset: Asset) {
-  const promises: Promise<void>[] = [];
-  for (const h of asset.holdings) {
-    const edited = editedHoldings.value.get(h.id);
-    if (!edited) continue;
-    const dirty = edited.quantity !== h.quantity || edited.lastPrice !== h.lastPrice;
-    if (!dirty) continue;
-    savingHoldings.value.add(h.id);
-    const data: { quantity?: number; lastPrice?: number | null } = {};
-    if (edited.quantity !== h.quantity) data.quantity = edited.quantity;
-    if (edited.lastPrice !== h.lastPrice) data.lastPrice = edited.lastPrice;
-    promises.push(
-      updateHolding(h.id, data)
-        .then(() => {
-          savedHoldings.value.add(h.id);
-          savingHoldings.value.delete(h.id);
-          setTimeout(() => savedHoldings.value.delete(h.id), 2000);
-        })
-        .catch((err) => {
-          failedHoldings.value.set(h.id, err instanceof Error ? err.message : 'Failed');
-          savingHoldings.value.delete(h.id);
-        }),
-    );
-  }
-  await Promise.all(promises);
-  if (failedHoldings.value.size === 0) {
-    editingAssetId.value = null;
-    editedHoldings.value.clear();
-    refreshAll();
-  }
-}
-
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
+const mutationError = ref('');
+const deleting = ref(false);
 const editingAsset = ref<Asset | null>(null);
 const assetForm = ref({
   name: '',
@@ -384,6 +309,7 @@ function openAddAsset() {
     initialValue: 0,
     initialCostBasis: 0,
   };
+  mutationError.value = '';
   showAssetDialog.value = true;
 }
 
@@ -400,6 +326,7 @@ function openEditAsset(asset: Asset) {
     initialValue: 0,
     initialCostBasis: 0,
   };
+  mutationError.value = '';
   showAssetDialog.value = true;
 }
 
@@ -409,6 +336,7 @@ const assetCategory = computed(() => getAssetCategory(assetForm.value.type));
 async function handleSaveAsset() {
   if (!assetValid.value) return;
   assetSaving.value = true;
+  mutationError.value = '';
   try {
     const linked =
       assetForm.value.linkedAccountId === 'none'
@@ -441,95 +369,10 @@ async function handleSaveAsset() {
     }
     showAssetDialog.value = false;
     refreshAll();
+  } catch (cause) {
+    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
     assetSaving.value = false;
-  }
-}
-
-// ─── Holding Dialog ───
-const showHoldingDialog = ref(false);
-const holdingParentAssetId = ref<number | null>(null);
-const holdingParentAsset = computed(
-  () => assetsApi.data.value?.find((a) => a.id === holdingParentAssetId.value) ?? null,
-);
-const editingHolding = ref<Holding | null>(null);
-const holdingForm = ref({
-  name: '',
-  type: 'stock',
-  currency: 'ILS',
-  quantity: 0,
-  costBasis: 0,
-  lastPrice: 0,
-  notes: '',
-});
-const holdingSaving = ref(false);
-
-function openAddHolding(assetId: number) {
-  holdingParentAssetId.value = assetId;
-  editingHolding.value = null;
-  holdingForm.value = {
-    name: '',
-    type: 'stock',
-    currency: 'ILS',
-    quantity: 0,
-    costBasis: 0,
-    lastPrice: 0,
-    notes: '',
-  };
-  showHoldingDialog.value = true;
-}
-
-function openEditHolding(assetId: number, holding: Holding) {
-  holdingParentAssetId.value = assetId;
-  editingHolding.value = holding;
-  holdingForm.value = {
-    name: holding.name,
-    type: holding.type,
-    currency: holding.currency,
-    quantity: holding.quantity,
-    costBasis: holding.costBasis,
-    lastPrice: holding.lastPrice ?? 0,
-    notes: holding.notes ?? '',
-  };
-  showHoldingDialog.value = true;
-}
-
-const holdingShowPrice = computed(() =>
-  ['stock', 'etf', 'crypto'].includes(holdingForm.value.type),
-);
-const holdingValid = computed(
-  () =>
-    holdingForm.value.name.trim() && holdingForm.value.type && holdingForm.value.currency.trim(),
-);
-const holdingDoubleCount = computed(() => {
-  if (!holdingParentAsset.value?.linkedAccountId) return false;
-  return holdingForm.value.currency.toUpperCase() === 'ILS' && holdingForm.value.type === 'cash';
-});
-
-async function handleSaveHolding() {
-  if (!holdingValid.value || !holdingParentAssetId.value || holdingDoubleCount.value) return;
-  holdingSaving.value = true;
-  try {
-    const data: Record<string, unknown> = {
-      name: holdingForm.value.name.trim(),
-      type: holdingForm.value.type,
-      currency: holdingForm.value.currency.trim(),
-      quantity: Number(holdingForm.value.quantity),
-      costBasis: Number(holdingForm.value.costBasis),
-      notes: holdingForm.value.notes.trim() || undefined,
-    };
-    if (holdingShowPrice.value) {
-      data.lastPrice = Number(holdingForm.value.lastPrice);
-    }
-    if (editingHolding.value) {
-      await updateHolding(editingHolding.value.id, data as Parameters<typeof updateHolding>[1]);
-    } else {
-      await createHolding(holdingParentAssetId.value, data as Parameters<typeof createHolding>[1]);
-    }
-    showHoldingDialog.value = false;
-    refreshAll();
-  } finally {
-    holdingSaving.value = false;
   }
 }
 
@@ -560,6 +403,7 @@ function openAddLiability() {
     startDate: '',
     notes: '',
   };
+  mutationError.value = '';
   showLiabilityDialog.value = true;
 }
 
@@ -575,6 +419,7 @@ function openEditLiability(liability: Liability) {
     startDate: liability.startDate ?? '',
     notes: liability.notes ?? '',
   };
+  mutationError.value = '';
   showLiabilityDialog.value = true;
 }
 
@@ -588,6 +433,7 @@ const liabilityValid = computed(
 async function handleSaveLiability() {
   if (!liabilityValid.value) return;
   liabilitySaving.value = true;
+  mutationError.value = '';
   try {
     const data = {
       name: liabilityForm.value.name.trim(),
@@ -613,6 +459,8 @@ async function handleSaveLiability() {
     }
     showLiabilityDialog.value = false;
     refreshAll();
+  } catch (cause) {
+    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
     liabilitySaving.value = false;
   }
@@ -620,42 +468,37 @@ async function handleSaveLiability() {
 
 // ─── Delete confirmations ───
 const deletingAsset = ref<{ id: number; name: string } | null>(null);
-const deletingHolding = ref<{ id: number; name: string; assetName: string } | null>(null);
 const deletingLiability = ref<{ id: number; name: string } | null>(null);
 
 async function handleDeleteAsset() {
   const target = deletingAsset.value;
-  if (!target) return;
-  deletingAsset.value = null;
+  if (!target || deleting.value) return;
+  deleting.value = true;
+  mutationError.value = '';
   try {
     await deleteAsset(target.id);
-    refreshAll();
-  } catch {
-    /* toast/error handling could go here */
-  }
-}
-
-async function handleDeleteHolding() {
-  const target = deletingHolding.value;
-  if (!target) return;
-  deletingHolding.value = null;
-  try {
-    await deleteHolding(target.id);
-    refreshAll();
-  } catch {
-    /* toast/error handling could go here */
+    deletingAsset.value = null;
+    await refreshAll();
+  } catch (cause) {
+    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } finally {
+    deleting.value = false;
   }
 }
 
 async function handleDeleteLiability() {
   const target = deletingLiability.value;
-  if (!target) return;
-  deletingLiability.value = null;
+  if (!target || deleting.value) return;
+  deleting.value = true;
+  mutationError.value = '';
   try {
     await deleteLiability(target.id);
-    refreshAll();
-  } catch {
-    /* toast/error handling could go here */
+    deletingLiability.value = null;
+    await refreshAll();
+  } catch (cause) {
+    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } finally {
+    deleting.value = false;
   }
 }
 
@@ -848,14 +691,14 @@ const fullLiabilityMap = computed(() => {
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'ghost' : 'secondary'"
-              class="h-7 px-2 text-[12px]"
+              class="px-2"
               @click="showLiquidOnly = false"
               >{{ t('total') }}</Button
             >
             <Button
               size="sm"
               :variant="showLiquidOnly ? 'secondary' : 'ghost'"
-              class="h-7 px-2 text-[12px]"
+              class="px-2"
               @click="showLiquidOnly = true"
               >{{ t('liquid') }}</Button
             >
@@ -890,11 +733,8 @@ const fullLiabilityMap = computed(() => {
             :key="asset.id"
             :class="['group', idx < assets.length - 1 ? 'border-b border-separator' : '']"
           >
-            <!-- Asset Row (collapsed) -->
-            <div
-              class="flex flex-wrap items-center gap-3 px-4 py-3 hover:bg-bg-tertiary/50 transition-colors duration-150 cursor-pointer"
-              @click="toggleExpand(asset.id)"
-            >
+            <!-- Asset summary -->
+            <div class="flex flex-wrap items-center gap-3 px-4 py-3 transition-colors duration-150">
               <div
                 class="w-2.5 h-2.5 rounded-full flex-shrink-0"
                 :style="{ backgroundColor: ASSET_TYPE_COLORS[asset.type] ?? '#71717a' }"
@@ -902,7 +742,7 @@ const fullLiabilityMap = computed(() => {
               <div class="flex-1 min-w-0">
                 <button
                   type="button"
-                  class="text-start text-[14px] font-medium hover:underline cursor-pointer break-words"
+                  class="text-start text-[14px] font-medium hover:underline cursor-pointer break-words min-h-9"
                   @click.stop="router.push(`/net-worth/assets/${asset.id}`)"
                 >
                   {{ asset.name }}
@@ -915,7 +755,7 @@ const fullLiabilityMap = computed(() => {
                   <Badge
                     v-if="asset.liquidity"
                     :class="LIQUIDITY_STYLES[asset.liquidity] ?? ''"
-                    class="ml-1.5 text-[10px] px-1.5 py-0 border-0"
+                    class="ms-2 text-[12px] px-2 py-0.5 border-0"
                   >
                     {{ LIQUIDITY_LABELS[asset.liquidity] ?? asset.liquidity }}
                   </Badge>
@@ -933,233 +773,31 @@ const fullLiabilityMap = computed(() => {
               <!-- Asset actions -->
               <div class="flex items-center gap-0.5 flex-shrink-0" @click.stop>
                 <button
-                  class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  class="icon-control inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
                   :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                   @click="openEditAsset(getFullAsset(asset.id)!)"
                 >
                   <Pencil class="h-3 w-3" />
                 </button>
                 <button
-                  class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  class="icon-control inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
                   :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
-                  @click="deletingAsset = { id: asset.id, name: asset.name }"
+                  @click="
+                    mutationError = '';
+                    deletingAsset = { id: asset.id, name: asset.name };
+                  "
                 >
                   <Trash2 class="h-3 w-3 text-destructive" />
                 </button>
               </div>
               <button
                 type="button"
-                class="h-8 w-8 inline-flex items-center justify-center rounded-md hover:bg-bg-secondary shrink-0"
-                :aria-label="`${language === 'he' ? 'החזקות' : 'Holdings'}: ${asset.name}`"
-                :aria-expanded="expandedAssets.has(asset.id)"
-                @click.stop="toggleExpand(asset.id)"
+                class="icon-control inline-flex items-center justify-center rounded-md hover:bg-bg-secondary shrink-0"
+                :aria-label="`${t('assetDetails')}: ${asset.name}`"
+                @click="router.push(`/net-worth/assets/${asset.id}`)"
               >
-                <ChevronDown
-                  class="h-4 w-4 text-text-secondary"
-                  :class="{ 'rotate-180': expandedAssets.has(asset.id) }"
-                />
+                <ChevronRight class="h-4 w-4 text-text-secondary" />
               </button>
-            </div>
-
-            <!-- Expanded Holdings -->
-            <div v-if="expandedAssets.has(asset.id)" class="min-w-0">
-              <div
-                v-if="getFullAsset(asset.id)"
-                class="px-4 pb-3 min-w-0 overflow-x-auto"
-                tabindex="0"
-                :aria-label="language === 'he' ? 'החזקות' : 'Holdings'"
-              >
-                <!-- Quick Update Mode -->
-                <template v-if="editingAssetId === asset.id">
-                  <div class="flex items-center justify-between mb-2">
-                    <p class="text-[12px] font-medium text-text-secondary">Holdings (editing):</p>
-                    <div class="flex gap-1.5">
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        class="h-7 text-[12px]"
-                        @click="cancelQuickUpdate"
-                        >Cancel</Button
-                      >
-                      <Button
-                        size="sm"
-                        class="h-7 text-[12px]"
-                        @click="saveQuickUpdate(getFullAsset(asset.id)!)"
-                        >Save Changes</Button
-                      >
-                    </div>
-                  </div>
-                  <div class="space-y-1.5">
-                    <div
-                      v-for="h in getFullAsset(asset.id)!.holdings"
-                      :key="h.id"
-                      class="flex items-center gap-2 text-[12px] min-w-[480px]"
-                    >
-                      <span class="w-24 truncate font-medium">{{ h.name }}</span>
-                      <Input
-                        :aria-label="`${language === 'he' ? 'כמות' : 'Quantity'}: ${h.name}`"
-                        type="number"
-                        step="any"
-                        class="h-7 text-[12px] w-24"
-                        :model-value="editedHoldings.get(h.id)?.quantity"
-                        @update:model-value="
-                          (v: string | number) => {
-                            const e = editedHoldings.get(h.id);
-                            if (e) e.quantity = Number(v);
-                          }
-                        "
-                      />
-                      <template v-if="['stock', 'etf', 'crypto'].includes(h.type)">
-                        <Input
-                          :aria-label="`${language === 'he' ? 'מחיר ליחידה' : 'Price per unit'}: ${h.name}`"
-                          type="number"
-                          step="any"
-                          class="h-7 text-[12px] w-24"
-                          :model-value="editedHoldings.get(h.id)?.lastPrice ?? undefined"
-                          @update:model-value="
-                            (v: string | number) => {
-                              const e = editedHoldings.get(h.id);
-                              if (e) e.lastPrice = Number(v);
-                            }
-                          "
-                        />
-                      </template>
-                      <span v-else class="w-24 text-center">-</span>
-                      <span class="w-20 text-right tabular-nums">{{
-                        formatCompact(h.currentValueIls)
-                      }}</span>
-                      <span class="w-6 flex justify-center">
-                        <Loader2 v-if="savingHoldings.has(h.id)" class="h-3.5 w-3.5 animate-spin" />
-                        <Check
-                          v-else-if="savedHoldings.has(h.id)"
-                          class="h-3.5 w-3.5 text-success"
-                        />
-                        <X
-                          v-else-if="failedHoldings.has(h.id)"
-                          class="h-3.5 w-3.5 text-destructive"
-                          :title="failedHoldings.get(h.id)"
-                        />
-                      </span>
-                    </div>
-                  </div>
-                </template>
-
-                <!-- View Mode -->
-                <template v-else>
-                  <p class="text-[12px] font-medium text-text-secondary mb-2">Holdings:</p>
-                  <div
-                    v-if="getFullAsset(asset.id)!.holdings.length === 0"
-                    class="text-[12px] text-text-secondary py-2"
-                  >
-                    <template
-                      v-if="
-                        getAssetCategory(asset.type) === 'crypto' ||
-                        getAssetCategory(asset.type) === 'brokerage'
-                      "
-                    >
-                      No holdings yet.
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        class="h-6 text-[12px] ml-2"
-                        @click.stop="openAddHolding(asset.id)"
-                      >
-                        <Plus class="h-3 w-3 mr-1" /> Add
-                      </Button>
-                    </template>
-                    <template v-else> Click to view and update value. </template>
-                  </div>
-                  <div v-else class="space-y-1">
-                    <div
-                      v-for="h in getFullAsset(asset.id)!.holdings"
-                      :key="h.id"
-                      class="flex items-center gap-2 text-[12px] group/holding min-w-[520px]"
-                    >
-                      <span class="w-24 truncate font-medium">{{ h.name }}</span>
-                      <span class="w-20 text-text-secondary tabular-nums">
-                        <template
-                          v-if="h.quantity !== 1 || ['stock', 'etf', 'crypto'].includes(h.type)"
-                        >
-                          {{ h.quantity }}
-                          {{ h.type === 'stock' || h.type === 'etf' ? 'shares' : h.currency }}
-                        </template>
-                        <template v-else>-</template>
-                      </span>
-                      <span class="w-16 text-text-secondary tabular-nums">
-                        {{
-                          h.lastPrice != null
-                            ? `${h.currency === 'ILS' ? '₪' : '$'}${h.lastPrice}`
-                            : '-'
-                        }}
-                      </span>
-                      <span
-                        class="w-20 text-right tabular-nums font-medium"
-                        :class="h.stale ? 'text-text-secondary' : ''"
-                      >
-                        {{ formatCompact(h.currentValueIls) }}
-                        <AlertCircle
-                          v-if="h.stale"
-                          class="h-3 w-3 inline ml-0.5 text-text-secondary"
-                        />
-                      </span>
-                      <span
-                        v-if="h.gainLossPercent != null"
-                        class="w-14 text-right tabular-nums"
-                        :class="h.gainLossPercent >= 0 ? 'text-success' : 'text-destructive'"
-                      >
-                        {{ h.gainLossPercent >= 0 ? '+' : '' }}{{ h.gainLossPercent.toFixed(1) }}%
-                      </span>
-                      <span v-else class="w-14" />
-                      <div class="flex items-center gap-1 transition-opacity ml-auto" @click.stop>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="h-6 w-6"
-                          :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
-                          @click="openEditHolding(asset.id, h)"
-                        >
-                          <Pencil class="h-3 w-3" />
-                        </Button>
-                        <Button
-                          variant="ghost"
-                          size="icon"
-                          class="h-6 w-6"
-                          :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
-                          @click="
-                            deletingHolding = { id: h.id, name: h.name, assetName: asset.name }
-                          "
-                        >
-                          <Trash2 class="h-3 w-3 text-destructive" />
-                        </Button>
-                      </div>
-                    </div>
-                    <div
-                      v-if="
-                        getAssetCategory(asset.type) === 'crypto' ||
-                        getAssetCategory(asset.type) === 'brokerage'
-                      "
-                      class="flex gap-1.5 mt-1"
-                    >
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        class="h-6 text-[12px]"
-                        @click.stop="openAddHolding(asset.id)"
-                      >
-                        <Plus class="h-3 w-3 mr-1" /> Add Holding
-                      </Button>
-                      <Button
-                        variant="secondary"
-                        size="sm"
-                        class="h-6 text-[12px]"
-                        @click.stop="startQuickUpdate(getFullAsset(asset.id)!)"
-                      >
-                        Update Values
-                      </Button>
-                    </div>
-                  </div>
-                </template>
-              </div>
             </div>
           </div>
         </section>
@@ -1216,7 +854,7 @@ const fullLiabilityMap = computed(() => {
                     v-if="liab.full"
                     variant="ghost"
                     size="icon"
-                    class="h-7 w-7"
+                    class="w-7"
                     :aria-label="language === 'he' ? 'עריכה' : 'Edit'"
                     @click="openEditLiability(liab.full)"
                   >
@@ -1225,9 +863,12 @@ const fullLiabilityMap = computed(() => {
                   <Button
                     variant="ghost"
                     size="icon"
-                    class="h-7 w-7"
+                    class="w-7"
                     :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
-                    @click="deletingLiability = { id: liab.id, name: liab.name }"
+                    @click="
+                      mutationError = '';
+                      deletingLiability = { id: liab.id, name: liab.name };
+                    "
                   >
                     <Trash2 class="h-3.5 w-3.5 text-destructive" />
                   </Button>
@@ -1406,6 +1047,9 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
         </div>
+        <p v-if="mutationError" role="alert" class="text-sm text-destructive">
+          {{ mutationError }}
+        </p>
         <DialogFooter>
           <DialogClose as-child>
             <Button variant="secondary">Cancel</Button>
@@ -1413,105 +1057,6 @@ const fullLiabilityMap = computed(() => {
           <Button variant="filled" :disabled="!assetValid || assetSaving" @click="handleSaveAsset">
             <Loader2 v-if="assetSaving" class="h-4 w-4 mr-2 animate-spin" />
             {{ editingAsset ? 'Save Changes' : 'Add Asset' }}
-          </Button>
-        </DialogFooter>
-      </DialogContent>
-    </Dialog>
-
-    <!-- ─── Holding Dialog ─── -->
-    <Dialog v-model:open="showHoldingDialog">
-      <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
-        <DialogHeader>
-          <DialogTitle>
-            {{
-              editingHolding
-                ? 'Edit Holding'
-                : `Add Holding${holdingParentAsset ? ` to ${holdingParentAsset.name}` : ''}`
-            }}
-          </DialogTitle>
-        </DialogHeader>
-        <div class="space-y-4 py-2">
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-10" class="text-[14px] font-medium">Name</label>
-            <Input
-              id="net-worth-page-field-10"
-              v-model="holdingForm.name"
-              placeholder="e.g. TSLA, kaspit shkalit"
-            />
-          </div>
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-11" class="text-[14px] font-medium">Type</label>
-            <Select v-model="holdingForm.type">
-              <SelectTrigger id="net-worth-page-field-11">
-                <SelectValue placeholder="Select type..." />
-              </SelectTrigger>
-              <SelectContent>
-                <SelectItem v-for="(label, key) in HOLDING_TYPE_LABELS" :key="key" :value="key">
-                  {{ label }}
-                </SelectItem>
-              </SelectContent>
-            </Select>
-          </div>
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-12" class="text-[14px] font-medium">Currency</label>
-            <Input id="net-worth-page-field-12" v-model="holdingForm.currency" placeholder="USD" />
-          </div>
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-13" class="text-[14px] font-medium">Quantity</label>
-            <Input
-              id="net-worth-page-field-13"
-              v-model="holdingForm.quantity"
-              type="number"
-              step="any"
-            />
-          </div>
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-14" class="text-[14px] font-medium">Cost Basis</label>
-            <Input
-              id="net-worth-page-field-14"
-              v-model="holdingForm.costBasis"
-              type="number"
-              step="any"
-            />
-          </div>
-          <div v-if="holdingShowPrice" class="space-y-1.5">
-            <label for="net-worth-page-field-15" class="text-[14px] font-medium"
-              >Last Price (per unit)</label
-            >
-            <Input
-              id="net-worth-page-field-15"
-              v-model="holdingForm.lastPrice"
-              type="number"
-              step="any"
-            />
-          </div>
-          <div
-            v-if="holdingDoubleCount"
-            class="rounded-md border border-destructive/20 bg-destructive/5 px-3 py-2 text-[14px] text-destructive"
-          >
-            ILS cash for this institution is already tracked via the linked bank account.
-          </div>
-          <div class="space-y-1.5">
-            <label for="net-worth-page-field-16" class="text-[14px] font-medium">Notes</label>
-            <Textarea
-              id="net-worth-page-field-16"
-              v-model="holdingForm.notes"
-              placeholder="Optional notes..."
-              :rows="2"
-            />
-          </div>
-        </div>
-        <DialogFooter>
-          <DialogClose as-child>
-            <Button variant="secondary">Cancel</Button>
-          </DialogClose>
-          <Button
-            variant="filled"
-            :disabled="!holdingValid || holdingSaving || holdingDoubleCount"
-            @click="handleSaveHolding"
-          >
-            <Loader2 v-if="holdingSaving" class="h-4 w-4 mr-2 animate-spin" />
-            {{ editingHolding ? 'Save Changes' : 'Add Holding' }}
           </Button>
         </DialogFooter>
       </DialogContent>
@@ -1601,6 +1146,9 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
         </div>
+        <p v-if="mutationError" role="alert" class="text-sm text-destructive">
+          {{ mutationError }}
+        </p>
         <DialogFooter>
           <DialogClose as-child>
             <Button variant="secondary">Cancel</Button>
@@ -1623,7 +1171,7 @@ const fullLiabilityMap = computed(() => {
       :open="!!deletingAsset"
       @update:open="
         (v) => {
-          if (!v) deletingAsset = null;
+          if (!v && !deleting) deletingAsset = null;
         }
       "
     >
@@ -1635,34 +1183,19 @@ const fullLiabilityMap = computed(() => {
             be preserved.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <p v-if="mutationError" role="alert" class="text-sm text-destructive">
+          {{ mutationError }}
+        </p>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="deletingAsset = null">Cancel</AlertDialogCancel>
-          <Button variant="destructive-filled" @click="handleDeleteAsset"> Hide Asset </Button>
-        </AlertDialogFooter>
-      </AlertDialogContent>
-    </AlertDialog>
-
-    <!-- Delete Holding -->
-    <AlertDialog
-      :open="!!deletingHolding"
-      @update:open="
-        (v) => {
-          if (!v) deletingHolding = null;
-        }
-      "
-    >
-      <AlertDialogContent>
-        <AlertDialogHeader>
-          <AlertDialogTitle>Delete "{{ deletingHolding?.name }}"?</AlertDialogTitle>
-          <AlertDialogDescription>
-            This will permanently remove this holding from {{ deletingHolding?.assetName }}. Related
-            movement records will be preserved.
-          </AlertDialogDescription>
-        </AlertDialogHeader>
-        <AlertDialogFooter>
-          <AlertDialogCancel @click="deletingHolding = null">Cancel</AlertDialogCancel>
-          <Button variant="destructive-filled" @click="handleDeleteHolding">
-            Delete Holding
+          <AlertDialogCancel
+            @click="
+              mutationError = '';
+              deletingAsset = null;
+            "
+            >Cancel</AlertDialogCancel
+          >
+          <Button variant="destructive-filled" :disabled="deleting" @click="handleDeleteAsset">
+            Hide Asset
           </Button>
         </AlertDialogFooter>
       </AlertDialogContent>
@@ -1673,7 +1206,7 @@ const fullLiabilityMap = computed(() => {
       :open="!!deletingLiability"
       @update:open="
         (v) => {
-          if (!v) deletingLiability = null;
+          if (!v && !deleting) deletingLiability = null;
         }
       "
     >
@@ -1684,9 +1217,18 @@ const fullLiabilityMap = computed(() => {
             This will hide {{ deletingLiability?.name }} from your net worth.
           </AlertDialogDescription>
         </AlertDialogHeader>
+        <p v-if="mutationError" role="alert" class="text-sm text-destructive">
+          {{ mutationError }}
+        </p>
         <AlertDialogFooter>
-          <AlertDialogCancel @click="deletingLiability = null">Cancel</AlertDialogCancel>
-          <Button variant="destructive-filled" @click="handleDeleteLiability">
+          <AlertDialogCancel
+            @click="
+              mutationError = '';
+              deletingLiability = null;
+            "
+            >Cancel</AlertDialogCancel
+          >
+          <Button variant="destructive-filled" :disabled="deleting" @click="handleDeleteLiability">
             Hide Liability
           </Button>
         </AlertDialogFooter>

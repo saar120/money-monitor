@@ -227,6 +227,53 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
           `${route} does not overflow the window`,
         );
+        assert.equal(
+          await page.$$eval('a[href*="/advanced"]', (links) => links.length),
+          0,
+          'No duplicate advanced destinations',
+        );
+        const sizes = await page.$$eval(
+          '.ui-button, .category-add-button, .category-inspector-actions button, .proto-save, .proto-filter-button',
+          (controls) =>
+            controls
+              .filter((el) => el.getClientRects().length)
+              .map((el) => ({
+                label: el.textContent.trim() || el.getAttribute('aria-label'),
+                height: el.getBoundingClientRect().height,
+              })),
+        );
+        assert.deepEqual(
+          sizes.filter((item) => Math.abs(item.height - 36) > 1),
+          [],
+          `${route}: action heights are consistent`,
+        );
+        const unnamed = await page.$$eval('button', (controls) =>
+          controls
+            .filter(
+              (el) =>
+                el.getClientRects().length &&
+                !el.textContent.trim() &&
+                !el.getAttribute('aria-label') &&
+                !el.getAttribute('aria-labelledby') &&
+                !el.getAttribute('title') &&
+                !['switch', 'combobox'].includes(el.getAttribute('role')),
+            )
+            .map((el) => el.outerHTML.slice(0, 250)),
+        );
+        assert.deepEqual(unnamed, [], `${route}: icon buttons have accessible names`);
+        const fields = await page.$$eval('.ui-field', (controls) =>
+          controls
+            .filter((el) => el.getClientRects().length)
+            .map((el) => ({
+              label: el.getAttribute('aria-label') || el.id,
+              height: el.getBoundingClientRect().height,
+            })),
+        );
+        assert.deepEqual(
+          fields.filter((item) => Math.abs(item.height - 36) > 1),
+          [],
+          `${route}: form heights are consistent`,
+        );
         coverage.push(`${theme}/${language} ${route}`);
       };
       const clickText = async (text, selector = 'button') => {
@@ -241,7 +288,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       };
       const inspectMenus = async (scope) => {
         const controls = await page.$$(scope + ' button[role="combobox"]');
-        for (const control of controls.slice(0, 8)) {
+        for (const control of controls) {
           const visible = await control.evaluate(
             (el) => !!el.getClientRects().length && !el.disabled,
           );
@@ -289,9 +336,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       const routes = [
         '/',
         '/transactions',
-        '/transactions/advanced',
         '/insights',
-        '/insights/advanced',
         '/explore',
         '/explore/category/groceries',
         '/explore/merchant/AM%3APM',
@@ -302,9 +347,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         '/net-worth',
         ...assets.map((asset) => `/net-worth/assets/${asset.id}`),
         '/accounts',
-        '/accounts/advanced',
         '/categories',
-        '/categories/advanced',
         '/alerts',
         '/scraping',
         '/chat',
@@ -312,8 +355,18 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       ];
       for (const route of routes) {
         await visit(`${route}?month=${month}`);
-        if (route === '/transactions/advanced' || route === '/insights/advanced')
-          await inspectMenus('main');
+        for (const width of [1024, 1440]) {
+          await page.setViewport({ width, height: 800 });
+          await page.evaluate(
+            () =>
+              new Promise((resolve) => requestAnimationFrame(() => requestAnimationFrame(resolve))),
+          );
+          assert(
+            await page.evaluate(() => document.documentElement.scrollWidth <= innerWidth + 1),
+            `${route}: fits ${width}px`,
+          );
+        }
+        await page.setViewport({ width: 1280, height: 800 });
         if (route === '/accounts' || route === '/categories') {
           const editorActionsVisible = () => {
             const rect = document
@@ -353,18 +406,68 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       );
       assert.deepEqual(unnamedSettings, [], 'Settings fields are named');
       await inspectMenus('#settings-ai');
-      await page.click('.management-toggle');
-      await page.click('.management-links a[href="/categories"]');
+      await page.click('.management-nav a[href="/categories"]');
+      await page.waitForFunction(() => location.pathname === '/categories');
+      assert.equal(
+        await page.$eval('.management-nav a[href="/categories"]', (el) =>
+          el.getAttribute('aria-current'),
+        ),
+        'page',
+      );
+      await clickText(language === 'he' ? 'סיווג מחדש' : 'Recategorize');
+      await checkDialog();
+      await visit('/accounts');
+      await clickText(language === 'he' ? 'עדכון פרטי כניסה' : 'Update sign-in details');
+      await checkDialog();
+      for (const legacy of ['transactions', 'accounts', 'categories', 'insights']) {
+        await visit(`/${legacy}/advanced?month=${month}`);
+        assert.equal(
+          new URL(page.url()).pathname,
+          `/${legacy}`,
+          'Old bookmarks redirect to the canonical screen',
+        );
+      }
+      const linked = (await (await fetch(api + '/api/transactions?limit=1&offset=70')).json())
+        .transactions[0];
+      assert(linked, 'Fixture provides a transaction beyond the first page');
+      await visit(`/transactions/advanced?transactionId=${linked.id}`);
+      assert.equal(
+        await page.$eval('.proto-inspector h3', (el) => el.textContent.trim()),
+        linked.description,
+        'Legacy transaction links open the requested details',
+      );
+      await visit('/transactions');
+      await page.click('.proto-filter-button');
+      assert.equal(
+        await page.$$eval('.proto-filter-popover select', (fields) => fields.length),
+        7,
+        'All transaction filters are available',
+      );
+      assert(
+        await page.$('.proto-filter-popover input[type="date"]'),
+        'Date range filter is available',
+      );
+      const direction = await page.$('.proto-filter-popover label:nth-of-type(6) select');
+      const incomeResponse = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/transactions?') &&
+          new URL(response.url()).searchParams.get('minAmount') === '0.01',
+      );
+      await direction.select('income');
+      assert.equal((await incomeResponse).status(), 200);
       await page.waitForFunction(
         () =>
-          location.pathname === '/categories' && !document.querySelector('.management-nav').open,
+          document.querySelectorAll('.proto-amount').length > 0 &&
+          [...document.querySelectorAll('.proto-amount')].every((el) =>
+            el.classList.contains('positive'),
+          ),
       );
-      await page.click('.management-toggle');
+      await page.click('.proto-clear');
       await page.keyboard.press('Escape');
-      await page.waitForFunction(() => !document.querySelector('.management-nav').open);
+      await page.waitForFunction(() => !document.querySelector('.proto-filter-popover'));
       assert(
-        await page.$eval('.management-toggle', (el) => el === document.activeElement),
-        'Escape restores Manage focus',
+        await page.$eval('.proto-filter-button', (el) => el === document.activeElement),
+        'Closing filters returns focus to its trigger',
       );
 
       await visit(`/explore/category/groceries?month=${month}`);
@@ -379,6 +482,17 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       assert(
         !historyLabels.at(-1).endsWith(futureLabel),
         'Category history ends with the selected month',
+      );
+      await visit('/net-worth');
+      await page.$$eval(
+        'button',
+        (buttons, name) => buttons.find((button) => button.textContent.trim() === name).click(),
+        assets[0].name,
+      );
+      await page.waitForFunction(
+        (id) => location.pathname === `/net-worth/assets/${id}`,
+        {},
+        assets[0].id,
       );
       await visit('/net-worth');
       await clickText(language === 'he' ? 'הוספה' : 'Add');
@@ -408,9 +522,22 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         await clickText(text);
         await checkDialog();
       }
-      await visit('/accounts/advanced?add=1');
+      await visit('/accounts');
+      await page.$$eval('.account-list-row', (rows) =>
+        rows.find((row) => row.textContent.includes('Sample One Zero')).click(),
+      );
+      await page.click('.account-import-link');
       await checkDialog();
-      for (const route of ['/accounts/advanced', '/scraping']) {
+      await page.click('.category-inspector-actions .ui-button');
+      await page.waitForSelector('[role="alertdialog"]');
+      await clickText(language === 'he' ? 'ביטול' : 'Cancel', '[role="alertdialog"] button');
+      assert(
+        await page.$('.account-inspector-balance'),
+        'Cancel deletion preserves the selected account',
+      );
+      await visit('/accounts?add=1');
+      await checkDialog();
+      for (const route of ['/accounts', '/scraping']) {
         for (const event of ['otp-required', 'manual-action-required']) {
           fixtureEvent = event;
           await visit(route);

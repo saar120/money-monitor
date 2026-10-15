@@ -161,13 +161,12 @@ try {
       'Unchanged transaction cannot be saved',
     );
     assert(
-      !(await page.$eval('.proto-more-details', (el) => el.open)),
-      'Secondary fields start collapsed',
+      await page.$('.proto-secondary-fields select'),
+      'Owner is available directly in the inspector',
     );
-    await page.click('.proto-more-details summary');
     assert(
-      await page.$eval('.proto-more-details', (el) => el.open),
-      'Secondary fields remain available',
+      await page.$('.proto-more-details input[type="date"]'),
+      'Effective date is available directly',
     );
     await page.select('.proto-fields > label select', 'dining');
     await page.click('.proto-save');
@@ -285,16 +284,9 @@ try {
     );
     assert.equal(
       await page.$$eval('.secondary-nav .nav-link', (els) => els.length),
-      9,
-      'Planning, management disclosure, and management destinations are available',
+      8,
+      'Planning and management destinations are directly available',
     );
-    assert(
-      !(await page.$eval('.management-nav', (el) => el.open)),
-      'Administration stays collapsed on money views',
-    );
-    await page.click('.management-toggle');
-    assert(await page.$eval('.management-nav', (el) => el.open), 'Management opens on demand');
-    await page.click('.management-toggle');
     await page.waitForSelector('.explore-change');
     assert(
       (await page.$eval('.explore-change', (el) => el.textContent)).includes('Groceries'),

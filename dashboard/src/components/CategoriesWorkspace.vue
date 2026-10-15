@@ -2,6 +2,7 @@
 import { computed, onMounted, ref } from 'vue';
 import { Plus, Trash2, X, Pencil } from 'lucide-vue-next';
 import {
+  aiRecategorize,
   createCategory,
   deleteCategory,
   getCategories,
@@ -12,8 +13,47 @@ import {
   type OwnerType,
 } from '@/api/client';
 import { DEFAULT_CATEGORY_COLOR } from '@/lib/format';
+import ConfirmAction from './ConfirmAction.vue';
+import { Button } from '@/components/ui/button';
+import { Input } from '@/components/ui/input';
+import {
+  Dialog,
+  DialogContent,
+  DialogHeader,
+  DialogTitle,
+  DialogDescription,
+  DialogFooter,
+  DialogClose,
+} from '@/components/ui/dialog';
 import { language, t } from '@/lib/language';
 
+const deleteOpen = ref(false);
+const recategorizeOpen = ref(false);
+const recatStartDate = ref('');
+const recatEndDate = ref('');
+const recatLoading = ref(false);
+const recatMessage = ref('');
+const recatError = ref('');
+async function recategorize() {
+  if (recatLoading.value) return;
+  recatLoading.value = true;
+  recatMessage.value = '';
+  recatError.value = '';
+  try {
+    const result = await aiRecategorize(
+      recatStartDate.value || undefined,
+      recatEndDate.value || undefined,
+    );
+    recatMessage.value =
+      language.value === 'he'
+        ? `${result.categorized} עסקאות סווגו`
+        : `${result.categorized} transactions categorized`;
+  } catch (cause) {
+    recatError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } finally {
+    recatLoading.value = false;
+  }
+}
 const categories = ref<Category[]>([]);
 const members = ref<Member[]>([]);
 const loading = ref(true);
@@ -34,7 +74,6 @@ const copy = computed(() =>
     ? {
         count: 'קטגוריות',
         add: 'קטגוריה חדשה',
-        advanced: 'כלים מתקדמים',
         category: 'קטגוריה',
         rules: 'כללי סיווג',
         owner: 'שיוך כברירת מחדל',
@@ -60,7 +99,6 @@ const copy = computed(() =>
     : {
         count: 'categories',
         add: 'New category',
-        advanced: 'Advanced tools',
         category: 'Category',
         rules: 'Classification rules',
         owner: 'Default owner',
@@ -174,11 +212,12 @@ async function save() {
 }
 async function remove() {
   const item = selected.value;
-  if (!item || !window.confirm(copy.value.deleteConfirm)) return;
+  if (!item || saving.value) return;
   saving.value = true;
   error.value = '';
   try {
     await deleteCategory(item.id);
+    deleteOpen.value = false;
     categories.value = categories.value.filter((category) => category.id !== item.id);
     selectedId.value = null;
     if (window.innerWidth > 1120 && categories.value[0]) select(categories.value[0]);
@@ -194,6 +233,9 @@ onMounted(load);
 <template>
   <div class="category-workspace-page">
     <Teleport to="#toolbar-actions">
+      <Button variant="secondary" @click="recategorizeOpen = true">{{
+        language === 'he' ? 'סיווג מחדש' : 'Recategorize'
+      }}</Button>
       <button type="button" class="category-add-button" @click="create">
         <Plus :size="16" />{{ copy.add }}
       </button>
@@ -202,7 +244,6 @@ onMounted(load);
       <span
         ><strong>{{ categories.length }}</strong> {{ copy.count }}</span
       >
-      <RouterLink to="/categories/advanced">{{ copy.advanced }}</RouterLink>
     </div>
     <p v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -296,7 +337,7 @@ onMounted(load);
             type="button"
             class="category-delete"
             :disabled="saving"
-            @click="remove"
+            @click="deleteOpen = true"
           >
             <Trash2 :size="15" />{{ copy.delete }}
           </button>
@@ -312,12 +353,59 @@ onMounted(load);
       </aside>
       <div v-else class="category-inspector-placeholder">{{ copy.choose }}</div>
     </div>
+    <ConfirmAction
+      v-model:open="deleteOpen"
+      :title="`${copy.delete}: ${selected?.label ?? ''}`"
+      :description="copy.deleteConfirm"
+      :pending="saving"
+      :error="error"
+      @confirm="remove"
+    />
+    <Dialog v-model:open="recategorizeOpen"
+      ><DialogContent
+        ><DialogHeader>
+          <DialogTitle>{{
+            language === 'he' ? 'סיווג עסקאות מחדש' : 'Recategorize transactions'
+          }}</DialogTitle>
+          <DialogDescription>{{
+            language === 'he'
+              ? 'הסיווג יחליף את הקטגוריות הקיימות בטווח שנבחר. ללא תאריכים, כל העסקאות ייכללו.'
+              : 'Replace existing categories in the selected date range using your categorization rules. Leave dates empty to include all transactions.'
+          }}</DialogDescription>
+        </DialogHeader>
+        <div class="grid grid-cols-2 gap-4">
+          <label class="field-label"
+            >{{ t('startDate')
+            }}<Input v-model="recatStartDate" type="date" :max="recatEndDate || undefined" /></label
+          ><label class="field-label"
+            >{{ t('endDate')
+            }}<Input v-model="recatEndDate" type="date" :min="recatStartDate || undefined"
+          /></label>
+        </div>
+        <p v-if="recatMessage" role="status" class="text-sm text-success">{{ recatMessage }}</p>
+        <p v-if="recatError" role="alert" class="text-sm text-destructive">{{ recatError }}</p>
+        <DialogFooter
+          ><DialogClose as-child
+            ><Button variant="secondary">{{ t('cancel') }}</Button></DialogClose
+          ><Button
+            variant="filled"
+            :disabled="
+              recatLoading || (!!recatStartDate && !!recatEndDate && recatStartDate > recatEndDate)
+            "
+            @click="recategorize"
+            >{{
+              recatLoading ? t('saving') : language === 'he' ? 'סיווג מחדש' : 'Recategorize'
+            }}</Button
+          ></DialogFooter
+        >
+      </DialogContent></Dialog
+    >
   </div>
 </template>
 
 <style scoped>
 .category-workspace-top {
-  padding: 16px 16px 24px;
+  padding: 0 0 24px;
   font-size: 14px;
 }
 .category-list-head,
@@ -343,10 +431,10 @@ onMounted(load);
   padding-inline: 24px;
 }
 .category-inspector-head {
-  min-height: 72px;
+  min-height: 64px;
 }
 .category-inspector-head h3 {
-  font-size: 20px;
+  font-size: var(--type-section);
   font-weight: 650;
 }
 .category-inspector-body {
@@ -366,7 +454,7 @@ onMounted(load);
 .category-inspector-body input:not([type='checkbox']),
 .category-inspector-body select,
 .category-inspector-body textarea {
-  min-height: 40px;
+  min-height: var(--control-height);
   font-size: 14px;
 }
 .category-inspector-body small {
@@ -374,7 +462,7 @@ onMounted(load);
   line-height: 1.5;
 }
 .category-inspector-actions button {
-  min-height: 40px;
+  min-height: var(--control-height);
   font-size: 14px;
 }
 .category-list-row {

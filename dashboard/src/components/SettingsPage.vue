@@ -414,7 +414,7 @@ async function save() {
 </script>
 
 <template>
-  <div class="settings-page w-full min-w-0 max-w-2xl mx-auto pb-20 space-y-8">
+  <div class="settings-page w-full min-w-0 mx-auto pb-8 space-y-8">
     <div v-if="loading" class="text-text-secondary">{{ sectionCopy.loading }}</div>
 
     <template v-else>
@@ -1034,7 +1034,7 @@ async function save() {
 .settings-page :deep(input),
 .settings-page :deep(select),
 .settings-page :deep([data-slot='select-trigger']) {
-  min-height: 38px;
+  min-height: var(--control-height);
 }
 .settings-page :deep(code) {
   line-height: 1.7;

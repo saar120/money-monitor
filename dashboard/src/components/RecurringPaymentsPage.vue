@@ -387,7 +387,7 @@ onUnmounted(() => {
 }
 .subscriptions-page > section > h2 {
   margin-block-end: 12px;
-  font-size: 20px;
+  font-size: var(--type-section);
   line-height: 1.3;
 }
 .subscription-totals {

@@ -45,7 +45,6 @@ const copy = computed(() =>
         confirm: 'אישור ומעבר לבאה',
         allClear: 'הכל נבדק',
         empty: 'אין עסקאות שממתינות לבדיקה.',
-        advanced: 'טבלה מלאה',
         page: 'עמוד',
         of: 'מתוך',
       }
@@ -58,7 +57,6 @@ const copy = computed(() =>
         confirm: 'Confirm and next',
         allClear: 'All caught up',
         empty: 'No transactions need review.',
-        advanced: 'Full table',
         page: 'Page',
         of: 'of',
       },
@@ -91,6 +89,11 @@ async function load() {
       sortBy: 'date',
       sortOrder: 'desc',
     });
+    if (offset.value > 0 && offset.value >= result.pagination.total) {
+      offset.value = Math.floor(Math.max(0, result.pagination.total - 1) / 50) * 50;
+      await load();
+      return;
+    }
     items.value = result.transactions;
     total.value = result.pagination.total;
     reviewCount.value = total.value;
@@ -148,7 +151,6 @@ onMounted(async () => {
       <p>
         <strong>{{ total }}</strong> {{ copy.title }}
       </p>
-      <RouterLink to="/insights/advanced">{{ copy.advanced }}</RouterLink>
     </div>
     <p v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -311,7 +313,7 @@ onMounted(async () => {
 .review-toolbar a {
   color: var(--accent);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
   text-decoration: none;
 }
 .review-workspace {
@@ -326,6 +328,7 @@ onMounted(async () => {
   flex: 1;
   min-width: 0;
   overflow: auto;
+  scroll-padding-block: 16px;
 }
 table {
   width: 100%;
@@ -358,7 +361,7 @@ th:nth-child(3) {
 }
 th:last-child {
   width: 20%;
-  text-align: end;
+  text-align: start;
 }
 td {
   height: 62px;
@@ -407,7 +410,7 @@ tbody tr:focus-visible {
 }
 .review-amount {
   text-align: end !important;
-  font-weight: 650;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
 .negative {
@@ -440,9 +443,12 @@ tbody tr:focus-visible {
   font-size: 12px;
 }
 .review-pagination button {
+  min-height: var(--control-height);
+  padding-inline: 12px;
+  border-radius: var(--control-radius);
   margin-inline-start: 8px;
   color: var(--accent);
-  font-weight: 650;
+  font-weight: 600;
 }
 .review-pagination button:disabled {
   opacity: 0.4;
@@ -450,11 +456,13 @@ tbody tr:focus-visible {
 .review-inspector {
   display: flex;
   position: sticky;
-  top: 20px;
+  top: 0;
+  align-self: start;
+  max-height: calc(100dvh - var(--banner-height, 0px) - 140px);
   flex: 0 0 320px;
   min-width: 0;
   flex-direction: column;
-  padding: 20px 24px 24px;
+  padding: 20px 24px;
   border-inline-start: 1px solid color-mix(in srgb, var(--separator) 65%, transparent);
   background: var(--bg-primary);
 }
@@ -475,14 +483,15 @@ tbody tr:focus-visible {
 .review-inspector-head button {
   display: grid;
   place-items: center;
-  width: 32px;
-  height: 32px;
+  width: var(--control-height);
+  height: var(--control-height);
   border-radius: 6px;
   color: var(--text-secondary);
 }
 .review-inspector-body {
   min-height: 0;
   overflow: auto;
+  scroll-padding-block: 16px;
 }
 .review-detail-amount {
   display: block;
@@ -494,8 +503,8 @@ tbody tr:focus-visible {
 }
 .review-inspector-body h4 {
   margin: 0 0 6px;
-  font-size: 20px;
-  font-weight: 650;
+  font-size: var(--type-section);
+  font-weight: 600;
   line-height: 1.35;
   overflow-wrap: anywhere;
 }
@@ -511,7 +520,7 @@ tbody tr:focus-visible {
 .review-inspector-body label > span {
   color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 650;
+  font-weight: 600;
 }
 .review-reason p {
   margin: 8px 0;
@@ -523,7 +532,7 @@ tbody tr:focus-visible {
 }
 .review-inspector-body label:not(.review-check) {
   display: grid;
-  grid-template-columns: 76px minmax(0, 1fr);
+  grid-template-columns: minmax(0, 1fr);
   align-items: center;
   gap: 12px;
   padding-block: 8px;
@@ -533,15 +542,17 @@ tbody tr:focus-visible {
   width: 100%;
   min-height: 36px;
   min-width: 0;
-  padding-inline: 4px;
-  border: 0;
-  border-radius: 4px;
-  background: transparent;
+  padding-inline: 10px;
+  border: 1px solid var(--separator);
+  border-radius: var(--control-radius);
+  background: var(--bg-primary);
   color: var(--text-primary);
-  text-align: end;
+  text-align: start;
 }
 .review-check {
-  margin-top: 20px;
+  margin-top: 0;
+  align-self: start;
+  max-height: calc(100dvh - var(--banner-height, 0px) - 140px);
   display: flex;
   align-items: center;
   gap: 8px;
@@ -555,12 +566,13 @@ tbody tr:focus-visible {
   flex-shrink: 0;
 }
 .review-inspector-footer button {
-  min-height: 38px;
+  min-height: var(--control-height);
+  font-size: var(--type-control);
   padding: 0 16px;
   border-radius: 6px;
   background: var(--accent);
   color: var(--primary-foreground);
-  font-weight: 700;
+  font-weight: 600;
 }
 .review-inspector-footer button:disabled {
   opacity: 0.5;
@@ -586,6 +598,7 @@ tbody tr:focus-visible {
     background: #12223d2b;
   }
   .review-inspector {
+    max-height: none;
     position: fixed;
     inset-block: 0;
     inset-inline-end: 0;

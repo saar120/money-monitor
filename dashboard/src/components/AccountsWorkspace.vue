@@ -1,7 +1,17 @@
 <script setup lang="ts">
 import { computed, onMounted, ref } from 'vue';
-import { Building2, CreditCard, FileSpreadsheet, Plus, RefreshCw, X } from 'lucide-vue-next';
 import {
+  Building2,
+  CreditCard,
+  FileSpreadsheet,
+  Plus,
+  RefreshCw,
+  X,
+  KeyRound,
+  Trash2,
+} from 'lucide-vue-next';
+import {
+  deleteAccount,
   getAccounts,
   getMembers,
   triggerScrape,
@@ -11,8 +21,27 @@ import {
 } from '@/api/client';
 import { formatCurrency } from '@/lib/format';
 import { language, t } from '@/lib/language';
+import { useRoute } from 'vue-router';
+import { nextTick } from 'vue';
+import AccountDialogs from './AccountDialogs.vue';
+import { Button } from '@/components/ui/button';
+import {
+  AlertDialog,
+  AlertDialogContent,
+  AlertDialogHeader,
+  AlertDialogTitle,
+  AlertDialogDescription,
+  AlertDialogFooter,
+  AlertDialogCancel,
+} from '@/components/ui/alert-dialog';
 import OneZeroImportDialog from './OneZeroImportDialog.vue';
 
+const route = useRoute();
+const dialogs = ref<InstanceType<typeof AccountDialogs> | null>(null);
+const deleting = ref(false);
+const deleteOpen = ref(false);
+const manualLogin = ref(false);
+const stalenessDays = ref('');
 const accounts = ref<Account[]>([]);
 const members = ref<Member[]>([]);
 const selectedId = ref<number | null>(null);
@@ -50,7 +79,6 @@ const copy = computed(() =>
   language.value === 'he'
     ? {
         add: 'הוספת חשבון',
-        advanced: 'ניהול מלא',
         count: 'חשבונות',
         choose: 'בחרו חשבון כדי לראות פרטים.',
         empty: 'עדיין אין חשבונות.',
@@ -78,7 +106,6 @@ const copy = computed(() =>
       }
     : {
         add: 'Add account',
-        advanced: 'Full management',
         count: 'accounts',
         choose: 'Select an account to see details.',
         empty: 'No accounts yet.',
@@ -129,6 +156,8 @@ function select(account: Account) {
   active.value = account.isActive;
   manualOnly.value = account.manualScrapeOnly;
   showBrowser.value = account.showBrowser;
+  manualLogin.value = account.manualLogin;
+  stalenessDays.value = account.stalenessDays == null ? '' : String(account.stalenessDays);
   error.value = '';
   message.value = '';
 }
@@ -160,6 +189,8 @@ async function save() {
       isActive: active.value,
       manualScrapeOnly: manualOnly.value,
       showBrowser: showBrowser.value,
+      manualLogin: manualLogin.value,
+      stalenessDays: stalenessDays.value ? Number(stalenessDays.value) : null,
     });
     const index = accounts.value.findIndex((item) => item.id === account.id);
     accounts.value[index] = result.account;
@@ -185,21 +216,41 @@ async function sync() {
     syncing.value = false;
   }
 }
-onMounted(load);
+async function removeAccount() {
+  if (!selected.value || deleting.value) return;
+  deleting.value = true;
+  error.value = '';
+  try {
+    await deleteAccount(selected.value.id, true);
+    selectedId.value = null;
+    deleteOpen.value = false;
+    await load();
+  } catch (cause) {
+    error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } finally {
+    deleting.value = false;
+  }
+}
+onMounted(async () => {
+  await load();
+  if (route.query.add === '1') {
+    await nextTick();
+    dialogs.value?.openAdd();
+  }
+});
 </script>
 
 <template>
   <div class="category-workspace-page account-workspace-page" @keydown.esc="selectedId = null">
     <Teleport to="#toolbar-actions">
-      <RouterLink class="category-add-button" to="/accounts/advanced?add=1"
-        ><Plus :size="16" />{{ copy.add }}</RouterLink
+      <Button variant="filled" @click="dialogs?.openAdd()"
+        ><Plus :size="16" />{{ copy.add }}</Button
       >
     </Teleport>
     <div class="category-workspace-top">
       <span
         ><strong>{{ accounts.length }}</strong> {{ copy.count }}</span
       >
-      <RouterLink to="/accounts/advanced">{{ copy.advanced }}</RouterLink>
     </div>
     <p v-if="error && !selected" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -294,12 +345,39 @@ onMounted(load);
           <label class="category-check"
             ><input v-model="manualOnly" type="checkbox" /><span>{{ copy.manual }}</span></label
           >
+          <label v-if="['isracard', 'amex'].includes(selected.companyId)" class="category-check"
+            ><input v-model="manualLogin" type="checkbox" />{{
+              language === 'he' ? 'כניסה ידנית לבנק' : 'Sign in manually'
+            }}</label
+          >
+          <label v-if="manualOnly"
+            ><span>{{
+              language === 'he'
+                ? 'התראה לאחר מספר ימים ללא סנכרון'
+                : 'Alert after days without a sync'
+            }}</span
+            ><input v-model="stalenessDays" type="number" min="1"
+          /></label>
+          <Button variant="secondary" @click="dialogs?.openUpdateCreds(selected)"
+            ><KeyRound :size="16" />{{
+              language === 'he' ? 'עדכון פרטי כניסה' : 'Update sign-in details'
+            }}</Button
+          >
           <label class="category-check"
-            ><input v-model="showBrowser" type="checkbox" /><span>{{ copy.browser }}</span></label
+            ><input v-model="showBrowser" :disabled="manualLogin" type="checkbox" /><span>{{
+              copy.browser
+            }}</span></label
           >
           <p v-if="message" class="account-inspector-message" role="status">{{ message }}</p>
         </div>
         <div class="category-inspector-actions">
+          <Button
+            variant="ghost"
+            size="icon"
+            :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
+            @click="deleteOpen = true"
+            ><Trash2 :size="16"
+          /></Button>
           <button
             type="button"
             class="account-sync-button"
@@ -320,6 +398,28 @@ onMounted(load);
       </aside>
       <div v-else class="category-inspector-placeholder">{{ copy.choose }}</div>
     </div>
+    <AccountDialogs ref="dialogs" @changed="load" />
+    <AlertDialog v-model:open="deleteOpen"
+      ><AlertDialogContent
+        ><AlertDialogHeader>
+          <AlertDialogTitle>{{
+            language === 'he' ? 'למחוק את החשבון?' : 'Delete this account?'
+          }}</AlertDialogTitle>
+          <AlertDialogDescription>{{
+            language === 'he'
+              ? 'החשבון וכל העסקאות שלו יימחקו לצמיתות.'
+              : 'This permanently deletes the account and all its transactions.'
+          }}</AlertDialogDescription>
+        </AlertDialogHeader>
+        <p v-if="error" role="alert" class="text-destructive text-sm">{{ error }}</p>
+        <AlertDialogFooter
+          ><AlertDialogCancel :disabled="deleting">{{ t('cancel') }}</AlertDialogCancel
+          ><Button variant="destructive-filled" :disabled="deleting" @click="removeAccount">{{
+            language === 'he' ? 'מחיקה' : 'Delete'
+          }}</Button></AlertDialogFooter
+        ></AlertDialogContent
+      ></AlertDialog
+    >
     <OneZeroImportDialog v-model:open="importOpen" :account="selected" @imported="load" />
   </div>
 </template>
@@ -359,21 +459,21 @@ onMounted(load);
   border-radius: 0;
 }
 .category-inspector-head {
-  padding: 24px;
+  padding: 16px 24px;
 }
 .category-inspector-head h3 {
-  font-size: 20px;
+  font-size: var(--type-section);
 }
 .category-inspector-body {
-  padding: 24px;
-  gap: 24px;
+  padding: 20px 24px;
+  gap: 20px;
 }
 .category-inspector-actions {
   padding: 20px 24px;
 }
 .category-inspector-body input:not([type='checkbox']),
 .category-inspector-body select {
-  min-height: 40px;
+  min-height: var(--control-height);
   font-size: 14px;
 }
 .category-inspector-body .category-check {

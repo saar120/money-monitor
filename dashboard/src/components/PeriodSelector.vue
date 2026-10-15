@@ -81,7 +81,7 @@ function onSelect(v: any) {
     <!-- Month nav arrows -->
     <div v-if="periodMode === 'month'" class="flex items-center gap-0.5">
       <button
-        class="h-8 w-8 inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        class="icon-control inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
         :aria-label="language === 'he' ? 'החודש הקודם' : 'Previous month'"
         @click="shiftMonth(-1)"
       >
@@ -91,7 +91,7 @@ function onSelect(v: any) {
         monthLabel
       }}</span>
       <button
-        class="h-8 w-8 inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
+        class="icon-control inline-flex items-center justify-center rounded-md bg-[var(--glass-bg)] border border-[var(--glass-border)] backdrop-blur-[10px] text-text-secondary hover:bg-[var(--glass-bg-heavy)] hover:text-text-primary transition-all duration-150"
         :aria-label="language === 'he' ? 'החודש הבא' : 'Next month'"
         @click="shiftMonth(1)"
       >
@@ -105,7 +105,7 @@ function onSelect(v: any) {
       @update:model-value="onSelect"
     >
       <SelectTrigger
-        class="w-[90px] h-8 text-[12px]"
+        class="w-[90px]"
         :aria-label="language === 'he' ? 'טווח תאריכים' : 'Date range'"
       >
         <SelectValue />

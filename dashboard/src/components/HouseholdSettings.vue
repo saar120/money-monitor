@@ -269,7 +269,7 @@ onMounted(load);
             <Input
               v-model="editingMemberName"
               :aria-label="copy.newMember"
-              class="h-8 min-w-0 flex-1 max-w-56"
+              class="min-w-0 flex-1 max-w-56"
               @keyup.enter="saveMember(member)"
             />
             <Button
@@ -460,7 +460,7 @@ onMounted(load);
 <style scoped>
 .household-settings :deep(input),
 .household-settings :deep([data-slot='select-trigger']) {
-  min-height: 38px;
+  min-height: var(--control-height);
 }
 .household-member > span:first-child {
   font-size: 14px;

@@ -11,7 +11,7 @@ const router = createRouter({
   routes: [
     { path: '/', component: () => import('./components/OverviewDashboard.vue') },
     { path: '/insights', component: () => import('./components/ReviewWorkspace.vue') },
-    { path: '/insights/advanced', component: () => import('./components/InsightsPage.vue') },
+    { path: '/insights/advanced', redirect: (to) => ({ path: '/insights', query: to.query }) },
     { path: '/explore', component: () => import('./components/ExploreDashboard.vue') },
     {
       path: '/explore/category/:name',
@@ -30,16 +30,16 @@ const router = createRouter({
       path: '/recurring-payments',
       component: () => import('./components/RecurringPaymentsPage.vue'),
     },
-    { path: '/transactions', component: () => import('./components/ActivitySplitPrototype.vue') },
+    { path: '/transactions', component: () => import('./components/ActivityWorkspace.vue') },
     {
       path: '/transactions/advanced',
-      component: () => import('./components/TransactionTable.vue'),
+      redirect: (to) => ({ path: '/transactions', query: to.query }),
     },
     { path: '/accounts', component: () => import('./components/AccountsWorkspace.vue') },
-    { path: '/accounts/advanced', component: () => import('./components/AccountManager.vue') },
+    { path: '/accounts/advanced', redirect: (to) => ({ path: '/accounts', query: to.query }) },
     { path: '/chat', component: () => import('./components/AiChat.vue') },
     { path: '/categories', component: () => import('./components/CategoriesWorkspace.vue') },
-    { path: '/categories/advanced', component: () => import('./components/CategoryManager.vue') },
+    { path: '/categories/advanced', redirect: (to) => ({ path: '/categories', query: to.query }) },
     { path: '/scraping', component: () => import('./components/ScrapingDashboard.vue') },
     { path: '/net-worth', component: () => import('./components/NetWorthPage.vue') },
     { path: '/net-worth/assets/:id', component: () => import('./components/AssetDetailPage.vue') },
@@ -54,7 +54,7 @@ if (import.meta.env.DEV) {
   router.addRoute({
     path: '/prototype/split-view',
     name: 'split-prototype',
-    component: () => import('./components/ActivitySplitPrototype.vue'),
+    component: () => import('./components/ActivityWorkspace.vue'),
   });
 }
 

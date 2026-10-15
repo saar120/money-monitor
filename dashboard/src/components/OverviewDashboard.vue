@@ -579,7 +579,7 @@ function categoryLink(category: string) {
 }
 .home-section h2,
 .rail-section h2 {
-  font-size: 20px;
+  font-size: var(--type-section);
   font-weight: 600;
   line-height: 1.3;
 }

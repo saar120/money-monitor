@@ -168,7 +168,7 @@ function formatMovementDate(iso: string) {
     <template v-else-if="asset">
       <!-- Asset header -->
       <div>
-        <h1 class="text-[22px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
+        <h1 class="text-[28px] font-semibold tracking-tight break-words">{{ asset.name }}</h1>
         <div class="flex flex-wrap items-center gap-2 mt-1">
           <span
             class="text-[12px] font-medium px-2 py-0.5 rounded-full bg-bg-tertiary text-text-secondary"

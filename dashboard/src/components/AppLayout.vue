@@ -1,20 +1,17 @@
 <script setup lang="ts">
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
-import { onClickOutside } from '@vueuse/core';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import {
   Activity,
   Bell,
   Building2,
   CheckCircle2,
-  ChevronDown,
   Compass,
   Home,
   MessageCircle,
   Receipt,
   Repeat2,
   Settings,
-  SlidersHorizontal,
   Tag,
   TrendingUp,
   Wallet,
@@ -47,33 +44,19 @@ const manage = [
   { path: '/alerts', label: 'alerts', icon: Bell },
   { path: '/scraping', label: 'scraping', icon: Activity },
 ] as const;
-const managementEl = ref<HTMLDetailsElement | null>(null);
-function hideManagement() {
-  if (managementEl.value) managementEl.value.open = false;
-}
-function closeManagement() {
-  hideManagement();
-  managementEl.value?.querySelector('summary')?.focus();
-}
-onClickOutside(managementEl, hideManagement);
-watch(() => route.path, hideManagement);
 const pageTitles: Record<string, LanguageLabel> = {
   '/': 'home',
   '/transactions': 'activity',
-  '/transactions/advanced': 'activity',
   '/explore': 'explore',
   '/explore/monthly-comparison': 'monthlySpending',
   '/cash-flow': 'cashFlow',
   '/chat': 'advisor',
   '/insights': 'review',
-  '/insights/advanced': 'review',
   '/budgets': 'budgets',
   '/recurring-payments': 'subscriptions',
   '/net-worth': 'netWorth',
   '/categories': 'categories',
-  '/categories/advanced': 'categories',
   '/accounts': 'accounts',
-  '/accounts/advanced': 'accounts',
   '/alerts': 'alerts',
   '/scraping': 'scraping',
   '/settings': 'settings',
@@ -180,38 +163,25 @@ async function exitDemo() {
             }}</span>
           </RouterLink>
         </div>
+        <div class="nav-group secondary-nav management-nav" role="group" :aria-label="t('manage')">
+          <p class="nav-heading">{{ t('manage') }}</p>
+          <RouterLink
+            v-for="item in manage"
+            :key="item.path"
+            :to="item.path"
+            class="nav-link"
+            :class="{ active: isActive(item.path) }"
+            :aria-current="isActive(item.path) ? 'page' : undefined"
+            :title="t(item.label)"
+            :aria-label="t(item.label)"
+          >
+            <component :is="item.icon" :size="18" :stroke-width="2" /><span>{{
+              t(item.label)
+            }}</span>
+          </RouterLink>
+        </div>
       </nav>
       <div class="sidebar-bottom">
-        <details
-          ref="managementEl"
-          class="nav-group secondary-nav management-nav"
-          @keydown.esc.prevent="closeManagement"
-        >
-          <summary
-            class="nav-link management-toggle"
-            :class="{ active: manage.some((item) => isActive(item.path)) }"
-            :title="t('manage')"
-          >
-            <SlidersHorizontal :size="17" /><span>{{ t('manage') }}</span>
-            <ChevronDown :size="14" class="management-chevron" />
-          </summary>
-          <div class="management-links">
-            <RouterLink
-              v-for="item in manage"
-              :key="item.path"
-              :to="item.path"
-              class="nav-link"
-              :class="{ active: isActive(item.path) }"
-              :aria-current="isActive(item.path) ? 'page' : undefined"
-              :title="t(item.label)"
-              :aria-label="t(item.label)"
-              @click="hideManagement"
-            >
-              <component :is="item.icon" :size="18" :stroke-width="2" />
-              <span>{{ t(item.label) }}</span>
-            </RouterLink>
-          </div>
-        </details>
         <RouterLink
           to="/settings"
           class="nav-link"
