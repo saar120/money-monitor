@@ -9,10 +9,11 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-primary/8 text-primary border border-primary/20 hover:bg-primary/12 active:bg-primary/16',
-        filled: 'bg-primary text-primary-foreground hover:brightness-110 active:brightness-90',
+          'bg-bg-primary text-text-primary border border-separator shadow-[0_1px_2px_rgb(0_0_0/0.04)] hover:bg-bg-secondary hover:border-text-tertiary/40 active:bg-bg-tertiary',
+        filled:
+          'bg-primary text-primary-foreground border border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:brightness-110 active:brightness-95',
         destructive:
-          'bg-destructive/8 text-destructive border border-destructive/15 hover:bg-destructive/12 active:bg-destructive/16',
+          'bg-bg-primary text-destructive border border-separator hover:bg-destructive/8 active:bg-destructive/12',
         'destructive-filled':
           'bg-destructive text-white hover:brightness-110 active:brightness-90 shadow-[var(--shadow-sm)]',
         secondary:

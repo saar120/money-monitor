@@ -1,5 +1,25 @@
 // Run with npm run dashboard:dev. Uses a disposable database and simulated desktop services.
 import assert from 'node:assert/strict';
+
+async function selectOption(page, trigger, value) {
+  await page.click(trigger);
+  await page.waitForSelector('[role="listbox"]', { visible: true });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'option');
+  await page.waitForFunction(() => {
+    const rect = document.querySelector('[role="listbox"]').getBoundingClientRect();
+    return (
+      rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth
+    );
+  });
+  await page.click(`[role="option"][data-value="${value}"]`);
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[role="listbox"]') &&
+      !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
+      getComputedStyle(document.body).pointerEvents !== 'none',
+  );
+}
+
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
 import { tmpdir } from 'node:os';
 import { join } from 'node:path';
@@ -184,6 +204,10 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         language,
       );
       let fixtureEvent = '';
+      const advisorSessions = new Map();
+      let advisorSessionCounter = 0;
+      let advisorSends = 0;
+      let advisorFailure = false;
       await page.setRequestInterception(true);
       page.on('request', async (request) => {
         const url = new URL(request.url());
@@ -202,6 +226,71 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
             contentType: 'application/json',
             body: '{"success":true}',
           });
+        if (url.pathname.startsWith('/api/ai/sessions')) {
+          const id = url.pathname.split('/')[4];
+          let data;
+          if (request.method() === 'POST') {
+            const meta = {
+              id: `synthetic-${++advisorSessionCounter}`,
+              title: 'New conversation',
+              createdAt: new Date().toISOString(),
+              updatedAt: new Date().toISOString(),
+            };
+            advisorSessions.set(meta.id, { meta, messages: [] });
+            data = { session: meta };
+          } else if (request.method() === 'DELETE') {
+            advisorSessions.delete(id);
+            data = { deleted: true };
+          } else
+            data = id
+              ? { session: advisorSessions.get(id) }
+              : { sessions: [...advisorSessions.values()].map((item) => item.meta) };
+          return request.respond({
+            status: 200,
+            contentType: 'application/json',
+            body: JSON.stringify(data),
+          });
+        }
+        if (url.pathname === '/api/ai/chat') {
+          advisorSends++;
+          const { sessionId, message } = JSON.parse(request.postData());
+          await new Promise((resolve) => setTimeout(resolve, 250));
+          if (advisorFailure)
+            return request.respond({
+              status: 503,
+              contentType: 'application/json',
+              body: JSON.stringify({ error: 'Synthetic provider unavailable' }),
+            });
+          const content =
+            '## Spending review\n\nYour largest category is groceries.\n\n| Category | Amount |\n| --- | ---: |\n| Groceries | 320 |';
+          const chart = {
+            kind: 'bar',
+            title: 'Sample spending',
+            currencyCode: 'ILS',
+            points: [
+              { label: 'Groceries', value: 320 },
+              { label: 'Dining', value: 180 },
+            ],
+          };
+          const session = advisorSessions.get(sessionId);
+          session.meta.title = 'Spending review';
+          session.messages.push(
+            { role: 'user', content: message },
+            { role: 'assistant', content, chart },
+          );
+          const events = [
+            { type: 'status', text: 'Reviewing sample data' },
+            { type: 'text_delta', text: content },
+            { type: 'chart', chart },
+          ];
+          return request.respond({
+            status: 200,
+            contentType: 'text/event-stream',
+            body: events
+              .map(({ type, ...data }) => `event: ${type}\ndata: ${JSON.stringify(data)}\n\n`)
+              .join(''),
+          });
+        }
         try {
           const response = await fetch(api + url.pathname + url.search, {
             method: request.method(),
@@ -294,7 +383,23 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           );
           if (!visible) continue;
           await control.click();
-          await page.waitForSelector('[role="listbox"]');
+          await page.waitForSelector('[role="listbox"]', { visible: true });
+          await page.waitForFunction(
+            () => document.activeElement?.getAttribute('role') === 'option',
+          );
+          const trigger = await control.boundingBox();
+          const menu = await page.$eval('[role="listbox"]', (el) => {
+            const r = el.getBoundingClientRect();
+            return { top: r.top, bottom: r.bottom };
+          });
+          assert(
+            menu.top >= trigger.y + trigger.height + 3 || menu.bottom <= trigger.y - 3,
+            'Dropdown opens outside its trigger, with a visible gap',
+          );
+          assert(
+            await control.evaluate((el) => !el.matches(':focus-visible')),
+            'Pointer opens do not show keyboard focus rings',
+          );
           const within = await page.$eval('[role="listbox"]', (el) => {
             const rect = el.getBoundingClientRect();
             return (
@@ -306,7 +411,12 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           });
           assert(within, 'Dropdown remains within the viewport');
           await page.keyboard.press('Escape');
-          await page.waitForFunction(() => !document.querySelector('[role="listbox"]'));
+          await page.waitForFunction(
+            () =>
+              !document.querySelector('[role="listbox"]') &&
+              !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
+              getComputedStyle(document.body).pointerEvents !== 'none',
+          );
         }
       };
       const checkDialog = async () => {
@@ -367,6 +477,38 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           );
         }
         await page.setViewport({ width: 1280, height: 800 });
+        if (route === '/') {
+          await page.waitForSelector('.home-chart canvas');
+          const geometry = () =>
+            ['.home-chart', '.home-stats', '.home-section'].map((selector) => {
+              const rect = document.querySelector(selector).getBoundingClientRect();
+              return [rect.top, rect.height];
+            });
+          const before = await page.evaluate(geometry);
+          const chart = await (await page.$('.home-chart canvas')).boundingBox();
+          await page.mouse.move(chart.x + chart.width / 2, chart.y + chart.height / 2);
+          await page.waitForFunction(
+            () =>
+              !document.querySelector('.home-chart-readout strong').classList.contains('invisible'),
+          );
+          assert.deepEqual(
+            await page.evaluate(geometry),
+            before,
+            'Home stays fixed while hovering the chart',
+          );
+          await page.mouse.move(1, 1);
+          await page.waitForFunction(() =>
+            document.querySelector('.home-chart-readout strong').classList.contains('invisible'),
+          );
+          assert.deepEqual(
+            await page.evaluate(geometry),
+            before,
+            'Home stays fixed when leaving the chart',
+          );
+          await inspectMenus('.toolbar-controls');
+        }
+        if (['/accounts', '/categories', '/insights'].includes(route))
+          await inspectMenus('.content-inner');
         if (route === '/accounts' || route === '/categories') {
           const editorActionsVisible = () => {
             const rect = document
@@ -406,6 +548,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       );
       assert.deepEqual(unnamedSettings, [], 'Settings fields are named');
       await inspectMenus('#settings-ai');
+      await inspectMenus('#settings-general');
       await page.click('.management-nav a[href="/categories"]');
       await page.waitForFunction(() => location.pathname === '/categories');
       assert.equal(
@@ -416,6 +559,98 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       );
       await clickText(language === 'he' ? 'סיווג מחדש' : 'Recategorize');
       await checkDialog();
+      const colorInput = '.color-custom input';
+      await page.click('.color-palette button:nth-child(3)');
+      assert(
+        await page.$eval(
+          '.color-palette button:nth-child(3)',
+          (el) => el.getAttribute('aria-pressed') === 'true',
+        ),
+      );
+      await page.$eval(colorInput, (el) => {
+        el.value = '#bad';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      assert(
+        await page.$eval('.category-save', (el) => el.disabled),
+        'Invalid colors cannot be saved',
+      );
+      await page.$eval(colorInput, (el) => {
+        el.value = '#3478ab';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      const colorSaved = page.waitForResponse(
+        (response) =>
+          response.url().includes('/api/categories/') && response.request().method() === 'PATCH',
+      );
+      await page.click('.category-save');
+      const savedCategory = await (await colorSaved).json();
+      assert.equal(savedCategory.category.color, '#3478ab', 'Custom category color persists');
+      const colorRows = await page.$$('.category-list-row');
+      await colorRows[1].click();
+      await colorRows[0].click();
+      assert.equal(
+        await page.$eval(colorInput, (el) => el.value),
+        '#3478ab',
+        'Saved color survives inspector changes',
+      );
+
+      await visit('/chat');
+      assert.equal(await page.$eval('.advisor-send', (el) => el.disabled), true);
+      await page.type('.advisor-input', 'Review spending');
+      await page.keyboard.down('Shift');
+      await page.keyboard.press('Enter');
+      await page.keyboard.up('Shift');
+      assert.equal(advisorSends, 0, 'Shift+Enter adds a line without sending');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.advisor-waiting');
+      assert(
+        await page.$eval('.history-actions button', (el) => el.disabled),
+        'History cannot switch conversations during a reply',
+      );
+      await page.waitForSelector('.advisor-chart');
+      assert.equal(advisorSends, 1);
+      assert.equal(await page.$$eval('.advisor-message', (els) => els.length), 2);
+      await page.waitForFunction(
+        () => document.querySelector('.history-title')?.textContent === 'Spending review',
+      );
+      await page.click('.history-actions button');
+      await page.waitForSelector('.advisor-welcome');
+      await page.$$eval('.history-select', (els) =>
+        els.find((el) => el.textContent.includes('Spending review')).click(),
+      );
+      await page.waitForSelector('.advisor-chart');
+      assert(
+        await page.$('.advisor-message-answer table'),
+        'Saved replies retain formatted tables and charts',
+      );
+      await page.hover('.history-row-active');
+      await page.click('.history-row-active .history-delete');
+      await page.waitForSelector('.advisor-welcome');
+      const createdBefore = advisorSessionCounter;
+      await page.type('.advisor-input', 'Start again');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.advisor-chart');
+      assert.equal(
+        advisorSessionCounter,
+        createdBefore + 1,
+        'Sending after deleting the active conversation creates a fresh session',
+      );
+      advisorFailure = true;
+      await page.type('.advisor-input', 'Try another request');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('.advisor-message-answer')].some((el) =>
+          el.textContent.includes('Synthetic provider unavailable'),
+        ),
+      );
+      assert.equal(
+        await page.$eval('.advisor-input', (el) => el.disabled),
+        false,
+        'Composer recovers after a provider error',
+      );
+      advisorFailure = false;
+
       await visit('/accounts');
       await clickText(language === 'he' ? 'עדכון פרטי כניסה' : 'Update sign-in details');
       await checkDialog();
@@ -437,9 +672,30 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         'Legacy transaction links open the requested details',
       );
       await visit('/transactions');
-      await page.click('.proto-filter-button');
+      const filterTiming = await page.evaluate(
+        () =>
+          new Promise((resolve) => {
+            const start = performance.now();
+            document.querySelector('.proto-filter-button').click();
+            requestAnimationFrame(() => {
+              const panel = document.querySelector('.proto-filter-popover');
+              resolve({
+                elapsed: performance.now() - start,
+                visible: !!panel && getComputedStyle(panel).opacity === '1',
+                delayed: panel?.getAnimations({ subtree: true }).length ?? 0,
+              });
+            });
+          }),
+      );
+      assert(
+        filterTiming.visible && !filterTiming.delayed,
+        'Filter controls are visible on the first frame without staggered animations',
+      );
+      assert(filterTiming.elapsed < 150, `Filters open promptly (${filterTiming.elapsed}ms)`);
+      console.log(`Filters ready in ${Math.round(filterTiming.elapsed)}ms (${theme}/${language})`);
+      await inspectMenus('.proto-filter-popover');
       assert.equal(
-        await page.$$eval('.proto-filter-popover select', (fields) => fields.length),
+        await page.$$eval('.proto-filter-popover [role=combobox]', (fields) => fields.length),
         7,
         'All transaction filters are available',
       );
@@ -447,13 +703,14 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         await page.$('.proto-filter-popover input[type="date"]'),
         'Date range filter is available',
       );
-      const direction = await page.$('.proto-filter-popover label:nth-of-type(6) select');
+      const direction = '.proto-filter-popover label:nth-of-type(6) [role=combobox]';
       const incomeResponse = page.waitForResponse(
         (response) =>
           response.url().includes('/api/transactions?') &&
           new URL(response.url()).searchParams.get('minAmount') === '0.01',
       );
-      await direction.select('income');
+      await selectOption(page, direction, 'income');
+      assert(await page.$('.proto-filter-popover'), 'Selecting a nested option keeps filters open');
       assert.equal((await incomeResponse).status(), 200);
       await page.waitForFunction(
         () =>

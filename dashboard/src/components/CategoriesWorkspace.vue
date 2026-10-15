@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import { Plus, Trash2, X, Pencil } from 'lucide-vue-next';
 import {
@@ -14,6 +15,7 @@ import {
 } from '@/api/client';
 import { DEFAULT_CATEGORY_COLOR } from '@/lib/format';
 import ConfirmAction from './ConfirmAction.vue';
+import CategoryColorPicker from './CategoryColorPicker.vue';
 import { Button } from '@/components/ui/button';
 import { Input } from '@/components/ui/input';
 import {
@@ -66,6 +68,7 @@ const selected = computed(
 const label = ref('');
 const slug = ref('');
 const color = ref(DEFAULT_CATEGORY_COLOR);
+const colorValid = ref(true);
 const rules = ref('');
 const owner = ref('unassigned');
 const included = ref(true);
@@ -172,7 +175,12 @@ async function load() {
   }
 }
 async function save() {
-  if (!label.value.trim() || (selectedId.value === 'new' && !slug.value.trim())) return;
+  if (
+    !colorValid.value ||
+    !label.value.trim() ||
+    (selectedId.value === 'new' && !slug.value.trim())
+  )
+    return;
   saving.value = true;
   error.value = '';
   try {
@@ -309,24 +317,24 @@ onMounted(load);
               >{{ copy.slugHint }}</small
             ></label
           >
-          <label
-            ><span>{{ copy.color }}</span
-            ><input v-model="color" type="color" class="category-color-input"
-          /></label>
+          <fieldset class="category-color-field">
+            <legend>{{ copy.color }}</legend>
+            <CategoryColorPicker :key="selectedId" v-model="color" v-model:valid="colorValid" />
+          </fieldset>
           <label
             ><span>{{ copy.rules }}</span
             ><textarea v-model="rules" rows="4" /><small>{{ copy.rulesHint }}</small></label
           >
           <label
             ><span>{{ copy.owner }}</span
-            ><select v-model="owner">
-              <option value="unassigned">{{ t('unassigned') }}</option>
-              <option value="shared">{{ t('together') }}</option>
-              <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-                {{ member.name }}
-              </option>
-            </select></label
-          >
+            ><SelectField
+              v-model="owner"
+              :options="[
+                { value: 'unassigned', label: t('unassigned') },
+                { value: 'shared', label: t('together') },
+                ...members.map((member) => ({ value: `member:${member.id}`, label: member.name })),
+              ]"
+          /></label>
           <label v-if="selectedId !== 'new'" class="category-check"
             ><input v-model="included" type="checkbox" /><span>{{ copy.included }}</span></label
           >
@@ -344,7 +352,9 @@ onMounted(load);
           <button
             type="button"
             class="category-save"
-            :disabled="saving || !label.trim() || (selectedId === 'new' && !slug.trim())"
+            :disabled="
+              saving || !colorValid || !label.trim() || (selectedId === 'new' && !slug.trim())
+            "
             @click="save"
           >
             {{ saving ? copy.saving : copy.save }}

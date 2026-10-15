@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import {
   getSettings,
@@ -88,12 +89,12 @@ const sectionCopy = computed(() =>
       },
 );
 
-function onLanguageChange(event: Event) {
-  setLanguageChoice((event.target as globalThis.HTMLSelectElement).value as LanguageChoice);
+function onLanguageChange(value: string) {
+  setLanguageChoice(value as LanguageChoice);
 }
 
-function onThemeChange(event: Event) {
-  setThemeChoice((event.target as globalThis.HTMLSelectElement).value as ThemeChoice);
+function onThemeChange(value: string) {
+  setThemeChoice(value as ThemeChoice);
 }
 
 const loading = ref(true);
@@ -433,28 +434,30 @@ async function save() {
 
       <SettingsGroup id="settings-general" :title="sectionCopy.general">
         <SettingsRow :label="t('appLanguage')">
-          <select
-            :value="languageChoice"
+          <SelectField
+            :model-value="languageChoice"
             class="ledger-select"
             :aria-label="t('appLanguage')"
-            @change="onLanguageChange"
-          >
-            <option value="system">{{ t('systemDefault') }}</option>
-            <option value="en">{{ t('english') }}</option>
-            <option value="he">{{ t('hebrew') }}</option>
-          </select>
+            :options="[
+              { value: 'system', label: t('systemDefault') },
+              { value: 'en', label: t('english') },
+              { value: 'he', label: t('hebrew') },
+            ]"
+            @update:model-value="onLanguageChange"
+          />
         </SettingsRow>
         <SettingsRow :label="sectionCopy.appearance" :description="sectionCopy.appearanceHint">
-          <select
-            :value="themeChoice"
+          <SelectField
+            :model-value="themeChoice"
             class="ledger-select"
             :aria-label="sectionCopy.appearance"
-            @change="onThemeChange"
-          >
-            <option value="system">{{ sectionCopy.followSystem }}</option>
-            <option value="light">{{ sectionCopy.light }}</option>
-            <option value="dark">{{ sectionCopy.dark }}</option>
-          </select>
+            :options="[
+              { value: 'system', label: sectionCopy.followSystem },
+              { value: 'light', label: sectionCopy.light },
+              { value: 'dark', label: sectionCopy.dark },
+            ]"
+            @update:model-value="onThemeChange"
+          />
         </SettingsRow>
       </SettingsGroup>
 

@@ -20,7 +20,7 @@ const settingsField = useSettingsField();
     v-bind="{ ...settingsField, ...forwardedProps }"
     :class="
       cn(
-        'ui-field flex h-9 w-full items-center justify-between rounded-md bg-bg-primary border border-separator px-3 text-sm text-text-primary data-[placeholder]:text-text-tertiary focus:outline-none focus:ring-[3px] focus:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate text-start transition-colors duration-150 hover:bg-bg-secondary',
+        'ui-field ui-select-trigger flex h-9 w-full items-center justify-between gap-3 rounded-md bg-bg-primary border border-separator px-3 text-sm text-text-primary data-[placeholder]:text-text-tertiary focus:outline-none focus-visible:ring-2 focus-visible:ring-primary/30 disabled:cursor-not-allowed disabled:opacity-50 [&>span]:truncate font-normal text-start transition-colors duration-150 hover:bg-bg-secondary',
         props.class,
       )
     "

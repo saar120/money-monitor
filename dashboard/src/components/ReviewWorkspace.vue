@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import { Check, X, ChevronRight } from 'lucide-vue-next';
 import {
@@ -254,23 +255,29 @@ onMounted(async () => {
             </div>
             <label
               ><span>{{ copy.category }}</span
-              ><select v-model="draftCategory">
-                <option value="">{{ t('uncategorized') }}</option>
-                <option v-for="category in categories" :key="category.name" :value="category.name">
-                  {{ category.label }}
-                </option>
-              </select></label
-            >
+              ><SelectField
+                v-model="draftCategory"
+                :options="[
+                  { value: '', label: t('uncategorized') },
+                  ...categories.map((category) => ({
+                    value: category.name,
+                    label: category.label,
+                  })),
+                ]"
+            /></label>
             <label
               ><span>{{ copy.owner }}</span
-              ><select v-model="draftOwner">
-                <option value="shared">{{ t('together') }}</option>
-                <option value="unassigned">{{ t('unassigned') }}</option>
-                <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-                  {{ member.name }}
-                </option>
-              </select></label
-            >
+              ><SelectField
+                v-model="draftOwner"
+                :options="[
+                  { value: 'shared', label: t('together') },
+                  { value: 'unassigned', label: t('unassigned') },
+                  ...members.map((member) => ({
+                    value: `member:${member.id}`,
+                    label: member.name,
+                  })),
+                ]"
+            /></label>
             <label class="review-check"
               ><input v-model="draftIncluded" type="checkbox" />{{ copy.include }}</label
             >

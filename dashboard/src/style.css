@@ -625,7 +625,9 @@ html[dir='rtl'] .lucide-arrow-left {
   background: var(--bg-tertiary);
 }
 .ledger-select {
-  padding: 0 28px 0 10px;
+  width: auto;
+  min-width: 132px;
+  padding-inline: 10px;
 }
 .content-scroll {
   flex: 1;
@@ -1676,7 +1678,7 @@ html[dir='rtl'] .lucide-arrow-left {
     animation-duration: 0.01ms !important;
     animation-iteration-count: 1 !important;
     scroll-behavior: auto !important;
-    transition-duration: 0.01ms !important;
+    transition-duration: 0s !important;
   }
   .ledger-page {
     animation: none;
@@ -2182,9 +2184,9 @@ html[dir='rtl'] .lucide-arrow-left {
   border-radius: 6px;
 }
 .home-chart-heading {
-  display: flex;
-  align-items: baseline;
-  justify-content: space-between;
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto;
+  align-items: center;
   gap: 16px;
   margin-top: 28px;
 }
@@ -2848,11 +2850,6 @@ html[dir='rtl'] .lucide-arrow-left {
 .category-inspector-body input[readonly] {
   color: var(--text-tertiary);
   background: var(--bg-secondary);
-}
-.category-inspector-body .category-color-input {
-  width: 52px !important;
-  height: 36px;
-  padding: 3px !important;
 }
 .category-inspector-body small {
   color: var(--text-tertiary);
@@ -3827,4 +3824,49 @@ button:disabled {
   width: var(--control-height);
   min-width: var(--control-height);
   padding: 0;
+}
+
+/* Pointer clicks keep controls quiet; keyboard navigation retains a visible focus outline. */
+.ui-select-trigger {
+  font-weight: 400;
+}
+.ui-select-trigger[data-state='open'] {
+  border-color: var(--text-tertiary);
+  background: var(--bg-secondary);
+}
+.ui-select-content [role='option']:focus-visible {
+  outline: none;
+}
+.ui-select-content {
+  overscroll-behavior: contain;
+}
+
+/* Both chart readouts occupy the same measured cell, so scrubbing never changes page geometry. */
+.home-chart-readout {
+  display: grid;
+  align-items: center;
+  justify-items: end;
+}
+.home-chart-readout > * {
+  grid-area: 1 / 1;
+}
+.home-chart-title {
+  min-width: 0;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.category-color-field {
+  min-width: 0;
+  border: 0;
+  padding: 0;
+  margin: 0;
+}
+.category-color-field legend {
+  padding: 0;
+  margin-bottom: 8px;
+  font-size: 12px;
+  font-weight: 500;
+  color: var(--text-secondary);
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import {
   Building2,
@@ -312,13 +313,13 @@ onMounted(async () => {
           /></label>
           <label
             ><span>{{ copy.member }}</span
-            ><select v-model="memberId">
-              <option v-if="selected.memberId == null" value="">{{ copy.noMember }}</option>
-              <option v-for="member in members" :key="member.id" :value="String(member.id)">
-                {{ member.name }}
-              </option>
-            </select></label
-          >
+            ><SelectField
+              v-model="memberId"
+              :options="[
+                ...(selected.memberId == null ? [{ value: '', label: copy.noMember }] : []),
+                ...members.map((member) => ({ value: String(member.id), label: member.name })),
+              ]"
+          /></label>
           <label
             ><span>{{ copy.number }}</span
             ><input :value="selected.accountNumber ?? '—'" readonly dir="ltr"

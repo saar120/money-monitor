@@ -1,6 +1,26 @@
 // Run against npm run dashboard:dev; all API responses use synthetic data.
 import puppeteer from 'puppeteer-core';
 import assert from 'node:assert/strict';
+
+async function selectOption(page, trigger, value) {
+  await page.click(trigger);
+  await page.waitForSelector('[role="listbox"]', { visible: true });
+  await page.waitForFunction(() => document.activeElement?.getAttribute('role') === 'option');
+  await page.waitForFunction(() => {
+    const rect = document.querySelector('[role="listbox"]').getBoundingClientRect();
+    return (
+      rect.top >= 0 && rect.bottom <= innerHeight && rect.left >= 0 && rect.right <= innerWidth
+    );
+  });
+  await page.click(`[role="option"][data-value="${value}"]`);
+  await page.waitForFunction(
+    () =>
+      !document.querySelector('[role="listbox"]') &&
+      !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
+      getComputedStyle(document.body).pointerEvents !== 'none',
+  );
+}
+
 const browser = await puppeteer.launch({
   executablePath:
     process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -161,14 +181,14 @@ try {
       'Unchanged transaction cannot be saved',
     );
     assert(
-      await page.$('.proto-secondary-fields select'),
+      await page.$('.proto-secondary-fields [role=combobox]'),
       'Owner is available directly in the inspector',
     );
     assert(
       await page.$('.proto-more-details input[type="date"]'),
       'Effective date is available directly',
     );
-    await page.select('.proto-fields > label select', 'dining');
+    await selectOption(page, '.proto-fields > label [role=combobox]', 'dining');
     await page.click('.proto-save');
     await page.waitForSelector('.proto-saved');
     assert(
@@ -179,7 +199,7 @@ try {
       await page.$eval('#proto-row-1 .proto-category', (el) => el.textContent.trim()),
       language === 'he' ? 'מסעדות' : 'Dining',
     );
-    await page.select('.proto-fields > label select', 'groceries');
+    await selectOption(page, '.proto-fields > label [role=combobox]', 'groceries');
     await page.click('.proto-save');
     await page.waitForFunction(() => document.querySelector('.proto-save').disabled);
     if (width === 1440)
@@ -246,7 +266,7 @@ try {
       el.dataset.retained = 'yes';
     });
     await page.click('.proto-filter-button');
-    await page.select('.proto-filter-popover select', 'groceries');
+    await selectOption(page, '.proto-filter-popover [role=combobox]', 'groceries');
     await page.waitForFunction(
       () =>
         document.querySelectorAll(

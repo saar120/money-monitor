@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Button } from '@/components/ui/button';
@@ -60,9 +61,13 @@ const sortOrder = ref<'asc' | 'desc'>('desc');
 const draftEffectiveDate = ref('');
 const { refresh: refreshReviewCount } = useReviewCount();
 const filterElement = ref<HTMLElement | null>(null);
-onClickOutside(filterElement, () => {
-  filterOpen.value = false;
-});
+onClickOutside(
+  filterElement,
+  () => {
+    filterOpen.value = false;
+  },
+  { ignore: ['.ui-select-content'] },
+);
 const hasFilters = computed(
   () =>
     reviewOnly.value ||
@@ -378,7 +383,20 @@ async function saveTransaction() {
     saving.value = false;
   }
 }
+function closeFilters(event: KeyboardEvent) {
+  if (filterElement.value?.querySelector('[role="combobox"][aria-expanded="true"]')) return;
+  event.stopPropagation();
+  filterOpen.value = false;
+  filterElement.value?.querySelector('button')?.focus();
+}
 function onKeys(event: KeyboardEvent) {
+  // Portaled menus own Escape and arrow keys until they close.
+  if (
+    event.defaultPrevented ||
+    (event.target instanceof HTMLElement && event.target.closest('[role="listbox"]')) ||
+    document.querySelector('[role="combobox"][aria-expanded="true"]')
+  )
+    return;
   if (event.key === 'Escape') {
     if (filterOpen.value) {
       filterOpen.value = false;
@@ -513,14 +531,7 @@ watch(search, () => {
             <ChevronLeft v-if="language === 'he'" :size="17" /><ChevronRight v-else :size="17" />
           </button>
         </div>
-        <div
-          ref="filterElement"
-          class="proto-filter-wrap"
-          @keydown.esc.stop="
-            filterOpen = false;
-            filterElement?.querySelector('button')?.focus();
-          "
-        >
+        <div ref="filterElement" class="proto-filter-wrap" @keydown.esc="closeFilters">
           <button
             type="button"
             class="proto-filter-button"
@@ -540,65 +551,82 @@ watch(search, () => {
               </div>
               <label
                 ><span>{{ t('category') }}</span
-                ><select v-model="filterCategory">
-                  <option value="all">{{ t('allCategories') }}</option>
-                  <option v-for="item in categories" :key="item.name" :value="item.name">
-                    {{ categoryLabel(item.name) }}
-                  </option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterCategory"
+                  :options="[
+                    { value: 'all', label: t('allCategories') },
+                    ...categories.map((item) => ({
+                      value: item.name,
+                      label: categoryLabel(item.name),
+                    })),
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('account') }}</span
-                ><select v-model="filterAccount">
-                  <option value="all">{{ t('allAccounts') }}</option>
-                  <option v-for="item in accounts" :key="item.id" :value="String(item.id)">
-                    {{ item.displayName }}
-                  </option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterAccount"
+                  :options="[
+                    { value: 'all', label: t('allAccounts') },
+                    ...accounts.map((item) => ({
+                      value: String(item.id),
+                      label: item.displayName,
+                    })),
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('allTypes') }}</span
-                ><select v-model="filterType">
-                  <option value="all">{{ t('allTypes') }}</option>
-                  <option value="bank">{{ t('banks') }}</option>
-                  <option value="credit_card">{{ t('creditCards') }}</option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterType"
+                  :options="[
+                    { value: 'all', label: t('allTypes') },
+                    { value: 'bank', label: t('banks') },
+                    { value: 'credit_card', label: t('creditCards') },
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('owner') }}</span
-                ><select v-model="filterOwner">
-                  <option value="all">{{ t('allOwners') }}</option>
-                  <option value="shared">{{ t('together') }}</option>
-                  <option value="unassigned">{{ t('unassigned') }}</option>
-                  <option v-for="member in members" :key="member.id" :value="`member:${member.id}`">
-                    {{ member.name }}
-                  </option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterOwner"
+                  :options="[
+                    { value: 'all', label: t('allOwners') },
+                    { value: 'shared', label: t('together') },
+                    { value: 'unassigned', label: t('unassigned') },
+                    ...members.map((member) => ({
+                      value: `member:${member.id}`,
+                      label: member.name,
+                    })),
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('transactionStatus') }}</span
-                ><select v-model="filterStatus">
-                  <option value="all">{{ t('anyStatus') }}</option>
-                  <option value="completed">{{ t('completed') }}</option>
-                  <option value="pending">{{ t('pending') }}</option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterStatus"
+                  :options="[
+                    { value: 'all', label: t('anyStatus') },
+                    { value: 'completed', label: t('completed') },
+                    { value: 'pending', label: t('pending') },
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('moneyDirection') }}</span
-                ><select v-model="filterDirection">
-                  <option value="all">{{ t('inAndOut') }}</option>
-                  <option value="expense">{{ t('spending') }}</option>
-                  <option value="income">{{ t('income') }}</option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterDirection"
+                  :options="[
+                    { value: 'all', label: t('inAndOut') },
+                    { value: 'expense', label: t('spending') },
+                    { value: 'income', label: t('income') },
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('includeInStatistics') }}</span
-                ><select v-model="filterInclusion">
-                  <option value="all">{{ t('allActivity') }}</option>
-                  <option value="included">{{ t('included') }}</option>
-                  <option value="ignored">{{ t('excluded') }}</option>
-                </select></label
-              >
+                ><SelectField
+                  v-model="filterInclusion"
+                  :options="[
+                    { value: 'all', label: t('allActivity') },
+                    { value: 'included', label: t('included') },
+                    { value: 'ignored', label: t('excluded') },
+                  ]"
+              /></label>
               <label
                 ><span>{{ t('startDate') }}</span
                 ><input v-model="startDate" type="date" :max="endDate || undefined"
@@ -812,25 +840,28 @@ watch(search, () => {
           <div class="proto-fields">
             <label
               ><span>{{ t('category') }}</span
-              ><select v-model="draftCategory">
-                <option value="">{{ t('uncategorized') }}</option>
-                <option v-for="item in categories" :key="item.name" :value="item.name">
-                  {{ categoryLabel(item.name) }}
-                </option>
-              </select></label
-            >
+              ><SelectField
+                v-model="draftCategory"
+                :options="[
+                  { value: '', label: t('uncategorized') },
+                  ...categories.map((item) => ({
+                    value: item.name,
+                    label: categoryLabel(item.name),
+                  })),
+                ]"
+            /></label>
             <div class="proto-more-details">
               <div class="proto-secondary-fields">
                 <label
                   ><span>{{ t('owner') }}</span
-                  ><select v-model="draftOwner">
-                    <option value="shared">{{ t('together') }}</option>
-                    <option value="unassigned">{{ t('unassigned') }}</option>
-                    <option v-for="item in members" :key="item.id" :value="`member:${item.id}`">
-                      {{ item.name }}
-                    </option>
-                  </select></label
-                >
+                  ><SelectField
+                    v-model="draftOwner"
+                    :options="[
+                      { value: 'shared', label: t('together') },
+                      { value: 'unassigned', label: t('unassigned') },
+                      ...members.map((item) => ({ value: `member:${item.id}`, label: item.name })),
+                    ]"
+                /></label>
                 <label class="proto-include"
                   ><input v-model="draftIncluded" type="checkbox" /><span>{{
                     t('includeInStatistics')
@@ -1105,41 +1136,13 @@ watch(search, () => {
 [dir='rtl'] .proto-filter-popover {
   transform-origin: calc(100% - 24px) -24px;
 }
-.filter-morph-enter-active {
-  transition:
-    transform 160ms ease-out,
-    opacity 150ms ease-out;
-}
+/* Controls are ready on the first frame; no stagger or delayed entrance. */
 .filter-morph-leave-active {
-  transition:
-    transform 200ms ease-in,
-    opacity 150ms ease-in;
+  transition: opacity 80ms ease-out;
   pointer-events: none;
 }
-.filter-morph-enter-from,
 .filter-morph-leave-to {
-  transform: translateY(-4px);
   opacity: 0;
-}
-.filter-morph-enter-active > label,
-.filter-morph-enter-active > .proto-clear {
-  animation: filter-controls-in 360ms 90ms both;
-}
-@keyframes filter-controls-in {
-  from {
-    opacity: 0;
-    transform: translateY(-12px);
-  }
-  to {
-    opacity: 1;
-    transform: translateY(0);
-  }
-}
-@media (prefers-reduced-motion: reduce) {
-  .filter-morph-enter-from,
-  .filter-morph-leave-to {
-    transform: none;
-  }
 }
 .proto-popover-head {
   grid-column: 1 / -1;

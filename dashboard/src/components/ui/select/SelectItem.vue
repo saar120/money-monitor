@@ -18,9 +18,10 @@ const forwardedProps = useForwardProps(delegatedProps);
   <SelectItem
     :key="language"
     v-bind="forwardedProps"
+    :data-value="props.value"
     :class="
       cn(
-        'relative flex w-full cursor-default select-none items-center rounded-md min-h-9 py-2 ps-8 pe-3 text-sm outline-none focus:bg-primary/10 data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
+        'relative flex w-full cursor-default select-none items-center rounded-md min-h-9 py-2 ps-8 pe-3 text-[13px] leading-5 outline-none focus:bg-bg-tertiary data-[highlighted]:bg-bg-tertiary data-[disabled]:pointer-events-none data-[disabled]:opacity-50',
         props.class,
       )
     "

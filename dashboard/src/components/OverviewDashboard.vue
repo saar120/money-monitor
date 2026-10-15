@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import SelectField from '@/components/ui/select/SelectField.vue';
 import { useMonthSwipe } from '@/composables/useMonthSwipe';
 import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
@@ -216,6 +217,7 @@ const chartOption = computed(() => {
     grid: { left: 0, right: 12, top: 16, bottom: 12, containLabel: true },
     tooltip: {
       trigger: 'axis' as const,
+      confine: true,
       axisPointer: {
         type: 'line' as const,
         snap: true,
@@ -324,18 +326,19 @@ function categoryLink(category: string) {
     <Teleport to="#toolbar-actions">
       <div class="toolbar-controls">
         <MonthControl v-model="selectedMonth" />
-        <select v-model="selectedOwner" :aria-label="t('everyone')" class="ledger-select">
-          <option value="all">{{ t('everyone') }}</option>
-          <option value="shared">{{ t('together') }}</option>
-          <option
-            v-for="member in members.filter((item) => item.isActive)"
-            :key="member.id"
-            :value="`member:${member.id}`"
-          >
-            {{ member.name }}
-          </option>
-          <option value="unassigned">{{ t('unassigned') }}</option>
-        </select>
+        <SelectField
+          v-model="selectedOwner"
+          :aria-label="t('everyone')"
+          class="ledger-select"
+          :options="[
+            { value: 'all', label: t('everyone') },
+            { value: 'shared', label: t('together') },
+            ...members
+              .filter((item) => item.isActive)
+              .map((member) => ({ value: `member:${member.id}`, label: member.name })),
+            { value: 'unassigned', label: t('unassigned') },
+          ]"
+        />
         <button
           class="toolbar-icon-button"
           :aria-label="t('refresh')"
@@ -375,12 +378,23 @@ function categoryLink(category: string) {
           </p>
           <div class="home-chart-heading">
             <h2 class="home-chart-title">{{ scrubDate }}</h2>
-            <strong v-if="scrubIndex != null" dir="ltr"
-              ><AnimatedAmount :value="scrubAmount" :animate="scrubIndex == null"
-            /></strong>
-            <div v-else class="home-chart-legend">
-              <span class="current">{{ t('thisMonth') }}</span>
-              <span v-if="previousSpending.length" class="previous">{{ t('previousMonth') }}</span>
+            <div class="home-chart-readout">
+              <strong
+                :class="{ invisible: scrubIndex == null }"
+                :aria-hidden="scrubIndex == null"
+                dir="ltr"
+                ><AnimatedAmount :value="scrubAmount" :animate="false"
+              /></strong>
+              <div
+                class="home-chart-legend"
+                :class="{ invisible: scrubIndex != null }"
+                :aria-hidden="scrubIndex != null"
+              >
+                <span class="current">{{ t('thisMonth') }}</span>
+                <span v-if="previousSpending.length" class="previous">{{
+                  t('previousMonth')
+                }}</span>
+              </div>
             </div>
           </div>
           <div
