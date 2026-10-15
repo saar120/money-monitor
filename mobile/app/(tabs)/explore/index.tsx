@@ -1,6 +1,7 @@
 import { DirectionalChevron } from '@/DirectionalChevron';
 import { t } from '@/localization';
 import { Text } from '@/LocalizedText';
+import { categoryLabel } from '@/translations';
 import { router, type Href } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -47,16 +48,19 @@ export default function ExploreScreen() {
       showsVerticalScrollIndicator={false}
       testID="explore-screen"
     >
+      <View style={styles.pageHeader}>
+        <Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.text }]}>
+          {t('explore')}
+        </Text>
+        <MonthPicker
+          month={selected.month}
+          months={selected.months}
+          onSelect={selected.selectMonth}
+          testID="explore-month-picker"
+        />
+      </View>
       <View style={styles.hero} testID="explore-summary">
-        <View style={styles.heroHeader}>
-          <Text style={[styles.heroLabel, { color: colors.text }]}>{t('totalSpending')}</Text>
-          <MonthPicker
-            month={selected.month}
-            months={selected.months}
-            onSelect={selected.selectMonth}
-            testID="explore-month-picker"
-          />
-        </View>
+        <Text style={[styles.heroLabel, { color: colors.secondary }]}>{t('whereItWent')}</Text>
         <Text
           adjustsFontSizeToFit
           allowFontScaling={false}
@@ -66,20 +70,36 @@ export default function ExploreScreen() {
         >
           {formatUnsignedMoney(home.spent, home.currencyCode)}
         </Text>
-        <Text style={[styles.heroDelta, { color: delta > 0 ? colors.warning : colors.positive }]}>
+        <Text style={[styles.heroDelta, { color: colors.secondary }]}>
           {delta === 0
             ? t('unchangedFromLastMonth')
             : formatSpendingComparison(delta, home.currencyCode)}
         </Text>
-        <View
-          style={[styles.mixTrack, { backgroundColor: colors.surfaceSoft }]}
-          accessibilityLabel={t('spendingMixByCategory')}
-        >
+        {categories.length ? (
+          <View
+            style={[styles.mixTrack, { backgroundColor: colors.surfaceSoft }]}
+            accessibilityLabel={t('spendingMixByCategory')}
+          >
+            {categories.map((category) => (
+              <View
+                key={category.name}
+                style={{ backgroundColor: category.color, flex: Math.max(1, category.spent) }}
+              />
+            ))}
+          </View>
+        ) : (
+          <Text style={[styles.heroDelta, { color: colors.secondary }]}>
+            {t('noSpendingToShowYet')}
+          </Text>
+        )}
+        <View style={styles.mixLegend} testID="explore-category-legend">
           {categories.map((category) => (
-            <View
-              key={category.name}
-              style={{ backgroundColor: category.color, flex: Math.max(1, category.spent) }}
-            />
+            <View key={category.name} style={styles.legendItem}>
+              <View style={[styles.legendMark, { backgroundColor: category.color }]} />
+              <Text style={[styles.legendLabel, { color: colors.secondary }]}>
+                {categoryLabel(category.name)}
+              </Text>
+            </View>
           ))}
         </View>
       </View>
@@ -106,7 +126,7 @@ export default function ExploreScreen() {
           detail={t('progressAgainstThePlansFromYourMac')}
           href={{ pathname: '/explore/budgets', params }}
           icon="gauge.with.dots.needle.50percent"
-          metric={primaryBudget ? `${Math.round(primaryBudget.usedPercent)}%` : '—'}
+          metric={primaryBudget ? `${Math.round(primaryBudget.usedPercent)}%` : '-'}
           testID="explore-card-budgets"
           title={t('budgets')}
         />
@@ -161,20 +181,20 @@ function ExploreRow({ detail, href, icon, last = false, metric, testID, title }:
         <SymbolView name={icon as never} size={17} tintColor={colors.accent} />
       </View>
       <View style={styles.copy}>
-        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
-          {title}
-        </Text>
-        <Text numberOfLines={1} style={[styles.rowDetail, { color: colors.secondary }]}>
-          {detail}
-        </Text>
+        <View style={styles.rowHeading}>
+          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
+            {title}
+          </Text>
+          <Text
+            allowFontScaling={false}
+            numberOfLines={1}
+            style={[styles.metric, { color: colors.text }]}
+          >
+            {metric}
+          </Text>
+        </View>
+        <Text style={[styles.rowDetail, { color: colors.secondary }]}>{detail}</Text>
       </View>
-      <Text
-        allowFontScaling={false}
-        numberOfLines={1}
-        style={[styles.metric, { color: colors.text }]}
-      >
-        {metric}
-      </Text>
       <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
     </Pressable>
   );
@@ -182,50 +202,68 @@ function ExploreRow({ detail, href, icon, last = false, metric, testID, title }:
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 40 },
-  hero: { marginTop: 4 },
-  heroHeader: {
+  pageHeader: {
+    marginTop: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
     gap: 12,
   },
-  heroLabel: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
+  pageTitle: {
+    flexShrink: 1,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    letterSpacing: -0.7,
+  },
+  hero: { marginTop: 28 },
+  heroLabel: { fontSize: 15, lineHeight: 21, fontWeight: '500' },
   heroValue: {
-    marginTop: 18,
+    marginTop: 8,
     fontSize: 42,
     lineHeight: 49,
-    fontWeight: '700',
+    fontWeight: '600',
     letterSpacing: -1.4,
     fontVariant: ['tabular-nums'],
   },
-  heroDelta: { marginTop: 4, fontSize: 13, lineHeight: 18, fontWeight: '600' },
+  heroDelta: { marginTop: 6, fontSize: 14, lineHeight: 20 },
   mixTrack: {
-    height: 9,
+    height: 8,
     marginTop: 20,
     borderRadius: 5,
     overflow: 'hidden',
     flexDirection: 'row',
     gap: 1,
   },
+  mixLegend: { marginTop: 12, flexDirection: 'row', flexWrap: 'wrap', columnGap: 16, rowGap: 8 },
+  legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendMark: { width: 7, height: 7, borderRadius: 2 },
+  legendLabel: { fontSize: 12, lineHeight: 17 },
   sectionTitle: {
-    marginTop: 36,
-    marginBottom: 10,
+    marginTop: 30,
+    marginBottom: 14,
     fontSize: 21,
     lineHeight: 27,
     fontWeight: '700',
     letterSpacing: -0.35,
   },
-  list: { borderRadius: 18, paddingHorizontal: 14, overflow: 'hidden' },
-  row: { minHeight: 75, flexDirection: 'row', alignItems: 'center', gap: 11 },
-  icon: { width: 40, height: 40, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
+  list: { borderRadius: 20, paddingHorizontal: 16, overflow: 'hidden' },
+  row: { minHeight: 84, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  icon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, minWidth: 0 },
-  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '700' },
-  rowDetail: { marginTop: 3, fontSize: 11.5, lineHeight: 16 },
+  rowHeading: {
+    flexDirection: 'row',
+    alignItems: 'baseline',
+    justifyContent: 'space-between',
+    gap: 8,
+  },
+  rowTitle: { flexShrink: 1, fontSize: 16, lineHeight: 21, fontWeight: '600' },
+  rowDetail: { marginTop: 4, fontSize: 13, lineHeight: 18 },
   metric: {
-    maxWidth: 88,
+    maxWidth: 130,
     textAlign: 'right',
     fontSize: 13.5,
-    fontWeight: '700',
+    fontWeight: '600',
     fontVariant: ['tabular-nums'],
   },
 });

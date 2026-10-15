@@ -477,7 +477,7 @@ export default function AdvisorScreen() {
           <SymbolView
             name="arrow.up"
             size={18}
-            tintColor={input.trim() && !busy && credential ? colors.background : colors.tertiary}
+            tintColor={input.trim() && !busy && credential ? colors.onAccent : colors.tertiary}
           />
         </Pressable>
       </GlassSurface>

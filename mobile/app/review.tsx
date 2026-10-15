@@ -237,7 +237,9 @@ export default function ReviewScreen() {
               onPress={() => void reload()}
               style={[styles.doneButton, { backgroundColor: colors.accent }]}
             >
-              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>{t('tryAgain')}</Text>
+              <Text style={[styles.doneButtonText, { color: colors.onAccent }]}>
+                {t('tryAgain')}
+              </Text>
             </Pressable>
           </View>
         ) : viewState === 'complete' ? (
@@ -318,7 +320,7 @@ export default function ReviewScreen() {
                 { backgroundColor: colors.accent, opacity: saving ? 0.5 : 1 },
               ]}
             >
-              <Text style={[styles.doneButtonText, { color: '#FFFFFF' }]}>
+              <Text style={[styles.doneButtonText, { color: colors.onAccent }]}>
                 {saving ? t('finishing') : t('done')}
               </Text>
             </Pressable>
@@ -482,8 +484,8 @@ export default function ReviewScreen() {
                   },
                 ]}
               >
-                <SymbolView name="checkmark" size={17} tintColor="#FFFFFF" />
-                <Text style={[styles.primaryButtonText, { color: '#FFFFFF' }]}>
+                <SymbolView name="checkmark" size={17} tintColor={colors.onAccent} />
+                <Text style={[styles.primaryButtonText, { color: colors.onAccent }]}>
                   {saving ? t('saving') : t('looksRight')}
                 </Text>
               </Pressable>

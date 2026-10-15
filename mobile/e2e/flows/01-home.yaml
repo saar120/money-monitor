@@ -5,11 +5,15 @@ name: Home renders the normal fixture
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: normal
+- tapOn:
+    id: tab-home
 - assertVisible:
     id: home-screen
 - assertVisible: '₪18,920'
 - assertVisible: '₪700 slower than last month’s pace'
-- assertVisible: '₪27,000'
+- assertVisible: 'This month'
+- assertVisible: 'Previous month'
+- assertVisible: '₪50,000'
 - assertVisible:
     id: budget-status
 - scrollUntilVisible:

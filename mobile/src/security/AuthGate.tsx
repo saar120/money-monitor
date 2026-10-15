@@ -101,8 +101,8 @@ export function AuthGate({
                 { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
               ]}
             >
-              <SymbolView name="faceid" size={20} tintColor="#FFFFFF" />
-              <Text style={styles.unlockLabel}>{t('unlock')}</Text>
+              <SymbolView name="faceid" size={20} tintColor={colors.onAccent} />
+              <Text style={[styles.unlockLabel, { color: colors.onAccent }]}>{t('unlock')}</Text>
             </Pressable>
           ) : null}
           {state === 'setup-required' ? (
@@ -115,8 +115,10 @@ export function AuthGate({
                 { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
               ]}
             >
-              <SymbolView name="gearshape.fill" size={19} tintColor="#FFFFFF" />
-              <Text style={styles.unlockLabel}>{t('openSettings')}</Text>
+              <SymbolView name="gearshape.fill" size={19} tintColor={colors.onAccent} />
+              <Text style={[styles.unlockLabel, { color: colors.onAccent }]}>
+                {t('openSettings')}
+              </Text>
             </Pressable>
           ) : null}
           <Text style={[styles.privacyNote, { color: colors.tertiary }]}>
@@ -169,6 +171,6 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     gap: 9,
   },
-  unlockLabel: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  unlockLabel: { fontSize: 17, fontWeight: '600' },
   privacyNote: { position: 'absolute', bottom: 44, fontSize: 13 },
 });

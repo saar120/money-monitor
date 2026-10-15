@@ -31,7 +31,8 @@ Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remai
 ## UI rules
 
 - Use semantic roles from `src/theme.ts`; do not add screen-local canvas or surface colors.
-- Cobalt indicates interaction or chart focus. Green, amber, and red are reserved for financial or operational meaning.
+- Follow the desktop's soft neutrals and slate blue for interaction or chart focus. Green, amber, and red are reserved for financial or operational meaning. Use `onAccent` for labels and icons on filled accent buttons in both appearances.
+- Give charts labeled series, distinguish comparisons with a dashed line, and keep the spending total visually stronger than the chart container.
 - Keep one leading financial statement per viewport, align monetary values, and use tabular numerals.
 - Prefer native navigation, sheets, controls, Dynamic Type, VoiceOver semantics, and 44-point targets.
 - Reserve Liquid Glass for navigation and compact selection controls—not ordinary content cards.

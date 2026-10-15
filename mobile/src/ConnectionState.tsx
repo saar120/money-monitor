@@ -53,7 +53,7 @@ export function ConnectionState() {
               { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
             ]}
           >
-            <Text style={styles.primaryLabel}>
+            <Text style={[styles.primaryLabel, { color: colors.onAccent }]}>
               {unpaired ? t('scanPairingCode') : t('pairAgain')}
             </Text>
           </Pressable>
@@ -86,7 +86,7 @@ const styles = StyleSheet.create({
   body: { marginTop: 10, fontSize: 16, lineHeight: 23, textAlign: 'center' },
   actions: { width: '100%', maxWidth: 300, marginTop: 27 },
   primary: { minHeight: 50, borderRadius: 13, alignItems: 'center', justifyContent: 'center' },
-  primaryLabel: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  primaryLabel: { fontSize: 17, fontWeight: '600' },
   secondary: { minHeight: 48, alignItems: 'center', justifyContent: 'center' },
   secondaryLabel: { fontSize: 16, fontWeight: '600' },
 });

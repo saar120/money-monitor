@@ -5,7 +5,7 @@ import { DirectionalChevron } from '@/DirectionalChevron';
 import { categoryLabel } from '@/translations';
 import { t } from '@/localization';
 import { Text } from '@/LocalizedText';
-import { Circle, Line as SkiaLine, vec } from '@shopify/react-native-skia';
+import { Circle, DashPathEffect, Line as SkiaLine, vec } from '@shopify/react-native-skia';
 import { CartesianChart, useChartPressState } from 'victory-native';
 import { router, type Href } from 'expo-router';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
@@ -94,7 +94,10 @@ export default function HomeScreen() {
           accessibilityRole="button"
           hitSlop={10}
           onPress={() => router.push('/settings')}
-          style={styles.settingsButton}
+          style={({ pressed }) => [
+            styles.settingsButton,
+            { backgroundColor: colors.surface, opacity: pressed ? 0.6 : 1 },
+          ]}
           testID="open-settings"
         >
           <SymbolView name="gearshape" size={20} tintColor={colors.secondary} />
@@ -125,6 +128,16 @@ export default function HomeScreen() {
           style={[styles.heroValue, { color: colors.text }]}
           value={formatUnsignedMoney(home.spent, home.currencyCode)}
         />
+        <Text style={[styles.heroComparison, { color: colors.secondary }]}>
+          {home.spent === home.previousSpent
+            ? t('inLineWithLastMonth')
+            : t(home.spent < home.previousSpent ? 'slowerPace' : 'higherPace', {
+                amount: formatUnsignedMoney(
+                  Math.abs(home.spent - home.previousSpent),
+                  home.currencyCode,
+                ),
+              })}
+        </Text>
       </MonthSwipe>
 
       <SpendingTrendCard
@@ -134,9 +147,6 @@ export default function HomeScreen() {
         spent={home.spent}
         trend={home.trend}
       />
-      <Text style={[styles.chartHint, { color: colors.secondary }]}>
-        {t('holdAndSlideToInspectDailySpending')}
-      </Text>
 
       <View style={[styles.cashflowRow, { borderBottomColor: colors.separator }]}>
         <View style={styles.cashflowItem}>
@@ -410,22 +420,70 @@ function SpendingTrendCard({
   const delta = selected.current - selected.previous;
   return (
     <View
-      style={[styles.spendingHero, { backgroundColor: colors.chart, shadowColor: colors.chart }]}
+      style={[
+        styles.spendingHero,
+        { backgroundColor: colors.surface, borderColor: colors.separator },
+      ]}
       testID="home-spending-chart"
     >
       <View style={styles.chartHeading}>
-        <Text style={styles.chartTitle}>{t('spendingThroughDayNumber', { count: day })}</Text>
-        <View style={styles.chartSource}>
-          <SymbolView name="checkmark.circle" size={11} tintColor="rgba(255,255,255,0.8)" />
-          <Text style={styles.chartSourceText}>{t('postedOnly')}</Text>
+        <Text style={[styles.chartTitle, { color: colors.text }]}>
+          {t('spendingThroughDayNumber', { count: day })}
+        </Text>
+        <Text style={[styles.chartSourceText, { color: colors.secondary }]}>{t('postedOnly')}</Text>
+      </View>
+      <View style={styles.chartLegend}>
+        <View style={styles.chartLegendItem}>
+          <View style={[styles.legendLine, { backgroundColor: colors.chart }]} />
+          <Text style={[styles.chartSourceText, { color: colors.secondary }]}>
+            {t('thisMonth2')}
+          </Text>
+        </View>
+        <View style={styles.chartLegendItem}>
+          <View
+            style={[
+              styles.legendLine,
+              { borderColor: colors.chartComparison, borderTopWidth: 2, borderStyle: 'dashed' },
+            ]}
+          />
+          <Text style={[styles.chartSourceText, { color: colors.secondary }]}>
+            {t('previousMonth')}
+          </Text>
         </View>
       </View>
-      <View style={styles.chartBody}>
-        <View pointerEvents="none" style={styles.chartGrid}>
-          <View style={styles.chartGridLine} />
-          <View style={styles.chartGridLine} />
-          <View style={styles.chartGridLine} />
-        </View>
+      <View
+        style={styles.chartBody}
+        accessible
+        accessibilityRole={trend.length ? 'adjustable' : 'image'}
+        accessibilityLabel={
+          trend.length ? t('spendingThroughDayNumber', { count: day }) : t('noPostedSpendingYet')
+        }
+        accessibilityValue={
+          trend.length
+            ? {
+                min: 1,
+                max: trend.length,
+                now: selectedIndex + 1,
+                text: t('dayAmount', {
+                  day: selected.day,
+                  amount: formatUnsignedMoney(selected.current, currencyCode),
+                }),
+              }
+            : undefined
+        }
+        accessibilityActions={trend.length ? [{ name: 'increment' }, { name: 'decrement' }] : []}
+        onAccessibilityAction={(event) =>
+          selectIndex(
+            Math.max(
+              0,
+              Math.min(
+                trend.length - 1,
+                selectedIndex + (event.nativeEvent.actionName === 'increment' ? 1 : -1),
+              ),
+            ),
+          )
+        }
+      >
         {trend.length ? (
           <CartesianChart
             chartPressConfig={trendPress}
@@ -435,24 +493,34 @@ function SpendingTrendCard({
             padding={trendPadding}
             xKey="day"
             yKeys={trendKeys}
+            yAxis={[
+              {
+                yKeys: trendKeys,
+                lineColor: colors.separator,
+                lineWidth: StyleSheet.hairlineWidth,
+                tickCount: 4,
+              },
+            ]}
           >
             {({ points, chartBounds }) => (
               <>
                 <MorphingArea
-                  color="#86B9FF"
+                  color={colors.chart}
                   curveType="linear"
-                  opacity={0.42}
+                  opacity={0.08}
                   points={points.current}
                   y0={chartBounds.bottom}
                 />
                 <MorphingLine
-                  color="rgba(255,255,255,0.58)"
+                  color={colors.chartComparison}
                   curveType="linear"
                   points={points.previous}
                   strokeWidth={2}
-                />
+                >
+                  <DashPathEffect intervals={[5, 5]} />
+                </MorphingLine>
                 <MorphingLine
-                  color="#FFFFFF"
+                  color={colors.chart}
                   curveType="linear"
                   points={points.current}
                   strokeWidth={2.8}
@@ -462,17 +530,17 @@ function SpendingTrendCard({
                     <SkiaLine
                       p1={guideTop}
                       p2={guideBottom}
-                      color="rgba(255,255,255,0.45)"
+                      color={colors.secondary}
                       strokeWidth={1}
                     />
                     <Circle
-                      color="rgba(255,255,255,0.2)"
+                      color={colors.accentSoft}
                       cx={state.x.position}
                       cy={state.y.current.position}
                       r={12}
                     />
                     <Circle
-                      color="#FFFFFF"
+                      color={colors.chart}
                       cx={state.x.position}
                       cy={state.y.current.position}
                       r={5}
@@ -484,30 +552,48 @@ function SpendingTrendCard({
           </CartesianChart>
         ) : (
           <View style={styles.noChart}>
-            <Text style={styles.noChartText}>{t('noPostedSpendingYet')}</Text>
+            <Text style={[styles.noChartText, { color: colors.secondary }]}>
+              {t('noPostedSpendingYet')}
+            </Text>
           </View>
         )}
       </View>
       <View style={styles.chartAxis}>
-        <Text style={styles.chartAxisText}>{t('day1')}</Text>
-        <Text style={styles.chartAxisText}>{t('todayDay', { count: day })}</Text>
-      </View>
-      <View style={styles.chartFooter}>
-        <View style={styles.chartMetricRow}>
-          <Text allowFontScaling={false} style={styles.chartMetricStrong}>
-            {t('dayAmount', {
-              day: selected.day,
-              amount: formatUnsignedMoney(selected.current, currencyCode),
-            })}
-          </Text>
-        </View>
-        <Text allowFontScaling={false} style={styles.chartMetric}>
-          {delta === 0
-            ? t('inLineWithLastMonth')
-            : t(delta < 0 ? 'slowerPace' : 'higherPace', {
-                amount: formatUnsignedMoney(Math.abs(delta), currencyCode),
-              })}
+        <Text style={[styles.chartAxisText, { color: colors.secondary }]}>{t('day1')}</Text>
+        <Text style={[styles.chartAxisText, { color: colors.secondary }]}>
+          {t('todayDay', { count: day })}
         </Text>
+      </View>
+      <View style={[styles.chartFooter, { borderTopColor: colors.separator }]}>
+        {isActive || selection?.trend === trend ? (
+          <>
+            <View style={styles.chartMetricRow}>
+              <Text
+                allowFontScaling={false}
+                style={[styles.chartMetricStrong, { color: colors.text }]}
+              >
+                {t('dayAmount', {
+                  day: selected.day,
+                  amount: formatUnsignedMoney(selected.current, currencyCode),
+                })}
+              </Text>
+            </View>
+            <Text
+              allowFontScaling={false}
+              style={[styles.chartMetric, { color: colors.secondary }]}
+            >
+              {delta === 0
+                ? t('inLineWithLastMonth')
+                : t(delta < 0 ? 'slowerPace' : 'higherPace', {
+                    amount: formatUnsignedMoney(Math.abs(delta), currencyCode),
+                  })}
+            </Text>
+          </>
+        ) : (
+          <Text style={[styles.chartHint, { color: colors.secondary }]}>
+            {t('holdAndSlideToInspectDailySpending')}
+          </Text>
+        )}
       </View>
     </View>
   );
@@ -689,10 +775,17 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   contextCopy: { minWidth: 0, flex: 1 },
-  settingsButton: { width: 40, height: 40, alignItems: 'center', justifyContent: 'center' },
-  greeting: { fontSize: 14, lineHeight: 20 },
+  settingsButton: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  greeting: { fontSize: 22, lineHeight: 28, fontWeight: '600', letterSpacing: -0.4 },
   freshness: { marginTop: 1, fontSize: 12.5 },
-  hero: { paddingTop: 24, paddingBottom: 20 },
+  hero: { paddingTop: 26, paddingBottom: 22 },
+  heroComparison: { marginTop: 8, fontSize: 14, lineHeight: 20 },
   heroHeader: {
     marginBottom: 12,
     flexDirection: 'row',
@@ -701,9 +794,9 @@ const styles = StyleSheet.create({
     gap: 12,
   },
   heroValue: {
-    fontSize: 56,
-    lineHeight: 59,
-    fontWeight: '700',
+    fontSize: 52,
+    lineHeight: 60,
+    fontWeight: '600',
     letterSpacing: -2,
     fontVariant: ['tabular-nums'],
   },
@@ -714,76 +807,46 @@ const styles = StyleSheet.create({
     letterSpacing: -0.2,
   },
   spendingHero: {
-    height: 292,
     overflow: 'hidden',
-    borderRadius: 25,
-    paddingTop: 17,
-    paddingHorizontal: 14,
-    paddingBottom: 13,
-    shadowOffset: { width: 0, height: 16 },
-    shadowOpacity: 0.22,
-    shadowRadius: 22,
+    borderRadius: 20,
+    borderWidth: StyleSheet.hairlineWidth,
+    paddingTop: 16,
+    paddingHorizontal: 16,
+    paddingBottom: 14,
   },
   chartHeading: {
     flexDirection: 'row',
+    flexWrap: 'wrap',
     alignItems: 'center',
     justifyContent: 'space-between',
-    gap: 12,
+    gap: 8,
   },
-  chartTitle: { color: '#FFFFFF', fontSize: 15, lineHeight: 20, fontWeight: '700' },
-  chartSource: {
-    minHeight: 28,
-    paddingHorizontal: 9,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderColor: 'rgba(255,255,255,0.3)',
-    borderRadius: 14,
-    backgroundColor: 'rgba(255,255,255,0.1)',
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 5,
-  },
-  chartSourceText: { color: 'rgba(255,255,255,0.82)', fontSize: 10.5, fontWeight: '600' },
+  chartTitle: { fontSize: 14, lineHeight: 20, fontWeight: '600' },
+  chartSourceText: { fontSize: 12, lineHeight: 17 },
+  chartLegend: { flexDirection: 'row', flexWrap: 'wrap', gap: 18, marginTop: 12 },
+  chartLegendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  legendLine: { width: 18, height: 2 },
   chartBody: { height: 176, marginTop: 4, direction: 'ltr' },
-  chartGrid: {
-    position: 'absolute',
-    top: 22,
-    right: 2,
-    bottom: 18,
-    left: 2,
-    justifyContent: 'space-between',
-  },
-  chartGridLine: {
-    height: StyleSheet.hairlineWidth,
-    backgroundColor: 'rgba(255,255,255,0.18)',
-  },
   noChart: { flex: 1, alignItems: 'center', justifyContent: 'center' },
-  noChartText: { color: 'rgba(255,255,255,0.72)', fontSize: 13 },
+  noChartText: { fontSize: 13 },
   chartAxis: {
     direction: 'ltr',
     flexDirection: 'row',
     justifyContent: 'space-between',
     paddingHorizontal: 3,
   },
-  chartAxisText: { color: 'rgba(255,255,255,0.64)', fontSize: 10.5 },
+  chartAxisText: { fontSize: 11 },
   chartFooter: {
     marginTop: 10,
     paddingTop: 10,
     borderTopWidth: StyleSheet.hairlineWidth,
-    borderTopColor: 'rgba(255,255,255,0.22)',
-    flexDirection: 'row',
-    justifyContent: 'space-between',
-    gap: 10,
+    minHeight: 50,
+    gap: 4,
   },
   chartMetricRow: { flexDirection: 'row', alignItems: 'baseline' },
-  chartMetric: { color: 'rgba(255,255,255,0.74)', fontSize: 11 },
-  chartMetricStrong: { color: '#FFFFFF', fontSize: 13, fontWeight: '700' },
-  chartHint: {
-    minHeight: 34,
-    paddingHorizontal: 4,
-    paddingTop: 10,
-    fontSize: 11.5,
-    fontWeight: '500',
-  },
+  chartMetric: { fontSize: 12, lineHeight: 17 },
+  chartMetricStrong: { fontSize: 14, fontWeight: '600', fontVariant: ['tabular-nums'] },
+  chartHint: { fontSize: 12, lineHeight: 18 },
   categorySectionHeader: {
     flexDirection: 'row',
     alignItems: 'center',
@@ -793,20 +856,26 @@ const styles = StyleSheet.create({
   },
   categorySectionTitle: { fontSize: 21, lineHeight: 27, fontWeight: '700', letterSpacing: -0.35 },
   categorySectionAction: { minHeight: 44, paddingTop: 12, fontSize: 14, fontWeight: '600' },
-  categoryList: { gap: 18 },
-  categoryRow: { minHeight: 52 },
+  categoryList: { gap: 10 },
+  categoryRow: { minHeight: 64, paddingVertical: 6 },
   categoryTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
   categoryName: { flex: 1, minWidth: 0, fontSize: 16, fontWeight: '600' },
   categoryAmount: { fontSize: 15, fontWeight: '600', fontVariant: ['tabular-nums'] },
   categoryBottom: { flexDirection: 'row', alignItems: 'center', gap: 10, marginTop: 7 },
   categoryTrack: { flex: 1, height: 4, borderRadius: 2, overflow: 'hidden' },
   categoryFill: { height: '100%', borderRadius: 2 },
-  categoryDelta: { width: 164, fontSize: 12, textAlign: 'right', fontVariant: ['tabular-nums'] },
+  categoryDelta: {
+    maxWidth: '65%',
+    flexShrink: 1,
+    fontSize: 12,
+    textAlign: 'right',
+    fontVariant: ['tabular-nums'],
+  },
   cashflowRow: {
     flexDirection: 'row',
     alignItems: 'stretch',
     gap: 24,
-    marginTop: 14,
+    marginTop: 4,
     paddingHorizontal: 3,
     paddingVertical: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
@@ -844,7 +913,7 @@ const styles = StyleSheet.create({
   noBudget: { minHeight: 68, marginTop: 28, justifyContent: 'center' },
   noBudgetTitle: { fontSize: 16, fontWeight: '600' },
   noBudgetText: { marginTop: 4, fontSize: 13 },
-  attention: { marginTop: 28, borderRadius: 16, paddingHorizontal: 14 },
+  attention: { marginTop: 28, borderRadius: 20, paddingHorizontal: 14 },
   attentionRow: { minHeight: 64, flexDirection: 'row', alignItems: 'center', gap: 12 },
   attentionText: { flex: 1, minWidth: 0, paddingVertical: 10 },
   attentionTitle: { fontSize: 15, lineHeight: 20, fontWeight: '600' },

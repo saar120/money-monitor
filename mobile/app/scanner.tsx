@@ -115,7 +115,7 @@ export default function ScannerScreen() {
             { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
           ]}
         >
-          <Text style={styles.permissionButtonLabel}>
+          <Text style={[styles.permissionButtonLabel, { color: colors.onAccent }]}>
             {permission.canAskAgain ? t('allowCamera') : t('openSettings')}
           </Text>
         </Pressable>
@@ -283,7 +283,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
     marginTop: 27,
   },
-  permissionButtonLabel: { color: '#FFFFFF', fontSize: 17, fontWeight: '600' },
+  permissionButtonLabel: { fontSize: 17, fontWeight: '600' },
   cancelButton: {
     minWidth: 100,
     minHeight: 48,

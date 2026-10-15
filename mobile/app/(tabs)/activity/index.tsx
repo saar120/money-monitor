@@ -6,6 +6,7 @@ import { Text } from '@/LocalizedText';
 import { router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useMemo, useRef, useState } from 'react';
+import { SafeAreaView } from 'react-native-safe-area-context';
 import {
   ActivityIndicator,
   Pressable,
@@ -85,7 +86,7 @@ export default function ActivityScreen() {
   if (money.status !== 'ready' || !money.home) return <ConnectionState />;
 
   return (
-    <>
+    <SafeAreaView edges={['top']} style={{ flex: 1, backgroundColor: colors.background }}>
       <SectionList
         CellRendererComponent={ActivityCell}
         style={{ backgroundColor: colors.background }}
@@ -110,7 +111,15 @@ export default function ActivityScreen() {
         }
         ListHeaderComponent={
           <View>
-            <View style={[styles.search, { backgroundColor: colors.surfaceSoft }]}>
+            <Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.text }]}>
+              {t('activity')}
+            </Text>
+            <View
+              style={[
+                styles.search,
+                { backgroundColor: colors.surface, borderColor: colors.separator },
+              ]}
+            >
               <SymbolView name="magnifyingglass" size={16} tintColor={colors.tertiary} />
               <TextInput
                 ref={searchBar}
@@ -137,7 +146,10 @@ export default function ActivityScreen() {
                 accessibilityRole="button"
                 onPress={() => router.push('/review')}
                 testID="activity-start-review"
-                style={[styles.reviewBanner, { backgroundColor: colors.accentSoft }]}
+                style={({ pressed }) => [
+                  styles.reviewBanner,
+                  { backgroundColor: colors.accentSoft, opacity: pressed ? 0.7 : 1 },
+                ]}
               >
                 <View style={styles.reviewBannerIcon}>
                   <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
@@ -163,7 +175,7 @@ export default function ActivityScreen() {
                 {t('transactionCount', { count: transactions.length })}
                 {result.hasMore ? '+' : ''}{' '}
                 {criteria.startDate || criteria.endDate
-                  ? `${criteria.startDate ?? t('first')}–${criteria.endDate ?? t('today3')}`
+                  ? `${criteria.startDate ?? t('first')} - ${criteria.endDate ?? t('today3')}`
                   : t('allDates')}
               </Text>
               <Pressable
@@ -290,7 +302,7 @@ export default function ActivityScreen() {
         value={criteria}
         visible={filtersVisible}
       />
-    </>
+    </SafeAreaView>
   );
 }
 
@@ -457,13 +469,22 @@ function merchantInitial(merchant: string) {
 
 const styles = StyleSheet.create({
   content: { paddingBottom: 36 },
+  pageTitle: {
+    marginHorizontal: 20,
+    marginTop: 8,
+    marginBottom: 20,
+    fontSize: 28,
+    lineHeight: 34,
+    fontWeight: '700',
+    letterSpacing: -0.7,
+  },
   search: {
     height: 48,
-    marginHorizontal: 16,
-    marginTop: 8,
-    marginBottom: 14,
+    marginHorizontal: 20,
+    marginBottom: 8,
     paddingHorizontal: 14,
-    borderRadius: 16,
+    borderRadius: 14,
+    borderWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 9,
@@ -471,10 +492,10 @@ const styles = StyleSheet.create({
   searchInput: { flex: 1, height: 48, fontSize: 16 },
   reviewBanner: {
     minHeight: 66,
-    marginHorizontal: 16,
+    marginHorizontal: 20,
     marginTop: 10,
     marginBottom: 8,
-    borderRadius: 16,
+    borderRadius: 20,
     paddingHorizontal: 14,
     flexDirection: 'row',
     alignItems: 'center',
@@ -486,7 +507,7 @@ const styles = StyleSheet.create({
   reviewBannerDetail: { marginTop: 2, fontSize: 12.5 },
   filterBar: {
     minHeight: 60,
-    paddingHorizontal: 16,
+    paddingHorizontal: 20,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -495,8 +516,8 @@ const styles = StyleSheet.create({
   summary: { flex: 1, minWidth: 0, fontSize: 13 },
   refreshError: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13, fontWeight: '600' },
   filter: {
-    minHeight: 38,
-    borderRadius: 19,
+    minHeight: 44,
+    borderRadius: 22,
     borderWidth: StyleSheet.hairlineWidth,
     paddingHorizontal: 14,
     alignItems: 'center',
@@ -505,7 +526,7 @@ const styles = StyleSheet.create({
   filterLabel: { fontSize: 13, fontWeight: '600' },
   filterWithIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   sectionHeader: {
-    minHeight: 40,
+    minHeight: 44,
     paddingHorizontal: 20,
     borderBottomWidth: StyleSheet.hairlineWidth,
     flexDirection: 'row',
@@ -520,22 +541,22 @@ const styles = StyleSheet.create({
     textAlign: 'right',
     fontVariant: ['tabular-nums'],
   },
-  row: { minHeight: 70, flexDirection: 'row', paddingLeft: 16 },
+  row: { minHeight: 76, flexDirection: 'row', paddingStart: 20 },
   merchantMark: {
     width: 38,
     height: 38,
     borderRadius: 11,
     alignItems: 'center',
     justifyContent: 'center',
-    marginTop: 13,
+    marginTop: 17,
   },
   merchantInitial: { fontSize: 16, fontWeight: '700' },
   rowBody: {
     flex: 1,
     minWidth: 0,
-    marginLeft: 12,
-    paddingRight: 17,
-    paddingVertical: 11,
+    marginStart: 12,
+    paddingEnd: 20,
+    paddingVertical: 14,
     justifyContent: 'center',
   },
   rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },

@@ -76,10 +76,10 @@
           "image": "./assets/icon.png",
           "imageWidth": 112,
           "resizeMode": "contain",
-          "backgroundColor": "#F8F7F3",
+          "backgroundColor": "#F3F3EE",
           "dark": {
             "image": "./assets/icon-dark.png",
-            "backgroundColor": "#17212E"
+            "backgroundColor": "#191E1B"
           }
         }
       ],

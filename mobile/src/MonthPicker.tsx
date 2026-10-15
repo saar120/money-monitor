@@ -142,8 +142,8 @@ function MonthButton({
 const styles = StyleSheet.create({
   switcher: {
     minWidth: 176,
-    height: 40,
-    borderRadius: 20,
+    height: 44,
+    borderRadius: 22,
     flexDirection: 'row',
     alignItems: 'center',
     overflow: 'hidden',
@@ -154,7 +154,7 @@ const styles = StyleSheet.create({
     shadowOpacity: 0.08,
     shadowRadius: 8,
   },
-  button: { width: 44, height: 40, alignItems: 'center', justifyContent: 'center' },
+  button: { width: 44, height: 44, alignItems: 'center', justifyContent: 'center' },
   divider: { width: StyleSheet.hairlineWidth, height: 16 },
   label: {
     flex: 1,
