@@ -58,18 +58,20 @@ async function launch() {
 }
 
 async function stop() {
-  if (browser) {
-    await browser.close();
-    browser = undefined;
-  }
-  if (child && child.exitCode === null && child.signalCode === null) {
-    const exited = once(child, 'exit');
-    const timeout = setTimeout(() => child.kill(), 10_000);
-    try {
-      await exited;
-    } finally {
-      clearTimeout(timeout);
+  const running = child?.pid && child.exitCode === null && child.signalCode === null;
+  const exited = running ? once(child, 'exit') : undefined;
+  // Electron can hide its window instead of acknowledging CDP's Browser.close.
+  const timeout = running ? setTimeout(() => child.kill(), 10_000) : undefined;
+  try {
+    if (browser) {
+      const connection = browser;
+      browser = undefined;
+      if (running) await connection.close();
+      else await connection.disconnect();
     }
+    await exited;
+  } finally {
+    clearTimeout(timeout);
   }
 }
 
