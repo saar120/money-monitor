@@ -116,6 +116,17 @@ try {
   assert.ok((await api(page, '/accounts')).accounts.length > 0, 'Demo SQLite seed is readable');
   assert.ok((await api(page, '/transactions?limit=5')).transactions.length > 0);
 
+  await page.setViewport({ width: 1000, height: 720 });
+  await page.reload({ waitUntil: 'networkidle2' });
+  const attentionTextWidths = await page.$$eval('.attention-row > span', (spans) =>
+    spans.map((span) => span.getBoundingClientRect().width),
+  );
+  assert.ok(attentionTextWidths.length > 0, 'Home attention rows are present');
+  assert.ok(
+    attentionTextWidths.every((width) => width >= 100),
+    'Home attention text must remain readable at Windows desktop scaling',
+  );
+
   for (const [language, theme] of [
     ['en', 'light'],
     ['he', 'dark'],

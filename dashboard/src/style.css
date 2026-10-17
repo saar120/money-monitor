@@ -1616,15 +1616,6 @@ html[dir='rtl'] .lucide-arrow-left {
   margin-inline: auto;
 }
 @media (max-width: 1040px) {
-  .home-grid {
-    grid-template-columns: 1fr;
-  }
-  .home-rail {
-    display: grid;
-    grid-template-columns: repeat(2, minmax(0, 1fr));
-  }
-}
-@media (max-width: 1040px) {
   .explore-grid {
     grid-template-columns: 1fr;
   }
@@ -2891,6 +2882,15 @@ html[dir='rtl'] .lucide-arrow-left {
   }
   .category-inspector-body {
     overflow-y: auto;
+  }
+}
+@media (max-width: 1040px) {
+  .home-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-rail {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
   }
 }
 @media (max-width: 900px) {

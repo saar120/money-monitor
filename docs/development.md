@@ -59,7 +59,7 @@ npm --prefix mobile run typecheck
 npm --prefix mobile test
 ```
 
-Root `check` runs lint, documentation link/script checks, backend/Electron/dashboard typechecks, the bootstrap schema drift check, backend tests, and Electron tests. The desktop/backend typecheck emits backend declarations because Electron imports `dist/` modules. Mobile checks use its separate package. CI runs these on pushes and PRs targeting `main` or `mm_revamped`. Native UI E2E remains a macOS check.
+Root `check` runs lint, documentation link/script checks, backend/Electron/dashboard typechecks, the bootstrap schema drift check, backend tests, Electron tests, and build-script tests. The desktop/backend typecheck emits backend declarations because Electron imports `dist/` modules. Mobile checks use its separate package. CI runs these on pushes and PRs targeting `main` or `mm_revamped`. Native UI E2E remains a macOS check.
 
 The Windows workflow also builds the NSIS installer, installs it, and launches the installed app with disposable synthetic data. It checks SQLite, API authentication, demo mode, English/Hebrew, light/dark themes, DPAPI encryption, and settings after restart. Download the installer from the workflow's `Money-Monitor-Windows` artifact. Release publishing runs the same smoke check first.
 
