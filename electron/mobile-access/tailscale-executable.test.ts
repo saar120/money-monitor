@@ -2,6 +2,20 @@ import { describe, expect, it, vi } from 'vitest';
 import { resolveTailscaleExecutable } from './tailscale-executable.js';
 
 describe('resolveTailscaleExecutable', () => {
+  it('resolves Windows PATH entries with spaces and ignores relative entries', () => {
+    const executable = 'C:\\Program Files\\Tailscale\\tailscale.exe';
+    const isExecutable = vi.fn((path: string) => path === executable);
+
+    expect(
+      resolveTailscaleExecutable({
+        platform: 'win32',
+        pathValue: '.;bin;C:\\Program Files\\Tailscale;C:\\Windows\\System32',
+        isExecutable,
+      }),
+    ).toBe(executable);
+    expect(isExecutable).not.toHaveBeenCalledWith('bin\\tailscale.exe');
+  });
+
   it('prefers an executable from an absolute PATH entry', () => {
     const isExecutable = vi.fn((path: string) => path === '/custom/bin/tailscale');
 

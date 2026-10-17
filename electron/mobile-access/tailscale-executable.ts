@@ -1,5 +1,5 @@
 import { constants, accessSync } from 'node:fs';
-import { delimiter, isAbsolute, join } from 'node:path';
+import { posix, win32 } from 'node:path';
 
 export interface TailscaleExecutableResolutionOptions {
   platform?: NodeJS.Platform;
@@ -31,6 +31,7 @@ export function resolveTailscaleExecutable(
   options: TailscaleExecutableResolutionOptions = {},
 ): string {
   const platform = options.platform ?? process.platform;
+  const { delimiter, isAbsolute, join } = platform === 'win32' ? win32 : posix;
   const pathValue = options.pathValue ?? process.env.PATH ?? '';
   const isExecutable = options.isExecutable ?? systemExecutableCheck;
   const executableName = platform === 'win32' ? 'tailscale.exe' : 'tailscale';
