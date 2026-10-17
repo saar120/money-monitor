@@ -1,0 +1,36 @@
+name: Windows
+
+on:
+  pull_request:
+    branches: [main, mm_revamped]
+  push:
+    branches: [mm_revamped, fix/windows-build]
+  workflow_dispatch:
+
+jobs:
+  windows:
+    runs-on: windows-latest
+    timeout-minutes: 30
+    permissions:
+      contents: read
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 22
+          cache: npm
+      - run: npm ci
+      - run: npm run test:build
+      - run: npm run test:electron
+      - name: Build Windows installer
+        run: npm run electron:build:win -- --publish never
+      - name: Install and smoke-test Windows app
+        run: ./scripts/smoke-test-windows.ps1
+      - uses: actions/upload-artifact@v4
+        with:
+          name: Money-Monitor-Windows
+          path: |
+            release/*.exe
+            release/*.blockmap
+            release/latest.yml
+          if-no-files-found: error

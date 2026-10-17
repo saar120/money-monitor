@@ -17,15 +17,15 @@ if (process.platform === 'darwin' && !env.SDKROOT) {
 }
 
 execFileSync(
-  'npx',
+  process.execPath,
   [
-    'node-gyp',
+    require.resolve('node-gyp/bin/node-gyp.js'),
     'rebuild',
     '--runtime=electron',
     `--target=${target}`,
     '--dist-url=https://electronjs.org/headers',
   ],
-  { cwd, env, stdio: 'inherit', shell: process.platform === 'win32' },
+  { cwd, env, stdio: 'inherit' },
 );
 
 console.log('Rebuild complete.');

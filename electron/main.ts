@@ -47,6 +47,11 @@ const isWin = process.platform === 'win32';
 // "money-monitor" but we want the userData dir to be "Money Monitor".
 app.name = 'Money Monitor';
 
+// Honor the backend's data-directory override for isolated desktop runs too.
+if (process.env.MONEY_MONITOR_DATA_DIR) {
+  app.setPath('userData', process.env.MONEY_MONITOR_DATA_DIR);
+}
+
 // ── Fix PATH for packaged macOS apps (Finder/Spotlight launch with minimal PATH) ─
 if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
   try {

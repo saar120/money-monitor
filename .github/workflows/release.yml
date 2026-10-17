@@ -79,6 +79,9 @@ jobs:
       - name: Build and package
         run: npm run electron:prebuild && npx electron-builder --win --publish never
 
+      - name: Install and verify Windows app
+        run: ./scripts/smoke-test-windows.ps1
+
       - name: Upload to GitHub Release
         uses: softprops/action-gh-release@v2
         with:
