@@ -41,6 +41,11 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const isMac = process.platform === 'darwin';
 const isWin = process.platform === 'win32';
 
+// Translated x64 Windows apps can stall before showing a window with virtual GPU drivers.
+if (isWin && app.runningUnderARM64Translation) {
+  app.disableHardwareAcceleration();
+}
+
 // ── Set app name FIRST (affects userData path and menu bar) ─────────────────
 // IMPORTANT: Must be set before any call to app.getPath('userData'), because
 // Electron caches the path on first access.  The package.json "name" is

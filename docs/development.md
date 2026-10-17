@@ -65,6 +65,8 @@ The Windows workflow also builds the NSIS installer, installs it, and launches t
 
 Windows source builds need Python and Visual Studio's **Desktop development with C++** workload. `npm run electron:rebuild` uses the pinned local `node-gyp` (including Visual Studio 2026 support). For an isolated desktop run, set `MONEY_MONITOR_DATA_DIR` to an existing absolute directory; the app and backend both use that directory.
 
+The x64 Windows app uses software rendering under ARM64 translation to avoid startup failures with virtual GPU drivers. Native x64 Windows keeps hardware acceleration. The packaged-app smoke check can also run inside a Windows 11 VMPal VM with a portable Node runtime and `puppeteer-core` installed beside the script.
+
 Commit hooks run the desktop/backend typecheck, staged lint/format, and gitleaks. Fix failing checks before retrying the commit.
 
 After changing the bootstrap contract, use `npm run mobile:bootstrap-schema:generate` and include the generated schema; `check` verifies it is current.
