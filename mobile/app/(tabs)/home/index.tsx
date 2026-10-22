@@ -691,7 +691,11 @@ function PaceLine({
           style={[styles.paceFill, { width: `${Math.min(value, 100)}%`, backgroundColor: color }]}
         />
       </View>
-      <Text allowFontScaling={false} style={[styles.pacePercent, { color: colors.text }]}>
+      <Text
+        allowFontScaling={false}
+        numberOfLines={1}
+        style={[styles.pacePercent, { color: colors.text }]}
+      >
         {Math.round(value)}%
       </Text>
     </View>
@@ -899,11 +903,13 @@ const styles = StyleSheet.create({
   budgetTitle: { flex: 1, minWidth: 0, fontSize: 17, fontWeight: '600' },
   budgetRemaining: { fontSize: 13, fontWeight: '600', fontVariant: ['tabular-nums'] },
   paceLine: { minHeight: 28, flexDirection: 'row', alignItems: 'center', gap: 10 },
-  paceLineLabel: { width: 104, fontSize: 13 },
-  paceTrack: { flex: 1, height: 5, borderRadius: 3, overflow: 'hidden' },
+  paceLineLabel: { width: 104, flexShrink: 0, fontSize: 13 },
+  paceTrack: { flex: 1, minWidth: 0, height: 5, borderRadius: 3, overflow: 'hidden' },
   paceFill: { height: '100%', borderRadius: 3 },
   pacePercent: {
-    width: 34,
+    minWidth: 44,
+    flexShrink: 0,
+    writingDirection: 'ltr',
     fontSize: 12,
     fontWeight: '600',
     textAlign: 'right',

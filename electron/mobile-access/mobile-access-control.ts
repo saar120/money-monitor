@@ -148,6 +148,8 @@ export class MobileAccessControl {
   private readonly deviceRegistry: MobileAccessDeviceRegistry;
   private readonly onPairingManagerChanged?: MobileAccessControlOptions['onPairingManagerChanged'];
   private enabled = false;
+  private recoveryActive = false;
+  private recoveryTimer: ReturnType<typeof setTimeout> | undefined;
   private runtimeState: MobileAccessRuntimeState = INITIAL_RUNTIME_STATE;
   private pairingManager: MobileAccessPairingManager | null = null;
   private pairingPublicUrl: string | null = null;
@@ -165,8 +167,10 @@ export class MobileAccessControl {
   startFromConfiguration(enabled: boolean): Promise<MobileAccessControlSnapshot> {
     return this.serialize(async () => {
       this.enabled = enabled;
+      this.recoveryActive = enabled;
       this.runtimeState = await this.runtime.start(enabled);
       this.reconcilePairingManager();
+      this.scheduleRecovery();
       return this.snapshot();
     });
   }
@@ -184,8 +188,10 @@ export class MobileAccessControl {
       }
 
       this.enabled = enabled;
+      this.recoveryActive = enabled;
       this.runtimeState = enabled ? await this.runtime.start(true) : await this.runtime.disable();
       this.reconcilePairingManager();
+      this.scheduleRecovery();
       return this.snapshot();
     });
   }
@@ -194,12 +200,15 @@ export class MobileAccessControl {
     return this.serialize(async () => {
       this.runtimeState = await this.runtime.resume();
       this.reconcilePairingManager();
+      this.scheduleRecovery();
       return this.snapshot();
     });
   }
 
   shutdown(): Promise<MobileAccessControlSnapshot> {
     return this.serialize(async () => {
+      this.recoveryActive = false;
+      this.scheduleRecovery();
       this.runtimeState = await this.runtime.shutdown();
       this.setPairingManager(null, null);
       return this.snapshot();
@@ -281,6 +290,20 @@ export class MobileAccessControl {
       this.lastActionError = 'device_operation_failed';
     }
     return this.snapshot();
+  }
+
+  private scheduleRecovery(): void {
+    clearTimeout(this.recoveryTimer);
+    this.recoveryTimer = undefined;
+    if (!this.recoveryActive) return;
+
+    // Tailscale may become ready after startup/wake. Keep checking the owned
+    // route even after success so a later transport restart also recovers.
+    // Rearm after completion to avoid queuing checks behind slow CLI calls.
+    this.recoveryTimer = setTimeout(() => {
+      void this.resume();
+    }, 30_000);
+    this.recoveryTimer.unref();
   }
 
   private performPairingAction(

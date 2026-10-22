@@ -123,6 +123,45 @@ function harness() {
 }
 
 describe('MobileAccessControl', () => {
+  it.each(['disable', 'shutdown'] as const)(
+    'recovers without a wake event, keeps checking, and stops after %s',
+    async (stop) => {
+      vi.useFakeTimers();
+      try {
+        const context = harness();
+        const unavailable: MobileAccessRuntimeState = {
+          status: 'failed',
+          diagnostic: 'tailscaleNotReady',
+        };
+        context.runtime.startStates = [unavailable];
+        context.runtime.resumeStates = [unavailable, RUNNING, unavailable, RUNNING];
+        await context.control.startFromConfiguration(true);
+
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(context.runtime.calls).toEqual(['start:true', 'resume']);
+        expect(context.control.getSnapshot().pairingAvailable).toBe(false);
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(context.control.getSnapshot()).toMatchObject({
+          transport: { status: 'running' },
+          pairingAvailable: true,
+        });
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(context.control.getSnapshot().transport.status).toBe('failed');
+        await vi.advanceTimersByTimeAsync(30_000);
+        expect(context.control.getSnapshot().transport.status).toBe('running');
+
+        if (stop === 'disable') await context.control.setEnabled(false);
+        else await context.control.shutdown();
+        const calls = [...context.runtime.calls];
+        await vi.advanceTimersByTimeAsync(90_000);
+        expect(context.runtime.calls).toEqual(calls);
+        expect(vi.getTimerCount()).toBe(0);
+      } finally {
+        vi.useRealTimers();
+      }
+    },
+  );
+
   it('keeps the disabled startup path free of pairing state', async () => {
     const context = harness();
 
