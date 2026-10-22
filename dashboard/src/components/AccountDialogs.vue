@@ -19,11 +19,12 @@ import {
   DialogContent,
   DialogHeader,
   DialogTitle,
+  DialogDescription,
   DialogFooter,
   DialogClose,
 } from '@/components/ui/dialog';
 import { Loader2, Plus } from 'lucide-vue-next';
-const emit = defineEmits<{ changed: [] }>();
+const emit = defineEmits<{ changed: [accountId?: number] }>();
 const members = ref<Member[]>([]);
 const activeMembers = computed(() => members.value.filter((member) => member.isActive));
 const showAddDialog = ref(false);
@@ -33,6 +34,15 @@ const newMemberId = ref('');
 const credentialValues = ref<Record<string, string>>({});
 const credentialFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
 const selectedProvider = computed(() => PROVIDERS.find((p) => p.id === newCompanyId.value));
+const canAddAccount = computed(
+  () =>
+    !!newCompanyId.value &&
+    !!newDisplayName.value.trim() &&
+    !!newMemberId.value &&
+    (selectedProvider.value?.fields.length
+      ? selectedProvider.value.fields.every((field) => !!credentialValues.value[field.key]?.trim())
+      : credentialFields.value.some((field) => field.key.trim() && field.value.trim())),
+);
 const updateCredsAccount = ref<Account | null>(null);
 const showUpdateCredsDialog = ref(false);
 const updateCredsValues = ref<Record<string, string>>({});
@@ -48,7 +58,11 @@ const credentialsChanged = computed(
 const updateCredsProvider = computed(() =>
   PROVIDERS.find((p) => p.id === updateCredsAccount.value?.companyId),
 );
-watch(newCompanyId, () => {
+watch(newCompanyId, (value, previous) => {
+  const previousName = PROVIDERS.find((provider) => provider.id === previous)?.name;
+  if (!newDisplayName.value.trim() || newDisplayName.value === previousName) {
+    newDisplayName.value = PROVIDERS.find((provider) => provider.id === value)?.name ?? '';
+  }
   credentialValues.value = {};
   credentialFields.value = [{ key: '', value: '' }];
 });
@@ -70,7 +84,7 @@ function addUpdateCredField() {
   updateCredsFields.value.push({ key: '', value: '' });
 }
 async function handleAdd() {
-  if (adding.value) return;
+  if (adding.value || !canAddAccount.value) return;
   adding.value = true;
   error.value = '';
   try {
@@ -79,7 +93,7 @@ async function handleAdd() {
       : Object.fromEntries(
           credentialFields.value.filter((f) => f.key).map((f) => [f.key, f.value]),
         );
-    await createAccount({
+    const { account } = await createAccount({
       companyId: newCompanyId.value,
       displayName: newDisplayName.value.trim(),
       memberId: Number(newMemberId.value),
@@ -88,7 +102,7 @@ async function handleAdd() {
     showAddDialog.value = false;
     newCompanyId.value = '';
     newDisplayName.value = '';
-    emit('changed');
+    emit('changed', account.id);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
@@ -166,16 +180,27 @@ defineExpose({ openAdd, openUpdateCreds });
     <DialogContent class="sm:max-w-md max-h-[calc(100dvh-2rem)] overflow-y-auto">
       <DialogHeader>
         <DialogTitle>{{ language === 'he' ? 'הוספת חשבון' : 'Add account' }}</DialogTitle>
+        <DialogDescription>{{
+          language === 'he'
+            ? 'בחרו בנק או חברת אשראי והזינו את פרטי הכניסה שלכם. לאחר השמירה, לחצו על סנכרון כדי לטעון את התנועות.'
+            : 'Choose your bank or credit card company and enter your sign-in details. After saving, sync the account to load your transactions.'
+        }}</DialogDescription>
       </DialogHeader>
 
       <div class="space-y-5 py-2">
         <div class="flex flex-col gap-2">
           <label for="account-manager-field-2" class="text-[14px] font-medium">{{
-            language === 'he' ? 'ספק' : 'Provider'
+            language === 'he' ? 'בנק או חברת אשראי' : 'Bank or credit card company'
           }}</label>
           <Select v-model="newCompanyId">
             <SelectTrigger id="account-manager-field-2">
-              <SelectValue :placeholder="language === 'he' ? 'בחירת ספק' : 'Select provider'" />
+              <SelectValue
+                :placeholder="
+                  language === 'he'
+                    ? 'בחירת בנק או חברת אשראי'
+                    : 'Choose your bank or credit card company'
+                "
+              />
             </SelectTrigger>
             <SelectContent>
               <SelectItem disabled value="_banks_label">{{ t('banks') }}</SelectItem>
@@ -292,11 +317,7 @@ defineExpose({ openAdd, openUpdateCreds });
         <DialogClose as-child>
           <Button variant="secondary">{{ t('cancel') }}</Button>
         </DialogClose>
-        <Button
-          variant="filled"
-          :disabled="adding || !newCompanyId || !newDisplayName.trim() || !newMemberId"
-          @click="handleAdd"
-        >
+        <Button variant="filled" :disabled="adding || !canAddAccount" @click="handleAdd">
           {{ adding ? t('saving') : t('save') }}
         </Button>
       </DialogFooter>

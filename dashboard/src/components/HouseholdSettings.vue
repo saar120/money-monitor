@@ -33,11 +33,13 @@ import { Badge } from '@/components/ui/badge';
 import { Check, Plus, Trash2, X } from 'lucide-vue-next';
 import { language, t } from '@/lib/language';
 
+withDefaults(defineProps<{ section?: 'members' | 'rules' }>(), { section: 'members' });
+
 const copy = computed(() =>
   language.value === 'he'
     ? {
         title: 'משק בית',
-        hint: 'בני בית, כללי הוצאות משותפות ושיוך עסקאות',
+        hint: 'בני בית, כללי הוצאות משותפות ושיוך תנועות',
         members: 'בני בית',
         loading: 'טוען את הגדרות משק הבית…',
         inactive: 'לא פעיל',
@@ -51,7 +53,7 @@ const copy = computed(() =>
         ruleName: 'שם הכלל',
         descriptionContains: 'התיאור מכיל',
         anyAccount: 'כל חשבון',
-        target: 'שיוך לעסקה',
+        target: 'שיוך לתנועה',
         together: 'ביחד',
         unassigned: 'ללא שיוך',
         addRule: 'הוספת כלל',
@@ -253,8 +255,12 @@ onMounted(load);
 </script>
 
 <template>
-  <SettingsGroup class="household-settings" :title="copy.title" :description="copy.hint">
-    <SettingsRow :label="copy.members" vertical>
+  <SettingsGroup
+    class="household-settings"
+    :title="copy.title"
+    :description="section === 'rules' ? copy.hint : undefined"
+  >
+    <SettingsRow v-show="section === 'members'" :label="copy.members" vertical>
       <div v-if="loading" class="text-[14px] text-text-secondary">
         {{ copy.loading }}
       </div>
@@ -319,7 +325,12 @@ onMounted(load);
       </div>
     </SettingsRow>
 
-    <SettingsRow :label="copy.ownership" vertical>
+    <SettingsRow
+      v-show="section === 'rules'"
+      data-household-section="rules"
+      :label="copy.ownership"
+      vertical
+    >
       <div class="space-y-2">
         <div
           v-for="rule in rules"

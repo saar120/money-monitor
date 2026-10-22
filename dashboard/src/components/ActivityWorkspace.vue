@@ -150,13 +150,13 @@ const copy = computed(() =>
         save: 'שמירה',
         saving: 'שומר…',
         onlyPreview: 'אב טיפוס · השינויים נשמרים במסך הזה בלבד',
-        saved: isPreview.value ? 'השינוי מוצג באב הטיפוס' : 'העסקה נשמרה',
+        saved: isPreview.value ? 'השינוי מוצג באב הטיפוס' : 'התנועה נשמרה',
         sync: 'מעודכן',
-        all: 'הכל',
-        loadMore: 'טעינת עסקאות נוספות',
-        noSelection: 'בחרו עסקה כדי לראות פרטים',
+        all: 'הכול',
+        loadMore: 'טעינת תנועות נוספות',
+        noSelection: 'בחרו תנועה כדי לראות פרטים',
         localChanges: 'תצוגה מקדימה בלבד',
-        saveFailed: 'לא ניתן לשמור את העסקה. נסו שוב.',
+        saveFailed: 'לא ניתן לשמור את התנועה. נסו שוב.',
       }
     : {
         filter: 'Filter',
@@ -214,7 +214,7 @@ const hebrewDemoCategories: Record<string, string> = {
   Travel: 'נסיעות',
   Shopping: 'קניות',
   Health: 'בריאות',
-  Subscriptions: 'מינויים',
+  Subscriptions: 'מנויים',
   Utilities: 'חשבונות',
   Entertainment: 'בידור',
   Education: 'חינוך',
@@ -898,7 +898,7 @@ watch(search, () => {
             class="w-full mb-2"
             :disabled="saving || !draftCategory"
             @click="confirmReview"
-            >{{ language === 'he' ? 'אישור העסקה' : 'Confirm review' }}</Button
+            >{{ language === 'he' ? 'אישור התנועה' : 'Confirm review' }}</Button
           >
           <button
             type="button"

@@ -96,6 +96,58 @@ describe('Electron config environment loading', () => {
   });
 });
 
+describe('desktop onboarding persistence', () => {
+  it('keeps first-run setup pending across restarts until explicitly completed', () => {
+    const directory = mkdtempSync(join(tmpdir(), 'money-onboarding-'));
+    const run = (source = '') =>
+      spawnSync(
+        process.execPath,
+        [
+          '--import',
+          'tsx',
+          '-e',
+          `import('./src/config.ts').then(m => { ${source}; console.log(JSON.stringify({ done: m.config.ONBOARDING_COMPLETED, key: m.config.CREDENTIALS_MASTER_KEY })); })`,
+        ],
+        {
+          cwd: process.cwd(),
+          encoding: 'utf8',
+          env: {
+            ...process.env,
+            MONEY_MONITOR_DATA_DIR: directory,
+            MONEY_MONITOR_MCP_MODE: '',
+            CREDENTIALS_MASTER_KEY: '',
+            ONBOARDING_COMPLETED: undefined,
+          },
+        },
+      );
+    try {
+      const first = run();
+      expect(first.status, first.stderr).toBe(0);
+      const initial = JSON.parse(first.stdout.trim());
+      expect(initial.done).toBe(false);
+      expect(initial.key).toHaveLength(64);
+      expect(JSON.parse(run().stdout.trim())).toEqual(initial);
+      const completed = run(
+        "m.saveConfigFile({ ONBOARDING_COMPLETED: 'true', APP_LANGUAGE: 'he', APP_THEME: 'dark' })",
+      );
+      expect(completed.status, completed.stderr).toBe(0);
+      expect(JSON.parse(run().stdout.trim())).toEqual({ ...initial, done: true });
+      expect(JSON.parse(readFileSync(join(directory, 'config.json'), 'utf8'))).toMatchObject({
+        APP_LANGUAGE: 'he',
+        APP_THEME: 'dark',
+      });
+      // Upgrades from versions without the flag must not send existing users through setup.
+      writeFileSync(
+        join(directory, 'config.json'),
+        JSON.stringify({ CREDENTIALS_MASTER_KEY: initial.key }),
+      );
+      expect(JSON.parse(run().stdout.trim()).done).toBe(true);
+    } finally {
+      rmSync(directory, { recursive: true, force: true });
+    }
+  });
+});
+
 // ── parseModelSpec ───────────────────────────────────────────────────────────
 
 describe('parseModelSpec', () => {

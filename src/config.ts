@@ -63,15 +63,6 @@ export function loadConfigFile(): Record<string, string> | null {
   return raw;
 }
 
-/** Whether a config file has been written (cached to avoid repeated disk reads). */
-let _configFileExists: boolean | null = null;
-
-export function configFileExists(): boolean {
-  if (_configFileExists !== null) return _configFileExists;
-  _configFileExists = loadRawConfigFile() !== null;
-  return _configFileExists;
-}
-
 export function saveConfigFile(settings: Record<string, string>): void {
   const existing = loadRawConfigFile() ?? {};
   // Encrypt secret values when safe storage is available
@@ -86,7 +77,6 @@ export function saveConfigFile(settings: Record<string, string>): void {
   const merged = { ...existing, ...toWrite };
   writeFileSync(configPath, JSON.stringify(merged, null, 2), { mode: 0o600 });
   if (isElectronMode) hardenOwnerOnlyFile(configPath);
-  _configFileExists = true;
   // Update process.env with plaintext values and re-parse config
   for (const [key, value] of Object.entries(settings)) {
     if (!isKnownConfigEnvironmentKey(key)) continue;
@@ -108,6 +98,10 @@ const booleanEnvValue = z.preprocess((value) => {
 const envSchema = z.object({
   PORT: z.coerce.number().default(3000),
   HOST: z.string().default('127.0.0.1'),
+  // Existing installations without the flag keep their completed setup.
+  ONBOARDING_COMPLETED: booleanEnvValue.default(true),
+  APP_LANGUAGE: z.enum(['system', 'en', 'he']).default('system'),
+  APP_THEME: z.enum(['system', 'light', 'dark']).default('system'),
   CREDENTIALS_MASTER_KEY: z.string().min(1, 'CREDENTIALS_MASTER_KEY is required'),
   SCRAPE_CRON: z.string().default('0 6 * * *'),
   SCRAPE_TIMEZONE: z.string().default('Asia/Jerusalem'),
@@ -190,6 +184,14 @@ if (!isElectronMode) {
   const raw = loadRawConfigFile();
   if (raw) {
     applyConfigFileToEnvironment(raw);
+  }
+  // Security bootstrap creates config.json before the UI opens; track setup separately.
+  if (!raw && !isMcpMode) {
+    process.env.CREDENTIALS_MASTER_KEY ||= randomBytes(32).toString('hex');
+    saveConfigFile({
+      CREDENTIALS_MASTER_KEY: process.env.CREDENTIALS_MASTER_KEY,
+      ONBOARDING_COMPLETED: 'false',
+    });
   }
   // Auto-generate CREDENTIALS_MASTER_KEY if not set (first launch)
   if (!process.env.CREDENTIALS_MASTER_KEY) {

@@ -50,6 +50,8 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
   seedDemoData(connection.db, connection.sqlite);
   const { createServer } = await import(`${root}src/server.ts`);
   const { app } = await createServer();
+  const { saveConfigFile } = await import(`${root}src/config.ts`);
+  saveConfigFile({ ONBOARDING_COMPLETED: 'true' });
   const create = async (url, payload, method = 'POST') => {
     const result = await app.inject({ method, url: `/api${url}`, payload });
     assert(result.statusCode < 300, result.body);
@@ -128,7 +130,9 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
     ]) {
       const page = await browser.newPage();
       await page.setViewport({ width: 1280, height: 800 });
-      page.on('pageerror', (error) => errors.push(error.message));
+      page.on('pageerror', (error) =>
+        errors.push(`${page.url()}: ${error.stack ?? error.message}`),
+      );
       await page.evaluateOnNewDocument(
         (themeChoice, lang) => {
           localStorage.setItem('money-monitor-theme', themeChoice);
@@ -533,7 +537,8 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           );
         }
       }
-      await page.waitForSelector('#settings-ai input');
+      await page.click('[data-settings-tab="connections"]');
+      await page.waitForSelector('#settings-ai input', { visible: true });
       const unnamedSettings = await page.$$eval(
         '.settings-page input:not([type="hidden"]):not([type="color"]), .settings-page [role="switch"], .settings-page [role="combobox"]',
         (fields) =>
@@ -548,6 +553,27 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       );
       assert.deepEqual(unnamedSettings, [], 'Settings fields are named');
       await inspectMenus('#settings-ai');
+      await page.click('[data-settings-tab="advanced"]');
+      assert(
+        await page.$eval(
+          '[data-household-section="rules"]',
+          (el) => el.getClientRects().length > 0,
+        ),
+        'Ownership rules are available in Advanced',
+      );
+      await page.waitForSelector('#settings-sync input', { visible: true });
+      assert(
+        await page.$eval('#settings-ai', (el) => getComputedStyle(el).display === 'none'),
+        'AI connection fields stay out of Advanced',
+      );
+      await page.click('[data-settings-tab="general"]');
+      assert(
+        await page.$eval(
+          '[data-household-section="rules"]',
+          (el) => el.getClientRects().length === 0,
+        ),
+        'Ownership rules stay out of General',
+      );
       await inspectMenus('#settings-general');
       await page.click('.management-nav a[href="/categories"]');
       await page.waitForFunction(() => location.pathname === '/categories');
@@ -820,25 +846,54 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
             'Desktop setup fits without an inner scroll',
           );
         }
-        await page.click('.setup-token summary');
-        await page.click('#setup-wizard-field-2');
-        assert(
-          await page.$eval('#setup-wizard-field-2', (el) => {
-            const field = el.getBoundingClientRect();
-            const body = el.closest('.setup-step').getBoundingClientRect();
-            return field.top >= body.top - 1 && field.bottom <= body.bottom + 1;
-          }),
-          'The optional token field scrolls into view',
+        await clickText(language === 'he' ? 'המשך' : 'Continue');
+        await page.waitForFunction(() => document.querySelector('.setup-step h2'));
+        assert.equal(
+          await page.$$eval('.setup-page input', (fields) => fields.length),
+          0,
+          'Onboarding does not ask for technical credentials',
         );
       }
       await page.setViewport({ width: 1280, height: 800 });
       await visit('/setup');
-      await clickText(language === 'he' ? 'דילוג' : 'Skip');
-      await clickText(language === 'he' ? 'המשך' : 'Next');
-      assert(
-        (await page.content()).includes(language === 'he' ? 'הגדרות נוספות' : 'Optional settings'),
-        'All setup steps are reachable',
+      await clickText(language === 'he' ? 'המשך' : 'Continue');
+      await clickText(language === 'he' ? 'הוספת חשבון ראשון' : 'Add your first account');
+      await page.waitForFunction(() => location.pathname === '/accounts');
+      await page.waitForSelector('[role="dialog"]', { visible: true });
+      await selectOption(page, '#account-manager-field-2', 'leumi');
+      assert.equal(
+        await page.$eval('#account-manager-field-3', (el) => el.value),
+        language === 'he' ? 'בנק לאומי' : 'Bank Leumi',
+        'Bank selection suggests an account name',
       );
+      const saveLabel = language === 'he' ? 'שמירה' : 'Save';
+      assert(
+        await page.$$eval(
+          '[role="dialog"] button',
+          (buttons, label) =>
+            buttons.find((button) => button.textContent.trim() === label)?.disabled,
+          saveLabel,
+        ),
+        'Account cannot be saved without sign-in details',
+      );
+      await page.type(
+        `[role="dialog"] input[aria-label="${language === 'he' ? 'שם משתמש' : 'Username'}"]`,
+        'synthetic-user',
+      );
+      await page.type('[role="dialog"] input[type="password"]', 'synthetic-password');
+      await clickText(saveLabel, '[role="dialog"] button');
+      await page.waitForFunction(() => !document.querySelector('[role="dialog"]'));
+      await page.waitForSelector('.account-sync-button');
+      assert(
+        (await page.$eval('.category-inspector-body', (el) => el.textContent)).includes(
+          language === 'he' ? 'החשבון נוסף.' : 'Your account is added.',
+        ),
+        'New account explains the next step',
+      );
+      await visit('/setup');
+      await clickText(language === 'he' ? 'המשך' : 'Continue');
+      await clickText(language === 'he' ? 'אחבר חשבון בהמשך' : 'I’ll do this later');
+      await page.waitForFunction(() => location.pathname === '/');
       coverage.push(`${theme}/${language} editors, keyboard menu, settings labels, setup steps`);
       console.log(
         `PASS ${theme}/${language}: ${routes.length + 1} screens, editor labels, keyboard menu, settings and setup`,

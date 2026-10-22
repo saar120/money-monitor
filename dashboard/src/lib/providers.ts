@@ -1,3 +1,5 @@
+import { language } from './language';
+
 export interface ProviderField {
   key: string;
   label: string;
@@ -31,7 +33,7 @@ const card6: ProviderField = {
   hint: 'Last 6 digits of your card number',
 };
 
-export const PROVIDERS: Provider[] = [
+const providerDefinitions: Provider[] = [
   {
     id: 'hapoalim',
     name: 'Bank Hapoalim',
@@ -98,3 +100,72 @@ export const PROVIDERS: Provider[] = [
   { id: 'behatsdaa', name: 'Behatsdaa', accountType: 'credit_card', fields: [] },
   { id: 'pagi', name: 'Pagi', accountType: 'credit_card', fields: [] },
 ];
+
+const hebrewNames: Record<string, string> = {
+  hapoalim: 'בנק הפועלים',
+  leumi: 'בנק לאומי',
+  discount: 'בנק דיסקונט',
+  mizrahi: 'בנק מזרחי',
+  otsarHahayal: 'אוצר החייל',
+  mercantile: 'מרכנתיל',
+  massad: 'מסד',
+  beinleumi: 'הבינלאומי',
+  union: 'בנק אגוד',
+  yahav: 'בנק יהב',
+  isracard: 'ישראכרט',
+  amex: 'אמריקן אקספרס (ישראל)',
+  max: 'מקס (לאומי קארד)',
+  visaCal: 'כאל',
+  beyahadBishvilha: 'Beyond (ביחד בשבילך)',
+  oneZero: 'וואן זירו',
+  behatsdaa: 'בהצדעה',
+  pagi: 'פאגי',
+};
+
+const hebrewFields: Record<string, { label: string; hint?: string }> = {
+  password: { label: 'סיסמה' },
+  username: { label: 'שם משתמש' },
+  id: { label: 'מספר תעודת זהות' },
+  num: {
+    label: 'קוד זיהוי',
+    hint: 'הקוד בן 2–4 הספרות שהוקצה לחשבון',
+  },
+  card6Digits: {
+    label: '6 הספרות האחרונות בכרטיס',
+    hint: '6 הספרות האחרונות של מספר כרטיס האשראי',
+  },
+  userCode: { label: 'קוד משתמש' },
+  nationalID: {
+    label: 'מספר תעודת זהות',
+    hint: 'מספר תעודת הזהות הישראלית שלכם',
+  },
+  email: { label: 'אימייל' },
+  phoneNumber: {
+    label: 'מספר טלפון',
+    hint: 'המספר שמקושר לחשבון וואן זירו, לקבלת קוד אימות',
+  },
+};
+
+// Getters keep existing consumers reactive when the interface language changes.
+export const PROVIDERS: Provider[] = providerDefinitions.map((provider) => ({
+  ...provider,
+  get name() {
+    return language.value === 'he' ? (hebrewNames[provider.id] ?? provider.name) : provider.name;
+  },
+  fields: provider.fields.map((field) => ({
+    ...field,
+    get label() {
+      return language.value === 'he'
+        ? (hebrewFields[field.key]?.label ?? field.label)
+        : field.label;
+    },
+    get hint() {
+      return language.value === 'he' ? (hebrewFields[field.key]?.hint ?? field.hint) : field.hint;
+    },
+  })),
+  get otpNote() {
+    return language.value === 'he' && provider.id === 'oneZero'
+      ? 'בכל סנכרון של חשבון וואן זירו תתבקשו להזין קוד אימות חד־פעמי.'
+      : provider.otpNote;
+  },
+}));

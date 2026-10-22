@@ -1,13 +1,7 @@
 import type { FastifyInstance } from 'fastify';
 import { getModels } from '@earendil-works/pi-ai/compat';
 import type { KnownProvider } from '@earendil-works/pi-ai';
-import {
-  config,
-  isElectronMode,
-  saveConfigFile,
-  configFileExists,
-  SECRET_KEYS,
-} from '../config.js';
+import { config, isElectronMode, saveConfigFile, SECRET_KEYS } from '../config.js';
 import { dataDir } from '../paths.js';
 import type { OAuthFlow } from '../ai/auth.js';
 import {
@@ -27,6 +21,9 @@ import { isDemoMode } from '../db/connection.js';
 
 /** Settable keys (exposed in GET, writable in POST) */
 const SETTABLE_KEYS = [
+  'ONBOARDING_COMPLETED',
+  'APP_LANGUAGE',
+  'APP_THEME',
   'ANTHROPIC_API_KEY',
   'ANTHROPIC_OAUTH_TOKEN',
   'ANTHROPIC_MODEL',
@@ -85,7 +82,7 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     return reply.send({
-      needsSetup: isElectronMode && !configFileExists(),
+      needsSetup: !config.ONBOARDING_COMPLETED,
       isElectron: isElectronMode,
       settings,
       dataDir,
@@ -102,6 +99,20 @@ export async function settingsRoutes(app: FastifyInstance) {
     }
 
     const body = request.body as Record<string, unknown>;
+    if (
+      'ONBOARDING_COMPLETED' in body &&
+      ![true, false, 'true', 'false'].includes(body.ONBOARDING_COMPLETED as boolean | string)
+    ) {
+      return reply.status(400).send({ error: 'Onboarding completion must be true or false' });
+    }
+    for (const [key, choices] of Object.entries({
+      APP_LANGUAGE: ['system', 'en', 'he'],
+      APP_THEME: ['system', 'light', 'dark'],
+    })) {
+      if (key in body && !choices.includes(String(body[key]))) {
+        return reply.status(400).send({ error: `Invalid ${key}` });
+      }
+    }
     const updates: Record<string, string> = {};
 
     for (const key of SETTABLE_KEYS) {

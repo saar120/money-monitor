@@ -4,7 +4,8 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { getSettings } from './api/client';
 import App from './App.vue';
 import './style.css';
-import './lib/theme';
+import { setThemeChoice } from './lib/theme';
+import { setLanguageChoice } from './lib/language';
 
 const router = createRouter({
   history: createWebHistory(),
@@ -58,13 +59,32 @@ if (import.meta.env.DEV) {
   });
 }
 
-// Redirect to setup wizard on first Electron launch (config.json missing)
+// Resume unfinished onboarding; config.json also exists before setup is completed.
 let setupChecked = false;
 router.beforeEach(async (to) => {
   if (setupChecked || to.name === 'setup') return;
   setupChecked = true;
   try {
-    const { needsSetup } = await getSettings();
+    const { needsSetup, isElectron, settings } = await getSettings();
+    // Desktop ports change between launches, so localStorage alone cannot retain preferences.
+    if (isElectron) {
+      if (
+        !localStorage.getItem('money-monitor-language') &&
+        (settings.APP_LANGUAGE === 'en' ||
+          settings.APP_LANGUAGE === 'he' ||
+          settings.APP_LANGUAGE === 'system')
+      ) {
+        setLanguageChoice(settings.APP_LANGUAGE);
+      }
+      if (
+        !localStorage.getItem('money-monitor-theme') &&
+        (settings.APP_THEME === 'light' ||
+          settings.APP_THEME === 'dark' ||
+          settings.APP_THEME === 'system')
+      ) {
+        setThemeChoice(settings.APP_THEME);
+      }
+    }
     if (needsSetup) return '/setup';
   } catch (err) {
     console.warn('[Router] Settings check failed, continuing without setup redirect:', err);

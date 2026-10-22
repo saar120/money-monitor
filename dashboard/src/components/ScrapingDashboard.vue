@@ -60,7 +60,7 @@ const copy = computed(() =>
         done: 'הושלם',
         failed: 'נכשל',
         newItems: 'חדשות',
-        transactions: 'עסקאות',
+        transactions: 'תנועות',
         scheduled: 'אוטומטי',
         single: 'חשבון בודד',
         manual: 'ידני',

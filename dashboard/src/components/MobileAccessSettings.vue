@@ -14,9 +14,9 @@ const copy = computed(() =>
   language.value === 'he'
     ? {
         title: 'גישה מהטלפון',
-        hint: 'גישה פרטית מהאייפון דרך ה־Tailnet שלך',
+        hint: 'חיבור פרטי לאייפון דרך Tailscale',
         enabled: 'גישה מהאייפון',
-        enabledHint: 'פרטי הבנק והסנכרון נשארים על ה־Mac הזה.',
+        enabledHint: 'פרטי הכניסה לבנק נשמרים ב־Mac הזה, והוא מבצע את הסנכרון.',
         status: 'מצב',
         available: 'זמין באפליקציית Mac המותקנת',
         retry: 'ניסיון חוזר',
@@ -538,7 +538,7 @@ onUnmounted(() => {
   </SettingsGroup>
   <ConfirmAction
     v-model:open="revokeOpen"
-    :title="localized('Revoke device access?', 'לבטל את הגישה למכשיר?')"
+    :title="localized('Revoke device access?', 'לבטל את הגישה של המכשיר?')"
     :description="
       localized(
         `${revokeTarget?.name ?? 'This device'} will lose access on its next connection.`,

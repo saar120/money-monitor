@@ -48,7 +48,7 @@ async function recategorize() {
     );
     recatMessage.value =
       language.value === 'he'
-        ? `${result.categorized} עסקאות סווגו`
+        ? `${result.categorized} תנועות סווגו`
         : `${result.categorized} transactions categorized`;
   } catch (cause) {
     recatError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
@@ -92,12 +92,12 @@ const copy = computed(() =>
         empty: 'עדיין אין קטגוריות.',
         choose: 'בחרו קטגוריה כדי לערוך אותה.',
         newTitle: 'קטגוריה חדשה',
-        deleteConfirm: 'למחוק את הקטגוריה? העסקאות הקיימות ישמרו את התווית שלה.',
+        deleteConfirm: 'למחוק את הקטגוריה? התנועות הקיימות ישמרו את התווית שלה.',
         loadError: 'לא ניתן לטעון קטגוריות',
         saveError: 'לא ניתן לשמור את הקטגוריה',
         deleteError: 'לא ניתן למחוק את הקטגוריה',
         slugHint: 'באנגלית, ללא רווחים. לא ניתן לשנות בהמשך.',
-        rulesHint: 'תיאור קצר שעוזר לסווג עסקאות באופן אוטומטי.',
+        rulesHint: 'תיאור קצר שעוזר לסווג תנועות באופן אוטומטי.',
       }
     : {
         count: 'categories',
@@ -375,11 +375,11 @@ onMounted(load);
       ><DialogContent
         ><DialogHeader>
           <DialogTitle>{{
-            language === 'he' ? 'סיווג עסקאות מחדש' : 'Recategorize transactions'
+            language === 'he' ? 'סיווג תנועות מחדש' : 'Recategorize transactions'
           }}</DialogTitle>
           <DialogDescription>{{
             language === 'he'
-              ? 'הסיווג יחליף את הקטגוריות הקיימות בטווח שנבחר. ללא תאריכים, כל העסקאות ייכללו.'
+              ? 'הסיווג יחליף את הקטגוריות הקיימות בטווח שנבחר. ללא תאריכים, כל התנועות ייכללו.'
               : 'Replace existing categories in the selected date range using your categorization rules. Leave dates empty to include all transactions.'
           }}</DialogDescription>
         </DialogHeader>

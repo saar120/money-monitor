@@ -663,7 +663,7 @@ function progressColor(percentage: number, neutral = false): string {
       :title="language === 'he' ? 'למחוק את התקציב?' : 'Delete this budget?'"
       :description="
         language === 'he'
-          ? `התקציב ${deleteTarget?.name ?? ''} יימחק. העסקאות יישמרו.`
+          ? `התקציב ${deleteTarget?.name ?? ''} יימחק. התנועות יישמרו.`
           : `Remove ${deleteTarget?.name ?? 'this budget'}. Your transactions will be kept.`
       "
       :pending="deleting"

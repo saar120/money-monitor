@@ -162,14 +162,16 @@ function select(account: Account) {
   error.value = '';
   message.value = '';
 }
-async function load() {
+async function load(createdAccountId?: number) {
   loading.value = true;
   error.value = '';
   try {
     const [accountResult, memberResult] = await Promise.all([getAccounts(), getMembers()]);
     accounts.value = accountResult.accounts;
     members.value = memberResult.members.filter((member) => member.isActive);
-    if (window.innerWidth > 1120 && selectedId.value == null && accounts.value[0])
+    const created = accounts.value.find((account) => account.id === createdAccountId);
+    if (created) select(created);
+    else if (window.innerWidth > 1120 && selectedId.value == null && accounts.value[0])
       select(accounts.value[0]);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : copy.value.loadError;
@@ -243,7 +245,7 @@ onMounted(async () => {
 
 <template>
   <div class="category-workspace-page account-workspace-page" @keydown.esc="selectedId = null">
-    <Teleport to="#toolbar-actions">
+    <Teleport defer to="#toolbar-actions">
       <Button variant="filled" @click="dialogs?.openAdd()"
         ><Plus :size="16" />{{ copy.add }}</Button
       >
@@ -254,7 +256,7 @@ onMounted(async () => {
       >
     </div>
     <p v-if="error && !selected" class="ledger-notice" role="alert">
-      {{ error }} <button @click="load">{{ t('retry') }}</button>
+      {{ error }} <button @click="load()">{{ t('retry') }}</button>
     </p>
     <div class="category-workspace">
       <section class="category-workspace-list" :aria-label="t('accounts')">
@@ -302,6 +304,13 @@ onMounted(async () => {
         </div>
         <div class="category-inspector-body">
           <p v-if="error" class="ledger-notice" role="alert">{{ error }}</p>
+          <p v-if="!selected.lastScrapedAt" class="text-sm text-text-secondary" role="status">
+            {{
+              language === 'he'
+                ? 'החשבון נוסף. לחצו על סנכרון כדי לטעון את התנועות. ייתכן שהבנק יבקש קוד אימות.'
+                : 'Your account is added. Choose Sync now to load your transactions. Your bank may ask for a verification code.'
+            }}
+          </p>
           <p class="account-inspector-balance" dir="ltr">
             {{
               selected.accountType === 'bank' ? balance(selected) : (selected.accountNumber ?? '—')
@@ -408,7 +417,7 @@ onMounted(async () => {
           }}</AlertDialogTitle>
           <AlertDialogDescription>{{
             language === 'he'
-              ? 'החשבון וכל העסקאות שלו יימחקו לצמיתות.'
+              ? 'החשבון וכל התנועות שלו יימחקו לצמיתות.'
               : 'This permanently deletes the account and all its transactions.'
           }}</AlertDialogDescription>
         </AlertDialogHeader>

@@ -33,7 +33,8 @@ import { formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { useSseConnection } from '@/composables/useSseConnection';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { isValidMonth } from '@/lib/month';
-import { t } from '@/lib/language';
+import { language, t } from '@/lib/language';
+import { Button } from '@/components/ui/button';
 import MonthControl from './MonthControl.vue';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
@@ -323,7 +324,7 @@ function categoryLink(category: string) {
 
 <template>
   <div class="ledger-page home-page month-swipe-surface" v-bind="monthSwipe" :aria-busy="loading">
-    <Teleport to="#toolbar-actions">
+    <Teleport defer to="#toolbar-actions">
       <div class="toolbar-controls">
         <MonthControl v-model="selectedMonth" />
         <SelectField
@@ -352,6 +353,31 @@ function categoryLink(category: string) {
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="refresh">{{ t('retry') }}</button>
     </div>
+    <section
+      v-if="!loading && !error && !accounts.length"
+      class="mb-6 space-y-3 border-b border-separator pb-6"
+      aria-labelledby="first-account-heading"
+    >
+      <h2 id="first-account-heading" class="text-lg font-semibold">
+        {{
+          language === 'he'
+            ? 'התמונה הכלכלית מתחילה בחשבון הראשון'
+            : 'Start with your first account'
+        }}
+      </h2>
+      <p class="text-text-secondary">
+        {{
+          language === 'he'
+            ? 'חברו בנק או חברת אשראי כדי לראות תנועות ולעקוב אחר ההוצאות.'
+            : 'Add a bank or credit card account to see your transactions and track spending.'
+        }}
+      </p>
+      <Button as-child
+        ><RouterLink to="/accounts?add=1">{{
+          language === 'he' ? 'הוספת חשבון' : 'Add account'
+        }}</RouterLink></Button
+      >
+    </section>
     <div class="home-grid">
       <section class="home-main">
         <div class="home-hero">
