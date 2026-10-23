@@ -16,9 +16,9 @@ const copy = computed(() =>
         title: 'גישה מהטלפון',
         hint: 'חיבור פרטי לאייפון דרך Tailscale',
         enabled: 'גישה מהאייפון',
-        enabledHint: 'פרטי הכניסה לבנק נשמרים ב־Mac הזה, והוא מבצע את הסנכרון.',
+        enabledHint: 'פרטי הכניסה לבנק נשמרים במחשב הזה, והוא מבצע את הסנכרון.',
         status: 'מצב',
-        available: 'זמין באפליקציית Mac המותקנת',
+        available: 'זמין באפליקציית המחשב המותקנת',
         retry: 'ניסיון חוזר',
         pair: 'חיבור אייפון',
         requests: 'בקשות לאישור',
@@ -29,9 +29,9 @@ const copy = computed(() =>
         title: 'Mobile access',
         hint: 'Private iPhone access through your Tailnet',
         enabled: 'Allow iPhone access',
-        enabledHint: 'Bank credentials and sync stay on this Mac.',
+        enabledHint: 'Bank credentials and sync stay on this computer.',
         status: 'Status',
-        available: 'Available in the packaged Mac app',
+        available: 'Available in the installed desktop app',
         retry: 'Retry',
         pair: 'Pair an iPhone',
         requests: 'Approval requests',
@@ -126,7 +126,7 @@ const statusLabel = computed(() => {
       return localized('Private address is already in use', 'הכתובת הפרטית כבר בשימוש');
     case 'failed':
       return snapshot.value.transport.diagnostic === 'tailscaleNotReady'
-        ? localized('Connect this Mac in Tailscale', 'יש לחבר את ה־Mac הזה ל־Tailscale')
+        ? localized('Connect this computer in Tailscale', 'יש לחבר את המחשב הזה ל־Tailscale')
         : localized('Private connection unavailable', 'החיבור הפרטי אינו זמין');
     default:
       return localized('Starting private connection…', 'מפעילים את החיבור הפרטי…');
@@ -404,8 +404,8 @@ onUnmounted(() => {
           <p class="text-[12px] text-text-secondary">
             {{
               localized(
-                'The code expires after five minutes and still requires approval on this Mac.',
-                'הקוד תקף לחמש דקות ודורש אישור ב־Mac הזה.',
+                'The code expires after five minutes and still requires approval on this computer.',
+                'הקוד תקף לחמש דקות ודורש אישור במחשב הזה.',
               )
             }}
           </p>
