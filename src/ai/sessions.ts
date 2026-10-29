@@ -8,6 +8,7 @@ import {
   readdirSync,
 } from 'node:fs';
 import { join } from 'node:path';
+import { z } from 'zod';
 import { sessionsDir } from '../paths.js';
 import type { AdvisorChart } from './advisor-chart.js';
 
@@ -17,7 +18,7 @@ const activeReplies = new Set<string>();
 
 /** Keep desktop and mobile replies to one chat in order within the Mac process. */
 export function beginSessionReply(id: string): boolean {
-  if (activeReplies.has(id)) return false;
+  if (activeReplies.has(id) || activeReplies.size >= 2) return false;
   activeReplies.add(id);
   return true;
 }
@@ -55,15 +56,16 @@ export interface SessionSummary {
 }
 
 function ensureDir() {
-  mkdirSync(SESSIONS_DIR, { recursive: true });
+  mkdirSync(SESSIONS_DIR, { recursive: true, mode: 0o700 });
 }
 
 function sessionPath(id: string): string {
+  if (!z.uuid().safeParse(id).success) throw new Error('Invalid session ID');
   return join(SESSIONS_DIR, `${id}.jsonl`);
 }
 
 function appendLine(filePath: string, data: object) {
-  appendFileSync(filePath, JSON.stringify(data) + '\n');
+  appendFileSync(filePath, JSON.stringify(data) + '\n', { mode: 0o600 });
 }
 
 function readLines(filePath: string): string[] {
@@ -153,6 +155,7 @@ export function appendMessage(
   content: string,
   chart?: AdvisorChart,
 ): SessionMessage | null {
+  if (!z.uuid().safeParse(id).success) return null;
   const path = sessionPath(id);
   const msg: SessionMessage = {
     type: 'message',

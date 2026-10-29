@@ -6,7 +6,7 @@ export type SseHandlers = Record<string, (data: Record<string, unknown>) => void
 export function useSseConnection(handlers: SseHandlers) {
   const isConnected = ref(false);
 
-  let eventSource: EventSource | null = null;
+  let eventSource: ReturnType<typeof createScrapeEventSource> | null = null;
   let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
 
   function connect() {

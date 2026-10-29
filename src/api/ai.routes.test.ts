@@ -1,4 +1,4 @@
-import { rmSync } from 'node:fs';
+import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import { afterAll, expect, it, vi } from 'vitest';
 import { aiRoutes } from './ai.routes.js';
@@ -64,5 +64,29 @@ it('streams and saves a valid desktop Advisor chart', async () => {
     });
   } finally {
     await app.close();
+  }
+});
+
+it('rejects encoded traversal without reading or deleting files outside sessions', async () => {
+  mkdirSync(dir, { recursive: true });
+  const victim = `${dir}-outside.jsonl`;
+  writeFileSync(victim, JSON.stringify({ type: 'meta', id: 'synthetic', title: 'private' }) + '\n');
+  const app = Fastify();
+  await app.register(aiRoutes);
+  try {
+    const name = victim
+      .split('/')
+      .at(-1)!
+      .replace(/\.jsonl$/, '');
+    for (const method of ['GET', 'DELETE'] as const) {
+      const response = await app.inject({ method, url: `/api/ai/sessions/..%2F${name}` });
+      expect(response.statusCode).toBe(400);
+      expect(response.body).not.toContain('private');
+      expect(existsSync(victim)).toBe(true);
+    }
+    expect(getSession(`../${name}`)).toBeNull();
+  } finally {
+    await app.close();
+    rmSync(victim, { force: true });
   }
 });

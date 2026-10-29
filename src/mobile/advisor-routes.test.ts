@@ -166,3 +166,51 @@ it('authenticates, streams, saves a calculated chart, and continues a reopened c
     await server.shutdown();
   }
 });
+
+it('limits mobile session creation per device and resets the window', async () => {
+  let now = new Date('2026-10-28T00:00:00Z');
+  const app = createMobileServer({
+    logger: false,
+    clock: () => now,
+    advisor: {
+      server: { id: 'test-server' },
+      authenticator: {
+        authenticate: () => ({
+          status: 'authenticated',
+          device: {
+            id: 'limited-phone',
+            name: 'Phone',
+            capabilities: ['mobile.read'],
+            protocolVersion: 1,
+            tokenVersion: 1,
+            createdAt: '',
+            lastUsedAt: null,
+            expiresAt: null,
+            rotatedAt: null,
+            revokedAt: null,
+          },
+        }),
+      },
+      list: listSessions,
+      create: createSession,
+      get: getSession,
+      append: appendMessage,
+      chat: async function* () {
+        yield { type: 'result', text: 'synthetic' };
+      },
+    },
+  });
+  const request = {
+    method: 'POST' as const,
+    url: '/api/mobile/v1/advisor/sessions',
+    headers: { authorization: `Bearer ${'A'.repeat(43)}` },
+  };
+  try {
+    for (let i = 0; i < 10; i++) expect((await app.app.inject(request)).statusCode).toBe(200);
+    expect((await app.app.inject(request)).statusCode).toBe(429);
+    now = new Date(now.getTime() + 60_000);
+    expect((await app.app.inject(request)).statusCode).toBe(200);
+  } finally {
+    await app.shutdown();
+  }
+});

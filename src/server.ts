@@ -29,6 +29,7 @@ import { closeImageBrowser, setServerPort } from './services/html-to-image.js';
 
 export async function createServer() {
   const app = Fastify({
+    disableRequestLogging: true,
     logger: {
       level: 'info',
       transport: {
@@ -41,9 +42,20 @@ export async function createServer() {
     },
   });
 
+  app.addHook('onSend', async (_request, reply, payload) => {
+    reply.header('Cache-Control', 'no-store');
+    reply.header('X-Content-Type-Options', 'nosniff');
+    reply.header('Referrer-Policy', 'no-referrer');
+    reply.header(
+      'Content-Security-Policy',
+      "default-src 'self'; script-src 'self'; style-src 'self' 'unsafe-inline'; img-src 'self' data: blob:; font-src 'self' data:; connect-src 'self'; object-src 'none'; base-uri 'none'; frame-ancestors 'none'; form-action 'self'",
+    );
+    return payload;
+  });
+
   // Global error handler
   app.setErrorHandler((error: FastifyError, request, reply) => {
-    request.log.error(error);
+    request.log.error({ code: error.code, statusCode: error.statusCode }, 'Request failed');
 
     if (error.validation) {
       return reply.status(400).send({
@@ -67,7 +79,7 @@ export async function createServer() {
   app.addHook('onResponse', (request, reply, done) => {
     request.log.info(
       { responseTime: reply.elapsedTime, statusCode: reply.statusCode },
-      `${request.method} ${request.url}`,
+      `${request.method} ${request.routeOptions.url ?? 'unmatched'}`,
     );
     done();
   });
@@ -99,12 +111,6 @@ export async function createServer() {
     app.addHook('onRequest', async (request, reply) => {
       if (!request.url.startsWith('/api/')) return;
       if (request.url === '/api/health') return;
-      // SSE endpoints can't send Authorization headers; accept token as query param
-      if (request.url.startsWith('/api/scrape/events')) {
-        const token = (request.query as Record<string, string>).token;
-        if (token === config.API_TOKEN) return;
-        return reply.status(401).send({ error: 'Unauthorized' });
-      }
 
       const auth = request.headers.authorization;
       if (auth !== `Bearer ${config.API_TOKEN}`) {
@@ -171,6 +177,9 @@ export async function createServer() {
   async function start(options?: { port?: number; host?: string }): Promise<number> {
     const port = options?.port ?? config.PORT;
     const host = options?.host ?? config.HOST;
+    if (!config.API_TOKEN && !['127.0.0.1', '::1', 'localhost'].includes(host)) {
+      throw new Error('API_TOKEN is required for a non-loopback listener');
+    }
     await app.listen({ port, host });
     // Add the actual bound port to CORS allowed origins (needed for port: 0)
     const address = app.server.address();

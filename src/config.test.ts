@@ -106,7 +106,7 @@ describe('desktop onboarding persistence', () => {
           '--import',
           'tsx',
           '-e',
-          `import('./src/config.ts').then(m => { ${source}; console.log(JSON.stringify({ done: m.config.ONBOARDING_COMPLETED, key: m.config.CREDENTIALS_MASTER_KEY })); })`,
+          `import('./src/safe-storage.ts').then(s => { s.registerSafeStorage({ encrypt: v => Buffer.from(v), decrypt: v => v.toString() }); return import('./src/config.ts'); }).then(m => { ${source}; console.log(JSON.stringify({ done: m.config.ONBOARDING_COMPLETED, key: m.config.CREDENTIALS_MASTER_KEY })); })`,
         ],
         {
           cwd: process.cwd(),
@@ -126,12 +126,15 @@ describe('desktop onboarding persistence', () => {
       const initial = JSON.parse(first.stdout.trim());
       expect(initial.done).toBe(false);
       expect(initial.key).toHaveLength(64);
-      expect(JSON.parse(run().stdout.trim())).toEqual(initial);
+      expect(JSON.parse(run().stdout.trim().split('\n').at(-1)!)).toEqual(initial);
       const completed = run(
         "m.saveConfigFile({ ONBOARDING_COMPLETED: 'true', APP_LANGUAGE: 'he', APP_THEME: 'dark' })",
       );
       expect(completed.status, completed.stderr).toBe(0);
-      expect(JSON.parse(run().stdout.trim())).toEqual({ ...initial, done: true });
+      expect(JSON.parse(run().stdout.trim().split('\n').at(-1)!)).toEqual({
+        ...initial,
+        done: true,
+      });
       expect(JSON.parse(readFileSync(join(directory, 'config.json'), 'utf8'))).toMatchObject({
         APP_LANGUAGE: 'he',
         APP_THEME: 'dark',
@@ -141,7 +144,7 @@ describe('desktop onboarding persistence', () => {
         join(directory, 'config.json'),
         JSON.stringify({ CREDENTIALS_MASTER_KEY: initial.key }),
       );
-      expect(JSON.parse(run().stdout.trim()).done).toBe(true);
+      expect(JSON.parse(run().stdout.trim().split('\n').at(-1)!).done).toBe(true);
     } finally {
       rmSync(directory, { recursive: true, force: true });
     }

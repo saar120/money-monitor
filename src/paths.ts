@@ -14,7 +14,7 @@ const __dirname = fileURLToPath(new URL('.', import.meta.url));
 const electronDataDir = process.env.MONEY_MONITOR_DATA_DIR;
 const DATA_DIR = electronDataDir || join(__dirname, '..', 'data');
 
-mkdirSync(DATA_DIR, electronDataDir ? { recursive: true, mode: 0o700 } : { recursive: true });
+mkdirSync(DATA_DIR, { recursive: true, mode: 0o700 });
 
 export const usesElectronUserData = Boolean(electronDataDir);
 
@@ -26,7 +26,7 @@ export const sessionsDir = join(DATA_DIR, 'chat', 'sessions');
 export const configPath = join(DATA_DIR, 'config.json');
 export const demoDbPath = join(DATA_DIR, 'demo.db');
 
-if (usesElectronUserData) {
+{
   hardenOwnerOnlyDirectory(dataDir);
   hardenOwnerOnlyFile(configPath);
   hardenOwnerOnlyFile(credentialsPath);

@@ -55,8 +55,10 @@ export function loadConfigFile(): Record<string, string> | null {
           `[Config] Failed to decrypt ${key}:`,
           err instanceof Error ? err.message : err,
         );
-        // Remove the corrupted value so the user can re-enter it
-        delete raw[key];
+        throw new Error(
+          `Cannot decrypt ${key}; unlock the original OS keychain before continuing`,
+          { cause: err },
+        );
       }
     }
   }
@@ -64,6 +66,13 @@ export function loadConfigFile(): Record<string, string> | null {
 }
 
 export function saveConfigFile(settings: Record<string, string>): void {
+  if (
+    isElectronMode &&
+    !isSafeStorageAvailable() &&
+    Object.entries(settings).some(([key, value]) => SECRET_KEYS.has(key) && value)
+  ) {
+    throw new Error('Secure storage is required to save desktop secrets');
+  }
   const existing = loadRawConfigFile() ?? {};
   // Encrypt secret values when safe storage is available
   const toWrite: Record<string, string> = {};
@@ -163,7 +172,11 @@ export function applyConfigFileToEnvironment(
             err instanceof Error ? err.message : err,
           );
         }
-        continue; // skip corrupted value
+        if (!isMcpMode)
+          throw new Error(`Cannot decrypt ${key}; refusing to replace stored secrets`, {
+            cause: err,
+          });
+        continue;
       }
     }
     environment[key] = String(plain);

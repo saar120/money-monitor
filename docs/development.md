@@ -89,3 +89,61 @@ Write exploratory screenshots and build logs outside the tracked repository, for
 Standalone mode defaults to repository `data/`. Electron sets `MONEY_MONITOR_DATA_DIR` to its OS user-data directory before importing the backend; on macOS this is `~/Library/Application Support/Money Monitor`. `src/paths.ts` defines the files, including database, credentials, configuration, and chat sessions.
 
 The existing `npm run backup` and `npm run restore` scripts are for standalone repository data and `.env` only. They do not back up Electron's user-data directory, `config.json`, or chat sessions. For a desktop replacement, retain the old app, take a consistent SQLite snapshot, and preserve the entire user-data directory. Electron config secrets are encrypted through OS safe storage; copying encrypted files to another machine does not transfer the ability to decrypt them.
+
+## Security maintenance
+
+Run `npm run security:audit` after installing both dependency trees. It fails on unknown
+advisories or an unavailable audit service. The only exception is deepmerge
+GHSA-gcqx-w48m-w2h4 in Expo's configuration tooling: upstream has no fixed release,
+so `mobile/patches/deepmerge+4.3.1.patch` rejects prototype keys from both inputs.
+The gate verifies that mitigation before accepting the exception. Remove the patch
+and exception when upstream ships a compatible fix. The query-string patch adapts
+its CommonJS import to the patched ESM decoder; keep its regression test when upgrading.
+The Expo CLI uses the patched Zod 4 override; validate an iOS export after upgrades.
+
+Electron uses a sandboxed CommonJS preload (`electron/preload.cts`). Its initial
+configuration comes from main-frame-validated IPC, never renderer environment
+variables. Keep permission checks denied unless a feature explicitly needs one.
+The CSP permits inline styles for Vue/ECharts, but does not permit inline scripts,
+external images, frames from other origins, or external connections.
+
+Desktop startup requires OS-backed secure storage (Linux `basic_text` is rejected).
+OAuth files migrate from legacy JSON to OS encryption on desktop and authenticated
+AES-GCM using `CREDENTIALS_MASTER_KEY` in standalone mode. Standalone OAuth requires
+a master key of at least 32 characters. Failed decryption preserves the existing
+file and stops startup rather than replacing the key. Keep the original keychain
+when restoring desktop data. Database and chat files are not application-encrypted;
+use OS disk encryption and encrypted backups for data at rest.
+
+The legacy mobile capability name `mobile.read` grants the existing paired-client
+scope: financial reads, transaction review edits, recurring-payment decisions, and
+Advisor conversations. It does not grant bank credentials, scraping, configuration,
+or device administration. Mobile Advisor tools remain read-only. Pair only devices
+trusted with that full financial scope. Advisor is limited to two simultaneous
+replies across the Mac and ten mobile session/message submissions per device per
+minute. Restrict Tailscale ACLs to trusted devices; never expose the desktop API.
+
+Standalone backups now require `MM_BACKUP_PASSPHRASE` (at least 16 characters),
+independent of the credentials master key. Supply it through your secret manager or
+a hidden shell prompt, keep it separately, then use `npm run backup`. The output is
+an authenticated `.tar.gz.enc` archive. Stop the app before `npm run restore -- path/to/backup.tar.gz.enc`,
+using the same passphrase. Restore rejects unknown paths, symlinks and active SQLite
+journal files. Legacy `.tar.gz` archives require explicit `--allow-plaintext`.
+Existing unencrypted backups are not rewritten or deleted automatically. These
+scripts still cover standalone data, not the Electron user-data directory.
+
+### Signed releases
+
+Release builds fail closed without signing credentials. Configure these repository
+Actions secrets through GitHub's encrypted secret settings (never commit them):
+
+- Mac: `MAC_CSC_LINK` (base64 signing certificate), `MAC_CSC_KEY_PASSWORD`,
+  `APPLE_API_KEY_P8` (App Store Connect API private-key contents),
+  `APPLE_API_KEY_ID`, and `APPLE_API_ISSUER`.
+- Windows: `WIN_CSC_LINK` and `WIN_CSC_KEY_PASSWORD` for the signing certificate.
+
+The workflow writes Apple's key into a private temporary file, notarizes the Mac
+build, and deletes the key afterward. Local unsigned development builds remain
+possible, but cannot be published by this release workflow. Validate a signed update
+from an existing installation before distributing it; unsigned historical releases
+may require a one-time manual installation. No quarantine-removal workaround remains.

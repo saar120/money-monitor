@@ -7,26 +7,37 @@ import { parseIntParam, validateBody, validateQuery } from './helpers.js';
 import { addSseClient, removeSseClient, broadcastSseEvent } from './sse.js';
 import { submitOtp } from '../scraper/otp-bridge.js';
 import { confirmManualAction } from '../scraper/manual-action-bridge.js';
-import { cancelSession, hasActiveSessions, getActiveSessions, getUniqueActiveAccounts, runScrapeSession } from '../scraper/session-manager.js';
+import {
+  cancelSession,
+  hasActiveSessions,
+  getActiveSessions,
+  getUniqueActiveAccounts,
+  runScrapeSession,
+} from '../scraper/session-manager.js';
 import type { ScrapeLog } from '../shared/types.js';
 
 type AccountInfo = { id: number; displayName: string; companyId: string };
 
 function loadAccountMap() {
-  const allAccounts = db.select({ id: accounts.id, displayName: accounts.displayName, companyId: accounts.companyId })
-    .from(accounts).all();
-  return new Map(allAccounts.map(a => [a.id, a]));
+  const allAccounts = db
+    .select({ id: accounts.id, displayName: accounts.displayName, companyId: accounts.companyId })
+    .from(accounts)
+    .all();
+  return new Map(allAccounts.map((a) => [a.id, a]));
 }
 
 function enrichLogsWithAccountNames(logs: ScrapeLog[], accountMap: Map<number, AccountInfo>) {
-  return logs.map(log => {
+  return logs.map((log) => {
     const account = accountMap.get(log.accountId);
-    return { ...log, accountName: account?.displayName ?? 'Unknown', companyId: account?.companyId ?? '' };
+    return {
+      ...log,
+      accountName: account?.displayName ?? 'Unknown',
+      companyId: account?.companyId ?? '',
+    };
   });
 }
 
 export async function scrapeRoutes(app: FastifyInstance) {
-
   // ─── SSE endpoint ───
 
   app.get('/api/scrape/events', (request, reply) => {
@@ -35,8 +46,8 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
     res.writeHead(200, {
       'Content-Type': 'text/event-stream',
-      'Cache-Control': 'no-cache',
-      'Connection': 'keep-alive',
+      'Cache-Control': 'no-store',
+      Connection: 'keep-alive',
       'X-Accel-Buffering': 'no',
     });
 
@@ -72,17 +83,20 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
   // ─── Manual login confirm ───
 
-  app.post<{ Params: { accountId: string } }>('/api/scrape/manual-confirm/:accountId', async (request, reply) => {
-    const accountId = parseIntParam(request.params.accountId, 'account ID', reply);
-    if (accountId === null) return;
+  app.post<{ Params: { accountId: string } }>(
+    '/api/scrape/manual-confirm/:accountId',
+    async (request, reply) => {
+      const accountId = parseIntParam(request.params.accountId, 'account ID', reply);
+      if (accountId === null) return;
 
-    const accepted = confirmManualAction(accountId);
-    if (!accepted) {
-      return reply.status(404).send({ error: 'No pending manual login for this account' });
-    }
+      const accepted = confirmManualAction(accountId);
+      if (!accepted) {
+        return reply.status(404).send({ error: 'No pending manual login for this account' });
+      }
 
-    return reply.send({ success: true });
-  });
+      return reply.send({ success: true });
+    },
+  );
 
   // ─── Scrape single account (fire-and-forget) ───
 
@@ -117,16 +131,19 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
   // ─── Cancel session ───
 
-  app.post<{ Params: { sessionId: string } }>('/api/scrape/cancel/:sessionId', async (request, reply) => {
-    const sessionId = parseIntParam(request.params.sessionId, 'session ID', reply);
-    if (sessionId === null) return;
+  app.post<{ Params: { sessionId: string } }>(
+    '/api/scrape/cancel/:sessionId',
+    async (request, reply) => {
+      const sessionId = parseIntParam(request.params.sessionId, 'session ID', reply);
+      if (sessionId === null) return;
 
-    const cancelled = cancelSession(sessionId);
-    if (!cancelled) return reply.status(404).send({ error: 'No active session found' });
+      const cancelled = cancelSession(sessionId);
+      if (!cancelled) return reply.status(404).send({ error: 'No active session found' });
 
-    broadcastSseEvent({ type: 'session-completed', sessionId, status: 'cancelled' });
-    return reply.send({ success: true });
-  });
+      broadcastSseEvent({ type: 'session-completed', sessionId, status: 'cancelled' });
+      return reply.send({ success: true });
+    },
+  );
 
   // ─── List sessions ───
 
@@ -135,18 +152,22 @@ export async function scrapeRoutes(app: FastifyInstance) {
     if (!data) return;
     const { limit, offset } = data;
 
-    const sessions = db.select().from(scrapeSessions)
+    const sessions = db
+      .select()
+      .from(scrapeSessions)
       .orderBy(desc(scrapeSessions.startedAt))
       .limit(limit)
       .offset(offset)
       .all();
 
     const accountMap = loadAccountMap();
-    const sessionIds = sessions.map(s => s.id);
+    const sessionIds = sessions.map((s) => s.id);
 
     const logsBySession = new Map<number, ScrapeLog[]>();
     if (sessionIds.length > 0) {
-      const allLogs = db.select().from(scrapeLogs)
+      const allLogs = db
+        .select()
+        .from(scrapeLogs)
         .where(inArray(scrapeLogs.sessionId, sessionIds))
         .all();
       for (const log of allLogs) {
@@ -157,12 +178,12 @@ export async function scrapeRoutes(app: FastifyInstance) {
       }
     }
 
-    const sessionsWithLogs = sessions.map(session => ({
+    const sessionsWithLogs = sessions.map((session) => ({
       ...session,
       logs: enrichLogsWithAccountNames(logsBySession.get(session.id) ?? [], accountMap),
     }));
 
-    const activeSessionsList = getActiveSessions().map(a => ({
+    const activeSessionsList = getActiveSessions().map((a) => ({
       ...a.session,
       logs: [],
     }));
@@ -179,11 +200,11 @@ export async function scrapeRoutes(app: FastifyInstance) {
     const session = db.select().from(scrapeSessions).where(eq(scrapeSessions.id, id)).get();
     if (!session) return reply.status(404).send({ error: 'Session not found' });
 
-    const logs = db.select().from(scrapeLogs)
-      .where(eq(scrapeLogs.sessionId, id))
-      .all();
+    const logs = db.select().from(scrapeLogs).where(eq(scrapeLogs.sessionId, id)).all();
 
-    return reply.send({ session: { ...session, logs: enrichLogsWithAccountNames(logs, loadAccountMap()) } });
+    return reply.send({
+      session: { ...session, logs: enrichLogsWithAccountNames(logs, loadAccountMap()) },
+    });
   });
 
   // ─── Scrape logs ───
@@ -195,16 +216,15 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
     let logs;
     if (accountId !== undefined) {
-      logs = db.select().from(scrapeLogs)
+      logs = db
+        .select()
+        .from(scrapeLogs)
         .where(eq(scrapeLogs.accountId, accountId))
         .orderBy(desc(scrapeLogs.startedAt))
         .limit(limit)
         .all();
     } else {
-      logs = db.select().from(scrapeLogs)
-        .orderBy(desc(scrapeLogs.startedAt))
-        .limit(limit)
-        .all();
+      logs = db.select().from(scrapeLogs).orderBy(desc(scrapeLogs.startedAt)).limit(limit).all();
     }
 
     return reply.send({ logs });

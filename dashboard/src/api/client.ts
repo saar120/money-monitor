@@ -1,3 +1,4 @@
+import { openScrapeStream } from './scrape-stream';
 const BASE_URL = '/api';
 
 const API_TOKEN_KEY = 'money_monitor_api_token';
@@ -433,12 +434,8 @@ export function triggerScrapeAll() {
   return request<{ sessionId: number }>('/scrape/all', { method: 'POST' });
 }
 
-export function createScrapeEventSource(): EventSource {
-  const token = getApiToken();
-  const url = token
-    ? `${BASE_URL}/scrape/events?token=${encodeURIComponent(token)}`
-    : `${BASE_URL}/scrape/events`;
-  return new EventSource(url);
+export function createScrapeEventSource() {
+  return openScrapeStream(`${BASE_URL}/scrape/events`, getApiToken() ?? '');
 }
 
 export function submitOtp(accountId: number, code: string) {

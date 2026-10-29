@@ -1,71 +1,52 @@
-/**
- * Cross-platform backup script for Money Monitor.
- * Creates a tar.gz archive of the database, encrypted credentials, and .env file.
- *
- * Usage: node scripts/backup.mjs [backup-dir]
- */
+/** Standalone encrypted backup. MM_BACKUP_PASSPHRASE must be kept separately. */
 import { execFileSync } from 'node:child_process';
-import { existsSync, mkdirSync, unlinkSync, copyFileSync, createWriteStream } from 'node:fs';
-import { join, dirname } from 'node:path';
+import { existsSync, mkdirSync, mkdtempSync, rmSync, copyFileSync, chmodSync } from 'node:fs';
+import { join, dirname, resolve } from 'node:path';
+import { tmpdir } from 'node:os';
 import { fileURLToPath } from 'node:url';
-import { pipeline } from 'node:stream/promises';
 import { pack } from 'tar';
+import { encryptBackup } from './backup-crypto.mjs';
 
-const __dirname = dirname(fileURLToPath(import.meta.url));
-const PROJECT_ROOT = join(__dirname, '..');
-
-const backupDir = process.argv[2] || join(PROJECT_ROOT, 'backups');
-const timestamp = new Date().toISOString().replace(/[T:]/g, '_').replace(/\..+/, '');
-const archivePath = join(backupDir, `money-monitor-backup-${timestamp}.tar.gz`);
-
-const DB_FILE = join('data', 'money-monitor.db');
-const DB_SNAPSHOT = join('data', 'money-monitor-backup.db');
-
-process.chdir(PROJECT_ROOT);
-
-// Collect files to back up
-const files = [];
-
-// Create a consistent SQLite snapshot (safe even with WAL mode / active connections)
-if (existsSync(DB_FILE)) {
-  try {
-    execFileSync('sqlite3', [DB_FILE, `.backup '${DB_SNAPSHOT}'`], { stdio: 'pipe' });
-    files.push(DB_SNAPSHOT);
-  } catch {
-    console.warn(`Warning: sqlite3 command failed, copying database file directly`);
-    // Fallback: copy the file directly (less safe with active WAL connections)
-    copyFileSync(DB_FILE, DB_SNAPSHOT);
-    files.push(DB_SNAPSHOT);
+const root = join(dirname(fileURLToPath(import.meta.url)), '..');
+const destination = resolve(process.argv[2] || join(root, 'backups'));
+const passphrase = process.env.MM_BACKUP_PASSPHRASE;
+if (!passphrase || passphrase.length < 16)
+  throw new Error('MM_BACKUP_PASSPHRASE must contain at least 16 characters');
+const staging = mkdtempSync(join(tmpdir(), 'money-monitor-backup-'));
+let archive;
+try {
+  mkdirSync(join(staging, 'data'), { mode: 0o700 });
+  const files = [];
+  const database = join(root, 'data', 'money-monitor.db');
+  if (existsSync(database)) {
+    const snapshot = join(staging, 'data', 'money-monitor-backup.db');
+    // Fail instead of copying an inconsistent live database if sqlite3 is unavailable.
+    execFileSync('sqlite3', [database, `.backup '${snapshot.replaceAll("'", "''")}'`], {
+      stdio: 'pipe',
+    });
+    files.push('data/money-monitor-backup.db');
   }
-} else {
-  console.warn(`Warning: ${DB_FILE} not found, skipping`);
-}
-
-for (const f of [join('data', 'credentials.enc'), '.env']) {
-  if (existsSync(f)) {
-    files.push(f);
-  } else {
-    console.warn(`Warning: ${f} not found, skipping`);
+  for (const name of ['data/credentials.enc', '.env']) {
+    if (existsSync(join(root, name))) {
+      copyFileSync(join(root, name), join(staging, name));
+      chmodSync(join(staging, name), 0o600);
+      files.push(name);
+    }
   }
+  if (!files.length) throw new Error('No standalone data found to back up');
+  const tarball = join(staging, 'backup.tar.gz');
+  await pack({ cwd: staging, gzip: true, file: tarball, portable: true }, files);
+  chmodSync(tarball, 0o600);
+  mkdirSync(destination, { recursive: true, mode: 0o700 });
+  archive = join(
+    destination,
+    `money-monitor-backup-${new Date().toISOString().replaceAll(':', '-')}.tar.gz.enc`,
+  );
+  await encryptBackup(tarball, archive, passphrase);
+  console.log(`Encrypted backup created: ${archive}`);
+} catch (error) {
+  if (archive) rmSync(archive, { force: true });
+  throw error;
+} finally {
+  rmSync(staging, { recursive: true, force: true });
 }
-
-if (files.length === 0) {
-  console.error('Error: No files to back up');
-  process.exit(1);
-}
-
-// Create backup directory
-mkdirSync(backupDir, { recursive: true });
-
-// Create tar.gz archive using the tar package
-await pipeline(
-  pack({ cwd: PROJECT_ROOT, gzip: true }, files),
-  createWriteStream(archivePath),
-);
-
-// Clean up snapshot
-if (existsSync(DB_SNAPSHOT)) {
-  unlinkSync(DB_SNAPSHOT);
-}
-
-console.log(`Backup created: ${archivePath} (${files.join(', ')})`);

@@ -274,7 +274,7 @@ export async function scrapeAccount(
       timeout: config.SCRAPE_TIMEOUT,
       defaultTimeout: config.SCRAPE_TIMEOUT,
       executablePath,
-      args: ['--no-sandbox', '--disable-gpu', '--disable-blink-features=AutomationControlled'],
+      args: ['--disable-gpu', '--disable-blink-features=AutomationControlled'],
       ...(accountType === 'credit_card' ? { futureMonthsToScrape: 1 } : {}),
     });
 

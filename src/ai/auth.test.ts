@@ -25,7 +25,9 @@ vi.mock('node:fs', () => ({
 }));
 
 // Controllable config for testing
-const mockConfig: Record<string, any> = {};
+const mockConfig: Record<string, any> = {
+  CREDENTIALS_MASTER_KEY: 'synthetic-auth-master-key-at-least-32-characters',
+};
 
 vi.mock('../config.js', () => ({
   get config() {
@@ -49,6 +51,7 @@ const {
 
 function resetConfig() {
   Object.assign(mockConfig, {
+    CREDENTIALS_MASTER_KEY: 'synthetic-auth-master-key-at-least-32-characters',
     ANTHROPIC_API_KEY: '',
     ANTHROPIC_OAUTH_TOKEN: undefined,
     OPENAI_API_KEY: '',
@@ -157,6 +160,7 @@ describe('OAuth logout', () => {
     );
     mockWriteFileSync.mockReset();
     loadCredentials();
+    mockWriteFileSync.mockClear();
   });
 
   it('removes only the ChatGPT credentials and persists the change', () => {
@@ -167,7 +171,7 @@ describe('OAuth logout', () => {
     expect(hasOpenAICodexOAuth()).toBe(false);
     expect(mockWriteFileSync).toHaveBeenCalledWith(
       '/tmp/test-auth/oauth-credentials.json',
-      JSON.stringify({ anthropic: { refresh: 'anthropic-refresh' } }, null, 2),
+      expect.stringMatching(/^sealed:v1:/),
       { mode: 0o600 },
     );
   });

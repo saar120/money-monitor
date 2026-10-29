@@ -30,6 +30,16 @@ export function registerMobileAdvisorRoutes(
   clock: () => Date,
 ) {
   const auth = createMobileAuthenticationHook(deps.authenticator, 'mobile.read');
+  const requests = new Map<string, { start: number; count: number }>();
+  const limit = (deviceId: string) => {
+    const now = clock().getTime();
+    for (const [id, window] of requests) if (now - window.start >= 60_000) requests.delete(id);
+    const window = requests.get(deviceId) ?? { start: now, count: 0 };
+    if (window.count >= 10 || (!requests.has(deviceId) && requests.size >= 1000))
+      throw new MobileApiError('rate_limited');
+    window.count++;
+    requests.set(deviceId, window);
+  };
   const envelope = (data: unknown) => {
     const response = createMobileSuccessEnvelope(data, clock());
     return { ...response, meta: { ...response.meta, server: deps.server } };
@@ -41,8 +51,9 @@ export function registerMobileAdvisorRoutes(
     available();
     return envelope({ sessions: deps.list() });
   });
-  app.post('/api/mobile/v1/advisor/sessions', { onRequest: auth }, async () => {
+  app.post('/api/mobile/v1/advisor/sessions', { onRequest: auth }, async (request) => {
     available();
+    limit(request.mobileDevice!.id);
     return envelope({ session: deps.create() });
   });
   app.get<{ Params: { id: string } }>(
@@ -66,6 +77,7 @@ export function registerMobileAdvisorRoutes(
         throw new MobileApiError('validation_error');
       const body = messageSchema.safeParse(request.body);
       if (!body.success) throw new MobileApiError('validation_error');
+      limit(request.mobileDevice!.id);
       const session = deps.get(request.params.id);
       if (!session) throw new MobileApiError('route_not_found');
       if (!beginSessionReply(request.params.id))

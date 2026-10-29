@@ -3,6 +3,8 @@ import { and, desc, eq, gt, isNull, or, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
 
+/** Legacy wire name: grants the paired client financial reads, review edits, recurring decisions,
+ * and Advisor conversations. It never grants desktop administration or bank credentials. */
 export const MOBILE_READ_CAPABILITY = 'mobile.read' as const;
 export type MobileCapability = typeof MOBILE_READ_CAPABILITY;
 

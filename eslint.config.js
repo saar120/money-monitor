@@ -14,6 +14,7 @@ export default tseslint.config(
       'dashboard/node_modules/**',
       'electron/**/*.js',
       'electron/**/*.mjs',
+      'electron/**/*.cjs',
       'data/**',
       'backups/**',
       '*.cjs',

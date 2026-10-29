@@ -16,7 +16,7 @@ async function getBrowser(): Promise<Browser> {
   browser = await puppeteer.launch({
     executablePath,
     headless: true,
-    args: ['--no-sandbox', '--disable-gpu', '--disable-dev-shm-usage'],
+    args: ['--disable-gpu', '--disable-dev-shm-usage'],
   });
   return browser;
 }
@@ -29,6 +29,11 @@ export async function renderHtmlToImage(html: string): Promise<Buffer> {
   const b = await getBrowser();
   const page = await b.newPage();
   try {
+    await page.setJavaScriptEnabled(false);
+    await page.setRequestInterception(true);
+    page.on('request', (request) => {
+      void request.abort();
+    });
     await page.setViewport({ width: 800, height: 600 });
     await page.setContent(html, { waitUntil: 'load' });
     const element = await page.$('#content');

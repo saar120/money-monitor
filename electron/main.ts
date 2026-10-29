@@ -60,25 +60,6 @@ if (isMac && !process.env.PATH?.includes('/usr/local/bin')) {
   }
 }
 
-// ── Strip macOS quarantine from unpacked native modules on first launch ──────
-// When users download and extract the zip, macOS applies com.apple.quarantine
-// to all files.  The app itself is unsigned, so users must right-click → Open
-// on first launch.  Unpacked native binaries (better-sqlite3, puppeteer-core)
-// can still be blocked — stripping the attribute early prevents load errors.
-if (isMac && app.isPackaged) {
-  const appUnpacked = join(process.resourcesPath, 'app.asar.unpacked');
-  const quarantineDone = join(app.getPath('userData'), '.quarantine-stripped');
-  if (!existsSync(quarantineDone)) {
-    try {
-      execFileSync('/usr/bin/xattr', ['-cr', appUnpacked], { timeout: 10000 });
-      writeFileSync(quarantineDone, '', { mode: 0o600 });
-      console.log('[Electron] Quarantine attributes stripped from unpacked modules');
-    } catch (e) {
-      console.warn('[Electron] Failed to strip quarantine:', e instanceof Error ? e.message : e);
-    }
-  }
-}
-
 // ── 1. Set data directory BEFORE any backend import ──────────────────────────
 const dataDir = app.getPath('userData');
 process.env.MONEY_MONITOR_DATA_DIR = dataDir;
@@ -200,10 +181,11 @@ let isQuitting = false;
 let mobileAccessControl: MobileAccessControl | null = null;
 let trustedRendererOrigin: string | null = null;
 
-function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent): void {
+function assertTrustedRenderer(event: Electron.IpcMainInvokeEvent | Electron.IpcMainEvent): void {
   const senderURL = event.senderFrame?.url ?? event.sender.getURL();
   if (
     event.sender !== mainWindow?.webContents ||
+    event.senderFrame !== mainWindow?.webContents.mainFrame ||
     !trustedRendererOrigin ||
     !isTrustedRendererURL(senderURL, trustedRendererOrigin)
   ) {
@@ -423,6 +405,20 @@ function sendAccentColor() {
   );
 }
 
+ipcMain.on('renderer:bootstrap', (event) => {
+  try {
+    assertTrustedRenderer(event);
+    event.returnValue = {
+      origin: trustedRendererOrigin,
+      token: authToken,
+      version: app.getVersion(),
+      dataPath: dataDir,
+    };
+  } catch {
+    event.returnValue = null;
+  }
+});
+
 function createWindow(port: number) {
   const windowOptions: BrowserWindowConstructorOptions = {
     show: false, // prevent white flash — show only after ready-to-show
@@ -432,10 +428,10 @@ function createWindow(port: number) {
     minHeight: 520,
     icon: join(__dirname, 'icons', isWin ? 'icon.ico' : 'icon-256.png'),
     webPreferences: {
-      preload: join(__dirname, 'preload.mjs'),
+      preload: join(__dirname, 'preload.cjs'),
       contextIsolation: true,
       nodeIntegration: false,
-      sandbox: false,
+      sandbox: true,
       backgroundThrottling: false,
       spellcheck: true,
     },
@@ -457,6 +453,10 @@ function createWindow(port: number) {
   }
 
   mainWindow = new BrowserWindow(windowOptions);
+  mainWindow.webContents.session.setPermissionRequestHandler((_contents, _permission, callback) =>
+    callback(false),
+  );
+  mainWindow.webContents.session.setPermissionCheckHandler(() => false);
 
   // Show window only after content is painted (prevents white flash on startup)
   mainWindow.once('ready-to-show', () => {
@@ -750,7 +750,6 @@ async function promptMoveToApplications(): Promise<boolean> {
     await execFileAsync('/bin/rm', ['-rf', dest], { timeout: 10000 });
     rmSucceeded = true;
     await execFileAsync('/bin/cp', ['-R', appBundlePath, dest], { timeout: 30000 });
-    await execFileAsync('/usr/bin/xattr', ['-cr', dest], { timeout: 10000 });
 
     // Relaunch from /Applications using the actual binary name from the running process
     app.relaunch({ execPath: join(dest, 'Contents', 'MacOS', basename(process.execPath)) });
@@ -798,7 +797,10 @@ app.whenReady().then(async () => {
     // safeStorage uses macOS Keychain, Windows DPAPI, or Linux libsecret to
     // encrypt/decrypt strings.  Registration must happen before the backend
     // import so config.ts can use it when loading secrets from config.json.
-    if (safeStorage.isEncryptionAvailable()) {
+    if (
+      safeStorage.isEncryptionAvailable() &&
+      safeStorage.getSelectedStorageBackend?.() !== 'basic_text'
+    ) {
       const { registerSafeStorage } = await import('../dist/safe-storage.js');
       registerSafeStorage({
         encrypt: (plaintext: string) => safeStorage.encryptString(plaintext),
@@ -810,7 +812,9 @@ app.whenReady().then(async () => {
         ')',
       );
     } else {
-      console.warn('[Electron] Safe storage not available — secrets will be stored in plaintext');
+      throw new Error(
+        'OS secure storage is unavailable. Unlock your keychain or configure a system keyring, then restart Money Monitor.',
+      );
     }
 
     // Start server import

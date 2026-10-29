@@ -283,8 +283,15 @@ const scrubDate = computed(() =>
     ? t('spendingOverTime')
     : `${displayedMonth.value}-${String(scrubIndex.value + 1).padStart(2, '0')}`,
 );
-function pointAt(event: { axesInfo?: Array<{ value: number | string }> }) {
-  const value = Number(event.axesInfo?.[0]?.value);
+function pointAt(event: unknown) {
+  if (
+    !event ||
+    typeof event !== 'object' ||
+    !('axesInfo' in event) ||
+    !Array.isArray(event.axesInfo)
+  )
+    return;
+  const value = Number(event.axesInfo[0]?.value);
   if (Number.isFinite(value))
     scrubIndex.value = Math.max(0, Math.min(chartOption.value.series[0]!.data.length - 1, value));
 }

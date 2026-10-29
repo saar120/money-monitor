@@ -120,3 +120,25 @@ describe('Telegram bot restart race condition', () => {
     expect(raceOrder[1]).toBe('stop:resolved');
   });
 });
+
+it('rejects group chats and filters old alert destinations against the current allowlist', async () => {
+  const { Bot } = await import('grammy');
+  const { registerGetChatIds } = await import('./alerts.js');
+  const { getAllChatIds } = await import('./session-map.js');
+  vi.mocked(getAllChatIds).mockReturnValue([123, -456, 999]);
+  botModule.startTelegramBot();
+  const instance = vi.mocked(Bot).mock.instances.at(-1)!;
+  const middleware = vi.mocked(instance.use).mock.calls.at(-1)![0] as (
+    context: { from: { id: number }; chat: { id: number; type: string } },
+    next: () => void,
+  ) => Promise<void>;
+  const next = vi.fn();
+  await middleware({ from: { id: 123 }, chat: { id: -456, type: 'group' } }, next);
+  expect(next).not.toHaveBeenCalled();
+  await middleware({ from: { id: 999 }, chat: { id: 999, type: 'private' } }, next);
+  expect(next).not.toHaveBeenCalled();
+  await middleware({ from: { id: 123 }, chat: { id: 123, type: 'private' } }, next);
+  expect(next).toHaveBeenCalledOnce();
+  expect(vi.mocked(registerGetChatIds).mock.calls.at(-1)![0]()).toEqual([123]);
+  await botModule.stopTelegramBot();
+});

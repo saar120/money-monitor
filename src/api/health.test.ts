@@ -5,8 +5,12 @@ import { createTestServer, authHeaders, type TestServer } from '../__tests__/hel
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -23,7 +27,11 @@ vi.mock('../scraper/scraper.service.js', () => ({
 }));
 
 vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
+  getExchangeRates: vi.fn().mockResolvedValue({
+    rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+    stale: false,
+    fetchedAt: new Date().toISOString(),
+  }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -99,4 +107,22 @@ describe('health & auth routes', () => {
       expect(res.statusCode).toBe(401);
     });
   });
+});
+
+it('rejects legacy URL bearer tokens and sets browser security headers', async () => {
+  testDb = createTestDb();
+  const server = await createTestServer(testDb);
+  try {
+    const denied = await server.inject({
+      method: 'GET',
+      url: '/api/scrape/events?token=test-token',
+    });
+    expect(denied.statusCode).toBe(401);
+    const response = await server.inject({ method: 'GET', url: '/api/health' });
+    expect(response.headers['cache-control']).toBe('no-store');
+    expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+    expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
+  } finally {
+    await server.close();
+  }
 });

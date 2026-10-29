@@ -3,9 +3,9 @@ import { join } from 'node:path';
 import { dataDir } from '../paths.js';
 
 /**
- * Chrome for Testing build that matches puppeteer-core 25.12.0.
+ * Chrome for Testing build that matches puppeteer-core 25.16.0.
  */
-const CHROME_BUILD_ID = '154.0.8037.57';
+const CHROME_BUILD_ID = '156.0.8078.47';
 
 const cacheDir = join(dataDir, 'puppeteer-cache');
 

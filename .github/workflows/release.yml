@@ -17,9 +17,9 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -33,8 +33,21 @@ jobs:
       - name: Set package version
         run: npm version "$VERSION" --no-git-tag-version --allow-same-version
 
-      - name: Build and package
-        run: npm run electron:prebuild && npx electron-builder --mac --publish never
+      - name: Build signed and notarized Mac release
+        env:
+          CSC_LINK: ${{ secrets.MAC_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.MAC_CSC_KEY_PASSWORD }}
+          APPLE_API_KEY_P8: ${{ secrets.APPLE_API_KEY_P8 }}
+          APPLE_API_KEY_ID: ${{ secrets.APPLE_API_KEY_ID }}
+          APPLE_API_ISSUER: ${{ secrets.APPLE_API_ISSUER }}
+        run: |
+          test -n "$CSC_LINK" && test -n "$APPLE_API_KEY_P8" && test -n "$APPLE_API_KEY_ID" && test -n "$APPLE_API_ISSUER"
+          umask 077
+          export APPLE_API_KEY="$RUNNER_TEMP/AuthKey.p8"
+          printf '%s' "$APPLE_API_KEY_P8" > "$APPLE_API_KEY"
+          trap 'rm -f "$APPLE_API_KEY"' EXIT
+          npm run electron:prebuild
+          npx electron-builder --mac --publish never --config.forceCodeSigning=true --config.mac.notarize=true
 
       - name: Verify packaged MCP
         run: |
@@ -43,7 +56,7 @@ jobs:
           node scripts/smoke-test-packaged-mcp.mjs "$MCP_COMMAND"
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             release/*.zip
@@ -59,9 +72,9 @@ jobs:
       contents: write
 
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4
 
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4
         with:
           node-version: 22
           cache: npm
@@ -76,11 +89,18 @@ jobs:
       - name: Set package version
         run: npm version "${{ env.VERSION }}" --no-git-tag-version --allow-same-version
 
-      - name: Build and package
-        run: npm run electron:prebuild && npx electron-builder --win --publish never
+      - name: Build signed Windows release
+        env:
+          CSC_LINK: ${{ secrets.WIN_CSC_LINK }}
+          CSC_KEY_PASSWORD: ${{ secrets.WIN_CSC_KEY_PASSWORD }}
+        shell: bash
+        run: |
+          test -n "$CSC_LINK"
+          npm run electron:prebuild
+          npx electron-builder --win --publish never --config.forceCodeSigning=true
 
       - name: Upload to GitHub Release
-        uses: softprops/action-gh-release@v2
+        uses: softprops/action-gh-release@3bb12739c298aeb8a4eeaf626c5b8d85266b0e65 # v2
         with:
           files: |
             release/*.exe

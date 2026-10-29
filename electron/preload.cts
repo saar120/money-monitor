@@ -1,7 +1,14 @@
 import { contextBridge, ipcRenderer } from 'electron';
 
+const bootstrap = ipcRenderer.sendSync('renderer:bootstrap') as {
+  origin: string;
+  token: string;
+  version: string;
+  dataPath: string;
+} | null;
+
 function isTrustedDocument(): boolean {
-  const trustedOrigin = process.env.MM_RENDERER_ORIGIN;
+  const trustedOrigin = bootstrap?.origin;
   if (!trustedOrigin) return false;
 
   try {
@@ -42,9 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
 });
 
 contextBridge.exposeInMainWorld('electronAPI', {
-  getAppVersion: () => process.env.MM_APP_VERSION ?? 'unknown',
-  getAuthToken: () => (isTrustedDocument() ? (process.env.API_TOKEN ?? '') : ''),
-  getDataPath: () => (isTrustedDocument() ? (process.env.MONEY_MONITOR_DATA_DIR ?? '') : ''),
+  getAppVersion: () => bootstrap?.version ?? 'unknown',
+  getAuthToken: () => (isTrustedDocument() ? (bootstrap?.token ?? '') : ''),
+  getDataPath: () => (isTrustedDocument() ? (bootstrap?.dataPath ?? '') : ''),
   onOpenSettings: (callback: () => void) => {
     const listener = () => {
       if (isTrustedDocument()) callback();

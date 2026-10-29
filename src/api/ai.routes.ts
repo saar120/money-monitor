@@ -1,4 +1,5 @@
 import type { FastifyInstance } from 'fastify';
+import { z } from 'zod';
 import { chat, batchCategorize, recategorize } from '../ai/agent.js';
 import { categorizeSchema, recategorizeSchema, sessionChatSchema } from './validation.js';
 import { validateBody } from './helpers.js';
@@ -28,6 +29,8 @@ export async function aiRoutes(app: FastifyInstance) {
 
   app.get<{ Params: { id: string } }>('/api/ai/sessions/:id', async (request, reply) => {
     const { id } = request.params;
+    if (!z.uuid().safeParse(id).success)
+      return reply.code(400).send({ error: 'Invalid session ID' });
     const session = getSession(id);
     if (!session) return reply.status(404).send({ error: 'Session not found' });
     return { session };
@@ -35,6 +38,8 @@ export async function aiRoutes(app: FastifyInstance) {
 
   app.delete<{ Params: { id: string } }>('/api/ai/sessions/:id', async (request, reply) => {
     const { id } = request.params;
+    if (!z.uuid().safeParse(id).success)
+      return reply.code(400).send({ error: 'Invalid session ID' });
     const deleted = deleteSession(id);
     if (!deleted) return reply.status(404).send({ error: 'Session not found' });
     return { deleted: true };

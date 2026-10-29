@@ -4,7 +4,9 @@ import type { OAuthAuth, OAuthCredentials, OAuthCredential } from '@earendil-wor
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
 import { openaiCodexProvider } from '@earendil-works/pi-ai/providers/openai-codex';
 import { dataDir } from '../paths.js';
-import { config, type Config } from '../config.js';
+import { config, isElectronMode, type Config } from '../config.js';
+
+import { sealSecretFile, openSecretFile } from '../secret-file.js';
 
 const CREDENTIALS_PATH = join(dataDir, 'oauth-credentials.json');
 
@@ -16,11 +18,18 @@ let lastSavedJson = '';
 export function loadCredentials(): void {
   try {
     const raw = readFileSync(CREDENTIALS_PATH, 'utf-8');
-    credentials = JSON.parse(raw);
-    lastSavedJson = raw;
-  } catch {
+    const plaintext = openSecretFile(raw, config.CREDENTIALS_MASTER_KEY, isElectronMode);
+    credentials = JSON.parse(plaintext);
+    lastSavedJson = plaintext;
+    if (raw.trimStart().startsWith('{') && Object.keys(credentials).length > 0) {
+      lastSavedJson = '';
+      saveCredentials();
+    }
+  } catch (error) {
     credentials = {};
     lastSavedJson = '';
+    if ((error as NodeJS.ErrnoException).code !== 'ENOENT')
+      throw new Error('Cannot load OAuth credentials securely', { cause: error });
   }
 }
 
@@ -29,7 +38,11 @@ function saveCredentials(): void {
   const json = JSON.stringify(credentials, null, 2);
   if (json === lastSavedJson) return;
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(CREDENTIALS_PATH, json, { mode: 0o600 });
+  writeFileSync(
+    CREDENTIALS_PATH,
+    sealSecretFile(json, config.CREDENTIALS_MASTER_KEY, isElectronMode),
+    { mode: 0o600 },
+  );
   lastSavedJson = json;
 }
 

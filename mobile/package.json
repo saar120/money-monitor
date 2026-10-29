@@ -36,7 +36,8 @@
   },
   "devDependencies": {
     "@types/react": "~19.2.2",
-    "typescript": "~6.0.3"
+    "typescript": "~6.0.3",
+    "patch-package": "^8.0.1"
   },
   "scripts": {
     "start": "expo start",
@@ -44,7 +45,12 @@
     "prebuild:ios": "expo prebuild --platform ios",
     "typecheck": "tsc --noEmit",
     "test": "node --experimental-strip-types --test src/*.test.ts src/**/*.test.ts",
-    "e2e:ios": "./scripts/e2e-ios.sh"
+    "e2e:ios": "./scripts/e2e-ios.sh",
+    "postinstall": "patch-package"
   },
-  "private": true
+  "private": true,
+  "overrides": {
+    "decode-uri-component": "^0.5.0",
+    "zod": "^4.6.6"
+  }
 }

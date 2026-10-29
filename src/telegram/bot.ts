@@ -128,6 +128,7 @@ export function startTelegramBot(): void {
   // Register alert infrastructure so alerts.ts can send messages
   const botRef = bot;
   registerSendMessage(async (chatId: number, html: string) => {
+    if (chatId <= 0 || !parseAllowedUsers().has(chatId)) return;
     try {
       await botRef.api.sendMessage(chatId, html, { parse_mode: 'HTML' });
     } catch {
@@ -139,6 +140,7 @@ export function startTelegramBot(): void {
   // A synthetic user message is inserted when needed to maintain the
   // alternating user/assistant pattern that LLM APIs require.
   registerOnAlertSent((chatId: number, markdown: string, context?: string) => {
+    if (chatId <= 0 || !parseAllowedUsers().has(chatId)) return;
     const sessionId = resolveSession(chatId);
     const messages = getSessionMessages(sessionId);
     const lastRole = messages?.[messages.length - 1]?.role;
@@ -147,7 +149,7 @@ export function startTelegramBot(): void {
     }
     appendMessage(sessionId, 'assistant', markdown);
   });
-  registerGetChatIds(() => getAllChatIds());
+  registerGetChatIds(() => getAllChatIds().filter((id) => id > 0 && parseAllowedUsers().has(id)));
 
   // ── Access control middleware ──
   if (allowedUsers.size === 0) {
@@ -156,7 +158,12 @@ export function startTelegramBot(): void {
   } else {
     bot.use(async (ctx, next) => {
       const userId = ctx.from?.id;
-      if (!userId || !allowedUsers.has(userId)) {
+      if (
+        !userId ||
+        !parseAllowedUsers().has(userId) ||
+        ctx.chat?.type !== 'private' ||
+        ctx.chat.id !== userId
+      ) {
         return;
       }
       await next();
