@@ -1,34 +1,12 @@
 import { t, useLanguage } from './localization';
-import { categoryLabel } from './translations';
+import { categoryLabel, fixtureCategoryKey } from './translations';
 import { Text } from './LocalizedText';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useCallback, useEffect, useMemo, useState } from 'react';
-import { Gesture, GestureDetector } from 'react-native-gesture-handler';
-import {
-  FlatList,
-  Keyboard,
-  KeyboardAvoidingView,
-  Modal,
-  Platform,
-  Pressable,
-  StyleSheet,
-  TextInput,
-  useWindowDimensions,
-  View,
-} from 'react-native';
-import Animated, {
-  cancelAnimation,
-  runOnJS,
-  useAnimatedStyle,
-  useReducedMotion,
-  useSharedValue,
-  withSpring,
-  withTiming,
-} from 'react-native-reanimated';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import { Modal, Pressable, ScrollView, StyleSheet, TextInput, View } from 'react-native';
+import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
 import { useAppColors } from './theme';
-
-const sheetSpring = { damping: 28, stiffness: 300, mass: 0.82 };
 
 const categorySymbols: Record<string, SFSymbol> = {
   Dining: 'fork.knife',
@@ -53,6 +31,7 @@ const categorySymbols: Record<string, SFSymbol> = {
   Other: 'ellipsis.circle',
 };
 
+// A native page sheet with a single-column list: swipe down or Cancel to leave, tap a row to pick.
 export function CategoryPickerSheet({
   categories,
   onClose,
@@ -71,14 +50,16 @@ export function CategoryPickerSheet({
   const colors = useAppColors();
   const { language } = useLanguage();
   const insets = useSafeAreaInsets();
-  const { height } = useWindowDimensions();
   const reduceMotion = useReducedMotion();
   const [query, setQuery] = useState('');
-  const hiddenOffset = Math.max(height * 0.6, 440);
-  const translateY = useSharedValue(hiddenOffset);
-  const dragOrigin = useSharedValue(0);
-  const backdropOpacity = useSharedValue(0);
-  const closing = useSharedValue(false);
+  const list = useRef<ScrollView>(null);
+  const opening = useRef({
+    content: 0,
+    selectedY: null as number | null,
+    settled: false,
+    viewport: 0,
+  });
+  const searching = query.trim().length > 0;
   const visibleCategories = useMemo(() => {
     const normalized = query.trim().toLocaleLowerCase();
     return categories.filter(
@@ -89,301 +70,200 @@ export function CategoryPickerSheet({
   }, [categories, query]);
 
   useEffect(() => {
-    if (!visible) {
-      setQuery('');
-      translateY.value = hiddenOffset;
-      backdropOpacity.value = 0;
-      closing.value = false;
-    }
-    return () => Keyboard.dismiss();
-  }, [backdropOpacity, closing, hiddenOffset, translateY, visible]);
+    if (visible) return;
+    setQuery('');
+    opening.current = { content: 0, selectedY: null, settled: false, viewport: 0 };
+  }, [visible]);
 
-  useEffect(
-    () => () => {
-      cancelAnimation(translateY);
-      cancelAnimation(backdropOpacity);
-    },
-    [backdropOpacity, translateY],
-  );
-
-  const present = useCallback(() => {
-    cancelAnimation(translateY);
-    cancelAnimation(backdropOpacity);
-    closing.value = false;
-    translateY.value = reduceMotion ? 0 : hiddenOffset;
-    backdropOpacity.value = reduceMotion ? 1 : 0;
-    if (!reduceMotion) {
-      translateY.value = withSpring(0, sheetSpring);
-      backdropOpacity.value = withTiming(1, { duration: 180 });
-    }
-  }, [backdropOpacity, closing, hiddenOffset, reduceMotion, translateY]);
-
-  const dismiss = useCallback(
-    (completion: () => void) => {
-      if (closing.value) return;
-      closing.value = true;
-      Keyboard.dismiss();
-      if (reduceMotion) {
-        translateY.value = hiddenOffset;
-        backdropOpacity.value = 0;
-        completion();
-        return;
-      }
-      backdropOpacity.value = withTiming(0, { duration: 140 });
-      translateY.value = withTiming(hiddenOffset, { duration: 180 }, (finished) => {
-        if (finished) runOnJS(completion)();
-      });
-    },
-    [backdropOpacity, closing, hiddenOffset, reduceMotion, translateY],
-  );
-  const close = useCallback(() => dismiss(onClose), [dismiss, onClose]);
-
-  const panGesture = useMemo(
-    () =>
-      Gesture.Pan()
-        .activeOffsetY(6)
-        .failOffsetX([-24, 24])
-        .onStart(() => {
-          if (closing.value) return;
-          cancelAnimation(translateY);
-          dragOrigin.value = translateY.value;
-        })
-        .onUpdate((event) => {
-          if (!closing.value) translateY.value = Math.max(0, dragOrigin.value + event.translationY);
-        })
-        .onEnd((event) => {
-          if (closing.value) return;
-          if (translateY.value > 72 || event.velocityY > 900) runOnJS(close)();
-          else translateY.value = reduceMotion ? 0 : withSpring(0, sheetSpring);
-        })
-        .onFinalize((_event, success) => {
-          if (!success && !closing.value) {
-            translateY.value = reduceMotion ? 0 : withSpring(0, sheetSpring);
-          }
-        }),
-    [close, closing, dragOrigin, reduceMotion, translateY],
-  );
-
-  const sheetStyle = useAnimatedStyle(() => ({
-    transform: [{ translateY: translateY.value }],
-  }));
-  const backdropStyle = useAnimatedStyle(() => ({
-    opacity:
-      backdropOpacity.value * (1 - Math.min(Math.max(translateY.value / hiddenOffset, 0), 1)),
-  }));
+  // Open with the current choice in view. The sheet's size settles after the first layout, so
+  // this reruns on each measurement, clamped to the list's end, until the person scrolls.
+  function revealSelection() {
+    const { content, selectedY, settled, viewport } = opening.current;
+    if (settled || searching || selectedY === null || !content || !viewport) return;
+    const offset = Math.min(selectedY - 160, content - viewport);
+    list.current?.scrollTo({ y: Math.max(0, offset), animated: false });
+  }
 
   return (
     <Modal
-      animationType="none"
-      onDismiss={() => Keyboard.dismiss()}
-      onRequestClose={close}
-      onShow={present}
-      presentationStyle="overFullScreen"
-      transparent
+      animationType={reduceMotion ? 'none' : 'slide'}
+      onRequestClose={onClose}
+      presentationStyle="pageSheet"
       visible={visible}
     >
-      <KeyboardAvoidingView
-        behavior={Platform.OS === 'ios' ? 'padding' : undefined}
-        style={styles.overlay}
+      <View
+        style={[styles.sheet, { backgroundColor: colors.background }]}
+        testID="category-picker-sheet"
       >
-        <Animated.View style={[styles.backdrop, backdropStyle]}>
+        <View style={styles.header}>
           <Pressable
-            accessibilityElementsHidden
-            importantForAccessibility="no-hide-descendants"
-            onPress={close}
-            style={StyleSheet.absoluteFill}
-          />
-        </Animated.View>
-        <Animated.View
-          style={[
-            styles.sheet,
-            {
-              backgroundColor: colors.background,
-              paddingBottom: Math.max(insets.bottom, 12),
-            },
-            sheetStyle,
-          ]}
-          testID="category-picker-sheet"
-        >
-          <GestureDetector gesture={panGesture}>
-            <View style={styles.grabberArea}>
-              <View style={[styles.grabber, { backgroundColor: colors.tertiary }]} />
-            </View>
-          </GestureDetector>
-          <View style={styles.header}>
-            <Pressable accessibilityRole="button" onPress={close} style={styles.headerButton}>
-              <Text style={[styles.cancel, { color: colors.accent }]}>{t('cancel')}</Text>
-            </Pressable>
-            <View style={styles.heading}>
-              <Text style={[styles.title, { color: colors.text }]}>{title}</Text>
-              <Text style={[styles.count, { color: colors.secondary }]}>
-                {t('categoryCount', { count: categories.length })}
-              </Text>
-            </View>
-            <View style={styles.headerButton} />
-          </View>
-          <View
+            accessibilityRole="button"
+            hitSlop={8}
+            onPress={onClose}
+            style={styles.cancelButton}
+          >
+            <Text
+              maxFontSizeMultiplier={1.3}
+              numberOfLines={1}
+              style={[styles.cancel, { color: colors.accent }]}
+            >
+              {t('cancel')}
+            </Text>
+          </Pressable>
+          <Text
+            accessibilityRole="header"
+            maxFontSizeMultiplier={1.3}
+            numberOfLines={1}
+            style={[styles.title, { color: colors.text }]}
+          >
+            {title}
+          </Text>
+        </View>
+        <View style={[styles.search, { backgroundColor: colors.surfaceSoft }]}>
+          <SymbolView name="magnifyingglass" size={16} tintColor={colors.secondary} />
+          <TextInput
+            accessibilityLabel={t('searchCategories')}
+            autoCapitalize="none"
+            autoCorrect={false}
+            clearButtonMode="while-editing"
+            onChangeText={setQuery}
+            placeholder={t('searchCategories')}
+            placeholderTextColor={colors.tertiary}
+            returnKeyType="search"
             style={[
-              styles.search,
+              styles.searchInput,
               {
-                backgroundColor: colors.surfaceSoft,
-                borderColor: colors.separator,
+                color: colors.text,
+                textAlign: language === 'he' ? 'right' : 'left',
+                writingDirection: language === 'he' ? 'rtl' : 'ltr',
               },
             ]}
-          >
-            <SymbolView name="magnifyingglass" size={16} tintColor={colors.secondary} />
-            <TextInput
-              autoCapitalize="none"
-              autoCorrect={false}
-              clearButtonMode="while-editing"
-              onChangeText={setQuery}
-              onSubmitEditing={() => Keyboard.dismiss()}
-              placeholder={t('searchCategories')}
-              placeholderTextColor={colors.tertiary}
-              returnKeyType="done"
-              style={[
-                styles.searchInput,
-                {
-                  color: colors.text,
-                  textAlign: language === 'he' ? 'right' : 'left',
-                  writingDirection: language === 'he' ? 'rtl' : 'ltr',
-                },
-              ]}
-              testID="category-search"
-              value={query}
-            />
-          </View>
-          <Text style={[styles.listLabel, { color: colors.secondary }]}>
-            {query.trim()
-              ? t('resultsCount', { count: visibleCategories.length })
-              : t('aLLCATEGORIES')}
-          </Text>
-          <FlatList
-            columnWrapperStyle={styles.columns}
-            contentContainerStyle={styles.list}
-            data={visibleCategories}
-            keyboardDismissMode="interactive"
-            keyboardShouldPersistTaps="handled"
-            keyExtractor={(item) => item}
-            numColumns={2}
-            renderItem={({ item }) => {
-              const isSelected = selected === item;
-              return (
-                <Pressable
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: isSelected }}
-                  onPress={() => {
-                    dismiss(() => onSelect(item));
-                  }}
-                  style={({ pressed }) => [
-                    styles.option,
-                    {
-                      backgroundColor: isSelected ? colors.accentSoft : colors.surfaceSoft,
-                      borderColor: isSelected ? colors.accent : colors.separator,
-                      opacity: pressed ? 0.76 : 1,
-                    },
-                  ]}
-                  testID={`category-option-${item}`}
-                >
-                  <View style={[styles.icon, { backgroundColor: colors.surface }]}>
+            testID="category-search"
+            value={query}
+          />
+        </View>
+        <ScrollView
+          automaticallyAdjustKeyboardInsets
+          contentContainerStyle={[
+            styles.listContent,
+            { paddingBottom: Math.max(insets.bottom, 16) },
+          ]}
+          keyboardDismissMode="on-drag"
+          keyboardShouldPersistTaps="handled"
+          onContentSizeChange={(_width, height) => {
+            opening.current.content = height;
+            revealSelection();
+          }}
+          onLayout={({ nativeEvent }) => {
+            opening.current.viewport = nativeEvent.layout.height;
+            revealSelection();
+          }}
+          onScrollBeginDrag={() => {
+            opening.current.settled = true;
+          }}
+          ref={list}
+        >
+          {visibleCategories.length ? (
+            <View style={[styles.group, { backgroundColor: colors.surface }]}>
+              {visibleCategories.map((category, index) => {
+                const isSelected = selected === category;
+                return (
+                  <Pressable
+                    accessibilityLabel={categoryLabel(category)}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: isSelected }}
+                    key={category}
+                    onLayout={
+                      isSelected
+                        ? ({ nativeEvent }) => {
+                            opening.current.selectedY = nativeEvent.layout.y;
+                            revealSelection();
+                          }
+                        : undefined
+                    }
+                    onPress={() => onSelect(category)}
+                    style={({ pressed }) => [
+                      styles.option,
+                      pressed && { backgroundColor: colors.surfaceSoft },
+                    ]}
+                    testID={`category-option-${category}`}
+                  >
                     <SymbolView
-                      name={categorySymbols[item] ?? 'tag'}
-                      size={15}
+                      name={categorySymbols[fixtureCategoryKey(category)] ?? 'tag'}
+                      size={20}
+                      style={styles.symbol}
                       tintColor={colors.accent}
                     />
-                  </View>
-                  <Text
-                    numberOfLines={1}
-                    style={[
-                      styles.optionLabel,
-                      { color: isSelected ? colors.accent : colors.text },
-                    ]}
-                  >
-                    {categoryLabel(item)}
-                  </Text>
-                  {isSelected ? (
-                    <SymbolView name="checkmark.circle.fill" size={14} tintColor={colors.accent} />
-                  ) : null}
-                </Pressable>
-              );
-            }}
-            ListEmptyComponent={
-              <View style={styles.empty}>
-                <SymbolView name="magnifyingglass" size={26} tintColor={colors.secondary} />
-                <Text style={[styles.emptyTitle, { color: colors.text }]}>
-                  {t('noMatchingCategory')}
-                </Text>
-                <Text style={[styles.emptyBody, { color: colors.secondary }]}>
-                  {t('tryAShorterSearch')}
-                </Text>
-              </View>
-            }
-          />
-        </Animated.View>
-      </KeyboardAvoidingView>
+                    <View
+                      style={[
+                        styles.optionBody,
+                        index < visibleCategories.length - 1 && {
+                          borderBottomColor: colors.separator,
+                          borderBottomWidth: StyleSheet.hairlineWidth,
+                        },
+                      ]}
+                    >
+                      <Text style={[styles.optionLabel, { color: colors.text }]}>
+                        {categoryLabel(category)}
+                      </Text>
+                      {isSelected ? (
+                        <SymbolView name="checkmark" size={16} tintColor={colors.accent} />
+                      ) : null}
+                    </View>
+                  </Pressable>
+                );
+              })}
+            </View>
+          ) : (
+            <Text style={[styles.empty, { color: colors.secondary }]}>
+              {t('noMatchingCategory')}
+            </Text>
+          )}
+        </ScrollView>
+      </View>
     </Modal>
   );
 }
 
 const styles = StyleSheet.create({
-  overlay: { flex: 1, justifyContent: 'flex-end' },
-  backdrop: { ...StyleSheet.absoluteFill, backgroundColor: 'rgba(9,17,31,0.24)' },
-  sheet: {
-    height: '55%',
-    minHeight: 400,
-    borderTopLeftRadius: 30,
-    borderTopRightRadius: 30,
-    overflow: 'hidden',
-  },
-  grabberArea: { height: 20, alignItems: 'center', justifyContent: 'center' },
-  grabber: { width: 36, height: 5, borderRadius: 3, opacity: 0.35 },
-  header: {
-    minHeight: 48,
-    paddingHorizontal: 12,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-  },
-  headerButton: { width: 74, minHeight: 44, justifyContent: 'center' },
-  cancel: { fontSize: 16 },
-  heading: { alignItems: 'center' },
-  title: { fontSize: 18, lineHeight: 23, fontWeight: '700', letterSpacing: -0.25 },
-  count: { marginTop: 2, fontSize: 11.5 },
-  search: {
+  sheet: { flex: 1 },
+  header: { minHeight: 56, justifyContent: 'center', paddingHorizontal: 16 },
+  cancelButton: {
+    position: 'absolute',
+    start: 16,
+    zIndex: 1,
     minHeight: 44,
+    maxWidth: '30%',
+    justifyContent: 'center',
+  },
+  cancel: { fontSize: 17 },
+  // Centered across the sheet; the side padding keeps it clear of Cancel at large text.
+  title: { paddingHorizontal: '24%', fontSize: 17, fontWeight: '600', textAlign: 'center' },
+  search: {
+    minHeight: 40,
     marginHorizontal: 16,
-    paddingHorizontal: 13,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 16,
+    marginBottom: 12,
+    paddingHorizontal: 10,
+    borderRadius: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 9,
+    gap: 7,
   },
-  searchInput: { flex: 1, height: 42, fontSize: 16 },
-  listLabel: {
-    marginTop: 13,
-    marginHorizontal: 18,
-    fontSize: 10.5,
-    fontWeight: '700',
-    letterSpacing: 0.6,
-  },
-  list: { paddingHorizontal: 16, paddingTop: 8, paddingBottom: 12, flexGrow: 1 },
-  columns: { gap: 8 },
-  option: {
+  searchInput: { flex: 1, minHeight: 40, fontSize: 17 },
+  listContent: { paddingHorizontal: 16 },
+  group: { borderRadius: 14, overflow: 'hidden' },
+  option: { minHeight: 50, flexDirection: 'row', alignItems: 'stretch', paddingStart: 14 },
+  symbol: { width: 24, height: 24, alignSelf: 'center' },
+  optionBody: {
     flex: 1,
-    minWidth: 0,
-    minHeight: 46,
-    marginBottom: 7,
-    paddingHorizontal: 9,
-    borderWidth: StyleSheet.hairlineWidth,
-    borderRadius: 14,
+    minHeight: 50,
+    marginStart: 12,
+    paddingEnd: 16,
+    paddingVertical: 12,
     flexDirection: 'row',
     alignItems: 'center',
-    gap: 8,
+    gap: 10,
   },
-  icon: { width: 28, height: 28, borderRadius: 9, alignItems: 'center', justifyContent: 'center' },
-  optionLabel: { flex: 1, minWidth: 0, fontSize: 12.5, lineHeight: 16, fontWeight: '600' },
-  empty: { flex: 1, minHeight: 220, alignItems: 'center', justifyContent: 'center' },
-  emptyTitle: { marginTop: 12, fontSize: 18, fontWeight: '700' },
-  emptyBody: { marginTop: 4, fontSize: 14 },
+  optionLabel: { flex: 1, fontSize: 17, lineHeight: 22 },
+  empty: { marginTop: 48, fontSize: 15, textAlign: 'center' },
 });

@@ -475,26 +475,7 @@ async function save() {
           }}
         </Button>
       </nav>
-      <p class="text-text-secondary">
-        {{
-          activeTab === 'general'
-            ? language === 'he'
-              ? 'העדפות אישיות ומשק הבית שלכם.'
-              : 'Your preferences and household.'
-            : activeTab === 'connections'
-              ? language === 'he'
-                ? 'חיבור היועץ והטלפון שלכם.'
-                : 'Connect your Advisor and iPhone.'
-              : language === 'he'
-                ? 'הגדרות טכניות לסנכרון, עיבוד נתונים ושילובים.'
-                : 'Technical controls for account refreshes, AI processing, and integrations.'
-        }}
-      </p>
-      <SettingsGroup
-        v-show="activeTab === 'general'"
-        id="settings-general"
-        :title="sectionCopy.general"
-      >
+      <SettingsGroup v-show="activeTab === 'general'" id="settings-general">
         <SettingsRow :label="t('appLanguage')">
           <SelectField
             :model-value="languageChoice"
@@ -508,7 +489,7 @@ async function save() {
             @update:model-value="onLanguageChange"
           />
         </SettingsRow>
-        <SettingsRow :label="sectionCopy.appearance" :description="sectionCopy.appearanceHint">
+        <SettingsRow :label="sectionCopy.appearance">
           <SelectField
             :model-value="themeChoice"
             class="ledger-select"

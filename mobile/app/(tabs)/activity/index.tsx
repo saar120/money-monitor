@@ -114,31 +114,66 @@ export default function ActivityScreen() {
             <Text accessibilityRole="header" style={[styles.pageTitle, { color: colors.text }]}>
               {t('activity')}
             </Text>
-            <View
-              style={[
-                styles.search,
-                { backgroundColor: colors.surface, borderColor: colors.separator },
-              ]}
-            >
-              <SymbolView name="magnifyingglass" size={16} tintColor={colors.tertiary} />
-              <TextInput
-                ref={searchBar}
-                accessibilityLabel={t('merchantCategoryOrAccount')}
-                clearButtonMode="while-editing"
-                onChangeText={setQuery}
-                placeholder={t('merchantCategoryOrAccount')}
-                placeholderTextColor={colors.tertiary}
-                returnKeyType="search"
+            <View style={styles.searchRow}>
+              <View
                 style={[
-                  styles.searchInput,
+                  styles.search,
+                  { backgroundColor: colors.surface, borderColor: colors.separator },
+                ]}
+              >
+                <SymbolView name="magnifyingglass" size={16} tintColor={colors.tertiary} />
+                <TextInput
+                  ref={searchBar}
+                  accessibilityLabel={t('merchantCategoryOrAccount')}
+                  clearButtonMode="while-editing"
+                  onChangeText={setQuery}
+                  placeholder={t('merchantCategoryOrAccount')}
+                  placeholderTextColor={colors.tertiary}
+                  returnKeyType="search"
+                  style={[
+                    styles.searchInput,
+                    {
+                      color: colors.text,
+                      textAlign: language === 'he' ? 'right' : 'left',
+                      writingDirection: language === 'he' ? 'rtl' : 'ltr',
+                    },
+                  ]}
+                  value={query}
+                />
+              </View>
+              <Pressable
+                accessibilityLabel={
+                  advancedFilters ? t('filtersCount', { count: advancedFilters }) : t('filters')
+                }
+                accessibilityRole="button"
+                onPress={() => {
+                  searchBar.current?.blur();
+                  setFiltersVisible(true);
+                }}
+                style={({ pressed }) => [
+                  styles.filter,
                   {
-                    color: colors.text,
-                    textAlign: language === 'he' ? 'right' : 'left',
-                    writingDirection: language === 'he' ? 'rtl' : 'ltr',
+                    backgroundColor: advancedFilters ? colors.accentSoft : colors.surface,
+                    borderColor: advancedFilters ? colors.accent : colors.separator,
+                    opacity: pressed ? 0.76 : 1,
                   },
                 ]}
-                value={query}
-              />
+                testID="activity-open-filters"
+              >
+                <SymbolView
+                  name="line.3.horizontal.decrease"
+                  size={18}
+                  tintColor={advancedFilters ? colors.accent : colors.secondary}
+                />
+                {advancedFilters ? (
+                  <Text
+                    maxFontSizeMultiplier={1.3}
+                    style={[styles.filterLabel, { color: colors.accent }]}
+                  >
+                    {advancedFilters}
+                  </Text>
+                ) : null}
+              </Pressable>
             </View>
             {money.home.reviewCount > 0 ? (
               <Pressable
@@ -151,17 +186,10 @@ export default function ActivityScreen() {
                   { backgroundColor: colors.accentSoft, opacity: pressed ? 0.7 : 1 },
                 ]}
               >
-                <View style={styles.reviewBannerIcon}>
-                  <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
-                </View>
-                <View style={styles.reviewBannerText}>
-                  <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
-                    {t('reviewCount', { count: money.home.reviewCount })}
-                  </Text>
-                  <Text style={[styles.reviewBannerDetail, { color: colors.secondary }]}>
-                    {t('openYourFinancialInbox')}
-                  </Text>
-                </View>
+                <SymbolView name="checkmark.circle" size={20} tintColor={colors.accent} />
+                <Text style={[styles.reviewBannerTitle, { color: colors.text }]}>
+                  {t('reviewCount', { count: money.home.reviewCount })}
+                </Text>
                 <DirectionalChevron direction="forward" size={12} tintColor={colors.accent} />
               </Pressable>
             ) : null}
@@ -170,47 +198,15 @@ export default function ActivityScreen() {
                 {t('couldnTRefreshPullToRetry')}
               </Text>
             ) : null}
-            <View style={styles.filterBar}>
+            {isUnfiltered ? null : (
               <Text style={[styles.summary, { color: colors.secondary }]}>
                 {t('transactionCount', { count: transactions.length })}
-                {result.hasMore ? '+' : ''}{' '}
+                {result.hasMore ? '+' : ''}
                 {criteria.startDate || criteria.endDate
-                  ? `${criteria.startDate ?? t('first')} - ${criteria.endDate ?? t('today3')}`
-                  : t('allDates')}
+                  ? ` · ${criteria.startDate ? dayLabel(criteria.startDate, currentDate) : t('first')} - ${criteria.endDate ? dayLabel(criteria.endDate, currentDate) : t('today3')}`
+                  : ''}
               </Text>
-              <Pressable
-                accessibilityRole="button"
-                onPress={() => {
-                  searchBar.current?.blur();
-                  setFiltersVisible(true);
-                }}
-                style={({ pressed }) => [
-                  styles.filter,
-                  {
-                    backgroundColor: advancedFilters ? colors.accentSoft : colors.surfaceSoft,
-                    borderColor: advancedFilters ? colors.accent : colors.separator,
-                    opacity: pressed ? 0.76 : 1,
-                  },
-                ]}
-                testID="activity-open-filters"
-              >
-                <View style={styles.filterWithIcon}>
-                  <SymbolView
-                    name="line.3.horizontal.decrease"
-                    size={13}
-                    tintColor={advancedFilters ? colors.accent : colors.secondary}
-                  />
-                  <Text
-                    style={[
-                      styles.filterLabel,
-                      { color: advancedFilters ? colors.accent : colors.secondary },
-                    ]}
-                  >
-                    {advancedFilters ? t('filtersCount', { count: advancedFilters }) : t('filters')}
-                  </Text>
-                </View>
-              </Pressable>
-            </View>
+            )}
           </View>
         }
         renderSectionHeader={({ section }) => (
@@ -229,9 +225,7 @@ export default function ActivityScreen() {
             </Text>
             {section.total === null ? null : (
               <Text
-                adjustsFontSizeToFit
-                allowFontScaling={false}
-                minimumFontScale={0.8}
+                maxFontSizeMultiplier={1.3}
                 numberOfLines={1}
                 testID={`section-total-${section.id}`}
                 style={[styles.sectionTotal, { color: colors.secondary }]}
@@ -386,9 +380,7 @@ function TransactionRow({
             {transaction.merchant}
           </Text>
           <Text
-            adjustsFontSizeToFit
-            allowFontScaling={false}
-            minimumFontScale={0.75}
+            maxFontSizeMultiplier={1.4}
             numberOfLines={1}
             style={[styles.amount, { color: positive ? colors.positive : colors.text }]}
           >
@@ -408,7 +400,7 @@ function TransactionRow({
               <Flag label={t('pending')} color={colors.warning} background={colors.warningSoft} />
             ) : null}
             {transaction.needsReview ? (
-              <Flag label={t('review')} color={colors.danger} background={colors.dangerSoft} />
+              <Flag label={t('review')} color={colors.accent} background={colors.accentSoft} />
             ) : null}
           </View>
         </View>
@@ -472,16 +464,23 @@ const styles = StyleSheet.create({
   pageTitle: {
     marginHorizontal: 20,
     marginTop: 8,
-    marginBottom: 20,
+    marginBottom: 14,
     fontSize: 28,
     lineHeight: 34,
     fontWeight: '700',
     letterSpacing: -0.7,
   },
-  search: {
-    height: 48,
+  searchRow: {
     marginHorizontal: 20,
-    marginBottom: 8,
+    marginBottom: 10,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 8,
+  },
+  search: {
+    flex: 1,
+    minWidth: 0,
+    height: 48,
     paddingHorizontal: 14,
     borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
@@ -490,41 +489,31 @@ const styles = StyleSheet.create({
     gap: 9,
   },
   searchInput: { flex: 1, height: 48, fontSize: 16 },
-  reviewBanner: {
-    minHeight: 66,
-    marginHorizontal: 20,
-    marginTop: 10,
-    marginBottom: 8,
-    borderRadius: 20,
-    paddingHorizontal: 14,
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 11,
-  },
-  reviewBannerIcon: { width: 28, alignItems: 'center' },
-  reviewBannerText: { flex: 1 },
-  reviewBannerTitle: { fontSize: 15, fontWeight: '700' },
-  reviewBannerDetail: { marginTop: 2, fontSize: 12.5 },
-  filterBar: {
-    minHeight: 60,
-    paddingHorizontal: 20,
-    flexDirection: 'row',
-    alignItems: 'center',
-    justifyContent: 'space-between',
-    gap: 12,
-  },
-  summary: { flex: 1, minWidth: 0, fontSize: 13 },
-  refreshError: { paddingHorizontal: 20, paddingTop: 8, fontSize: 13, fontWeight: '600' },
   filter: {
-    minHeight: 44,
-    borderRadius: 22,
+    minWidth: 48,
+    height: 48,
+    paddingHorizontal: 12,
+    borderRadius: 14,
     borderWidth: StyleSheet.hairlineWidth,
-    paddingHorizontal: 14,
+    flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'center',
+    gap: 5,
   },
-  filterLabel: { fontSize: 13, fontWeight: '600' },
-  filterWithIcon: { flexDirection: 'row', alignItems: 'center', gap: 6 },
+  filterLabel: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
+  reviewBanner: {
+    minHeight: 48,
+    marginHorizontal: 20,
+    marginBottom: 10,
+    borderRadius: 14,
+    paddingHorizontal: 14,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 10,
+  },
+  reviewBannerTitle: { flex: 1, fontSize: 15, fontWeight: '600' },
+  summary: { paddingHorizontal: 20, paddingBottom: 8, fontSize: 13 },
+  refreshError: { paddingHorizontal: 20, paddingBottom: 8, fontSize: 13, fontWeight: '600' },
   sectionHeader: {
     minHeight: 44,
     paddingHorizontal: 20,
@@ -533,7 +522,7 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  sectionTitle: { flex: 1, minWidth: 0, marginRight: 12, fontSize: 14, fontWeight: '700' },
+  sectionTitle: { flex: 1, minWidth: 0, marginEnd: 12, fontSize: 14, fontWeight: '700' },
   sectionTotal: {
     flexShrink: 1,
     fontSize: 12,
@@ -562,7 +551,6 @@ const styles = StyleSheet.create({
   rowTop: { flexDirection: 'row', alignItems: 'baseline', gap: 12 },
   merchant: { flex: 1, minWidth: 0, fontSize: 16, lineHeight: 21, fontWeight: '600' },
   amount: {
-    minWidth: 116,
     flexShrink: 0,
     textAlign: 'right',
     fontSize: 15,

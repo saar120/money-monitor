@@ -221,9 +221,6 @@ export default function NetWorthScreen() {
           </Text>
         </View>
       </View>
-      <Text style={[styles.note, { color: colors.secondary }]}>
-        {t('calculatedOnYourMacFromConnectedAccountsAssetsAndLiabilities')}
-      </Text>
     </ScrollView>
   );
 }

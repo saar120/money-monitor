@@ -559,6 +559,10 @@ const fullLiabilityMap = computed(() => {
       </DropdownMenuRoot>
     </Teleport>
 
+    <p v-if="netWorth.error.value || history.error.value" class="ledger-notice" role="alert">
+      {{ t('couldNotLoad') }} <button @click="refreshAll">{{ t('retry') }}</button>
+    </p>
+
     <!-- Stale rates warning -->
     <div
       v-if="nw?.ratesStale"
@@ -649,7 +653,10 @@ const fullLiabilityMap = computed(() => {
               class="h-full w-full"
             />
             <Skeleton v-else-if="netWorth.loading.value" class="h-full w-full rounded-lg" />
-            <p v-else class="text-text-secondary text-[14px] text-center py-12">
+            <p
+              v-else-if="!netWorth.error.value"
+              class="text-text-secondary text-[14px] text-center py-12"
+            >
               {{ t('noDataYet') }}
             </p>
           </div>
@@ -714,7 +721,10 @@ const fullLiabilityMap = computed(() => {
             />
           </div>
           <Skeleton v-else-if="history.loading.value" class="h-48 w-full rounded-lg" />
-          <p v-else class="text-[14px] text-text-secondary text-center py-12">
+          <p
+            v-else-if="!history.error.value"
+            class="text-[14px] text-text-secondary text-center py-12"
+          >
             {{ t('startTrackingAssets') }}
           </p>
         </div>
@@ -803,7 +813,7 @@ const fullLiabilityMap = computed(() => {
         </section>
 
         <p
-          v-else-if="!netWorth.loading.value"
+          v-else-if="!netWorth.loading.value && !netWorth.error.value"
           class="text-text-secondary text-[14px] text-center py-6"
         >
           {{ t('noAssetsTracked') }}
@@ -922,7 +932,7 @@ const fullLiabilityMap = computed(() => {
           </template>
         </section>
         <p
-          v-else-if="!netWorth.loading.value"
+          v-else-if="!netWorth.loading.value && !netWorth.error.value"
           class="text-text-secondary text-[14px] text-center py-6"
         >
           {{ t('noLiabilitiesTracked') }}

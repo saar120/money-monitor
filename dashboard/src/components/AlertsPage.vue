@@ -137,7 +137,7 @@ async function testAlert() {
 </script>
 
 <template>
-  <div class="alerts-page w-full min-w-0 max-w-2xl mx-auto space-y-7 pb-6">
+  <div class="alerts-page w-full min-w-0 space-y-7 pb-6">
     <Teleport to="#toolbar-actions">
       <div class="flex flex-wrap items-center gap-2">
         <div v-if="success" class="flex items-center gap-1.5 text-[14px] text-success">
@@ -229,6 +229,10 @@ async function testAlert() {
 <style scoped>
 .alerts-page {
   line-height: 1.6;
+}
+/* The page toolbar already draws the rule above the first group. */
+.alerts-page > :deep(:first-child > :last-child) {
+  border-top: 0;
 }
 .alerts-page :deep(input) {
   min-height: var(--control-height);

@@ -1,6 +1,6 @@
 import assert from 'node:assert/strict';
 import test from 'node:test';
-import { getReviewViewState } from './review-state.ts';
+import { getReviewViewState, reviewConfirmation } from './review-state.ts';
 
 test('keeps a non-empty review queue in loading state until its transactions arrive', () => {
   assert.equal(
@@ -52,4 +52,15 @@ test('waits for the final mutation before showing review completion', () => {
     }),
     'loading',
   );
+});
+
+test('a retried confirmation still sends the category picked before the failed save', () => {
+  assert.deepEqual(reviewConfirmation('Groceries'), { category: 'Groceries', reviewed: true });
+  assert.deepEqual(reviewConfirmation(), { reviewed: true });
+  assert.deepEqual(reviewConfirmation('Groceries', false), {
+    category: 'Groceries',
+    included: false,
+    reviewed: true,
+  });
+  assert.deepEqual(reviewConfirmation(undefined, false), { reviewed: true });
 });

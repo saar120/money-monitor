@@ -184,6 +184,24 @@ export function appendMessage(
   return msg;
 }
 
+/** Drop a question whose reply failed, so sending it again doesn't save it twice. */
+export function removeLastUserMessage(id: string): void {
+  if (!z.uuid().safeParse(id).success) return;
+  const path = sessionPath(id);
+  try {
+    const lines = readLines(path);
+    const last = JSON.parse(lines.at(-1) ?? '{}') as Partial<SessionMessage>;
+    if (lines.length < 2 || last.type !== 'message' || last.role !== 'user') return;
+    const kept = lines.slice(0, -1);
+    const meta = JSON.parse(kept[0]) as SessionMeta;
+    // The title came from this question if it was the first.
+    if (kept.length === 1) meta.title = DEFAULT_TITLE;
+    writeMeta(path, meta, kept);
+  } catch {
+    // Keeping the question is harmless; the reply stream must still end.
+  }
+}
+
 export function getSessionMessages(
   id: string,
 ): Array<{ role: 'user' | 'assistant'; content: string }> | null {

@@ -36,6 +36,9 @@ name: Chart range resets and sheet gesture interruptions
     id: review-category
 - tapOn:
     id: category-option-Dining
+- assertVisible: '8 transactions to review'
+- tapOn:
+    id: looks-right
 - assertVisible: '7 transactions to review'
 - launchApp:
     clearState: true
@@ -44,10 +47,11 @@ name: Chart range resets and sheet gesture interruptions
 - tapOn: 'Explore, tab, 3 of 4'
 - tapOn:
     id: explore-card-net-worth
+# The chart's press activates after a hold, so the drag has to be slow.
 - swipe:
     start: 80%, 45%
     end: 15%, 45%
-    duration: 600
+    duration: 4500
 - assertNotVisible:
     text: Now
     id: net-worth-live-date

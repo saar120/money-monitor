@@ -57,7 +57,11 @@ const categorySpending = ref<SummaryItem[]>([]);
 const previousSpending = ref<SummaryItem[]>([]);
 const dailySpending = ref<SummaryItem[]>([]);
 const cashflow = ref<CashflowItem | null>(null);
-const budget = ref<BudgetProgress | null>(null);
+const monthlyBudgets = ref<BudgetProgress[]>([]);
+// Unavailable sources render as unknown, never as zero or "all clear".
+const spendingFailed = ref(false);
+const budgetsFailed = ref(false);
+const attentionFailed = ref(false);
 const reviewCount = ref(0);
 const sinceLastVisit = ref<{ transactions: number; spent: number } | null>(null);
 const visitStartedAt = new Date().toISOString();
@@ -133,13 +137,15 @@ async function refresh() {
   categories.value = value(results[4])?.categories ?? [];
   accounts.value = value(results[5])?.accounts ?? [];
   members.value = value(results[6])?.members ?? [];
-  budget.value =
-    value(results[7])?.progress.find((item) => item.budget.period === 'monthly') ?? null;
+  monthlyBudgets.value =
+    value(results[7])?.progress.filter((item) => item.budget.period === 'monthly') ?? [];
   reviewCount.value = value(results[8])?.count ?? 0;
   netWorth.value = value(results[9])?.total ?? null;
-  if (results.slice(0, 4).some((result) => result.status === 'rejected')) {
-    error.value = t('couldNotLoad');
-  }
+  const failed = (...indexes: number[]) => indexes.some((i) => results[i]!.status === 'rejected');
+  spendingFailed.value = failed(0, 1, 2, 3);
+  budgetsFailed.value = failed(7);
+  attentionFailed.value = failed(5, 8);
+  if (results.some((result) => result.status === 'rejected')) error.value = t('couldNotLoad');
   loading.value = false;
 }
 const { connect } = useSseConnection({
@@ -187,8 +193,24 @@ const staleAccounts = computed(() =>
     return Date.now() - Date.parse(account.lastScrapedAt) > account.stalenessDays * 86_400_000;
   }),
 );
-const budgetNeedsAttention = computed(
-  () => budget.value && (budget.value.isAlertTriggered || budget.value.isOverBudget),
+// Totals match the summary on the Budgets page.
+const budgetTotals = computed(() => {
+  if (!monthlyBudgets.value.length) return null;
+  const planned = monthlyBudgets.value.reduce((sum, item) => sum + item.budget.amount, 0);
+  const spent = monthlyBudgets.value.reduce((sum, item) => sum + item.spent, 0);
+  return { planned, spent, percentage: planned > 0 ? Math.round((spent / planned) * 100) : 0 };
+});
+const budgetsNeedingAttention = computed(() =>
+  monthlyBudgets.value.filter((item) => item.isAlertTriggered || item.isOverBudget),
+);
+// A new profile has nothing to total, so its first step stands alone.
+const noAccounts = computed(() => !loading.value && !error.value && !accounts.value.length);
+const hasAttentionItems = computed(
+  () =>
+    !!sinceLastVisit.value?.transactions ||
+    reviewCount.value > 0 ||
+    budgetsNeedingAttention.value.length > 0 ||
+    staleAccounts.value.length > 0,
 );
 const chartOption = computed(() => {
   const end = Number(
@@ -236,12 +258,18 @@ const chartOption = computed(() => {
       type: 'category' as const,
       boundaryGap: false,
       data: Array.from({ length: end }, (_, index) => String(index + 1).padStart(2, '0')),
-      axisLabel: { color: textSecondary.value, interval: 6, fontSize: 12 },
+      axisLabel: {
+        color: textSecondary.value,
+        // Stay legible whether the month has 3 elapsed days or 31.
+        interval: end <= 8 ? 0 : end <= 16 ? 2 : 6,
+        fontSize: 12,
+      },
       axisLine: { show: false },
       axisTick: { show: false },
     },
     yAxis: {
       type: 'value' as const,
+      splitNumber: 3,
       axisLabel: {
         color: textSecondary.value,
         fontSize: 12,
@@ -360,11 +388,7 @@ function categoryLink(category: string) {
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="refresh">{{ t('retry') }}</button>
     </div>
-    <section
-      v-if="!loading && !error && !accounts.length"
-      class="mb-6 space-y-3 border-b border-separator pb-6"
-      aria-labelledby="first-account-heading"
-    >
+    <section v-if="noAccounts" class="mb-6 space-y-3" aria-labelledby="first-account-heading">
       <h2 id="first-account-heading" class="text-lg font-semibold">
         {{
           language === 'he'
@@ -385,7 +409,7 @@ function categoryLink(category: string) {
         }}</RouterLink></Button
       >
     </section>
-    <div class="home-grid">
+    <div v-if="!noAccounts" class="home-grid">
       <section class="home-main">
         <div class="home-hero">
           <div class="home-hero-top">
@@ -399,10 +423,11 @@ function categoryLink(category: string) {
             class="home-total home-amount-loading skeleton-shimmer"
             aria-hidden="true"
           />
+          <p v-else-if="spendingFailed" class="home-total">—</p>
           <p v-else class="home-total" dir="ltr" aria-live="polite">
             <AnimatedAmount :value="totalSpent" />
           </p>
-          <p v-if="!loading" class="home-comparison">
+          <p v-if="!loading && !spendingFailed" class="home-comparison">
             {{
               spendingDelta === 0
                 ? t('sameAsLastMonth')
@@ -420,8 +445,8 @@ function categoryLink(category: string) {
               /></strong>
               <div
                 class="home-chart-legend"
-                :class="{ invisible: scrubIndex != null }"
-                :aria-hidden="scrubIndex != null"
+                :class="{ invisible: scrubIndex != null || spendingFailed }"
+                :aria-hidden="scrubIndex != null || spendingFailed"
               >
                 <span class="current">{{ t('thisMonth') }}</span>
                 <span v-if="previousSpending.length" class="previous">{{
@@ -444,6 +469,7 @@ function categoryLink(category: string) {
             @keydown="scrubWithKeyboard"
           >
             <div v-if="loading" class="home-chart-loading skeleton-shimmer" aria-hidden="true" />
+            <div v-else-if="spendingFailed" class="home-chart-empty" />
             <div v-else-if="!dailySpending.length" class="home-chart-empty">
               <Receipt :size="28" />
               <span>{{ t('noPostedSpendingYet') }}</span>
@@ -458,25 +484,22 @@ function categoryLink(category: string) {
               @globalout="scrubIndex = null"
             />
           </div>
-          <p id="home-chart-hint" class="home-chart-hint">
-            {{ t('dailyChartHint') }}
-            <span>{{ t('chartKeyboardHint') }}</span>
-          </p>
+          <p id="home-chart-hint" class="sr-only">{{ t('chartKeyboardHint') }}</p>
         </div>
         <div class="home-stats">
           <div>
             <span>{{ t('postedIncome') }}</span
-            ><strong>{{ loading ? '—' : formatCurrency(income) }}</strong>
+            ><strong>{{ loading || spendingFailed ? '—' : formatCurrency(income) }}</strong>
           </div>
           <div>
             <span>{{ t('netCashFlow') }}</span
             ><strong
               :class="{
-                'is-positive': !loading && netCashflow > 0,
-                'is-danger': !loading && netCashflow < 0,
+                'is-positive': !loading && !spendingFailed && netCashflow > 0,
+                'is-danger': !loading && !spendingFailed && netCashflow < 0,
               }"
             >
-              <template v-if="loading">—</template>
+              <template v-if="loading || spendingFailed">—</template>
               <AnimatedAmount v-else :value="netCashflow" />
             </strong>
           </div>
@@ -515,14 +538,17 @@ function categoryLink(category: string) {
               <strong dir="ltr">{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
               ><ArrowRight :size="15" class="row-chevron" />
             </RouterLink>
-            <p v-if="!loading && !topCategories.length" class="ledger-empty">
+            <p v-if="!loading && !spendingFailed && !topCategories.length" class="ledger-empty">
               {{ t('noSpendingThisMonth') }}
             </p>
           </div>
         </section>
       </section>
       <aside class="home-rail">
-        <section class="rail-section home-attention">
+        <section
+          v-if="hasAttentionItems || !(attentionFailed || budgetsFailed)"
+          class="rail-section home-attention"
+        >
           <h2>{{ t('needsAttention') }}</h2>
           <div class="ledger-list attention-list">
             <RouterLink v-if="sinceLastVisit?.transactions" to="/transactions" class="attention-row"
@@ -536,35 +562,31 @@ function categoryLink(category: string) {
             /></RouterLink>
             <RouterLink v-if="reviewCount" to="/insights" class="attention-row"
               ><AlertCircle :size="18" /><span
-                ><strong>{{ reviewCount }} {{ t('toReview') }}</strong
-                ><small>{{ t('cleanFinancialInbox') }}</small></span
+                ><strong>{{ reviewCount }} {{ t('toReview') }}</strong></span
               ><ArrowRight :size="15"
             /></RouterLink>
-            <RouterLink v-if="budgetNeedsAttention" to="/budgets" class="attention-row"
+            <RouterLink
+              v-if="budgetsNeedingAttention.length"
+              :to="{ path: '/budgets', query: { month: selectedMonth } }"
+              class="attention-row"
               ><AlertCircle :size="18" /><span
                 ><strong>{{ t('budgetNeedsAttention') }}</strong
-                ><small>{{ budget?.budget.name }}</small></span
+                ><small>{{
+                  budgetsNeedingAttention.map((item) => item.budget.name).join(', ')
+                }}</small></span
               ><ArrowRight :size="15"
             /></RouterLink>
             <RouterLink v-if="staleAccounts.length" to="/accounts" class="attention-row"
               ><AlertCircle :size="18" /><span
-                ><strong>{{ staleAccounts.length }} {{ t('accountsNeedAttention') }}</strong
-                ><small>{{ t('checkLatestSync') }}</small></span
+                ><strong>{{ staleAccounts.length }} {{ t('accountsNeedAttention') }}</strong></span
               ><ArrowRight :size="15"
             /></RouterLink>
             <div
-              v-if="
-                !loading &&
-                !sinceLastVisit?.transactions &&
-                !reviewCount &&
-                !budgetNeedsAttention &&
-                !staleAccounts.length
-              "
+              v-if="!loading && !attentionFailed && !budgetsFailed && !hasAttentionItems"
               class="attention-row all-clear"
             >
               <CheckCircle2 :size="18" /><span
-                ><strong>{{ t('everythingCurrent') }}</strong
-                ><small>{{ t('noActionNeeded') }}</small></span
+                ><strong>{{ t('everythingCurrent') }}</strong></span
               >
             </div>
           </div>
@@ -576,19 +598,23 @@ function categoryLink(category: string) {
               >{{ t('budgets') }} <ArrowRight :size="15"
             /></RouterLink>
           </div>
-          <div v-if="budget" class="budget-readout">
-            <strong>{{ Math.round(budget.percentage) }}%</strong
+          <div v-if="budgetTotals" class="budget-readout">
+            <strong>{{ budgetTotals.percentage }}%</strong
             ><span
-              >{{ t('ofPlanned') }} {{ formatCurrency(budget.budget.amount) }}
+              >{{ t('ofPlanned') }} {{ formatCurrency(budgetTotals.planned) }}
               {{ t('planned') }}</span
             >
             <div class="budget-track">
-              <span :style="{ width: `${Math.min(100, budget.percentage)}%` }" />
+              <span :style="{ width: `${Math.min(100, budgetTotals.percentage)}%` }" />
             </div>
-            <p>{{ formatCurrency(Math.max(0, budget.remaining)) }} {{ t('remaining') }}</p>
+            <p>
+              {{ formatCurrency(Math.max(0, budgetTotals.planned - budgetTotals.spent)) }}
+              {{ t('remaining') }}
+            </p>
           </div>
+          <p v-else-if="budgetsFailed" class="networth-readout">—</p>
           <RouterLink
-            v-else
+            v-else-if="!loading"
             :to="{ path: '/budgets', query: { month: selectedMonth } }"
             class="rail-empty-link"
             >{{ t('setBudgetForPace') }} <ArrowRight :size="15"
@@ -599,12 +625,11 @@ function categoryLink(category: string) {
             <h2>{{ t('netWorth') }}</h2>
             <RouterLink to="/net-worth">{{ t('details') }} <ArrowRight :size="15" /></RouterLink>
           </div>
-          <RouterLink to="/net-worth" class="networth-readout"
-            ><bdi dir="ltr">{{
+          <p class="networth-readout">
+            <bdi dir="ltr">{{
               netWorth == null ? '—' : `${netWorth < 0 ? '−' : ''}${formatCurrency(netWorth)}`
             }}</bdi>
-            <ArrowRight :size="16"
-          /></RouterLink>
+          </p>
         </section>
       </aside>
     </div>

@@ -47,8 +47,10 @@ async function loadSessions() {
   try {
     const { sessions: data } = await getChatSessions();
     sessions.value = data;
+    return data;
   } catch {
     failure.value = 'load';
+    return undefined;
   }
 }
 

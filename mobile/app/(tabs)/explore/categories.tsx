@@ -82,7 +82,7 @@ function CategoryList({
           maxFontSizeMultiplier={1.3}
           style={[styles.contextLabel, { color: colors.secondary }]}
         >
-          {t('activeCategoryCount', { count: categories.length })}
+          {t('vsLastMonth')}
         </Text>
         <MonthPicker
           month={snapshot.month}
@@ -102,7 +102,7 @@ function CategoryList({
           return (
             <MotionRow key={category.name}>
               <DetailLink
-                accessibilityLabel={categoryLabel(category.name)}
+                accessibilityLabel={`${categoryLabel(category.name)}, ${formatUnsignedMoney(category.spent, homeCurrency)}, ${delta === 0 ? t('noChange') : formatMoney(delta, homeCurrency)} ${t('vsLastMonth')}`}
                 accessibilityHint={t('opensDetailsForMonth', {
                   name: categoryLabel(category.name),
                   month: formatMonthShort(snapshot.month),
@@ -124,22 +124,22 @@ function CategoryList({
                     {categoryLabel(category.name)}
                   </Text>
                   <Text
-                    allowFontScaling={false}
-                    style={[styles.delta, { color: delta > 0 ? colors.warning : colors.positive }]}
+                    maxFontSizeMultiplier={1.4}
+                    style={[
+                      styles.delta,
+                      {
+                        color:
+                          delta > 0 ? colors.warning : delta < 0 ? colors.positive : colors.secondary,
+                      },
+                    ]}
                   >
                     {delta === 0 ? t('noChange') : formatMoney(delta, homeCurrency)}
                   </Text>
                 </View>
                 {fontScale < 1.5 ? <Sparkline color={category.color} values={values} /> : null}
                 <View style={styles.amounts}>
-                  <Text allowFontScaling={false} style={[styles.amount, { color: colors.text }]}>
+                  <Text maxFontSizeMultiplier={1.4} style={[styles.amount, { color: colors.text }]}>
                     {formatUnsignedMoney(category.spent, homeCurrency)}
-                  </Text>
-                  <Text
-                    maxFontSizeMultiplier={1.2}
-                    style={[styles.previous, { color: colors.secondary }]}
-                  >
-                    {t('vsLastMonth')}
                   </Text>
                 </View>
                 <DirectionalChevron direction="forward" size={11} tintColor={colors.tertiary} />
@@ -175,7 +175,6 @@ const styles = StyleSheet.create({
   delta: { marginTop: 4, fontSize: 12, fontWeight: '600', fontVariant: ['tabular-nums'] },
   amounts: { minWidth: 86, alignItems: 'flex-end' },
   amount: { fontSize: 14, fontWeight: '700', fontVariant: ['tabular-nums'] },
-  previous: { marginTop: 3, fontSize: 10.5 },
   loading: { minHeight: 260, alignItems: 'center', justifyContent: 'center' },
   loadingText: { marginTop: 12, fontSize: 14 },
 });

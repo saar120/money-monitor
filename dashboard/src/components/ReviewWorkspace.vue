@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
-import { Check, X, ChevronRight } from 'lucide-vue-next';
+import { Check, X } from 'lucide-vue-next';
 import {
   getCategories,
   getMembers,
@@ -50,7 +50,7 @@ const copy = computed(() =>
         of: 'מתוך',
       }
     : {
-        title: 'To review',
+        title: 'to review',
         reason: 'Why this needs review',
         category: 'Category',
         owner: 'Owner',
@@ -79,7 +79,8 @@ function date(item: Transaction) {
     language.value === 'he' ? 'he-IL' : 'en-GB',
   );
 }
-async function load() {
+// `nextIndex` keeps the queue moving at every window width after a confirm.
+async function load(nextIndex?: number) {
   loading.value = true;
   error.value = '';
   try {
@@ -92,7 +93,7 @@ async function load() {
     });
     if (offset.value > 0 && offset.value >= result.pagination.total) {
       offset.value = Math.floor(Math.max(0, result.pagination.total - 1) / 50) * 50;
-      await load();
+      await load(nextIndex);
       return;
     }
     items.value = result.transactions;
@@ -100,10 +101,16 @@ async function load() {
     reviewCount.value = total.value;
     if (!items.value.some((item) => item.id === selectedId.value)) {
       selectedId.value = null;
-      if (window.innerWidth > 1120 && items.value[0]) select(items.value[0]);
+      const next =
+        nextIndex != null
+          ? items.value[Math.min(nextIndex, items.value.length - 1)]
+          : window.innerWidth > 1120
+            ? items.value[0]
+            : undefined;
+      if (next) select(next);
     }
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } catch {
+    error.value = t('couldNotLoad');
   } finally {
     loading.value = false;
   }
@@ -111,6 +118,7 @@ async function load() {
 async function confirm() {
   const item = selected.value;
   if (!item || !draftCategory.value) return;
+  const position = items.value.indexOf(item);
   saving.value = true;
   error.value = '';
   try {
@@ -122,10 +130,14 @@ async function confirm() {
     if (ownerType !== updated.expenseOwnerType || ownerMemberId !== updated.expenseOwnerMemberId) {
       updated = (await updateTransactionOwner(item.id, { ownerType, ownerMemberId })).transaction;
     }
-    if (updated.ignored === draftIncluded.value)
-      await ignoreTransaction(item.id, !draftIncluded.value);
+    // Resolving lets the category decide inclusion, unless the user chose otherwise.
+    const category = categories.value.find((entry) => entry.name === item.category);
+    const excludedByHand = item.ignored && !category?.ignoredFromStats;
+    const changedHere = draftIncluded.value === item.ignored;
+    const ignored = changedHere ? !draftIncluded.value : excludedByHand || updated.ignored;
+    if (ignored !== updated.ignored) await ignoreTransaction(item.id, ignored);
     selectedId.value = null;
-    await load();
+    await load(position);
   } catch (cause) {
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
@@ -149,16 +161,16 @@ onMounted(async () => {
 <template>
   <div class="review-page">
     <div class="review-toolbar">
-      <p>
+      <p v-if="!error || items.length">
         <strong>{{ total }}</strong> {{ copy.title }}
       </p>
     </div>
     <p v-if="error" class="ledger-notice" role="alert">
-      {{ error }} <button @click="load">{{ t('retry') }}</button>
+      {{ error }} <button @click="load()">{{ t('retry') }}</button>
     </p>
     <div class="review-workspace">
       <div class="review-list">
-        <table>
+        <table v-if="items.length || !error">
           <thead>
             <tr>
               <th scope="col">{{ t('date') }}</th>
@@ -189,7 +201,6 @@ onMounted(async () => {
                   @click.stop="select(item)"
                 >
                   <bdi dir="auto">{{ item.description }}</bdi>
-                  <ChevronRight :size="14" aria-hidden="true" />
                 </button>
               </td>
               <td>
@@ -203,7 +214,7 @@ onMounted(async () => {
             </tr>
           </tbody>
         </table>
-        <div v-if="!loading && !items.length" class="review-empty">
+        <div v-if="!loading && !error && !items.length" class="review-empty">
           <Check :size="26" /><strong>{{ copy.allClear }}</strong
           ><span>{{ copy.empty }}</span>
         </div>
@@ -237,7 +248,9 @@ onMounted(async () => {
             </button>
           </div>
           <div class="review-inspector-body">
-            <h4 dir="auto">{{ selected.description }}</h4>
+            <h4>
+              <bdi dir="auto">{{ selected.description }}</bdi>
+            </h4>
             <p class="review-detail-date">
               <bdi dir="ltr">{{ date(selected) }}</bdi>
             </p>
@@ -248,10 +261,12 @@ onMounted(async () => {
             >
             <div class="review-reason">
               <span>{{ copy.reason }}</span>
-              <p>{{ selected.reviewReason ?? t('needsReview') }}</p>
-              <small v-if="selected.confidence != null"
-                >{{ Math.round(selected.confidence * 100) }}%</small
-              >
+              <p>
+                {{ selected.reviewReason ?? t('needsReview')
+                }}<template v-if="selected.confidence != null">
+                  · {{ Math.round(selected.confidence * 100) }}%</template
+                >
+              </p>
             </div>
             <label
               ><span>{{ copy.category }}</span
@@ -368,7 +383,7 @@ th:nth-child(3) {
 }
 th:last-child {
   width: 20%;
-  text-align: start;
+  text-align: end;
 }
 td {
   height: 62px;
@@ -381,8 +396,6 @@ td {
 .review-row-open {
   display: flex;
   align-items: center;
-  justify-content: space-between;
-  gap: 12px;
   width: 100%;
   min-width: 0;
   text-align: start;
@@ -393,13 +406,6 @@ td {
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-}
-.review-row-open svg {
-  flex: none;
-  color: var(--text-tertiary);
-}
-:global([dir='rtl'] .review-row-open svg) {
-  transform: rotate(180deg);
 }
 td:nth-child(2) {
   color: var(--text-primary);
@@ -419,9 +425,6 @@ tbody tr:focus-visible {
   text-align: end !important;
   font-weight: 600;
   font-variant-numeric: tabular-nums;
-}
-.negative {
-  color: var(--destructive) !important;
 }
 .positive {
   color: var(--success) !important;
@@ -541,9 +544,8 @@ tbody tr:focus-visible {
   display: grid;
   grid-template-columns: minmax(0, 1fr);
   align-items: center;
-  gap: 12px;
+  gap: 8px;
   padding-block: 8px;
-  border-bottom: 1px solid color-mix(in srgb, var(--separator) 65%, transparent);
 }
 .review-inspector-body select {
   width: 100%;
@@ -557,7 +559,7 @@ tbody tr:focus-visible {
   text-align: start;
 }
 .review-check {
-  margin-top: 0;
+  margin-top: 8px;
   align-self: start;
   max-height: calc(100dvh - var(--banner-height, 0px) - 140px);
   display: flex;

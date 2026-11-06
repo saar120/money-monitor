@@ -10,6 +10,7 @@ import {
   listSessions,
   deleteSession,
   appendMessage,
+  removeLastUserMessage,
   getSessionMessages,
   beginSessionReply,
   endSessionReply,
@@ -75,9 +76,11 @@ export async function aiRoutes(app: FastifyInstance) {
 
       let assistantResponse = '';
       let chart: AdvisorChart | undefined;
+      let failed = false;
 
       try {
         for await (const event of chat(conversationHistory)) {
+          if (event.type === 'error') failed = true;
           if (event.type === 'chart') {
             const valid = advisorChartSchema.safeParse(event.chart);
             if (valid.success) {
@@ -99,9 +102,11 @@ export async function aiRoutes(app: FastifyInstance) {
           appendMessage(data.sessionId, 'assistant', assistantResponse, chart);
         }
       } catch (err) {
+        failed = true;
         const message = err instanceof Error ? err.message : 'AI chat failed';
         reply.raw.write(`event: error\ndata: ${JSON.stringify({ text: message })}\n\n`);
       } finally {
+        if (failed && !assistantResponse && !chart) removeLastUserMessage(data.sessionId);
         reply.raw.end();
       }
     } finally {

@@ -20,7 +20,7 @@ import {
   type Account,
   type Member,
 } from '@/api/client';
-import { formatCurrency } from '@/lib/format';
+import { formatCurrency, formatDateTime } from '@/lib/format';
 import { language, t } from '@/lib/language';
 import { useRoute } from 'vue-router';
 import { nextTick } from 'vue';
@@ -143,12 +143,12 @@ function balance(account: Account) {
     : `${account.balance < 0 ? '−' : ''}${formatCurrency(account.balance)}`;
 }
 function date(value: string | null) {
-  return value
-    ? new Date(value).toLocaleString(language.value === 'he' ? 'he-IL' : 'en-GB', {
-        dateStyle: 'short',
-        timeStyle: 'short',
-      })
-    : copy.value.never;
+  return value ? formatDateTime(value) : copy.value.never;
+}
+// Card rows show the card's last digits, styled apart so they never read as money.
+function accountValue(account: Account) {
+  if (account.accountType === 'bank') return balance(account);
+  return account.accountNumber ? `•••• ${account.accountNumber.slice(-4)}` : '';
 }
 function select(account: Account) {
   selectedId.value = account.id;
@@ -173,8 +173,8 @@ async function load(createdAccountId?: number) {
     if (created) select(created);
     else if (window.innerWidth > 1120 && selectedId.value == null && accounts.value[0])
       select(accounts.value[0]);
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.loadError;
+  } catch {
+    error.value = copy.value.loadError;
   } finally {
     loading.value = false;
   }
@@ -250,7 +250,7 @@ onMounted(async () => {
         ><Plus :size="16" />{{ copy.add }}</Button
       >
     </Teleport>
-    <div class="category-workspace-top">
+    <div v-if="!error || accounts.length" class="category-workspace-top">
       <span
         ><strong>{{ accounts.length }}</strong> {{ copy.count }}</span
       >
@@ -280,13 +280,16 @@ onMounted(async () => {
                 ></span
               >
             </span>
-            <span class="account-list-value" dir="ltr">{{
-              account.accountType === 'bank' ? balance(account) : (account.accountNumber ?? '—')
-            }}</span>
+            <span
+              class="account-list-value"
+              :class="{ 'is-identifier': account.accountType !== 'bank' }"
+              dir="ltr"
+              >{{ accountValue(account) }}</span
+            >
           </button>
         </div>
         <p v-if="loading" class="category-list-empty">{{ t('loadingTransactions') }}</p>
-        <p v-else-if="!accounts.length" class="category-list-empty">{{ copy.empty }}</p>
+        <p v-else-if="!error && !accounts.length" class="category-list-empty">{{ copy.empty }}</p>
       </section>
       <button
         v-if="selected"
@@ -311,10 +314,8 @@ onMounted(async () => {
                 : 'Your account is added. Choose Sync now to load your transactions. Your bank may ask for a verification code.'
             }}
           </p>
-          <p class="account-inspector-balance" dir="ltr">
-            {{
-              selected.accountType === 'bank' ? balance(selected) : (selected.accountNumber ?? '—')
-            }}
+          <p v-if="selected.accountType === 'bank'" class="account-inspector-balance" dir="ltr">
+            {{ balance(selected) }}
           </p>
           <label
             ><span>{{ copy.name }}</span
@@ -406,7 +407,9 @@ onMounted(async () => {
           </button>
         </div>
       </aside>
-      <div v-else class="category-inspector-placeholder">{{ copy.choose }}</div>
+      <div v-else-if="accounts.length" class="category-inspector-placeholder">
+        {{ copy.choose }}
+      </div>
     </div>
     <AccountDialogs ref="dialogs" @changed="load" />
     <AlertDialog v-model:open="deleteOpen"

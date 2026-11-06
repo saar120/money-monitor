@@ -127,12 +127,6 @@ onUnmounted(() => {
     class="subscriptions-page min-w-0 w-full max-w-5xl mx-auto space-y-8"
     :aria-label="t('subscriptionsAndServices')"
   >
-    <header>
-      <p class="text-[14px] text-text-secondary">
-        {{ t('recurringIntro') }}
-      </p>
-    </header>
-
     <div v-if="loading" class="space-y-3" :aria-label="t('loadingTransactions')">
       <Skeleton class="h-20 w-full" />
       <Skeleton class="h-60 w-full" />
@@ -146,7 +140,7 @@ onUnmounted(() => {
       <div v-if="result.totals.length" class="subscription-totals">
         <div v-for="total in result.totals" :key="total.currencyCode" class="subscription-total">
           <p class="text-[12px] text-text-secondary">
-            {{ t('estimatedMonthly') }} · {{ total.currencyCode }}
+            {{ t('estimatedMonthly') }}
           </p>
           <p class="mt-1 text-[28px] font-semibold tabular-nums text-text-primary">
             {{ formatAmount(total.monthlyCost, total.currencyCode) }}
@@ -230,9 +224,6 @@ onUnmounted(() => {
       </div>
       <section v-if="result.suggestions.length" :aria-label="t('reviewRecurring')">
         <h2 class="mb-2 text-lg font-semibold text-text-primary">{{ t('reviewRecurring') }}</h2>
-        <p class="mb-3 text-sm text-text-secondary">
-          {{ t('recurringReviewHint') }}
-        </p>
         <div class="divide-y divide-separator/60 border-y border-separator/60">
           <div
             v-for="payment in result.suggestions"
@@ -391,9 +382,9 @@ onUnmounted(() => {
   line-height: 1.3;
 }
 .subscription-totals {
-  padding: 24px 16px;
+  padding: 0 16px 24px;
   gap: 32px;
-  border-block: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
 }
 .subscription-total {
   padding: 0;

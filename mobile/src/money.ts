@@ -2,14 +2,17 @@ import { currentLanguage, currentLocale } from './locale-state.ts';
 import { t } from './translations.ts';
 
 function hebrewCurrency(value: number, currencyCode: string, precise: boolean, signed: boolean) {
-  return new Intl.NumberFormat('he-IL', {
+  const amount = new Intl.NumberFormat('he-IL', {
     style: 'currency',
     currency: currencyCode,
     currencyDisplay: 'narrowSymbol',
     minimumFractionDigits: precise ? 2 : 0,
     maximumFractionDigits: precise ? 2 : 0,
-    signDisplay: signed ? 'exceptZero' : 'never',
-  }).format(value);
+  }).format(Math.abs(value));
+  // Hermes on iOS ignores signDisplay, so format the magnitude and place the sign ourselves.
+  if (!signed || value === 0) return amount;
+  // The left-to-right mark keeps the sign on the number's left inside right-to-left text.
+  return amount.replace(/\d/, (digit) => `\u200e${value > 0 ? '+' : '-'}${digit}`);
 }
 
 function shekelAmount(value: number, precise: boolean) {
@@ -51,7 +54,8 @@ export function formatMoney(value: number, currencyCode = 'ILS', precise = false
 }
 
 export function formatUnsignedMoney(value: number, currencyCode = 'ILS'): string {
-  if (currentLanguage() === 'he') return hebrewCurrency(Math.abs(value), currencyCode, false, false);
+  if (currentLanguage() === 'he')
+    return hebrewCurrency(Math.abs(value), currencyCode, false, false);
   const formatted = formatMoney(Math.abs(value), currencyCode);
   return formatted.startsWith('+') ? formatted.slice(1) : formatted;
 }

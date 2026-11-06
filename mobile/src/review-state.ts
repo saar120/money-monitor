@@ -18,3 +18,15 @@ export function getReviewViewState({
   if (!hasCurrent) return 'complete';
   return 'transaction';
 }
+
+// The picked category is the only signal of a change: a card held after a failed save already shows it.
+// The Mac sets inclusion from a new category, so an exclusion shown on the card goes with it.
+export function reviewConfirmation(
+  category?: string,
+  included?: boolean,
+): { category?: string; included?: boolean; reviewed: true } {
+  if (!category) return { reviewed: true };
+  return included === undefined
+    ? { category, reviewed: true }
+    : { category, included, reviewed: true };
+}

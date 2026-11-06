@@ -398,7 +398,8 @@ onUnmounted(() => {
       </div>
     </SettingsRow>
 
-    <SettingsRow v-if="snapshot?.enabled" :label="copy.pair" vertical>
+    <!-- A code in flight is spent once a phone asks to join: approval takes this row's place. -->
+    <SettingsRow v-if="snapshot?.enabled && !activeRequests.length" :label="copy.pair" vertical>
       <div class="w-full space-y-5">
         <div class="flex flex-wrap items-center justify-between gap-3">
           <p class="text-[12px] text-text-secondary">
@@ -503,7 +504,7 @@ onUnmounted(() => {
             <Button
               size="sm"
               variant="secondary"
-              :disabled="pairing || !snapshot?.pairingAvailable"
+              :disabled="pairing || !snapshot?.pairingAvailable || !!activeRequests.length"
               @click="createPairing(device)"
             >
               <QrCode class="mr-1 h-3.5 w-3.5" /> {{ localized('Re-pair', 'חיבור מחדש') }}

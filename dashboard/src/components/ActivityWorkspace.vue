@@ -1,6 +1,15 @@
 <script setup lang="ts">
 import SelectField from '@/components/ui/select/SelectField.vue';
-import { computed, nextTick, onMounted, onUnmounted, ref, watch } from 'vue';
+import {
+  computed,
+  nextTick,
+  onBeforeUnmount,
+  onMounted,
+  onUnmounted,
+  ref,
+  shallowRef,
+  watch,
+} from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Button } from '@/components/ui/button';
 import { useReviewCount } from '@/composables/useReviewCount';
@@ -68,18 +77,19 @@ onClickOutside(
   },
   { ignore: ['.ui-select-content'] },
 );
-const hasFilters = computed(
+const activeFilterCount = computed(
   () =>
-    reviewOnly.value ||
-    filterCategory.value !== 'all' ||
-    filterAccount.value !== 'all' ||
-    filterOwner.value !== 'all' ||
-    filterType.value !== 'all' ||
-    filterStatus.value !== 'all' ||
-    filterDirection.value !== 'all' ||
-    filterInclusion.value !== 'all' ||
-    !!startDate.value ||
-    !!endDate.value,
+    [
+      reviewOnly.value,
+      filterCategory.value !== 'all',
+      filterAccount.value !== 'all',
+      filterOwner.value !== 'all',
+      filterType.value !== 'all',
+      filterStatus.value !== 'all',
+      filterDirection.value !== 'all',
+      filterInclusion.value !== 'all',
+      !!startDate.value || !!endDate.value,
+    ].filter(Boolean).length,
 );
 function clearFilters() {
   filterCategory.value =
@@ -104,18 +114,10 @@ async function confirmReview() {
   const row = selected.value;
   const category = draftCategory.value;
   if (!row || !category || saving.value) return;
-  await saveTransaction();
-  if (error.value) return;
-  saving.value = true;
-  try {
-    await resolveTransaction(row.id, category);
-    await refreshReviewCount();
-    await load();
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.saveFailed;
-  } finally {
-    saving.value = false;
-  }
+  // Edits that failed on this row go with the confirmation, which must not skip them.
+  const patch: SavePatch = { ...failureFor(row.id)?.patch, resolve: category };
+  if (dateChanged.value) patch.effectiveDate = draftEffectiveDate.value;
+  await queueSave(row, patch);
 }
 const rows = ref<Transaction[]>([]);
 const accounts = ref<Account[]>([]);
@@ -125,6 +127,7 @@ const total = ref(0);
 const hasMore = ref(false);
 const loading = ref(true);
 const error = ref('');
+const loadFailed = ref(false);
 const selectedId = ref<number | null>(null);
 const linkedTransaction = ref<Transaction | null>(null);
 const requestedTransactionId = ref(
@@ -135,10 +138,20 @@ const draftOwner = ref('unassigned');
 const draftIncluded = ref(true);
 const draftMemo = ref('');
 const saved = ref(false);
-const saving = ref(false);
+const pendingSaves = ref(0);
+const saving = computed(() => pendingSaves.value > 0);
+const saveFailures = shallowRef<SaveFailure[]>([]);
+const selectedFailure = computed(() => failureFor(selectedId.value));
+// What the user last asked for on the selected row. New edits compare against this,
+// not the saved row, so changing back during a slow save still counts as a change.
+const intended = { category: '', owner: '', included: true, memo: '' };
+const otherFailures = computed(() =>
+  saveFailures.value.filter((failure) => failure.row.id !== selectedId.value),
+);
 const localEdits = new Map<number, Partial<Transaction>>();
 let requestId = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
+let savedTimer: ReturnType<typeof setTimeout> | undefined;
 
 const copy = computed(() =>
   language.value === 'he'
@@ -189,15 +202,17 @@ const selected = computed(
     rows.value.find((row) => row.id === selectedId.value) ??
     (linkedTransaction.value?.id === selectedId.value ? linkedTransaction.value : null),
 );
-const hasChanges = computed(() => {
+// A date moves the transaction between months, so it waits for an explicit Save:
+// typing passes through valid dates on the way to the intended one.
+function isCompleteDate(value: string) {
+  return !value || value >= '2000-01-01';
+}
+const dateChanged = computed(() => {
   const row = selected.value;
   return (
     row != null &&
-    (draftCategory.value !== (row.category ?? '') ||
-      draftOwner.value !== ownerValue(row) ||
-      draftIncluded.value === row.ignored ||
-      draftEffectiveDate.value !== (row.effectiveDate ?? '') ||
-      (isPreview.value && draftMemo.value !== (row.memo ?? '')))
+    isCompleteDate(draftEffectiveDate.value) &&
+    draftEffectiveDate.value !== (row.effectiveDate ?? '')
   );
 });
 const accountMap = computed(
@@ -243,6 +258,15 @@ const monthLabel = computed(() =>
     },
   ),
 );
+const hasDateRange = computed(() => !!startDate.value || !!endDate.value);
+const searching = computed(() => search.value.trim().length > 0);
+const scopeLabel = computed(() => {
+  if (hasDateRange.value)
+    return [startDate.value, endDate.value]
+      .map((value) => (value ? dateLabel(value) : '…'))
+      .join(' – ');
+  return searching.value ? t('allDates') : monthLabel.value;
+});
 function monthEnd(value: string) {
   const [year, number] = value.split('-').map(Number) as [number, number];
   return `${value}-${new Date(Date.UTC(year, number, 0)).getUTCDate()}`;
@@ -259,21 +283,32 @@ function signedAmount(row: Transaction) {
   const sign = row.chargedAmount < 0 ? '−' : row.chargedAmount > 0 ? '+' : '';
   return `${sign}${formatAmount(row.chargedAmount, row.chargedCurrency)}`;
 }
+function ownerFields(owner: string) {
+  return owner.startsWith('member:')
+    ? { expenseOwnerType: 'member' as OwnerType, expenseOwnerMemberId: Number(owner.slice(7)) }
+    : { expenseOwnerType: owner as OwnerType, expenseOwnerMemberId: null };
+}
 function ownerValue(row: Transaction) {
   return row.expenseOwnerType === 'member'
     ? `member:${row.expenseOwnerMemberId ?? ''}`
     : row.expenseOwnerType;
 }
 function selectRow(row: Transaction) {
+  if (row.id === selectedId.value) return;
+  // Leaving a row keeps a pending date rather than discarding it.
+  saveDate();
   selectedId.value = row.id;
-  draftCategory.value = row.category ?? '';
-  draftOwner.value = ownerValue(row);
-  draftIncluded.value = !row.ignored;
-  draftMemo.value = row.memo ?? '';
-  draftEffectiveDate.value = row.effectiveDate ?? '';
+  // A queued or failed edit stays on screen so Retry and later edits agree with it.
+  const failed = { ...queuedPatches.get(row.id), ...failureFor(row.id)?.patch };
+  intended.category = draftCategory.value = failed.category ?? row.category ?? '';
+  intended.owner = draftOwner.value = failed.owner ?? ownerValue(row);
+  intended.included = draftIncluded.value = failed.included ?? !row.ignored;
+  intended.memo = draftMemo.value = failed.memo ?? row.memo ?? '';
+  draftEffectiveDate.value = failed.effectiveDate ?? row.effectiveDate ?? '';
   saved.value = false;
 }
 function closeDetails() {
+  saveDate();
   const id = selectedId.value;
   selectedId.value = null;
   if (id != null)
@@ -283,11 +318,16 @@ async function load(append = false) {
   const id = ++requestId;
   loading.value = true;
   error.value = '';
+  loadFailed.value = false;
   try {
     const filters: TransactionFilters = {
-      startDate: startDate.value || (endDate.value ? undefined : `${month.value}-01`),
-      endDate: endDate.value || (startDate.value ? undefined : monthEnd(month.value)),
-      search: search.value || undefined,
+      startDate:
+        startDate.value ||
+        (hasDateRange.value || searching.value ? undefined : `${month.value}-01`),
+      endDate:
+        endDate.value ||
+        (hasDateRange.value || searching.value ? undefined : monthEnd(month.value)),
+      search: search.value.trim() || undefined,
       category: filterCategory.value === 'all' ? undefined : filterCategory.value,
       accountId: filterAccount.value === 'all' ? undefined : Number(filterAccount.value),
       needsReview: reviewOnly.value || undefined,
@@ -326,62 +366,163 @@ async function load(append = false) {
           ? linkedTransaction.value
           : null);
       if (requested) selectRow(requested);
-      else if (rows.value[0] && window.innerWidth > 1120) selectRow(rows.value[0]);
       requestedTransactionId.value = null;
     }
-  } catch (cause) {
-    if (id === requestId) error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } catch {
+    if (id === requestId) {
+      loadFailed.value = true;
+      error.value = t('couldNotLoad');
+      // Rows from the previous month or filter must not pass as this one's.
+      if (!append) {
+        rows.value = [];
+        total.value = 0;
+        hasMore.value = false;
+        selectedId.value = null;
+      }
+    }
   } finally {
     if (id === requestId) loading.value = false;
   }
 }
-async function saveTransaction() {
-  const row = selected.value;
-  if (!row || saving.value) return;
-  const [ownerType, memberId] = draftOwner.value.startsWith('member:')
-    ? (['member', Number(draftOwner.value.slice(7))] as const)
-    : ([draftOwner.value as OwnerType, null] as const);
-  saving.value = true;
-  error.value = '';
+type SavePatch = {
+  category?: string;
+  owner?: string;
+  included?: boolean;
+  memo?: string;
+  effectiveDate?: string;
+  resolve?: string;
+};
+type SaveFailure = { row: Transaction; merchant: string; patch: SavePatch };
+// Each edit queues only the field it changed and saves run in order, so a slow save
+// cannot swallow a later edit or replay a value the server has since changed.
+let saveQueue: Promise<unknown> = Promise.resolve();
+const queuedPatches = new Map<number, SavePatch>();
+const queuedResults = new Map<number, Transaction>();
+function queueSave(row: Transaction, patch: SavePatch) {
+  pendingSaves.value++;
+  queuedPatches.set(row.id, { ...queuedPatches.get(row.id), ...patch });
+  const run = saveQueue
+    .then(() => persistPatch(row, patch))
+    .finally(() => {
+      pendingSaves.value--;
+      if (pendingSaves.value) return;
+      queuedPatches.clear();
+      queuedResults.clear();
+    });
+  saveQueue = run;
+  return run;
+}
+function failureFor(rowId: number | null) {
+  return saveFailures.value.find((failure) => failure.row.id === rowId);
+}
+function addSaveFailure(row: Transaction, patch: SavePatch) {
+  saveFailures.value = [
+    ...saveFailures.value.filter((failure) => failure.row.id !== row.id),
+    {
+      row,
+      merchant: normalizeMerchant(row.description),
+      patch: { ...failureFor(row.id)?.patch, ...patch },
+    },
+  ];
+}
+function clearSavedFields(rowId: number, patch: SavePatch) {
+  saveFailures.value = saveFailures.value.flatMap((failure) => {
+    if (failure.row.id !== rowId) return [failure];
+    const left = Object.fromEntries(
+      Object.entries(failure.patch).filter(([field]) => !(field in patch)),
+    );
+    return Object.keys(left).length ? [{ ...failure, patch: left }] : [];
+  });
+}
+function retrySave(failure: SaveFailure) {
+  void queueSave(failure.row, failure.patch);
+}
+function saveDate() {
+  if (selected.value && dateChanged.value)
+    void queueSave(selected.value, { effectiveDate: draftEffectiveDate.value });
+}
+function isExcludedByHand(row: Transaction) {
+  const category = categories.value.find((item) => item.name === row.category);
+  return row.ignored && !category?.ignoredFromStats;
+}
+async function persistPatch(row: Transaction, patch: SavePatch) {
+  // Queued saves may outlive the row in the list, so the last result is kept for them.
+  const latest =
+    rows.value.find((item) => item.id === row.id) ??
+    (linkedTransaction.value?.id === row.id ? linkedTransaction.value : null) ??
+    queuedResults.get(row.id) ??
+    row;
   try {
     if (isPreview.value) {
-      const edit: Partial<Transaction> = {
-        category: draftCategory.value || null,
-        expenseOwnerType: ownerType,
-        expenseOwnerMemberId: memberId,
-        ignored: !draftIncluded.value,
-        memo: draftMemo.value || null,
-        effectiveDate: draftEffectiveDate.value || null,
-      };
-      localEdits.set(row.id, edit);
+      const edit: Partial<Transaction> = {};
+      if (patch.category !== undefined) edit.category = patch.category || null;
+      if (patch.owner !== undefined) Object.assign(edit, ownerFields(patch.owner));
+      if (patch.included !== undefined) edit.ignored = !patch.included;
+      if (patch.memo !== undefined) edit.memo = patch.memo || null;
+      if (patch.effectiveDate !== undefined) edit.effectiveDate = patch.effectiveDate || null;
+      localEdits.set(row.id, { ...localEdits.get(row.id), ...edit });
       rows.value = rows.value.map((item) => (item.id === row.id ? { ...item, ...edit } : item));
+      clearSavedFields(row.id, patch);
     } else {
-      let updated = row;
-      if (draftCategory.value !== (row.category ?? '')) {
-        updated = (await updateTransactionCategory(row.id, draftCategory.value || null))
+      let updated = latest;
+      if (patch.category !== undefined && patch.category !== (latest.category ?? '')) {
+        updated = (await updateTransactionCategory(row.id, patch.category || null)).transaction;
+        // A category sets inclusion on the server; an exclusion chosen by hand stays.
+        if (isExcludedByHand(latest) && !updated.ignored)
+          updated = (await ignoreTransaction(row.id, true)).transaction;
+      }
+      if (patch.owner !== undefined && patch.owner !== ownerValue(updated)) {
+        const { expenseOwnerType, expenseOwnerMemberId } = ownerFields(patch.owner);
+        updated = (
+          await updateTransactionOwner(row.id, {
+            ownerType: expenseOwnerType,
+            ownerMemberId: expenseOwnerMemberId,
+          })
+        ).transaction;
+      }
+      if (patch.included !== undefined && patch.included === updated.ignored) {
+        updated = (await ignoreTransaction(row.id, !patch.included)).transaction;
+      }
+      if (
+        patch.effectiveDate !== undefined &&
+        patch.effectiveDate !== (updated.effectiveDate ?? '')
+      ) {
+        updated = (await updateTransactionEffectiveDate(row.id, patch.effectiveDate || null))
           .transaction;
       }
-      if (draftOwner.value !== ownerValue(updated)) {
-        updated = (await updateTransactionOwner(row.id, { ownerType, ownerMemberId: memberId }))
-          .transaction;
+      if (patch.resolve !== undefined) {
+        const excludedByHand = isExcludedByHand(updated);
+        updated = (await resolveTransaction(row.id, patch.resolve)).transaction;
+        if (excludedByHand && !updated.ignored)
+          updated = (await ignoreTransaction(row.id, true)).transaction;
       }
-      if (draftIncluded.value === updated.ignored) {
-        updated = (await ignoreTransaction(row.id, !draftIncluded.value)).transaction;
-      }
-      if (draftEffectiveDate.value !== (row.effectiveDate ?? '')) {
-        updated = (await updateTransactionEffectiveDate(row.id, draftEffectiveDate.value || null))
-          .transaction;
-      }
+      queuedResults.set(row.id, updated);
       rows.value = rows.value.map((item) => (item.id === row.id ? updated : item));
       if (linkedTransaction.value?.id === row.id) linkedTransaction.value = updated;
-      if (updated.reportingDate !== row.reportingDate) await load();
+      clearSavedFields(row.id, patch);
+      // The last save shows what the server decided, unless a newer edit is waiting.
+      if (selectedId.value === row.id && pendingSaves.value === 1) {
+        const failed = failureFor(row.id)?.patch;
+        if (failed?.category === undefined && draftCategory.value === intended.category)
+          intended.category = draftCategory.value = updated.category ?? '';
+        if (failed?.owner === undefined && draftOwner.value === intended.owner)
+          intended.owner = draftOwner.value = ownerValue(updated);
+        if (failed?.included === undefined && draftIncluded.value === intended.included)
+          intended.included = draftIncluded.value = !updated.ignored;
+      }
+      if (updated.needsReview !== latest.needsReview) void refreshReviewCount();
+      if (patch.resolve !== undefined || updated.reportingDate !== latest.reportingDate)
+        await load();
     }
-    saved.value = selectedId.value === row.id;
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.saveFailed;
-  } finally {
-    saving.value = false;
+    if (selectedId.value === row.id) showSaved();
+  } catch {
+    addSaveFailure(row, patch);
   }
+}
+function showSaved() {
+  saved.value = true;
+  clearTimeout(savedTimer);
+  savedTimer = setTimeout(() => (saved.value = false), 2000);
 }
 function closeFilters(event: KeyboardEvent) {
   if (filterElement.value?.querySelector('[role="combobox"][aria-expanded="true"]')) return;
@@ -402,6 +543,8 @@ function onKeys(event: KeyboardEvent) {
       filterOpen.value = false;
       return;
     }
+    // Escape cancels: a date still being typed must not move the transaction.
+    draftEffectiveDate.value = selected.value?.effectiveDate ?? '';
     closeDetails();
     return;
   }
@@ -452,11 +595,14 @@ onMounted(async () => {
   }
   await load();
 });
+onBeforeUnmount(saveDate);
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeys);
   clearTimeout(searchTimer);
+  clearTimeout(savedTimer);
 });
 watch(month, () => {
+  saveDate();
   startDate.value = endDate.value = '';
   void load();
 });
@@ -475,9 +621,26 @@ watch(
     sortBy,
     sortOrder,
   ],
-  () => void load(),
+  () => {
+    saveDate();
+    void load();
+  },
 );
+// Category, owner and inclusion save as soon as they change.
+watch([draftCategory, draftOwner, draftIncluded, draftMemo], () => {
+  const row = selected.value;
+  if (!row) return;
+  const patch: SavePatch = {};
+  if (draftCategory.value !== intended.category) patch.category = draftCategory.value;
+  if (draftOwner.value !== intended.owner) patch.owner = draftOwner.value;
+  if (draftIncluded.value !== intended.included) patch.included = draftIncluded.value;
+  if (isPreview.value && draftMemo.value !== intended.memo) patch.memo = draftMemo.value;
+  if (!Object.keys(patch).length) return;
+  Object.assign(intended, patch);
+  void queueSave(row, patch);
+});
 watch(search, () => {
+  saveDate();
   clearTimeout(searchTimer);
   searchTimer = setTimeout(() => void load(), 250);
 });
@@ -523,11 +686,21 @@ watch(search, () => {
     <section class="proto-workspace">
       <div class="proto-toolbar">
         <div class="proto-month">
-          <button type="button" :aria-label="t('previous')" @click="shiftMonth(-1)">
+          <button
+            type="button"
+            :aria-label="t('previous')"
+            :disabled="searching && !hasDateRange"
+            @click="shiftMonth(-1)"
+          >
             <ChevronRight v-if="language === 'he'" :size="17" /><ChevronLeft v-else :size="17" />
           </button>
-          <span>{{ monthLabel }}</span>
-          <button type="button" :aria-label="t('next')" @click="shiftMonth(1)">
+          <span>{{ scopeLabel }}</span>
+          <button
+            type="button"
+            :aria-label="t('next')"
+            :disabled="searching && !hasDateRange"
+            @click="shiftMonth(1)"
+          >
             <ChevronLeft v-if="language === 'he'" :size="17" /><ChevronRight v-else :size="17" />
           </button>
         </div>
@@ -539,7 +712,9 @@ watch(search, () => {
             @click="filterOpen = !filterOpen"
           >
             <SlidersHorizontal :size="17" />{{ copy.filter
-            }}<span v-if="hasFilters" class="proto-filter-dot" />
+            }}<span v-if="activeFilterCount" class="proto-filter-count">{{
+              activeFilterCount
+            }}</span>
           </button>
           <Transition name="filter-morph">
             <div v-if="filterOpen" class="proto-filter-popover">
@@ -574,7 +749,7 @@ watch(search, () => {
                   ]"
               /></label>
               <label
-                ><span>{{ t('allTypes') }}</span
+                ><span>{{ t('accountType') }}</span
                 ><SelectField
                   v-model="filterType"
                   :options="[
@@ -655,13 +830,23 @@ watch(search, () => {
       <div class="proto-content">
         <div class="proto-title">
           <h1>{{ t('activity') }}</h1>
-          <span>{{ total }} {{ t('transactions') }}</span>
+          <span v-if="!loadFailed">{{ total }} {{ t('transactions') }}</span>
         </div>
-        <div v-if="error" class="proto-error" role="alert">
+        <div v-if="loadFailed" class="proto-error" role="alert">
           {{ error }} <button type="button" @click="load()">{{ t('retry') }}</button>
         </div>
+        <div
+          v-for="failure in otherFailures"
+          :key="failure.row.id"
+          class="proto-error"
+          role="alert"
+        >
+          <bdi dir="auto">{{ failure.merchant }}</bdi
+          >: {{ copy.saveFailed }}
+          <button type="button" @click="retrySave(failure)">{{ t('retry') }}</button>
+        </div>
         <div class="proto-table-scroll" tabindex="0" :aria-label="t('activity')">
-          <table class="proto-table">
+          <table v-if="rows.length || !loadFailed" class="proto-table">
             <colgroup>
               <col class="proto-date-col" />
               <col class="proto-merchant-col" />
@@ -766,8 +951,16 @@ watch(search, () => {
           <div v-if="loading && !rows.length" class="proto-empty">
             {{ t('loadingTransactions') }}
           </div>
-          <div v-else-if="!loading && !rows.length" class="proto-empty">
+          <div v-else-if="!loading && !loadFailed && !rows.length" class="proto-empty">
             {{ t('noTransactionsFound') }}
+            <button
+              v-if="activeFilterCount"
+              type="button"
+              class="proto-clear"
+              @click="clearFilters"
+            >
+              {{ t('clear') }}
+            </button>
           </div>
           <button
             v-if="hasMore"
@@ -815,14 +1008,17 @@ watch(search, () => {
           <p v-if="selected.needsReview" class="proto-review">
             {{ selected.reviewReason || t('needsReview') }}
           </p>
-          <dl class="transaction-facts">
-            <div>
+          <dl
+            v-if="
+              selected.status !== 'completed' ||
+              selected.installmentTotal ||
+              selected.originalCurrency !== selected.chargedCurrency
+            "
+            class="transaction-facts"
+          >
+            <div v-if="selected.status !== 'completed'">
               <dt>{{ t('status') }}</dt>
-              <dd>{{ selected.status === 'completed' ? t('completed') : t('pending') }}</dd>
-            </div>
-            <div v-if="selected.type">
-              <dt>{{ t('type') }}</dt>
-              <dd>{{ selected.type }}</dd>
+              <dd>{{ t('pending') }}</dd>
             </div>
             <div v-if="selected.installmentTotal">
               <dt>{{ t('installment') }}</dt>
@@ -887,24 +1083,32 @@ watch(search, () => {
               >
             </div>
           </div>
-          <p v-if="error" class="proto-error" role="alert">{{ error }}</p>
+          <p v-if="selectedFailure" class="proto-error" role="alert">
+            {{ copy.saveFailed }}
+            <button type="button" @click="retrySave(selectedFailure)">{{ t('retry') }}</button>
+          </p>
           <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
           <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
         </div>
-        <div class="proto-inspector-actions">
+        <div
+          v-if="(selected.needsReview && !isPreview) || dateChanged"
+          class="proto-inspector-actions"
+        >
           <Button
             v-if="selected.needsReview && !isPreview"
             variant="secondary"
-            class="w-full mb-2"
+            class="w-full"
+            :class="{ 'mb-2': dateChanged }"
             :disabled="saving || !draftCategory"
             @click="confirmReview"
             >{{ language === 'he' ? 'אישור התנועה' : 'Confirm review' }}</Button
           >
           <button
+            v-if="dateChanged"
             type="button"
             class="proto-save"
-            :disabled="saving || !hasChanges"
-            @click="saveTransaction"
+            :disabled="saving"
+            @click="saveDate"
           >
             {{ saving ? copy.saving : copy.save }}
           </button>
@@ -1087,6 +1291,11 @@ watch(search, () => {
 .proto-inspector-head button:hover {
   background: var(--bg-tertiary);
 }
+.proto-month button:disabled {
+  opacity: 0.35;
+  background: transparent;
+  cursor: default;
+}
 .proto-filter-wrap {
   position: relative;
 }
@@ -1106,11 +1315,18 @@ watch(search, () => {
 .proto-filter-button:hover {
   background: var(--bg-tertiary);
 }
-.proto-filter-dot {
-  width: 6px;
-  height: 6px;
-  border-radius: 50%;
+.proto-filter-count {
+  display: inline-grid;
+  place-items: center;
+  min-width: 18px;
+  height: 18px;
+  padding-inline: 5px;
+  border-radius: 9px;
   background: var(--accent);
+  color: var(--primary-foreground);
+  font-size: 11px;
+  font-weight: 600;
+  font-variant-numeric: tabular-nums;
 }
 .proto-filter-popover {
   position: absolute;
@@ -1402,6 +1618,10 @@ watch(search, () => {
   padding: 70px 20px;
   color: var(--text-tertiary);
   text-align: center;
+}
+.proto-empty .proto-clear {
+  display: block;
+  margin: 8px auto 0;
 }
 .proto-more {
   display: block;

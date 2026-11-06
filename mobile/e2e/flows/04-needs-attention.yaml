@@ -5,19 +5,27 @@ name: Needs-attention fixture is reproducible
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: needs-attention
+- tapOn:
+    id: tab-home
 - assertVisible:
     id: home-screen
 - assertVisible: '₪26,840'
 - assertVisible:
-    id: budget-status
+    id: home-attention
+- tapOn:
+    id: budget-attention
+- assertVisible:
+    id: budgets-screen
+- tapOn:
+    point: 7%, 10%
 - scrollUntilVisible:
     element:
-      id: home-attention
+      id: budget-status
     direction: DOWN
 - scrollUntilVisible:
     element:
       id: account-attention
-    direction: DOWN
+    direction: UP
 - tapOn:
     id: account-attention
 - assertVisible:

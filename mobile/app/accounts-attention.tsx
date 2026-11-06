@@ -24,14 +24,17 @@ export default function AccountsAttentionScreen() {
         testID="account-attention-screen"
       >
         <Text style={[styles.title, { color: colors.text }]}>{t('refreshOnYourMac')}</Text>
-        <Text style={[styles.intro, { color: colors.secondary }]}>
-          {t('theseSourcesNeedAttentionBeforeTheirBalancesAreCurrent')}
-        </Text>
         <View style={[styles.list, { backgroundColor: colors.surface }]}>
-          {accounts.map((account) => (
+          {accounts.map((account, index) => (
             <View
               key={account.account}
-              style={[styles.row, { borderBottomColor: colors.separator }]}
+              style={[
+                styles.row,
+                {
+                  borderBottomColor: colors.separator,
+                  borderBottomWidth: index === accounts.length - 1 ? 0 : StyleSheet.hairlineWidth,
+                },
+              ]}
             >
               <SymbolView name="exclamationmark.circle.fill" size={18} tintColor={colors.danger} />
               <View style={styles.copy}>
@@ -49,14 +52,12 @@ export default function AccountsAttentionScreen() {
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 20, paddingBottom: 72 },
   title: { marginTop: 12, fontSize: 28, lineHeight: 34, fontWeight: '700', letterSpacing: -0.5 },
-  intro: { marginTop: 8, fontSize: 15, lineHeight: 21 },
   list: { marginTop: 24, borderRadius: 16, paddingHorizontal: 14, overflow: 'hidden' },
   row: {
     minHeight: 68,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 12,
-    borderBottomWidth: StyleSheet.hairlineWidth,
   },
   copy: { flex: 1, minWidth: 0, paddingVertical: 12 },
   account: { fontSize: 16, lineHeight: 21, fontWeight: '600' },

@@ -1,8 +1,18 @@
 import * as SecureStore from 'expo-secure-store';
 import { useLocales } from 'expo-localization';
-import { createContext, Fragment, useContext, useEffect, useState, type ReactNode } from 'react';
+import { router, usePathname } from 'expo-router';
+import {
+  createContext,
+  Fragment,
+  useContext,
+  useEffect,
+  useRef,
+  useState,
+  type ReactNode,
+} from 'react';
 import { I18nManager } from 'react-native';
 import { choiceFromNativeDirection, setActiveLanguage, type Language } from './locale-state';
+import { rootTabFromPath } from './navigation-state';
 
 export type LanguageChoice = 'system' | 'en' | 'he';
 export type { Language } from './locale-state';
@@ -22,6 +32,15 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const deviceLanguage: Language = locales[0]?.languageCode === 'he' ? 'he' : 'en';
   const [choice, setChoiceState] = useState<LanguageChoice | null>(null);
   const language = !choice || choice === 'system' ? deviceLanguage : choice;
+  const pathname = usePathname();
+  const reopenSettings = useRef(false);
+
+  // The language key below remounts navigation at a root tab; return to the screen that changed it.
+  useEffect(() => {
+    if (!reopenSettings.current || !rootTabFromPath(pathname)) return;
+    reopenSettings.current = false;
+    router.push('/settings');
+  }, [pathname]);
 
   useEffect(() => {
     const fallback = choiceFromNativeDirection(deviceLanguage, I18nManager.isRTL);
@@ -45,7 +64,9 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [choice, language]);
 
   function setChoice(next: LanguageChoice) {
-    setActiveLanguage(next === 'system' ? deviceLanguage : next);
+    const nextLanguage = next === 'system' ? deviceLanguage : next;
+    reopenSettings.current = nextLanguage !== language;
+    setActiveLanguage(nextLanguage);
     setChoiceState(next);
     void SecureStore.setItemAsync(STORAGE_KEY, next).catch(() => undefined);
   }

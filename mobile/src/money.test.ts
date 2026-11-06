@@ -1,9 +1,11 @@
+import { setActiveLanguage } from './locale-state.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
   categoryTransactions,
   cashFlowSummary,
   formatCompactNumber,
+  formatMoney,
   formatSpendingChange,
   monthlyCategoryNames,
   overviewCashFlow,
@@ -85,4 +87,15 @@ test('monthly chart categories stay stable when a different month is selected', 
 
   assert.deepEqual(monthlyCategoryNames(months), ['Housing', 'Dining', 'Groceries']);
   assert.deepEqual(monthlyCategoryNames([...months].reverse()), ['Housing', 'Dining', 'Groceries']);
+});
+
+test('Hebrew signed amounts keep their sign beside the number', () => {
+  setActiveLanguage('he');
+  try {
+    assert.match(formatMoney(3430), /\+3,430/);
+    assert.match(formatMoney(-310), /-310/);
+    assert.doesNotMatch(formatMoney(0), /[+-]\d/);
+  } finally {
+    setActiveLanguage('en');
+  }
 });

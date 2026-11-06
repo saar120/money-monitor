@@ -444,9 +444,8 @@ export function useOverviewMonth(initialMonth?: string) {
       .then((value) => {
         if (current) setOverview(value);
       })
-      .catch((caught) => {
-        if (current)
-          setError(caught instanceof Error ? caught.message : t('thisMonthCouldNotBeLoaded'));
+      .catch(() => {
+        if (current) setError(t('thisMonthCouldNotBeLoaded'));
       })
       .finally(() => {
         if (current) setLoading(false);
@@ -590,9 +589,9 @@ export function useActivityTransactions(
           setTransactions(filterActivityPage(page.transactions, criteria));
           setNextCursor(page.nextCursor);
         })
-        .catch((caught) => {
+        .catch(() => {
           if (!controller.signal.aborted) {
-            setError(caught instanceof Error ? caught.message : t('transactionsCouldNotBeLoaded'));
+            setError(t('transactionsCouldNotBeLoaded'));
           }
         })
         .finally(() => {
@@ -645,9 +644,9 @@ export function useActivityTransactions(
         setTransactions((current) => [...current, ...page.transactions]);
         setNextCursor(page.nextCursor);
       })
-      .catch((caught) => {
+      .catch(() => {
         if (!controller.signal.aborted && activeRequestKey.current === key)
-          setError(caught instanceof Error ? caught.message : t('moreTransactionsCouldNotLoad'));
+          setError(t('moreTransactionsCouldNotLoad'));
       })
       .finally(() => {
         if (moreRequest.current === controller) moreRequest.current = null;
@@ -755,9 +754,9 @@ export function useTransaction(id: string | undefined) {
     setError(null);
     void fetchTransactionDetail(money.credential, id, controller.signal)
       .then(setTransaction)
-      .catch((caught) => {
+      .catch(() => {
         if (!controller.signal.aborted) {
-          setError(caught instanceof Error ? caught.message : t('transactionCouldNotBeLoaded'));
+          setError(t('transactionCouldNotBeLoaded'));
         }
       })
       .finally(() => {

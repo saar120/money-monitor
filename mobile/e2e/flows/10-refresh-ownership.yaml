@@ -6,6 +6,8 @@ name: Pull-to-refresh belongs to the initiating tab
     arguments:
       MM_FIXTURE_SCENARIO: normal
       MM_FIXTURE_REFRESH_DELAY_MS: 10000
+- tapOn:
+    id: tab-home
 - assertVisible:
     id: home-screen
 - swipe:

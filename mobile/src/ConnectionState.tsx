@@ -8,7 +8,7 @@ import { useAppColors } from './theme';
 
 export function ConnectionState() {
   const colors = useAppColors();
-  const { status, error, reload } = useMoneyData();
+  const { status, reload } = useMoneyData();
   const loading = status === 'loading';
   const unpaired = status === 'unpaired';
 
@@ -41,29 +41,30 @@ export function ConnectionState() {
           ? t('moneyMonitorIsReadingTheLatestPrivateSnapshot')
           : unpaired
             ? t('scanThePairingCodeInMoneyMonitorSettingsYourDataAndCalculationsStayOnTheMac')
-            : (error ?? t('checkThatMoneyMonitorAndTailscaleAreRunningOnYourMac'))}
+            : t('checkThatMoneyMonitorAndTailscaleAreRunningOnYourMac')}
       </Text>
       {!loading ? (
         <View style={styles.actions}>
+          {/* A failed load usually just needs a retry; re-pairing is the fallback. */}
           <Pressable
             accessibilityRole="button"
-            onPress={() => router.push('/scanner')}
+            onPress={() => (unpaired ? router.push('/scanner') : void reload())}
             style={({ pressed }) => [
               styles.primary,
               { backgroundColor: colors.accent, opacity: pressed ? 0.72 : 1 },
             ]}
           >
             <Text style={[styles.primaryLabel, { color: colors.onAccent }]}>
-              {unpaired ? t('scanPairingCode') : t('pairAgain')}
+              {unpaired ? t('scanPairingCode') : t('tryAgain')}
             </Text>
           </Pressable>
           {!unpaired ? (
             <Pressable
               accessibilityRole="button"
-              onPress={() => void reload()}
+              onPress={() => router.push('/scanner')}
               style={styles.secondary}
             >
-              <Text style={[styles.secondaryLabel, { color: colors.accent }]}>{t('tryAgain')}</Text>
+              <Text style={[styles.secondaryLabel, { color: colors.accent }]}>{t('pairAgain')}</Text>
             </Pressable>
           ) : null}
           <Pressable

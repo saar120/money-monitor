@@ -26,7 +26,7 @@ const browser = await puppeteer.launch({
     process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
   headless: true,
 });
-const baseUrl = process.env.MM_DASHBOARD_URL ?? 'http://127.0.0.1:5173';
+const baseUrl = process.env.MM_DASHBOARD_URL ?? 'http://localhost:5173';
 const errors = [];
 try {
   for (const [width, language, motion, theme] of [
@@ -64,6 +64,9 @@ try {
       console.error(`Browser error: ${e.message}`);
     });
     await page.setRequestInterception(true);
+    const patches = [];
+    let patchDelay = 0;
+    let patchFails = false;
     page.on('request', (req) => {
       const u = new URL(req.url());
       if (!u.pathname.startsWith('/api/')) return req.continue();
@@ -82,15 +85,24 @@ try {
         reviewReason: 'Check category',
       };
       let data = {};
-      if (/^\/api\/transactions\/\d+$/.test(u.pathname) && req.method() === 'PATCH')
-        data = {
+      if (req.method() === 'PATCH' && u.pathname.startsWith('/api/transactions/')) {
+        const [id, action = 'category'] = u.pathname.split('/').slice(3);
+        patches.push(`${id}:${action}`);
+        if (patchFails) return req.respond({ status: 500, body: '{"error":"Synthetic failure"}' });
+        const body = JSON.stringify({
           transaction: {
             ...row,
-            id: Number(u.pathname.split('/').at(-1)),
+            id: Number(id),
+            description: ['Sample market', 'Sample cafe', 'Sample bakery', 'Sample restaurant'][
+              id - 1
+            ],
             ...JSON.parse(req.postData()),
           },
-        };
-      else if (u.pathname === '/api/settings') data = { needsSetup: false, demoMode: true };
+        });
+        const respond = () => req.respond({ status: 200, contentType: 'application/json', body });
+        return patchDelay ? void setTimeout(respond, patchDelay) : respond();
+      }
+      if (u.pathname === '/api/settings') data = { needsSetup: false, demoMode: true };
       else if (u.pathname === '/api/accounts')
         data = { accounts: [{ id: 1, displayName: 'Sample account', isActive: true }] };
       else if (u.pathname === '/api/categories')
@@ -170,16 +182,73 @@ try {
     await page.goto(`${baseUrl}/transactions?month=2026-09`, { waitUntil: 'networkidle0' });
     await page.waitForSelector('.proto-table tbody tr[tabindex]');
     assert.equal(await page.$eval('html', (el) => el.dataset.theme), theme);
+    if (width === 1440) {
+      const category = '.proto-fields > label [role=combobox]';
+      const dateInput = '.proto-more-details input[type="date"]';
+      const patched = async (entry) => {
+        for (let i = 0; i < 100 && !patches.includes(entry); i++)
+          await new Promise((resolve) => setTimeout(resolve, 20));
+        assert(patches.includes(entry), `${entry} was sent: ${patches.join(', ')}`);
+      };
+      // Autosave leaves a pending date alone; leaving the row saves it.
+      await page.click('#proto-row-1');
+      await page.waitForSelector(dateInput);
+      await page.waitForFunction(
+        () =>
+          !document
+            .querySelector('.proto-inspector')
+            .classList.contains('detail-panel-enter-active'),
+      );
+      await page.$eval(dateInput, (el) => {
+        el.value = '2026-09-20';
+        el.dispatchEvent(new Event('input', { bubbles: true }));
+      });
+      await selectOption(page, category, 'dining');
+      await patched('1:category');
+      assert(!patches.includes('1:effective-date'), 'Autosave does not commit a pending date');
+      await page.click('#proto-row-2');
+      await patched('1:effective-date');
+      // A second edit made during a slow save survives moving to another row.
+      patchDelay = 300;
+      await selectOption(page, category, 'groceries');
+      await page.click('.proto-include input');
+      await page.click('#proto-row-3');
+      await patched('2:ignore');
+      // Changing back during a slow save sends the correction too.
+      patches.length = 0;
+      await selectOption(page, category, 'dining');
+      await selectOption(page, category, 'groceries');
+      for (let i = 0; i < 100 && patches.length < 2; i++)
+        await new Promise((resolve) => setTimeout(resolve, 20));
+      assert.deepEqual(patches, ['3:category', '3:category'], 'A correction is saved');
+      patchDelay = 0;
+      await new Promise((resolve) => setTimeout(resolve, 350));
+      // A failed save stays visible on other rows and Retry resends it.
+      patchFails = true;
+      patches.length = 0;
+      await selectOption(page, category, 'dining');
+      await page.waitForSelector('.proto-inspector .proto-error');
+      await page.click('#proto-row-4');
+      await page.waitForSelector('.proto-content > .proto-error');
+      assert.match(
+        await page.$eval('.proto-content > .proto-error', (el) => el.textContent),
+        /bakery/,
+      );
+      patchFails = false;
+      patches.length = 0;
+      await page.click('.proto-content > .proto-error button');
+      await page.waitForSelector('.proto-error', { hidden: true });
+      assert.deepEqual(patches, ['3:category'], 'Retry resends the failed edit, not another row');
+      await page.goto(`${baseUrl}/transactions?month=2026-09`, { waitUntil: 'networkidle0' });
+      await page.waitForSelector('.proto-table tbody tr[tabindex]');
+    }
     await page.click('.proto-table tbody tr[tabindex]');
     await page.waitForSelector('.proto-inspector');
     await page.waitForFunction(
       () =>
         !document.querySelector('.proto-inspector').classList.contains('detail-panel-enter-active'),
     );
-    assert(
-      await page.$eval('.proto-save', (el) => el.disabled),
-      'Unchanged transaction cannot be saved',
-    );
+    assert(!(await page.$('.proto-save')), 'Category and owner save without a Save button');
     assert(
       await page.$('.proto-secondary-fields [role=combobox]'),
       'Owner is available directly in the inspector',
@@ -189,19 +258,18 @@ try {
       'Effective date is available directly',
     );
     await selectOption(page, '.proto-fields > label [role=combobox]', 'dining');
-    await page.click('.proto-save');
     await page.waitForSelector('.proto-saved');
-    assert(
-      await page.$eval('.proto-save', (el) => el.disabled),
-      'Save settles back to the unchanged state',
-    );
     assert.equal(
       await page.$eval('#proto-row-1 .proto-category', (el) => el.textContent.trim()),
       language === 'he' ? 'מסעדות' : 'Dining',
     );
     await selectOption(page, '.proto-fields > label [role=combobox]', 'groceries');
-    await page.click('.proto-save');
-    await page.waitForFunction(() => document.querySelector('.proto-save').disabled);
+    await page.waitForFunction(
+      (label) =>
+        document.querySelector('#proto-row-1 .proto-category').textContent.trim() === label,
+      {},
+      language === 'he' ? 'מצרכים' : 'Groceries',
+    );
     if (width === 1440)
       assert.equal(
         await page.$eval('.proto-mobile-date', (el) => getComputedStyle(el).display),

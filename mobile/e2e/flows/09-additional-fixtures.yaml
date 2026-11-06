@@ -5,9 +5,15 @@ name: Inbox-zero, no-budget, and slower-spending states stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: inbox-zero
+- tapOn:
+    id: tab-home
 - assertNotVisible:
     id: start-review
 - openLink: 'moneymonitor://review'
+# iOS asks before opening an app from a link; an unanswered prompt blocks later flows.
+- tapOn:
+    text: Open
+    optional: true
 - assertVisible:
     id: review-complete
 - assertVisible: 'All caught up'
@@ -15,6 +21,8 @@ name: Inbox-zero, no-budget, and slower-spending states stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: no-budget
+- tapOn:
+    id: tab-home
 - assertVisible:
     id: no-budget-state
 - assertNotVisible:
@@ -23,4 +31,6 @@ name: Inbox-zero, no-budget, and slower-spending states stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: slower-spending
+- tapOn:
+    id: tab-home
 - assertVisible: '₪5,320 slower than last month’s pace'

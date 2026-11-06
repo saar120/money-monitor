@@ -81,7 +81,8 @@ function AppLayout() {
               }}
             >
               <Stack.Screen name="index" options={{ headerShown: false }} />
-              <Stack.Screen name="(tabs)" options={{ headerShown: false }} />
+              {/* The launch redirect replaces index with the tabs; without this they slide in sideways. */}
+              <Stack.Screen name="(tabs)" options={{ animation: 'none', headerShown: false }} />
               <Stack.Screen
                 name="scanner"
                 options={{ headerShown: false, presentation: 'fullScreenModal' }}
@@ -97,6 +98,7 @@ function AppLayout() {
               />
               <Stack.Screen name="transaction/[id]" options={{ title: t('transaction') }} />
               <Stack.Screen name="net-worth" options={{ title: t('netWorth') }} />
+              <Stack.Screen name="budgets" options={{ title: t('budgets') }} />
               <Stack.Screen name="settings" options={{ title: t('settings') }} />
               <Stack.Screen
                 name="accounts-attention"

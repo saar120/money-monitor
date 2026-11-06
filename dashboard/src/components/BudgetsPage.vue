@@ -48,6 +48,7 @@ const expandedBudgetId = ref<number | null>(null);
 const categories = ref<Category[]>([]);
 const loading = ref(false);
 const error = ref('');
+const loadFailed = ref(false);
 let requestId = 0;
 const activePeriod = ref<'monthly' | 'yearly'>('monthly');
 
@@ -103,6 +104,7 @@ async function loadData() {
   const id = ++requestId;
   loading.value = true;
   error.value = '';
+  loadFailed.value = false;
   try {
     const [progressRes, catRes] = await Promise.all([
       getBudgetProgress(false, `${selectedMonth.value}-01`),
@@ -111,8 +113,11 @@ async function loadData() {
     if (id !== requestId) return;
     progressData.value = progressRes.progress;
     categories.value = catRes.categories;
-  } catch (e: unknown) {
-    if (id === requestId) error.value = e instanceof Error ? e.message : 'Failed to load budgets';
+  } catch {
+    if (id === requestId) {
+      loadFailed.value = true;
+      error.value = t('couldNotLoad');
+    }
   } finally {
     if (id === requestId) loading.value = false;
   }
@@ -256,6 +261,11 @@ function setActivePeriod(v: unknown) {
   if (v === 'monthly' || v === 'yearly') activePeriod.value = v;
 }
 
+// Skip the category line when it would only repeat the budget's own name.
+function budgetCategories(p: BudgetProgress) {
+  const labels = p.budget.categoryNames.map((n) => categoryMap.value.get(n)?.label ?? n);
+  return labels.length === 1 && labels[0] === p.budget.name ? '' : labels.join(', ');
+}
 function progressColor(percentage: number, neutral = false): string {
   if (percentage >= 100) return 'var(--destructive)';
   if (percentage >= 80) return 'var(--warning)';
@@ -290,7 +300,10 @@ function progressColor(percentage: number, neutral = false): string {
       </div>
     </Teleport>
 
-    <p v-if="error" class="text-[14px] text-destructive mb-3">{{ error }}</p>
+    <p v-if="error" class="ledger-notice" role="alert">
+      {{ error }}
+      <button v-if="loadFailed" @click="loadData">{{ t('retry') }}</button>
+    </p>
 
     <!-- Loading -->
     <div v-if="loading && progressData.length === 0" class="space-y-5">
@@ -304,7 +317,7 @@ function progressColor(percentage: number, neutral = false): string {
 
     <!-- Empty state -->
     <div
-      v-else-if="progressData.length === 0 && !loading"
+      v-else-if="progressData.length === 0 && !loading && !loadFailed"
       class="flex flex-col items-center justify-center flex-1 gap-5"
     >
       <Wallet class="h-10 w-10 text-text-tertiary" />
@@ -320,7 +333,7 @@ function progressColor(percentage: number, neutral = false): string {
       </Button>
     </div>
 
-    <div v-else class="flex-1 min-h-0 overflow-y-auto space-y-8">
+    <div v-else-if="!loadFailed" class="flex-1 min-h-0 overflow-y-auto space-y-8">
       <!-- Summary -->
       <div class="budget-summary grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div class="budget-metric">
@@ -365,7 +378,7 @@ function progressColor(percentage: number, neutral = false): string {
           </div>
         </div>
         <div class="budget-metric">
-          <p class="text-[12px] text-text-tertiary mb-1">{{ t('remaining') }}</p>
+          <p class="text-[12px] text-text-tertiary mb-1">{{ t('remainingTitle') }}</p>
           <p class="text-[20px] font-semibold tabular-nums text-text-primary leading-tight">
             {{ formatCurrency(activeRemaining) }}
           </p>
@@ -449,12 +462,12 @@ function progressColor(percentage: number, neutral = false): string {
               <span
                 class="text-[12px] tabular-nums font-medium w-10 text-right flex-shrink-0"
                 :style="{ color: progressColor(p.percentage) }"
-                >{{ p.percentage }}%</span
+                >{{ Math.round(p.percentage) }}%</span
               >
             </div>
             <div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
               <p class="text-[12px] text-text-tertiary truncate">
-                {{ p.budget.categoryNames.map((n) => categoryMap.get(n)?.label ?? n).join(', ') }}
+                {{ budgetCategories(p) }}
               </p>
               <span
                 class="text-[12px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
@@ -675,16 +688,17 @@ function progressColor(percentage: number, neutral = false): string {
 
 <style scoped>
 .budget-summary {
-  padding: 24px;
-  border-block: 1px solid var(--separator);
+  padding: 0 16px 24px;
+  border-bottom: 1px solid var(--separator);
 }
 .budget-summary > .budget-metric {
   min-width: 0;
   padding: 0;
+  padding-inline-end: 24px;
   border: 0;
 }
 .budget-list {
-  border-block: 1px solid var(--separator);
+  border-bottom: 1px solid var(--separator);
 }
 .budget-ledger-row {
   padding: 24px 16px;

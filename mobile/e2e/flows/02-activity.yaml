@@ -81,3 +81,16 @@ name: Activity search filters and detail
 - assertVisible:
     id: activity-screen
 - assertVisible: '.*Groceries.*Isracard · 3098.*'
+# Confirming from detail clears the Needs review filter's match.
+- tapOn:
+    id: transaction-txn-superpharm
+- tapOn:
+    id: transaction-looks-right
+- assertNotVisible:
+    id: transaction-looks-right
+- swipe:
+    start: 3%, 50%
+    end: 90%, 50%
+    duration: 500
+- assertNotVisible:
+    id: transaction-txn-superpharm

@@ -1,6 +1,13 @@
 // Run with npm run dashboard:dev. Uses a disposable database and simulated desktop services.
 import assert from 'node:assert/strict';
 
+// A modal dialog intentionally disables the body; it must stay usable itself.
+const menuClosed = () =>
+  !document.querySelector('[role="listbox"]') &&
+  !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
+  getComputedStyle(document.querySelector('[role="dialog"]') ?? document.body).pointerEvents !==
+    'none';
+
 async function selectOption(page, trigger, value) {
   await page.click(trigger);
   await page.waitForSelector('[role="listbox"]', { visible: true });
@@ -12,12 +19,7 @@ async function selectOption(page, trigger, value) {
     );
   });
   await page.click(`[role="option"][data-value="${value}"]`);
-  await page.waitForFunction(
-    () =>
-      !document.querySelector('[role="listbox"]') &&
-      !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
-      getComputedStyle(document.body).pointerEvents !== 'none',
-  );
+  await page.waitForFunction(menuClosed);
 }
 
 import { mkdtemp, writeFile, rm } from 'node:fs/promises';
@@ -88,6 +90,8 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
   process.send({ port: app.server.address().port });
 } else {
   const dir = await mkdtemp(join(tmpdir(), 'money-monitor-screen-smoke-'));
+  // Node has no OS secure storage, so config bootstrap must not need to persist secrets.
+  await writeFile(join(dir, 'config.json'), JSON.stringify({ ONBOARDING_COMPLETED: 'true' }));
   const child = fork(fileURLToPath(import.meta.url), [], {
     execArgv: ['--import', 'tsx'],
     env: {
@@ -95,6 +99,8 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       MM_DESKTOP_SMOKE_SERVER: '1',
       MONEY_MONITOR_DATA_DIR: dir,
       CREDENTIALS_MASTER_KEY: 'synthetic-desktop-qa-key',
+      MOBILE_PUBLIC_ID_KEY: 'synthetic-desktop-qa-public-id-key',
+      MOBILE_SERVER_ID: '306b4757-74c5-4157-aeb3-2b160a171a1b',
       API_TOKEN: '',
       TELEGRAM_BOT_TOKEN: '',
       ANTHROPIC_API_KEY: '',
@@ -118,7 +124,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       }),
     ]);
     const api = `http://127.0.0.1:${ready.port}`;
-    const base = process.env.MM_DASHBOARD_URL ?? 'http://127.0.0.1:5173';
+    const base = process.env.MM_DASHBOARD_URL ?? 'http://localhost:5173';
     browser = await puppeteer.launch({
       executablePath:
         process.env.CHROME_PATH ?? '/Applications/Google Chrome.app/Contents/MacOS/Google Chrome',
@@ -415,12 +421,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           });
           assert(within, 'Dropdown remains within the viewport');
           await page.keyboard.press('Escape');
-          await page.waitForFunction(
-            () =>
-              !document.querySelector('[role="listbox"]') &&
-              !document.querySelector('[role="combobox"][aria-expanded="true"]') &&
-              getComputedStyle(document.body).pointerEvents !== 'none',
-          );
+          await page.waitForFunction(menuClosed);
         }
       };
       const checkDialog = async () => {
@@ -441,7 +442,11 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         assert.deepEqual(unnamed, [], 'Dialog fields have accessible labels');
         await inspectMenus('[role="dialog"]');
         await page.keyboard.press('Escape');
-        await page.waitForFunction(() => !document.querySelector('[role="dialog"]'));
+        await page.waitForFunction(
+          () =>
+            !document.querySelector('[role="dialog"]') &&
+            getComputedStyle(document.body).pointerEvents !== 'none',
+        );
       };
       const month = new Date()
         .toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' })
@@ -662,20 +667,45 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         createdBefore + 1,
         'Sending after deleting the active conversation creates a fresh session',
       );
+      const questionsBefore = await page.$$eval('.advisor-message-user', (els) => els.length);
       advisorFailure = true;
       await page.type('.advisor-input', 'Try another request');
       await page.keyboard.press('Enter');
-      await page.waitForFunction(() =>
-        [...document.querySelectorAll('.advisor-message-answer')].some((el) =>
-          el.textContent.includes('Synthetic provider unavailable'),
-        ),
-      );
+      await page.waitForSelector('.advisor-send-error');
       assert.equal(
         await page.$eval('.advisor-input', (el) => el.disabled),
         false,
         'Composer recovers after a provider error',
       );
+      assert.equal(
+        await page.$eval('.advisor-input', (el) => el.value),
+        'Try another request',
+        'A failed question stays ready to retry',
+      );
+      assert(
+        await page.$eval('.advisor-input', (el) => el === document.activeElement),
+        'Focus returns to the composer after a reply',
+      );
+      assert.equal(
+        await page.$$eval('.advisor-message-user', (els) => els.length),
+        questionsBefore,
+        'A failed question moves back to the composer instead of staying in the thread',
+      );
+      assert(
+        !(await page.$eval('.advisor-workspace', (el) => el.innerText)).includes(
+          'Synthetic provider unavailable',
+        ),
+        'Provider errors are not shown raw',
+      );
       advisorFailure = false;
+      await page.click('.advisor-send-error button');
+      await page.waitForFunction(() => !document.querySelector('.advisor-send-error'));
+      await page.waitForFunction(() => !document.querySelector('.advisor-input').disabled);
+      assert.equal(
+        await page.$eval('.advisor-conversation-title', (el) => el.textContent.trim()),
+        'Spending review',
+        'The header takes the conversation title after a reply',
+      );
 
       await visit('/accounts');
       await clickText(language === 'he' ? 'עדכון פרטי כניסה' : 'Update sign-in details');
@@ -697,7 +727,10 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         linked.description,
         'Legacy transaction links open the requested details',
       );
-      await visit('/transactions');
+      // The seeded salary may not have posted yet this month; last month's always has.
+      const [year, monthNumber] = month.split('-').map(Number);
+      const lastMonth = new Date(Date.UTC(year, monthNumber - 2, 1)).toISOString().slice(0, 7);
+      await visit(`/transactions?month=${lastMonth}`);
       const filterTiming = await page.evaluate(
         () =>
           new Promise((resolve) => {

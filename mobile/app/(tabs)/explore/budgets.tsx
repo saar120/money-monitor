@@ -7,6 +7,7 @@ import { SymbolView } from 'expo-symbols';
 import { useMemo, useState } from 'react';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import Animated, { FadeInDown, useReducedMotion } from 'react-native-reanimated';
+import { BudgetBar, budgetStatusColor } from '@/BudgetBar';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useActivityTransactions, useExploreHistory, useMoneyData } from '@/MoneyData';
@@ -46,9 +47,6 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
   return (
     <>
       <View style={styles.contextRow}>
-        <Text style={[styles.contextLabel, { color: colors.secondary }]}>
-          {t('tapABudgetForTransactions')}
-        </Text>
         <MonthPicker
           month={selected.month}
           months={months.map((item) => item.month)}
@@ -62,12 +60,7 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
       {selected.budgets.length ? (
         <View style={styles.list}>
           {selected.budgets.map((budget) => {
-            const statusColor =
-              budget.status === 'over_budget'
-                ? colors.danger
-                : budget.status === 'watch'
-                  ? colors.warning
-                  : colors.positive;
+            const statusColor = budgetStatusColor(budget.status, colors);
             const isExpanded = expanded === budget.name;
             return (
               <View key={budget.name}>
@@ -116,26 +109,11 @@ function BudgetList({ initialMonth, months }: { initialMonth?: string; months: E
                       </Text>
                     </View>
                   </View>
-                  <View style={[styles.track, { backgroundColor: colors.separator }]}>
-                    <View
-                      style={[
-                        styles.fill,
-                        {
-                          backgroundColor: statusColor,
-                          width: `${Math.min(100, budget.usedPercent)}%`,
-                        },
-                      ]}
-                    />
-                    <View
-                      style={[
-                        styles.elapsed,
-                        {
-                          backgroundColor: colors.secondary,
-                          left: `${Math.min(100, budget.elapsedPercent)}%`,
-                        },
-                      ]}
-                    />
-                  </View>
+                  <BudgetBar
+                    color={statusColor}
+                    elapsedPercent={budget.elapsedPercent}
+                    usedPercent={budget.usedPercent}
+                  />
                   <Text style={[styles.pace, { color: colors.secondary }]}>
                     {t('monthElapsed', { count: Math.round(budget.elapsedPercent) })}
                   </Text>
@@ -291,10 +269,9 @@ const styles = StyleSheet.create({
   contextRow: {
     flexDirection: 'row',
     alignItems: 'center',
-    justifyContent: 'space-between',
+    justifyContent: 'flex-end',
     gap: 12,
   },
-  contextLabel: { flex: 1, fontSize: 12.5, lineHeight: 18 },
   list: { marginTop: 16 },
   row: { paddingVertical: 22, borderBottomWidth: StyleSheet.hairlineWidth },
   heading: {
@@ -302,6 +279,7 @@ const styles = StyleSheet.create({
     alignItems: 'flex-start',
     justifyContent: 'space-between',
     gap: 16,
+    marginBottom: 16,
   },
   copy: { flex: 1, minWidth: 0 },
   name: { fontSize: 17, lineHeight: 22, fontWeight: '700' },
@@ -310,9 +288,6 @@ const styles = StyleSheet.create({
   percentRow: { flexDirection: 'row', alignItems: 'center', gap: 8 },
   percent: { fontSize: 19, lineHeight: 23, fontWeight: '700', fontVariant: ['tabular-nums'] },
   remaining: { marginTop: 3, fontSize: 11.5 },
-  track: { height: 8, marginTop: 16, borderRadius: 4 },
-  fill: { height: 8, borderRadius: 4 },
-  elapsed: { position: 'absolute', top: -2, width: 2, height: 12, borderRadius: 1 },
   pace: { marginTop: 8, fontSize: 11.5 },
   transactions: { marginVertical: 10, paddingHorizontal: 14, borderRadius: 16 },
   transactionsTitle: {

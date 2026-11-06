@@ -69,8 +69,16 @@ async function load() {
     monthly.value = history.summary;
     categories.value = categoryData.categories;
     cashflow.value = flow.summary[0] ?? null;
-  } catch (cause) {
-    if (id === requestId) error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } catch {
+    if (id === requestId) {
+      error.value = t('couldNotLoad');
+      // The previous month's rows must not pass as this one's.
+      current.value = [];
+      previousCategories.value = [];
+      previousFlow.value = null;
+      monthly.value = [];
+      cashflow.value = null;
+    }
   } finally {
     if (id === requestId) loading.value = false;
   }
@@ -143,9 +151,9 @@ const largestChange = computed(() => {
     <section class="explore-summary">
       <div>
         <h2>{{ t('whereItWent') }}</h2>
-        <strong v-if="loading">—</strong>
+        <strong v-if="loading || error">—</strong>
         <strong v-else><AnimatedAmount :value="total" /></strong>
-        <small v-if="!loading">{{
+        <small v-if="!loading && !error">{{
           delta === 0
             ? t('sameAsLastMonth')
             : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
@@ -161,7 +169,8 @@ const largestChange = computed(() => {
       >
         <span>{{ t('largestCategoryChange') }}</span>
         <strong>{{
-          categoryMap.get(largestChange.category)?.label ?? largestChange.category
+          categoryMap.get(largestChange.category)?.label ??
+          (largestChange.category === 'uncategorized' ? t('uncategorized') : largestChange.category)
         }}</strong>
         <span
           >{{ formatCurrency(Math.abs(largestChange.delta)) }}
@@ -195,8 +204,7 @@ const largestChange = computed(() => {
     </nav>
     <div class="explore-grid">
       <section class="explore-main">
-        <div class="ledger-section-heading">
-          <h2>{{ t('categories') }}</h2>
+        <div class="ledger-section-heading explore-manage-link">
           <RouterLink to="/categories"
             >{{ t('manageCategories') }} <ArrowRight :size="15"
           /></RouterLink>
@@ -234,7 +242,7 @@ const largestChange = computed(() => {
               >{{ item.totalAmount > 0 ? '+' : '' }}{{ formatCurrency(item.totalAmount) }}</strong
             ><ArrowRight :size="15" />
           </RouterLink>
-          <p v-if="!loading && !sortedCategories.length" class="ledger-empty">
+          <p v-if="!loading && !error && !sortedCategories.length" class="ledger-empty">
             {{ t('noSpendingInMonth') }}
           </p>
         </div>
@@ -266,7 +274,7 @@ const largestChange = computed(() => {
             <strong>{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
             ><ArrowRight :size="15" />
           </RouterLink>
-          <p v-if="!loading && !recentMonths.length" class="ledger-empty">
+          <p v-if="!loading && !error && !recentMonths.length" class="ledger-empty">
             {{ t('monthlyHistoryEmpty') }}
           </p>
         </div>

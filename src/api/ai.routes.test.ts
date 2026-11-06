@@ -67,6 +67,43 @@ it('streams and saves a valid desktop Advisor chart', async () => {
   }
 });
 
+it('drops a question whose reply failed, so a retry does not save it twice', async () => {
+  const app = Fastify({ logger: false });
+  await app.register(aiRoutes);
+  try {
+    const created = await app.inject({ method: 'POST', url: '/api/ai/sessions' });
+    const id = created.json().session.id as string;
+    const send = () =>
+      app.inject({
+        method: 'POST',
+        url: '/api/ai/chat',
+        payload: { sessionId: id, message: 'Show my spending' },
+      });
+    chat.mockImplementation(async function* () {
+      yield { type: 'error', text: 'Provider unavailable' };
+    });
+    expect((await send()).body).toContain('event: error');
+    expect(getSession(id)?.messages).toEqual([]);
+    expect(getSession(id)?.meta.title).toBe('New chat');
+    chat.mockImplementation(async function* () {
+      yield { type: 'status', text: 'Working' };
+      throw new Error('Connection lost');
+    });
+    expect((await send()).body).toContain('Connection lost');
+    expect(getSession(id)?.messages).toEqual([]);
+    chat.mockImplementation(async function* () {
+      yield { type: 'result', text: 'Here it is.' };
+    });
+    await send();
+    expect(getSession(id)?.messages).toMatchObject([
+      { role: 'user', content: 'Show my spending' },
+      { role: 'assistant', content: 'Here it is.' },
+    ]);
+  } finally {
+    await app.close();
+  }
+});
+
 it('rejects encoded traversal without reading or deleting files outside sessions', async () => {
   mkdirSync(dir, { recursive: true });
   const victim = `${dir}-outside.jsonl`;

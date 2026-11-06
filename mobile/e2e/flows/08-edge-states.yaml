@@ -5,6 +5,8 @@ name: Empty and mixed-currency fixtures stay truthful
     clearState: true
     arguments:
       MM_FIXTURE_SCENARIO: light-data
+- tapOn:
+    id: tab-home
 - scrollUntilVisible:
     element:
       id: home-calm-state
@@ -21,7 +23,7 @@ name: Empty and mixed-currency fixtures stay truthful
 - assertVisible: 'No transactions yet'
 - tapOn: 'Explore, tab, 3 of 4'
 - assertVisible:
-    id: cashflow-chart
+    id: explore-summary
 - launchApp:
     clearState: true
     arguments:

@@ -21,7 +21,7 @@ type ExploreRowProps = {
   href: Href;
   icon: string;
   last?: boolean;
-  metric: string;
+  metric?: string;
   testID: string;
   title: string;
 };
@@ -104,13 +104,11 @@ export default function ExploreScreen() {
         </View>
       </View>
 
-      <Text style={[styles.sectionTitle, { color: colors.text }]}>{t('exploreYourMoney')}</Text>
       <View style={[styles.list, { backgroundColor: colors.surface }]}>
         <ExploreRow
           detail={t('recentShapeMerchantsAndTransactions')}
           href={{ pathname: '/explore/categories', params }}
           icon="list.bullet.rectangle"
-          metric={`${home.categories.length}`}
           testID="explore-card-categories"
           title={t('categories')}
         />
@@ -118,7 +116,6 @@ export default function ExploreScreen() {
           detail={t('howTheSpendingMixChangesOverTime')}
           href={{ pathname: '/explore/monthly-comparison', params }}
           icon="chart.bar.xaxis"
-          metric={t('message6M')}
           testID="explore-card-monthly"
           title={t('monthlySpending')}
         />
@@ -142,7 +139,6 @@ export default function ExploreScreen() {
           detail={t('membershipsAndServiceBills')}
           href="/explore/recurring-payments"
           icon="repeat"
-          metric=""
           testID="explore-card-recurring"
           title={t('subscriptions')}
         />
@@ -181,20 +177,19 @@ function ExploreRow({ detail, href, icon, last = false, metric, testID, title }:
         <SymbolView name={icon as never} size={17} tintColor={colors.accent} />
       </View>
       <View style={styles.copy}>
-        <View style={styles.rowHeading}>
-          <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
-            {title}
-          </Text>
-          <Text
-            allowFontScaling={false}
-            numberOfLines={1}
-            style={[styles.metric, { color: colors.text }]}
-          >
-            {metric}
-          </Text>
-        </View>
-        <Text style={[styles.rowDetail, { color: colors.secondary }]}>{detail}</Text>
+        <Text numberOfLines={1} style={[styles.rowTitle, { color: colors.text }]}>
+          {title}
+        </Text>
       </View>
+      {metric ? (
+        <Text
+          maxFontSizeMultiplier={1.4}
+          numberOfLines={1}
+          style={[styles.metric, { color: colors.secondary }]}
+        >
+          {metric}
+        </Text>
+      ) : null}
       <DirectionalChevron direction="forward" size={10} tintColor={colors.tertiary} />
     </Pressable>
   );
@@ -239,31 +234,14 @@ const styles = StyleSheet.create({
   legendItem: { flexDirection: 'row', alignItems: 'center', gap: 6 },
   legendMark: { width: 7, height: 7, borderRadius: 2 },
   legendLabel: { fontSize: 12, lineHeight: 17 },
-  sectionTitle: {
-    marginTop: 30,
-    marginBottom: 14,
-    fontSize: 21,
-    lineHeight: 27,
-    fontWeight: '700',
-    letterSpacing: -0.35,
-  },
-  list: { borderRadius: 20, paddingHorizontal: 16, overflow: 'hidden' },
-  row: { minHeight: 84, paddingVertical: 16, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  list: { marginTop: 28, borderRadius: 20, paddingHorizontal: 16, overflow: 'hidden' },
+  row: { minHeight: 60, paddingVertical: 12, flexDirection: 'row', alignItems: 'center', gap: 12 },
   icon: { width: 36, height: 36, borderRadius: 12, alignItems: 'center', justifyContent: 'center' },
   copy: { flex: 1, minWidth: 0 },
-  rowHeading: {
-    flexDirection: 'row',
-    alignItems: 'baseline',
-    justifyContent: 'space-between',
-    gap: 8,
-  },
-  rowTitle: { flexShrink: 1, fontSize: 16, lineHeight: 21, fontWeight: '600' },
-  rowDetail: { marginTop: 4, fontSize: 13, lineHeight: 18 },
+  rowTitle: { fontSize: 16, lineHeight: 21, fontWeight: '600' },
   metric: {
-    maxWidth: 130,
-    textAlign: 'right',
-    fontSize: 13.5,
-    fontWeight: '600',
+    flexShrink: 0,
+    fontSize: 15,
     fontVariant: ['tabular-nums'],
   },
 });

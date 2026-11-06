@@ -6,6 +6,10 @@ name: Secure credential lifecycle works
     arguments:
       MM_FIXTURE_SCENARIO: normal
 - openLink: 'moneymonitor://foundation'
+# iOS asks before opening an app from a link; an unanswered prompt blocks later flows.
+- tapOn:
+    text: Open
+    optional: true
 - assertVisible: 'Ready. No credential operation has run.'
 - tapOn: 'Store dummy credential'
 - assertVisible: 'Dummy pairing credential stored in the iOS Keychain.'

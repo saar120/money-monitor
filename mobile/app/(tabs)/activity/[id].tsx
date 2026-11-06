@@ -26,8 +26,9 @@ export default function TransactionDetailScreen() {
     id: string;
     category?: string;
     effectiveDate?: string;
+    needsReview?: boolean;
   } | null>(null);
-  const [saving, setSaving] = useState<'category' | 'effectiveDate' | null>(null);
+  const [saving, setSaving] = useState<'category' | 'effectiveDate' | 'reviewed' | null>(null);
   const [saveError, setSaveError] = useState<string | null>(null);
   const [categoryVisible, setCategoryVisible] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
@@ -87,9 +88,27 @@ export default function TransactionDetailScreen() {
     try {
       await money.saveTransaction(transactionId, update);
       await Haptics.selectionAsync();
-    } catch (caught) {
+    } catch {
       setEdits(previous);
-      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
+      setSaveError(t('thisTransactionCouldNotBeSaved'));
+    } finally {
+      setSaving(null);
+    }
+  }
+
+  async function confirmReview() {
+    if (saving) return;
+    setSaving('reviewed');
+    setSaveError(null);
+    try {
+      await money.saveTransaction(transactionId, { reviewed: true });
+      setEdits((value) => ({
+        ...(value?.id === transactionId ? value : { id: transactionId }),
+        needsReview: false,
+      }));
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+    } catch {
+      setSaveError(t('thisTransactionCouldNotBeSaved'));
     } finally {
       setSaving(null);
     }
@@ -104,9 +123,9 @@ export default function TransactionDetailScreen() {
       setCategories(categories);
       setSaving(null);
       setCategoryVisible(true);
-    } catch (caught) {
+    } catch {
       setSaving(null);
-      setSaveError(caught instanceof Error ? caught.message : t('categoriesCouldNotBeLoaded'));
+      setSaveError(t('categoriesCouldNotBeLoaded'));
     }
   }
 
@@ -122,7 +141,7 @@ export default function TransactionDetailScreen() {
         <View style={styles.hero}>
           <Text
             adjustsFontSizeToFit
-            allowFontScaling={false}
+            maxFontSizeMultiplier={1.4}
             minimumFontScale={0.7}
             numberOfLines={1}
             style={[
@@ -135,12 +154,6 @@ export default function TransactionDetailScreen() {
           <Text maxFontSizeMultiplier={1.6} style={[styles.merchant, { color: colors.text }]}>
             {transaction.merchant}
           </Text>
-          <Text
-            maxFontSizeMultiplier={1.5}
-            style={[styles.description, { color: colors.secondary }]}
-          >
-            {transaction.description ?? date}
-          </Text>
           <View style={styles.flags}>
             {transaction.pending ? (
               <DetailFlag
@@ -152,35 +165,41 @@ export default function TransactionDetailScreen() {
             {transaction.needsReview ? (
               <DetailFlag
                 label={t('needsReview')}
-                color={colors.danger}
-                background={colors.dangerSoft}
+                color={colors.accent}
+                background={colors.accentSoft}
               />
             ) : null}
           </View>
         </View>
 
-        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>{t('tRANSACTION')}</Text>
-        <View style={[styles.group, { backgroundColor: colors.surface }]}>
-          <DetailRow label={t('date')} value={date} />
-          <DetailRow label={t('account')} value={transaction.account} />
-          <DetailRow label={t('description')} value={transaction.description ?? '—'} last />
-        </View>
+        {transaction.needsReview ? (
+          <Pressable
+            accessibilityRole="button"
+            disabled={saving !== null}
+            onPress={() => void confirmReview()}
+            style={({ pressed }) => [
+              styles.confirm,
+              {
+                backgroundColor: colors.accent,
+                opacity: saving !== null ? 0.5 : pressed ? 0.76 : 1,
+              },
+            ]}
+            testID="transaction-looks-right"
+          >
+            <SymbolView name="checkmark" size={17} tintColor={colors.onAccent} />
+            <Text style={[styles.confirmText, { color: colors.onAccent }]}>
+              {saving === 'reviewed' ? t('saving') : t('looksRight')}
+            </Text>
+          </Pressable>
+        ) : null}
 
-        <Text style={[styles.sectionLabel, { color: colors.secondary }]}>{t('mONEYMONITOR')}</Text>
         <View style={[styles.group, { backgroundColor: colors.surface }]}>
           <DetailRow
             label={t('category')}
             value={saving === 'category' ? t('saving') : categoryLabel(transaction.category)}
-            symbol="tag"
             disabled={saving !== null}
             onPress={() => void chooseCategory()}
             testID="transaction-category"
-          />
-          <DetailRow label={t('owner')} value={ownerLabel(transaction.owner)} symbol="person" />
-          <DetailRow
-            label={t('included')}
-            value={transaction.included ? t('includedInReports') : t('excluded')}
-            symbol="checkmark.circle"
           />
           <DatePickerRow
             disabled={saving !== null}
@@ -193,12 +212,20 @@ export default function TransactionDetailScreen() {
             saving={saving === 'effectiveDate'}
             value={parseFinancialDate(currentEffectiveDate)}
           />
+          <DetailRow label={t('owner')} value={ownerLabel(transaction.owner)} />
           <DetailRow
-            label={t('review')}
-            value={transaction.needsReview ? t('needsReview') : t('reviewed')}
-            symbol="checkmark.seal"
+            label={t('reports')}
+            value={transaction.included ? t('included') : t('excluded')}
             last
           />
+        </View>
+
+        <View style={[styles.group, styles.secondGroup, { backgroundColor: colors.surface }]}>
+          <DetailRow label={t('date')} value={date} />
+          <DetailRow label={t('account')} value={transaction.account} last={!transaction.description} />
+          {transaction.description ? (
+            <DetailRow label={t('description')} value={transaction.description} last />
+          ) : null}
         </View>
         {saveError ? (
           <Text style={[styles.saveError, { color: colors.danger }]}>{saveError}</Text>
@@ -233,7 +260,6 @@ function DatePickerRow({
   const colors = useAppColors();
   return (
     <View style={[styles.detailRow, disabled && styles.disabled]}>
-      <SymbolView name="calendar" size={17} tintColor={colors.secondary} style={styles.rowIcon} />
       <View
         style={[
           styles.detailRowBody,
@@ -259,9 +285,7 @@ function DatePickerRow({
             disabled={disabled}
             display="compact"
             mode="date"
-            onChange={(_, nextValue) => {
-              if (nextValue) onChange(nextValue);
-            }}
+            onValueChange={(_, nextValue) => onChange(nextValue)}
             testID="transaction-effective-date"
             value={value}
           />
@@ -274,7 +298,6 @@ function DatePickerRow({
 function DetailRow({
   label,
   value,
-  symbol,
   last = false,
   disabled = false,
   onPress,
@@ -282,7 +305,6 @@ function DetailRow({
 }: {
   label: string;
   value: string;
-  symbol?: Parameters<typeof SymbolView>[0]['name'];
   last?: boolean;
   disabled?: boolean;
   onPress?: () => void;
@@ -291,9 +313,6 @@ function DetailRow({
   const colors = useAppColors();
   const content = (
     <>
-      {symbol ? (
-        <SymbolView name={symbol} size={17} tintColor={colors.secondary} style={styles.rowIcon} />
-      ) : null}
       <View
         style={[
           styles.detailRowBody,
@@ -321,6 +340,8 @@ function DetailRow({
   );
   return onPress ? (
     <Pressable
+      accessibilityLabel={`${label}, ${value}`}
+      accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
       style={[styles.detailRow, disabled && styles.disabled]}
@@ -365,7 +386,7 @@ function DetailFlag({
 
 const styles = StyleSheet.create({
   content: { paddingHorizontal: 16, paddingBottom: 40 },
-  hero: { alignItems: 'center', paddingTop: 26, paddingBottom: 34, paddingHorizontal: 20 },
+  hero: { alignItems: 'center', paddingTop: 20, paddingBottom: 24, paddingHorizontal: 20 },
   amount: {
     fontSize: 39,
     lineHeight: 46,
@@ -381,7 +402,6 @@ const styles = StyleSheet.create({
     textAlign: 'center',
     writingDirection: 'ltr',
   },
-  description: { marginTop: 4, fontSize: 14, textAlign: 'center', writingDirection: 'auto' },
   flags: { flexDirection: 'row', gap: 7, marginTop: 14 },
   flag: {
     minHeight: 27,
@@ -391,30 +411,33 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   flagText: { fontSize: 12, fontWeight: '700' },
-  sectionLabel: {
-    fontSize: 12,
-    fontWeight: '600',
-    marginLeft: 16,
-    marginBottom: 7,
-    marginTop: 23,
-    letterSpacing: 0.25,
+  confirm: {
+    minHeight: 50,
+    marginBottom: 20,
+    borderRadius: 16,
+    flexDirection: 'row',
+    alignItems: 'center',
+    justifyContent: 'center',
+    gap: 8,
   },
+  confirmText: { fontSize: 17, fontWeight: '700' },
   group: { borderRadius: 16, overflow: 'hidden' },
-  detailRow: { minHeight: 52, flexDirection: 'row', paddingLeft: 16 },
-  rowIcon: { width: 22, marginRight: 8, alignSelf: 'center' },
+  secondGroup: { marginTop: 20 },
+  detailRow: { minHeight: 52, flexDirection: 'row', paddingStart: 16 },
   detailRowBody: {
     flex: 1,
     minHeight: 52,
-    paddingRight: 16,
+    paddingEnd: 16,
     paddingVertical: 10,
     flexDirection: 'row',
     alignItems: 'center',
     gap: 14,
   },
-  detailLabel: { flex: 0.42, fontSize: 15 },
-  detailValue: { flex: 0.58, fontSize: 15, textAlign: 'right', writingDirection: 'ltr' },
+  detailLabel: { flexShrink: 0, maxWidth: '50%', fontSize: 15 },
+  // Hugs its text at the row's trailing edge in both directions; Hebrew dates need RTL ordering.
+  detailValue: { flexShrink: 1, marginStart: 'auto', fontSize: 15, textAlign: 'right' },
   dateRowBody: { gap: 8 },
-  dateLabel: { flex: 1 },
+  dateLabel: { flex: 1, maxWidth: '100%' },
   dateSaving: { flex: 1, fontSize: 15, textAlign: 'right' },
   disabled: { opacity: 0.55 },
   saveError: { marginTop: 12, paddingHorizontal: 16, fontSize: 13, lineHeight: 18 },

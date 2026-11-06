@@ -24,6 +24,9 @@ const loading = ref(false);
 const sessionLoading = ref(false);
 const historyPending = ref(false);
 const sessionLoadFailed = ref(false);
+const sendFailed = ref(false);
+const replyUnknown = ref(false);
+const composer = ref<HTMLElement | null>(null);
 const busy = computed(() => loading.value || sessionLoading.value || historyPending.value);
 const status = ref('');
 const chatContainer = ref<HTMLElement | null>(null);
@@ -60,10 +63,21 @@ async function scrollToBottom(instant = false) {
   });
 }
 
+// Leaves focus or a text selection the user has since moved elsewhere alone.
+function focusComposer() {
+  const field = composer.value?.querySelector('textarea');
+  const active = document.activeElement;
+  if (!field || (active !== document.body && active !== field)) return;
+  if (!window.getSelection()?.isCollapsed) return;
+  field.focus({ preventScroll: true });
+}
+
 async function selectSession(session: SessionMeta) {
   if (busy.value) return;
   sessionLoading.value = true;
   sessionLoadFailed.value = false;
+  sendFailed.value = false;
+  replyUnknown.value = false;
   try {
     const { session: data } = await getChatSession(session.id);
     activeSession.value = session;
@@ -83,6 +97,8 @@ async function selectSession(session: SessionMeta) {
 
 function handleNewChat(session: SessionMeta) {
   sessionLoadFailed.value = false;
+  sendFailed.value = false;
+  replyUnknown.value = false;
   if (compact.value) sidebarOpen.value = false;
   activeSession.value = session;
   messages.value = [];
@@ -94,6 +110,8 @@ function handleDeletedSession(id: string) {
   messages.value = [];
   input.value = '';
   sessionLoadFailed.value = false;
+  sendFailed.value = false;
+  replyUnknown.value = false;
 }
 
 async function ensureSession(): Promise<string> {
@@ -109,14 +127,19 @@ async function sendMessage(text?: string) {
   if (!messageText || busy.value) return;
 
   sessionLoadFailed.value = false;
+  sendFailed.value = false;
+  replyUnknown.value = false;
+  const questionIndex = messages.value.length;
   messages.value.push({ role: 'user', content: messageText });
   input.value = '';
   loading.value = true;
   status.value = '';
   await scrollToBottom();
 
+  let sessionId: string | undefined;
+  let serverFailed = false;
   try {
-    const sessionId = await ensureSession();
+    sessionId = await ensureSession();
     // Accumulate response without showing partial text —
     // the typing indicator stays visible until the full message is ready.
     let accumulated = '';
@@ -132,6 +155,7 @@ async function sendMessage(text?: string) {
       } else if (event.type === 'chart') {
         chart = event.chart;
       } else if (event.type === 'error') {
+        serverFailed = true;
         throw new Error(event.text);
       }
     }
@@ -139,18 +163,52 @@ async function sendMessage(text?: string) {
     if (accumulated || chart) {
       messages.value.push({ role: 'assistant', content: accumulated, chart });
     }
-    // Refresh sidebar to update title/timestamp
-    sidebarRef.value?.loadSessions();
-  } catch (err) {
-    messages.value.push({
-      role: 'assistant',
-      content: `Error: ${err instanceof Error ? err.message : 'Something went wrong'}`,
-    });
+    // Refresh the sidebar and header with the title the reply produced.
+    const sessions = await sidebarRef.value?.loadSessions();
+    const updated = sessions?.find((session) => session.id === sessionId);
+    if (updated && activeSession.value?.id === sessionId) activeSession.value = updated;
+  } catch {
+    // A dropped connection says nothing about the server: it may have saved the reply.
+    if (!serverFailed && sessionId && (await keepSavedExchange(sessionId, questionIndex))) return;
+    // The question goes back to the composer; the server dropped it, so a retry can't double it.
+    messages.value.splice(questionIndex, 1);
+    input.value = messageText;
+    sendFailed.value = true;
   } finally {
     loading.value = false;
     status.value = '';
     await scrollToBottom();
+    focusComposer();
   }
+}
+
+// True unless the server is known not to have the question, so sending it again is safe.
+async function keepSavedExchange(sessionId: string, questionIndex: number) {
+  try {
+    const { session } = await getChatSession(sessionId);
+    if (session.messages.length <= questionIndex) return false;
+    messages.value = session.messages.map((m: SessionMessage) => ({
+      role: m.role,
+      content: m.content,
+      chart: m.chart,
+    }));
+    replyUnknown.value = session.messages.length === questionIndex + 1;
+  } catch {
+    replyUnknown.value = true;
+  }
+  return true;
+}
+
+// Checks again without resending: the reply may still be on its way.
+async function checkForReply() {
+  const session = activeSession.value;
+  const question = messages.value[messages.value.length - 1]?.content;
+  if (!session || question === undefined || busy.value) return;
+  if (await keepSavedExchange(session.id, messages.value.length - 1)) return;
+  messages.value.pop();
+  input.value = question;
+  replyUnknown.value = false;
+  sendFailed.value = true;
 }
 
 function handleKeydown(e: KeyboardEvent) {
@@ -228,9 +286,7 @@ function handleKeydown(e: KeyboardEvent) {
           </p>
           <div ref="chatContainer" class="chat-messages flex-1 overflow-y-auto">
             <section v-if="messages.length === 0" class="advisor-welcome">
-              <p class="advisor-eyebrow">{{ t('advisor') }}</p>
               <h2>{{ t('askAboutFinances') }}</h2>
-              <p class="advisor-intro">{{ t('advisorDescription') }}</p>
               <div class="advisor-suggestions">
                 <button
                   v-for="key in suggestionKeys"
@@ -278,8 +334,23 @@ function handleKeydown(e: KeyboardEvent) {
             </div>
           </div>
 
-          <div class="advisor-composer">
+          <div ref="composer" class="advisor-composer">
             <div class="advisor-composer-inner">
+              <div v-if="sendFailed" class="ledger-notice advisor-send-error" role="alert">
+                {{ t('advisorFailed') }}
+                <button type="button" @click="sendMessage()">{{ t('tryAgain') }}</button>
+                <RouterLink to="/settings">{{ t('settings') }}</RouterLink>
+              </div>
+              <div
+                v-if="replyUnknown && activeSession"
+                class="ledger-notice advisor-send-error"
+                role="alert"
+              >
+                {{ t('advisorFailed') }}
+                <button type="button" @click="checkForReply">
+                  {{ t('retry') }}
+                </button>
+              </div>
               <div class="advisor-input-wrap">
                 <Textarea
                   v-model="input"
@@ -302,13 +373,6 @@ function handleKeydown(e: KeyboardEvent) {
                   <ArrowUp class="h-4 w-4" />
                 </Button>
               </div>
-              <p class="advisor-input-hint">
-                {{
-                  language === 'he'
-                    ? 'Enter לשליחה · Shift + Enter לשורה חדשה'
-                    : 'Enter to send · Shift + Enter for a new line'
-                }}
-              </p>
             </div>
           </div>
         </div>
@@ -360,7 +424,6 @@ function handleKeydown(e: KeyboardEvent) {
 .advisor-welcome {
   padding-block: clamp(16px, 5vh, 56px) 24px;
 }
-.advisor-eyebrow,
 .advisor-message-author {
   margin-bottom: 10px;
   color: var(--text-secondary);
@@ -375,15 +438,8 @@ function handleKeydown(e: KeyboardEvent) {
   letter-spacing: -0.025em;
   text-wrap: balance;
 }
-.advisor-intro {
-  max-width: 54ch;
-  margin-block: 14px 28px;
-  color: var(--text-secondary);
-  font-size: 14px;
-  line-height: 1.7;
-  text-wrap: pretty;
-}
 .advisor-suggestions {
+  margin-top: 24px;
   border-top: 1px solid var(--separator);
 }
 .advisor-suggestion {
@@ -469,6 +525,13 @@ function handleKeydown(e: KeyboardEvent) {
   padding: 16px 32px 14px;
   background: var(--bg-primary);
 }
+.advisor-send-error {
+  margin-bottom: 12px;
+}
+.advisor-send-error a {
+  color: var(--accent);
+  font-weight: 700;
+}
 .advisor-input-wrap {
   display: flex;
   align-items: flex-end;
@@ -487,7 +550,7 @@ function handleKeydown(e: KeyboardEvent) {
   min-width: 0;
   min-height: 48px;
   max-height: 160px;
-  resize: vertical;
+  resize: none;
   border: 0;
   border-radius: 0;
   padding: 2px 4px;
@@ -500,12 +563,6 @@ function handleKeydown(e: KeyboardEvent) {
   flex-shrink: 0;
   width: 36px;
   height: 36px;
-}
-.advisor-input-hint {
-  margin-top: 8px;
-  color: var(--text-tertiary);
-  font-size: 11px;
-  text-align: end;
 }
 @media (max-width: 900px) {
   .advisor-history {

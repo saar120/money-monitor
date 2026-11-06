@@ -65,8 +65,8 @@ name: Charts, month gestures, detail navigation, and filtered row continuity
 - tapOn: '3M'
 - tapOn: '1Y'
 - swipe:
-    start: 22%, 35%
-    end: 75%, 35%
+    start: 22%, 45%
+    end: 75%, 45%
     duration: 4500
 - assertVisible:
     id: net-worth-live-date

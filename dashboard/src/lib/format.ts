@@ -1,9 +1,23 @@
+import { language } from './language';
+
 /** Default fallback color for categories without a color (slate-400). */
 export const DEFAULT_CATEGORY_COLOR = '#94a3b8';
 
 /** Format a number as ILS currency with shekel sign. Uses Math.abs() so the sign is always positive. */
 export function formatCurrency(amount: number): string {
   return `₪${Math.abs(amount).toLocaleString('he-IL', { minimumFractionDigits: 2, maximumFractionDigits: 2 })}`;
+}
+
+/** A moment in time, e.g. "5 Nov, 02:00"; the year appears only when it isn't this year. */
+export function formatDateTime(value: string): string {
+  const date = new Date(value);
+  return new Intl.DateTimeFormat(language.value === 'he' ? 'he-IL' : 'en-GB', {
+    day: 'numeric',
+    month: 'short',
+    ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' as const } : {}),
+    hour: '2-digit',
+    minute: '2-digit',
+  }).format(date);
 }
 
 const compactCurrencyFormatter = new Intl.NumberFormat('en-US', {
@@ -44,16 +58,6 @@ export function formatAmount(amount: number, currency: string): string {
 /** Format an ISO date string as a short locale date (he-IL). */
 export function formatDate(iso: string): string {
   return new Date(iso).toLocaleDateString('he-IL');
-}
-
-/** Format an ISO datetime string as a short date + time (en-GB). */
-export function formatDateTime(iso: string): string {
-  return new Date(iso).toLocaleString('en-GB', {
-    day: 'numeric',
-    month: 'short',
-    hour: '2-digit',
-    minute: '2-digit',
-  });
 }
 
 /** Build inline style for a category badge: semi-transparent background + matching text color. */

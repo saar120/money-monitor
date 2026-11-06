@@ -18,6 +18,8 @@ Use the shared Button, Input, Select and dialog components. Standard actions and
 
 Activity, Review, Accounts and Categories each have one workspace. Their former `/advanced` URLs redirect while preserving query parameters. Account creation and sign-in dialogs belong to Accounts; transaction filters and effective dates belong to Activity; recategorization belongs to Categories. Net Worth links to the asset detail pages for holdings and value changes.
 
+In Activity, category, owner and inclusion save as soon as they change; an effective date moves a transaction between months, so it waits for Save and is kept when leaving the row. Search covers all dates. When data fails to load, pages show an error with Retry and never a zero or an empty state.
+
 The screen smoke verifies all routes in English/light and Hebrew/dark at 1024, 1280 and 1440px, shared control dimensions, accessible icon names, legacy redirects, menus, account sign-in/import, and setup. Keep these checks in sync when changing navigation.
 
 First launch introduces the app and routes users to Accounts, with an option to explore first. Encryption is prepared automatically without replacing an existing key. Settings separates General (preferences, household, refresh presets, updates), Connections (Advisor and iPhone), and Advanced (AI tuning, custom refresh schedules, encryption, Telegram, and diagnostic data).

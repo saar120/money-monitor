@@ -225,18 +225,20 @@ export function ActivityFiltersSheet({
                       {t('needsReview')}
                     </Text>
                   </View>
-                  <Switch
-                    accessibilityLabel={t('needsReviewOnly')}
-                    onValueChange={(needsReview) =>
-                      setDraft((current) => ({
-                        ...current,
-                        needsReview: needsReview || undefined,
-                      }))
-                    }
-                    trackColor={{ false: colors.separator, true: colors.accent }}
-                    testID="activity-filter-needs-review"
-                    value={Boolean(draft.needsReview)}
-                  />
+                  <View style={styles.toggleSwitch}>
+                    <Switch
+                      accessibilityLabel={t('needsReviewOnly')}
+                      onValueChange={(needsReview) =>
+                        setDraft((current) => ({
+                          ...current,
+                          needsReview: needsReview || undefined,
+                        }))
+                      }
+                      trackColor={{ false: colors.separator, true: colors.accent }}
+                      testID="activity-filter-needs-review"
+                      value={Boolean(draft.needsReview)}
+                    />
+                  </View>
                 </View>
               </View>
 
@@ -573,7 +575,7 @@ const styles = StyleSheet.create({
   sectionLabel: {
     marginTop: 20,
     marginBottom: 7,
-    marginLeft: 4,
+    marginStart: 4,
     fontSize: 13,
     lineHeight: 18,
     fontWeight: '600',
@@ -587,7 +589,7 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
     gap: 12,
   },
-  divider: { height: StyleSheet.hairlineWidth, marginLeft: 54 },
+  divider: { height: StyleSheet.hairlineWidth, marginStart: 54 },
   rowLeading: { flexDirection: 'row', alignItems: 'center', gap: 11 },
   rowIcon: {
     width: 30,
@@ -606,10 +608,12 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   rowValue: { flexShrink: 1, maxWidth: 170, fontSize: 14, lineHeight: 19, textAlign: 'right' },
+  // UISwitch ignores its Yoga offset on iOS 27; a sized wrapper keeps it on the row's center line.
+  toggleSwitch: { width: 64, height: 31, alignItems: 'flex-end' },
   toggleRow: {
     minHeight: 58,
-    paddingLeft: 13,
-    paddingRight: 8,
+    paddingStart: 13,
+    paddingEnd: 8,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
@@ -640,5 +644,5 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'space-between',
   },
-  choiceText: { flex: 1, marginRight: 12, fontSize: 17, lineHeight: 22 },
+  choiceText: { flex: 1, marginEnd: 12, fontSize: 17, lineHeight: 22 },
 });

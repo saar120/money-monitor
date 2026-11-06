@@ -32,12 +32,12 @@ import {
   Landmark,
   CreditCard,
 } from 'lucide-vue-next';
-import { language } from '@/lib/language';
+import { formatDateTime } from '@/lib/format';
+import { language, t } from '@/lib/language';
 
 const copy = computed(() =>
   language.value === 'he'
     ? {
-        intro: 'כל החשבונות והעדכונים שלהם במקום אחד.',
         syncAll: 'סנכרון כל החשבונות',
         syncing: 'מתחיל סנכרון…',
         accounts: 'חשבונות מחוברים',
@@ -74,7 +74,6 @@ const copy = computed(() =>
         statusCancelled: 'בוטל',
       }
     : {
-        intro: 'Every connected account and its latest update, in one place.',
         syncAll: 'Sync all accounts',
         syncing: 'Starting sync…',
         accounts: 'Connected accounts',
@@ -163,17 +162,6 @@ function getAccountName(id: number): string {
   return accounts.value.find((a) => a.id === id)?.displayName ?? `Account #${id}`;
 }
 
-function formatSyncTime(value: string): string {
-  const date = new Date(value);
-  return new Intl.DateTimeFormat(language.value === 'he' ? 'he-IL' : 'en-US', {
-    day: 'numeric',
-    month: 'short',
-    ...(date.getFullYear() !== new Date().getFullYear() ? { year: 'numeric' } : {}),
-    hour: '2-digit',
-    minute: '2-digit',
-  }).format(date);
-}
-
 function formatDuration(ms: number): string {
   if (ms < 1000) return `${ms}ms`;
   const seconds = Math.round(ms / 1000);
@@ -227,8 +215,10 @@ function toggleExpand(sessionId: number) {
 }
 
 // ─── Data loading ───
+const loadFailed = ref(false);
 async function loadData() {
   loading.value = true;
+  loadFailed.value = false;
   try {
     const [accountsRes, sessionsRes] = await Promise.all([
       getAccounts(),
@@ -254,6 +244,8 @@ async function loadData() {
       };
       startElapsedTimer();
     }
+  } catch {
+    loadFailed.value = true;
   } finally {
     loading.value = false;
   }
@@ -403,12 +395,14 @@ const latestSession = computed(() => sessions.value[0]);
       </Button>
     </Teleport>
 
-    <div class="sync-overview">
-      <p>{{ copy.intro }}</p>
-      <div v-if="latestSession" class="sync-latest">
+    <p v-if="loadFailed" class="ledger-notice" role="alert">
+      {{ t('couldNotLoad') }} <button @click="loadData">{{ t('retry') }}</button>
+    </p>
+    <div v-if="latestSession" class="sync-overview">
+      <div class="sync-latest">
         <span class="sync-status-dot" :class="latestSession.status" />
         <span>{{ copy.lastSync }}</span>
-        <strong>{{ formatSyncTime(latestSession.startedAt) }}</strong>
+        <strong>{{ formatDateTime(latestSession.startedAt) }}</strong>
         <span>· {{ statusLabel(latestSession.status) }}</span>
       </div>
     </div>
@@ -461,7 +455,9 @@ const latestSession = computed(() => sessions.value[0]);
       <div v-if="loading" class="sync-skeleton">
         <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
       </div>
-      <p v-else-if="!activeAccounts.length" class="sync-empty-inline">{{ copy.noAccounts }}</p>
+      <p v-else-if="!loadFailed && !activeAccounts.length" class="sync-empty-inline">
+        {{ copy.noAccounts }}
+      </p>
       <div v-else class="sync-account-list">
         <div v-for="account in activeAccounts" :key="account.id" class="sync-account-row">
           <div class="sync-account-identity">
@@ -475,7 +471,7 @@ const latestSession = computed(() => sessions.value[0]);
             </span>
           </div>
           <span class="sync-account-updated">
-            {{ account.lastScrapedAt ? formatSyncTime(account.lastScrapedAt) : copy.neverSynced }}
+            {{ account.lastScrapedAt ? formatDateTime(account.lastScrapedAt) : copy.neverSynced }}
           </span>
           <Button
             variant="secondary"
@@ -505,7 +501,7 @@ const latestSession = computed(() => sessions.value[0]);
       <div v-if="loading" class="sync-skeleton">
         <Skeleton v-for="i in 3" :key="i" class="h-16 w-full" />
       </div>
-      <div v-else-if="!sessions.length" class="scrape-empty">
+      <div v-else-if="!loadFailed && !sessions.length" class="scrape-empty">
         <Landmark :size="28" :stroke-width="1.6" />
         <h3>{{ copy.noHistory }}</h3>
         <p>{{ copy.noHistoryHint }}</p>
@@ -531,7 +527,7 @@ const latestSession = computed(() => sessions.value[0]);
               <small>{{ sessionAccountNames(session) || copy.results }}</small>
             </span>
             <span class="sync-session-result">{{ sessionSummary(session) }}</span>
-            <time class="sync-session-time">{{ formatSyncTime(session.startedAt) }}</time>
+            <time class="sync-session-time">{{ formatDateTime(session.startedAt) }}</time>
             <ChevronDown
               :size="17"
               class="sync-session-chevron"

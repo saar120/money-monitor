@@ -24,7 +24,7 @@ import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import type { Transaction } from '@/fixtures';
 import { formatMoney } from '@/money';
-import { getReviewViewState } from '@/review-state';
+import { getReviewViewState, reviewConfirmation } from '@/review-state';
 import { useAppColors, type AppColors } from '@/theme';
 import type { TransactionUpdate } from '@/mobile-api';
 
@@ -38,9 +38,15 @@ export default function ReviewScreen() {
   const { transactions, loading, error } = useActivityTransactions('', 'review');
   const [dismissedIds, setDismissedIds] = useState(() => new Set<string>());
   const [overrides, setOverrides] = useState<
-    Record<string, Partial<Pick<Transaction, 'included' | 'owner'>>>
+    Record<string, Partial<Pick<Transaction, 'category' | 'included' | 'owner'>>>
   >({});
-  const queue = transactions.filter((transaction) => !dismissedIds.has(transaction.id));
+  // "Later" sends a card to the back of this session's queue; it stays unreviewed on the Mac.
+  const [laterIds, setLaterIds] = useState<string[]>([]);
+  const unreviewed = transactions.filter((transaction) => !dismissedIds.has(transaction.id));
+  const queue = [
+    ...unreviewed.filter((transaction) => !laterIds.includes(transaction.id)),
+    ...laterIds.flatMap((id) => unreviewed.find((transaction) => transaction.id === id) ?? []),
+  ];
   // Keep the saved card on screen while the provider refreshes the queue.
   const [heldCard, setHeldCard] = useState<Transaction | null>(null);
   const sourceCurrent = heldCard ?? queue[0] ?? null;
@@ -69,9 +75,7 @@ export default function ReviewScreen() {
   useEffect(() => {
     void loadReviewOptions()
       .then(setOptions)
-      .catch((caught) =>
-        setSaveError(caught instanceof Error ? caught.message : t('reviewOptionsCouldNotBeLoaded')),
-      );
+      .catch(() => setSaveError(t('reviewOptionsCouldNotBeLoaded')));
   }, [loadReviewOptions]);
 
   useEffect(() => {
@@ -83,6 +87,44 @@ export default function ReviewScreen() {
     };
   }, [arrival, departure]);
 
+  // Slides the held card away, runs `next` to change the queue, then springs in the next card.
+  async function advance(next: () => void) {
+    if (!reduceMotion) {
+      await new Promise<void>((resolve) =>
+        Animated.timing(departure, {
+          toValue: 1,
+          duration: 300,
+          easing: Easing.bezier(0.4, 0, 0.8, 0.6),
+          useNativeDriver: true,
+        }).start(() => resolve()),
+      );
+    }
+    if (!mounted.current) return;
+    departure.setValue(0);
+    arrival.setValue(reduceMotion ? 1 : 0);
+    next();
+    setHeldCard(null);
+    if (!reduceMotion) {
+      Animated.spring(arrival, {
+        toValue: 1,
+        damping: 19,
+        stiffness: 230,
+        mass: 0.9,
+        useNativeDriver: true,
+      }).start();
+    }
+  }
+
+  async function later() {
+    if (!current || busy.current || saving) return;
+    const { id } = current;
+    busy.current = true;
+    setHeldCard(current);
+    void Haptics.selectionAsync().catch(() => {});
+    await advance(() => setLaterIds((ids) => [...ids.filter((value) => value !== id), id]));
+    busy.current = false;
+  }
+
   async function complete(update: TransactionUpdate) {
     if (!current || busy.current || saving) return;
     busy.current = true;
@@ -93,34 +135,11 @@ export default function ReviewScreen() {
       await saveTransaction(current.id, update);
       if (!mounted.current) return;
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      if (!reduceMotion) {
-        await new Promise<void>((resolve) =>
-          Animated.timing(departure, {
-            toValue: 1,
-            duration: 300,
-            easing: Easing.bezier(0.4, 0, 0.8, 0.6),
-            useNativeDriver: true,
-          }).start(() => resolve()),
-        );
-      }
+      await advance(() => setDismissedIds((ids) => new Set(ids).add(current.id)));
+    } catch {
       if (!mounted.current) return;
       departure.setValue(0);
-      arrival.setValue(reduceMotion ? 1 : 0);
-      setDismissedIds((ids) => new Set(ids).add(current.id));
-      setHeldCard(null);
-      if (!reduceMotion) {
-        Animated.spring(arrival, {
-          toValue: 1,
-          damping: 19,
-          stiffness: 230,
-          mass: 0.9,
-          useNativeDriver: true,
-        }).start();
-      }
-    } catch (caught) {
-      if (!mounted.current) return;
-      departure.setValue(0);
-      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
+      setSaveError(t('thisTransactionCouldNotBeSaved'));
     } finally {
       busy.current = false;
       if (mounted.current) setSaving(false);
@@ -142,9 +161,9 @@ export default function ReviewScreen() {
     try {
       await saveTransaction(transaction.id, update);
       await Haptics.selectionAsync();
-    } catch (caught) {
+    } catch {
       setOverrides((values) => ({ ...values, [transaction.id]: previous ?? {} }));
-      setSaveError(caught instanceof Error ? caught.message : t('thisTransactionCouldNotBeSaved'));
+      setSaveError(t('thisTransactionCouldNotBeSaved'));
     } finally {
       setSaving(false);
     }
@@ -206,9 +225,6 @@ export default function ReviewScreen() {
               : remaining
                 ? t('transactionsToReview', { count: remaining })
                 : t('inboxZero')}
-          </Text>
-          <Text style={[styles.progressCount, { color: colors.secondary }]}>
-            {reviewed}/{sessionTotal || reviewed}
           </Text>
         </View>
         <View style={[styles.progressTrack, { backgroundColor: colors.separator }]}>
@@ -413,7 +429,7 @@ export default function ReviewScreen() {
                     </Text>
                   ) : null}
 
-                  <View style={[styles.fields, { backgroundColor: colors.surfaceSoft }]}>
+                  <View style={[styles.fields, { borderTopColor: colors.separator }]}>
                     <Field
                       symbol="tag"
                       label={t('category')}
@@ -430,37 +446,37 @@ export default function ReviewScreen() {
                       colors={colors}
                       disabled={saving}
                       onPress={() => setPicker('owner')}
+                      testID="review-owner"
                     />
-                    <View style={styles.fieldRow}>
+                    <View style={[styles.fieldRow, { borderBottomColor: colors.separator }]}>
                       <SymbolView name="chart.bar" size={18} tintColor={colors.secondary} />
-                      <View style={styles.fieldText}>
-                        <Text style={[styles.fieldLabel, { color: colors.text }]}>
-                          {t('includeInReports')}
-                        </Text>
-                        <Text style={[styles.fieldValue, { color: colors.secondary }]}>
-                          {current.included ? t('included') : t('excluded')}
-                        </Text>
+                      <Text numberOfLines={2} style={[styles.fieldLabel, { color: colors.text }]}>
+                        {t('includeInReports')}
+                      </Text>
+                      <View style={styles.fieldSwitch}>
+                        <Switch
+                          accessibilityLabel={t('includeInReports')}
+                          disabled={saving}
+                          value={current.included}
+                          onValueChange={(included) => {
+                            void saveField(current, { included });
+                          }}
+                          testID="review-include"
+                          trackColor={{ true: colors.positive }}
+                        />
                       </View>
-                      <Switch
-                        disabled={saving}
-                        value={current.included}
-                        onValueChange={(included) => {
-                          void saveField(current, { included });
-                        }}
-                        trackColor={{ true: colors.positive }}
-                      />
                     </View>
-                    <View style={styles.fieldRow}>
-                      <SymbolView name="calendar" size={18} tintColor={colors.secondary} />
-                      <View style={styles.fieldText}>
+                    {current.effectiveDate !== current.occurredAt.slice(0, 10) ? (
+                      <View style={[styles.fieldRow, { borderBottomColor: colors.separator }]}>
+                        <SymbolView name="calendar" size={18} tintColor={colors.secondary} />
                         <Text style={[styles.fieldLabel, { color: colors.text }]}>
                           {t('reportingDate')}
                         </Text>
                         <Text style={[styles.fieldValue, { color: colors.secondary }]}>
-                          {current.effectiveDate}
+                          {relativeDate(current.effectiveDate, home?.currentDate)}
                         </Text>
                       </View>
-                    </View>
+                    ) : null}
                   </View>
                   {error || saveError ? (
                     <Text style={[styles.error, { color: colors.danger }]}>
@@ -474,7 +490,14 @@ export default function ReviewScreen() {
               <Pressable
                 accessibilityRole="button"
                 disabled={saving}
-                onPress={() => void complete({ reviewed: true })}
+                onPress={() =>
+                  void complete(
+                    reviewConfirmation(
+                      overrides[current.id]?.category,
+                      overrides[current.id]?.included ?? (current.included ? undefined : false),
+                    ),
+                  )
+                }
                 testID="looks-right"
                 style={({ pressed }) => [
                   styles.primaryButton,
@@ -489,9 +512,22 @@ export default function ReviewScreen() {
                   {saving ? t('saving') : t('looksRight')}
                 </Text>
               </Pressable>
-              <Text style={[styles.actionHint, { color: colors.secondary }]}>
-                {t('changingTheCategoryConfirmsItAutomatically')}
-              </Text>
+              {queue.length > 1 ? (
+                <Pressable
+                  accessibilityRole="button"
+                  disabled={saving}
+                  onPress={() => void later()}
+                  style={({ pressed }) => [
+                    styles.laterButton,
+                    { opacity: saving ? 0.5 : pressed ? 0.62 : 1 },
+                  ]}
+                  testID="review-later"
+                >
+                  <Text style={[styles.laterButtonText, { color: colors.accent }]}>
+                    {t('later')}
+                  </Text>
+                </Pressable>
+              ) : null}
             </View>
           </>
         ) : null}
@@ -501,7 +537,12 @@ export default function ReviewScreen() {
         onClose={() => setPicker(null)}
         onSelect={(category) => {
           setPicker(null);
-          if (current) void complete({ category, reviewed: true });
+          if (!current) return;
+          void Haptics.selectionAsync().catch(() => {});
+          setOverrides((values) => ({
+            ...values,
+            [current.id]: { ...values[current.id], category },
+          }));
         }}
         selected={current?.category}
         visible={picker === 'category'}
@@ -541,17 +582,22 @@ function Field({
 }) {
   return (
     <Pressable
+      accessibilityLabel={`${label}, ${value}`}
       accessibilityRole="button"
       disabled={disabled}
       onPress={onPress}
       testID={testID}
-      style={[styles.fieldRow, disabled && styles.disabled]}
+      style={[
+        styles.fieldRow,
+        { borderBottomColor: colors.separator },
+        disabled && styles.disabled,
+      ]}
     >
       <SymbolView name={symbol} size={18} tintColor={colors.secondary} />
-      <View style={styles.fieldText}>
-        <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
-        <Text style={[styles.fieldValue, { color: colors.secondary }]}>{value}</Text>
-      </View>
+      <Text style={[styles.fieldLabel, { color: colors.text }]}>{label}</Text>
+      <Text numberOfLines={1} style={[styles.fieldValue, { color: colors.secondary }]}>
+        {value}
+      </Text>
       <SymbolView name="chevron.up.chevron.down" size={12} tintColor={colors.tertiary} />
     </Pressable>
   );
@@ -613,7 +659,7 @@ function OptionSheet({
 
 function relativeDate(value: string, currentDate?: string) {
   const day = value.slice(0, 10);
-  if (day === currentDate) return 'Today';
+  if (day === currentDate) return t('today');
   const current = currentDate ? new Date(`${currentDate}T12:00:00Z`) : null;
   if (current) {
     current.setUTCDate(current.getUTCDate() - 1);
@@ -628,13 +674,10 @@ const styles = StyleSheet.create({
   screen: { flex: 1 },
   center: { flex: 1, alignItems: 'center', justifyContent: 'center', gap: 10 },
   progressHeader: {
-    flexDirection: 'row',
-    justifyContent: 'space-between',
     paddingHorizontal: 20,
     paddingTop: 10,
   },
   progressText: { fontSize: 13, fontWeight: '600' },
-  progressCount: { fontSize: 12, fontVariant: ['tabular-nums'] },
   progressTrack: {
     height: 3,
     marginHorizontal: 20,
@@ -660,7 +703,12 @@ const styles = StyleSheet.create({
     borderWidth: 2,
   },
   completionRay: { position: 'absolute', width: 4, height: 14, borderRadius: 2 },
-  reviewContent: { paddingHorizontal: 20, paddingTop: 24, paddingBottom: 24 },
+  reviewContent: {
+    flexGrow: 1,
+    justifyContent: 'center',
+    paddingHorizontal: 20,
+    paddingVertical: 20,
+  },
   date: { fontSize: 13, textAlign: 'center', writingDirection: 'auto' },
   merchant: {
     marginTop: 16,
@@ -680,12 +728,19 @@ const styles = StyleSheet.create({
     fontVariant: ['tabular-nums'],
   },
   description: { marginTop: 8, fontSize: 14, textAlign: 'center', writingDirection: 'auto' },
-  fields: { marginTop: 24, borderRadius: 16, paddingHorizontal: 14 },
-  fieldRow: { minHeight: 62, flexDirection: 'row', alignItems: 'center', gap: 12 },
+  fields: { marginTop: 28, borderTopWidth: StyleSheet.hairlineWidth },
+  fieldRow: {
+    minHeight: 56,
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: 12,
+    borderBottomWidth: StyleSheet.hairlineWidth,
+  },
+  // UISwitch ignores its Yoga offset on iOS 27; a sized wrapper keeps it on the row's center line.
+  fieldSwitch: { width: 64, height: 31, alignItems: 'flex-end' },
   disabled: { opacity: 0.55 },
-  fieldText: { flex: 1 },
-  fieldLabel: { fontSize: 15, fontWeight: '600' },
-  fieldValue: { marginTop: 2, fontSize: 13, writingDirection: 'ltr' },
+  fieldLabel: { flex: 1, fontSize: 16, fontWeight: '500' },
+  fieldValue: { flexShrink: 1, fontSize: 16 },
   error: { marginTop: 16, fontSize: 13, lineHeight: 18, textAlign: 'center' },
   actions: { paddingHorizontal: 20, paddingTop: 10 },
   primaryButton: {
@@ -697,7 +752,8 @@ const styles = StyleSheet.create({
     gap: 8,
   },
   primaryButtonText: { fontSize: 17, fontWeight: '700' },
-  actionHint: { marginTop: 8, fontSize: 11.5, textAlign: 'center' },
+  laterButton: { minHeight: 44, marginTop: 4, alignItems: 'center', justifyContent: 'center' },
+  laterButtonText: { fontSize: 16, fontWeight: '600' },
   caughtUp: { flex: 1, alignItems: 'center', justifyContent: 'center', paddingHorizontal: 36 },
   caughtUpTitle: { marginTop: 20, fontSize: 29, lineHeight: 35, fontWeight: '700' },
   caughtUpBody: { marginTop: 8, fontSize: 15, lineHeight: 21, textAlign: 'center' },

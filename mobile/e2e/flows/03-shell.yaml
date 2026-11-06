@@ -9,8 +9,7 @@ name: All root tabs are reachable
 - assertVisible:
     id: explore-screen
 - assertVisible:
-    id: cashflow-chart
-- assertVisible: 'What changed'
+    id: explore-card-categories
 - tapOn: 'Home, tab, 1 of 4'
 - assertVisible:
     id: home-screen
