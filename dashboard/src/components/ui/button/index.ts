@@ -9,13 +9,12 @@ export const buttonVariants = cva(
     variants: {
       variant: {
         default:
-          'bg-bg-primary text-text-primary border border-separator shadow-[0_1px_2px_rgb(0_0_0/0.04)] hover:bg-bg-secondary hover:border-text-tertiary/40 active:bg-bg-tertiary',
+          'bg-bg-primary text-text-primary border border-separator hover:bg-bg-secondary hover:border-text-tertiary/40 active:bg-bg-tertiary',
         filled:
-          'bg-primary text-primary-foreground border border-transparent shadow-[0_1px_2px_rgb(0_0_0/0.08)] hover:brightness-110 active:brightness-95',
+          'bg-primary text-primary-foreground border border-transparent hover:brightness-110 active:brightness-95',
         destructive:
           'bg-bg-primary text-destructive border border-separator hover:bg-destructive/8 active:bg-destructive/12',
-        'destructive-filled':
-          'bg-destructive text-white hover:brightness-110 active:brightness-90 shadow-[var(--shadow-sm)]',
+        'destructive-filled': 'bg-destructive text-white hover:brightness-110 active:brightness-90',
         secondary:
           'bg-bg-primary text-text-primary border border-separator hover:bg-bg-secondary active:brightness-95',
         ghost: 'hover:bg-black/[0.04] dark:hover:bg-white/[0.06] text-text-primary',

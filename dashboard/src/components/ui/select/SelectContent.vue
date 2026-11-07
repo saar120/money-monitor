@@ -32,7 +32,7 @@ const forwarded = useForwardPropsEmits(delegatedProps, emits);
       v-bind="{ ...forwarded, ...$attrs }"
       :class="
         cn(
-          'ui-select-content relative z-50 max-h-[min(24rem,var(--reka-select-content-available-height))] max-w-[calc(100vw-16px)] min-w-32 overflow-hidden rounded-lg border border-separator bg-bg-primary text-text-primary shadow-[0_6px_24px_rgba(0,0,0,0.12)]',
+          'ui-select-content relative z-50 max-h-[min(24rem,var(--reka-select-content-available-height))] max-w-[calc(100vw-16px)] min-w-32 overflow-hidden rounded-lg border border-separator bg-popover text-text-primary shadow-[0_6px_24px_rgba(0,0,0,0.12)]',
           props.class,
         )
       "

@@ -1,6 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
+import { reviewState } from '../shared/transaction-review.js';
 import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
@@ -51,6 +52,186 @@ describe('transactions routes', () => {
 
   afterAll(async () => {
     await server?.close();
+  });
+
+  it('totals the whole filtered reporting scope, separately for each currency', async () => {
+    const account = insertAccount(testDb.db);
+    for (const chargedAmount of [-10, -20, 100])
+      insertTransaction(testDb.db, account.id, { chargedAmount, expenseOwnerType: 'shared' });
+    insertTransaction(testDb.db, account.id, {
+      chargedAmount: -3.5,
+      chargedCurrency: 'USD',
+      expenseOwnerType: 'shared',
+    });
+    insertTransaction(testDb.db, account.id, {
+      chargedAmount: -40,
+      ignored: true,
+      expenseOwnerType: 'shared',
+    });
+    insertTransaction(testDb.db, account.id, {
+      chargedAmount: -50,
+      status: 'pending',
+      expenseOwnerType: 'shared',
+    });
+    insertTransaction(testDb.db, account.id, {
+      chargedAmount: -999,
+      expenseOwnerType: 'unassigned',
+    });
+    const response = await server.inject({
+      method: 'GET',
+      url: `/api/transactions?accountId=${account.id}&ownerType=shared&limit=1`,
+      headers: authHeaders(),
+    });
+    expect(response.statusCode).toBe(200);
+    expect(response.json().transactions).toHaveLength(1);
+    expect(response.json().pagination.total).toBe(6);
+    expect(response.json().totals).toEqual(
+      expect.arrayContaining([
+        { currency: 'ILS', income: 100, expense: 30 },
+        { currency: 'USD', income: 0, expense: 3.5 },
+      ]),
+    );
+    const noMatches = await server.inject({
+      method: 'GET',
+      url: `/api/transactions?accountId=${account.id}&search=no-such-merchant`,
+      headers: authHeaders(),
+    });
+    expect(noMatches.json().totals).toEqual([]);
+  });
+
+  it('commits and undoes a complete review without changing bank data', async () => {
+    const account = insertAccount(testDb.db);
+    const tx = insertTransaction(testDb.db, account.id, {
+      needsReview: true,
+      reviewReason: 'Unknown merchant',
+      category: null,
+      ignored: true,
+      expenseOwnerType: 'unassigned',
+      ownerSource: 'unassigned',
+      confidence: 0.4,
+    });
+    const member = insertMember(testDb.db, { name: 'Review owner' });
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review`,
+      headers: authHeaders(),
+      payload: {
+        expected: reviewState(tx),
+        category: 'food',
+        ownerType: 'member',
+        ownerMemberId: member.id,
+        included: true,
+        effectiveDate: '2026-10-03',
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    const committed = response.json();
+    expect(committed.transaction).toMatchObject({
+      needsReview: false,
+      category: 'food',
+      expenseOwnerType: 'member',
+      expenseOwnerMemberId: member.id,
+      ignored: false,
+      effectiveDate: '2026-10-03',
+      date: tx.date,
+      chargedAmount: tx.chargedAmount,
+    });
+    const undone = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review/undo`,
+      headers: authHeaders(),
+      payload: committed.undo,
+    });
+    expect(undone.statusCode).toBe(200);
+    expect(reviewState(undone.json().transaction)).toEqual(reviewState(tx));
+    expect(undone.json().transaction.date).toBe(tx.date);
+  });
+
+  it('rejects a stale review and invalid owner before saving any fields', async () => {
+    const account = insertAccount(testDb.db);
+    const tx = insertTransaction(testDb.db, account.id, { needsReview: true, category: null });
+    const payload = {
+      expected: reviewState(tx),
+      category: 'food',
+      ownerType: 'member',
+      ownerMemberId: 999999,
+    };
+    const invalid = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review`,
+      headers: authHeaders(),
+      payload,
+    });
+    expect(invalid.statusCode).toBe(404);
+    const unchanged = await server.inject({
+      method: 'GET',
+      url: `/api/transactions/${tx.id}`,
+      headers: authHeaders(),
+    });
+    expect(reviewState(unchanged.json().transaction)).toEqual(reviewState(tx));
+    await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/effective-date`,
+      headers: authHeaders(),
+      payload: { effectiveDate: '2026-10-04' },
+    });
+    const stale = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review`,
+      headers: authHeaders(),
+      payload: { ...payload, ownerType: 'shared', ownerMemberId: null },
+    });
+    expect(stale.statusCode).toBe(409);
+    const current = await server.inject({
+      method: 'GET',
+      url: `/api/transactions/${tx.id}`,
+      headers: authHeaders(),
+    });
+    expect(current.json().transaction).toMatchObject({
+      needsReview: true,
+      category: null,
+      effectiveDate: '2026-10-04',
+    });
+  });
+
+  it('does not let Undo overwrite a later transaction edit', async () => {
+    const account = insertAccount(testDb.db);
+    const tx = insertTransaction(testDb.db, account.id, { needsReview: true, category: null });
+    const response = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review`,
+      headers: authHeaders(),
+      payload: {
+        expected: reviewState(tx),
+        category: 'food',
+        ownerType: 'shared',
+        ownerMemberId: null,
+      },
+    });
+    expect(response.statusCode).toBe(200);
+    await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/ignore`,
+      headers: authHeaders(),
+      payload: { ignored: true },
+    });
+    const undone = await server.inject({
+      method: 'PATCH',
+      url: `/api/transactions/${tx.id}/review/undo`,
+      headers: authHeaders(),
+      payload: response.json().undo,
+    });
+    expect(undone.statusCode).toBe(409);
+    const current = await server.inject({
+      method: 'GET',
+      url: `/api/transactions/${tx.id}`,
+      headers: authHeaders(),
+    });
+    expect(current.json().transaction).toMatchObject({
+      needsReview: false,
+      category: 'food',
+      ignored: true,
+    });
   });
 
   // ── GET /api/transactions ──

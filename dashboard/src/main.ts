@@ -4,6 +4,7 @@ import { createRouter, createWebHistory } from 'vue-router';
 import { getSettings } from './api/client';
 import App from './App.vue';
 import './style.css';
+import './design-language.css';
 import { setThemeChoice } from './lib/theme';
 import { setLanguageChoice } from './lib/language';
 

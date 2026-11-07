@@ -1,5 +1,7 @@
 # Development
 
+For the approved app-wide visual and interaction direction, see [the design language](design-language.md) and its [finance UI references](research/finance-ui-references.md).
+
 ## Find the implementation
 
 | Change                                     | Entry points                                                                                                                  |
@@ -14,6 +16,8 @@
 | Scraping and schedules                     | `src/scraper/`, `src/api/scrape.routes.ts`, `patches/`                                                                        |
 | AI providers and categorization            | `src/ai/agent.ts`, `src/ai/auth.ts`, `src/ai/categorization/`                                                                 |
 | Paths and encrypted configuration          | `src/paths.ts`, `src/config.ts`, `src/safe-storage.ts`, `electron/main.ts`                                                    |
+
+Desktop review decisions and their conditional Undo are implemented in `src/services/transaction-review.ts`; their shared field snapshot is `src/shared/transaction-review.ts`.
 
 The Mac owns financial calculations, credentials, scraping, and administration. Trace a shared feature through its service and both API/client paths; the mobile API is separate from the desktop API.
 

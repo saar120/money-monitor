@@ -7,6 +7,8 @@ import {
   updateTransactionEffectiveDateSchema,
   updateTransactionOwnerSchema,
   resolveReviewSchema,
+  reviewDecisionSchema,
+  undoReviewDecisionSchema,
 } from './validation.js';
 import { parseIntParam, validateBody, validateQuery, sendServiceError } from './helpers.js';
 import {
@@ -20,8 +22,30 @@ import {
   updateTransactionEffectiveDate,
 } from '../services/transactions.js';
 import { setTransactionOwner } from '../services/ownership.js';
+import { saveReviewDecision, undoReviewDecision } from '../services/transaction-review.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
+  app.patch<{ Params: { id: string } }>('/api/transactions/:id/review', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
+    const data = validateBody(reviewDecisionSchema, request.body, reply);
+    if (!data) return;
+    const result = saveReviewDecision(id, data);
+    if (!result.ok) return sendServiceError(reply, result);
+    return reply.send({ transaction: result.transaction, undo: result.undo });
+  });
+  app.patch<{ Params: { id: string } }>(
+    '/api/transactions/:id/review/undo',
+    async (request, reply) => {
+      const id = parseIntParam(request.params.id, 'transaction id', reply);
+      if (id === null) return;
+      const data = validateBody(undoReviewDecisionSchema, request.body, reply);
+      if (!data) return;
+      const result = undoReviewDecision(id, data);
+      if (!result.ok) return sendServiceError(reply, result);
+      return reply.send({ transaction: result.transaction });
+    },
+  );
   app.get('/api/transactions', async (request, reply) => {
     const data = validateQuery(transactionQuerySchema, request.query, reply);
     if (!data) return;

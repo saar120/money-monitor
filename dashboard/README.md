@@ -14,11 +14,17 @@ For cross-client ownership, native dependency setup, checks, and synthetic brows
 
 ## Desktop UI conventions
 
-Use the shared Button, Input, Select and dialog components. Standard actions and fields are 36px high, icon actions are 36px square, and control labels are 13px. Keep navigation rows and content rows spacious enough for their content. Typography uses the platform UI font, 14px body copy, 18px section headings, and 28px page headings. Use theme tokens for color and the shared content gutter for page alignment.
+Use the shared Button, Input, Select and dialog components. Standard actions and fields are 36px high, icon actions are 36px square, and control labels are 13px. Use compact 36px navigation rows and roughly 38px single-line ledger rows, allowing longer content to reflow. Typography uses the platform UI font, 14px body copy, 16px section headings, and 24px page headings. Tables and inspectors share a fine perimeter and a subtle surface tone; shadows are reserved for overlays. Use theme tokens for color and the shared content gutter for page alignment.
 
 Activity, Review, Accounts and Categories each have one workspace. Their former `/advanced` URLs redirect while preserving query parameters. Account creation and sign-in dialogs belong to Accounts; transaction filters and effective dates belong to Activity; recategorization belongs to Categories. Net Worth links to the asset detail pages for holdings and value changes.
 
 In Activity, category, owner and inclusion save as soon as they change; an effective date moves a transaction between months, so it waits for Save and is kept when leaving the row. Search covers all dates. When data fails to load, pages show an error with Retry and never a zero or an empty state.
+
+Home, Activity, and Review implement the [approved design language](../docs/design-language.md) in light and dark mode. Shared surface and selection tokens live in `src/style.css`; shell, merchant marks, and inline category controls use `src/design-language.css`. Home links preserve the selected owner, Reporting Date range, and reporting inclusion rules. Recent activity opens the selected record directly.
+
+Activity shows reporting totals for the entire active filter, grouped by charged currency. Pending and excluded amounts do not contribute. The API returns these totals separately from the paginated rows; the UI never sums only the loaded page.
+
+Review stages category, owner, inclusion, and Effective Date until confirmation. The decision saves atomically through `PATCH /api/transactions/:id/review`, rejects stale review fields, and offers Undo using `PATCH /api/transactions/:id/review/undo`. Undo restores the accepted decision's previous fields only if the transaction still matches its post-review state. Skip applies to the current browser session and keeps the transaction unresolved; reviewed, skipped, and remaining counts are distinct. Failed decisions retain the draft; explicit Reload discards drafts and starts from current server values.
 
 The screen smoke verifies all routes in English/light and Hebrew/dark at 1024, 1280 and 1440px, shared control dimensions, accessible icon names, legacy redirects, menus, account sign-in/import, and setup. Keep these checks in sync when changing navigation.
 

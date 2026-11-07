@@ -117,6 +117,7 @@ export function listTransactions(
   if (empty)
     return {
       transactions: [] as typeof rows,
+      totals: [] as typeof totals,
       pagination: { total: 0, offset, limit, hasMore: false },
     };
 
@@ -133,6 +134,7 @@ export function listTransactions(
     if (ftsIds.length === 0) {
       return {
         transactions: [] as typeof rows,
+        totals: [] as typeof totals,
         pagination: { total: 0, offset, limit, hasMore: false },
       };
     }
@@ -142,6 +144,21 @@ export function listTransactions(
   const where = conditions.length > 0 ? and(...conditions) : undefined;
 
   const [{ total }] = db.select({ total: count() }).from(transactions).where(where).all();
+
+  // These are reporting totals over the entire filter, never just the loaded page.
+  // Keep currencies separate and omit pending or excluded amounts.
+  const totals = db
+    .select({
+      currency: transactions.chargedCurrency,
+      income: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.chargedAmount} > 0 THEN ${transactions.chargedAmount} ELSE 0 END), 0)`,
+      expense: sql<number>`COALESCE(SUM(CASE WHEN ${transactions.chargedAmount} < 0 THEN -${transactions.chargedAmount} ELSE 0 END), 0)`,
+    })
+    .from(transactions)
+    .where(
+      and(...conditions, eq(transactions.ignored, false), eq(transactions.status, 'completed')),
+    )
+    .groupBy(transactions.chargedCurrency)
+    .all();
 
   const sortColumn =
     opts.sortBy === 'chargedAmount'
@@ -165,6 +182,7 @@ export function listTransactions(
 
   return {
     transactions: rows,
+    totals,
     pagination: { total, offset, limit, hasMore: offset + limit < total },
   };
 }

@@ -65,6 +65,7 @@ try {
     });
     await page.setRequestInterception(true);
     const patches = [];
+    const edits = new Map();
     let patchDelay = 0;
     let patchFails = false;
     page.on('request', (req) => {
@@ -89,16 +90,17 @@ try {
         const [id, action = 'category'] = u.pathname.split('/').slice(3);
         patches.push(`${id}:${action}`);
         if (patchFails) return req.respond({ status: 500, body: '{"error":"Synthetic failure"}' });
-        const body = JSON.stringify({
-          transaction: {
-            ...row,
-            id: Number(id),
-            description: ['Sample market', 'Sample cafe', 'Sample bakery', 'Sample restaurant'][
-              id - 1
-            ],
-            ...JSON.parse(req.postData()),
-          },
-        });
+        const updated = {
+          ...row,
+          id: Number(id),
+          description: ['Sample market', 'Sample cafe', 'Sample bakery', 'Sample restaurant'][
+            id - 1
+          ],
+          ...edits.get(Number(id)),
+          ...JSON.parse(req.postData()),
+        };
+        edits.set(Number(id), updated);
+        const body = JSON.stringify({ transaction: updated });
         const respond = () => req.respond({ status: 200, contentType: 'application/json', body });
         return patchDelay ? void setTimeout(respond, patchDelay) : respond();
       }
@@ -145,6 +147,7 @@ try {
             index
           ],
           category: index % 2 ? 'dining' : 'groceries',
+          ...edits.get(index + 1),
         })).filter(
           (item) =>
             !u.searchParams.get('category') || item.category === u.searchParams.get('category'),
@@ -191,7 +194,7 @@ try {
         assert(patches.includes(entry), `${entry} was sent: ${patches.join(', ')}`);
       };
       // Autosave leaves a pending date alone; leaving the row saves it.
-      await page.click('#proto-row-1');
+      await page.click('#proto-row-1 .proto-row-open');
       await page.waitForSelector(dateInput);
       await page.waitForFunction(
         () =>
@@ -206,13 +209,13 @@ try {
       await selectOption(page, category, 'dining');
       await patched('1:category');
       assert(!patches.includes('1:effective-date'), 'Autosave does not commit a pending date');
-      await page.click('#proto-row-2');
+      await page.click('#proto-row-2 .proto-row-open');
       await patched('1:effective-date');
       // A second edit made during a slow save survives moving to another row.
       patchDelay = 300;
       await selectOption(page, category, 'groceries');
-      await page.click('.proto-include input');
-      await page.click('#proto-row-3');
+      await page.click('.proto-include [role=switch]');
+      await page.click('#proto-row-3 .proto-row-open');
       await patched('2:ignore');
       // Changing back during a slow save sends the correction too.
       patches.length = 0;
@@ -228,21 +231,22 @@ try {
       patches.length = 0;
       await selectOption(page, category, 'dining');
       await page.waitForSelector('.proto-inspector .proto-error');
-      await page.click('#proto-row-4');
-      await page.waitForSelector('.proto-content > .proto-error');
+      await page.click('#proto-row-4 .proto-row-open');
+      await page.waitForSelector('.proto-ledger-column > .proto-error');
       assert.match(
-        await page.$eval('.proto-content > .proto-error', (el) => el.textContent),
+        await page.$eval('.proto-ledger-column > .proto-error', (el) => el.textContent),
         /bakery/,
       );
       patchFails = false;
       patches.length = 0;
-      await page.click('.proto-content > .proto-error button');
+      await page.click('.proto-ledger-column > .proto-error button');
       await page.waitForSelector('.proto-error', { hidden: true });
       assert.deepEqual(patches, ['3:category'], 'Retry resends the failed edit, not another row');
+      edits.clear();
       await page.goto(`${baseUrl}/transactions?month=2026-09`, { waitUntil: 'networkidle0' });
       await page.waitForSelector('.proto-table tbody tr[tabindex]');
     }
-    await page.click('.proto-table tbody tr[tabindex]');
+    await page.click('.proto-table tbody tr[tabindex] .proto-row-open');
     await page.waitForSelector('.proto-inspector');
     await page.waitForFunction(
       () =>
@@ -281,9 +285,11 @@ try {
     assert(
       await page.$eval(
         '.proto-table-scroll',
-        (el) => el.scrollWidth - el.querySelector('table').getBoundingClientRect().width >= 15,
+        (el) =>
+          el.clientWidth >= el.querySelector('table').getBoundingClientRect().width - 1 ||
+          el.scrollWidth > el.clientWidth,
       ),
-      'Scrollbar has space outside transaction cells',
+      'Table fits or provides its own horizontal scroll',
     );
 
     await page.click('.proto-filter-button');
@@ -299,7 +305,7 @@ try {
       await page.click('.proto-inspector-head button');
       await page.waitForSelector('.proto-inspector', { hidden: true });
     }
-    await page.click('.proto-table tbody tr[tabindex]');
+    await page.click('.proto-table tbody tr[tabindex] .proto-row-open');
     await page.waitForSelector('.proto-inspector');
     assert.equal(
       await page.$$eval('.transaction-amount-flight', (els) => els.length),
@@ -320,7 +326,7 @@ try {
       'No orphan amount after close',
     );
     // Open, close and reopen before the previous exit completes.
-    await page.click('.proto-table tbody tr[tabindex]');
+    await page.click('.proto-table tbody tr[tabindex] .proto-row-open');
     await page.waitForSelector('.proto-inspector-head button');
     await page.evaluate(() => {
       document.querySelector('.proto-inspector-head button').click();
@@ -346,11 +352,11 @@ try {
       'yes',
       'Filtering preserves surviving row elements',
     );
-    if (motion !== 'reduce')
-      assert(
-        await page.$eval('#proto-row-3', (el) => el.getAnimations().length > 0),
-        'Remaining row moves into the gap',
-      );
+    assert.equal(
+      await page.$eval('#proto-row-3', (el) => el.getAnimations().length),
+      0,
+      'Ledger filtering keeps row navigation immediate',
+    );
     await new Promise((r) => setTimeout(r, 550));
     assert.equal(await page.$$eval('.proto-table tbody tr[tabindex]', (els) => els.length), 2);
     await page.goto(`${baseUrl}/insights`, { waitUntil: 'networkidle0' });
@@ -463,6 +469,13 @@ try {
       'Vertical scrolling does not change month',
     );
     await page.click('.category-ledger-row');
+    await page.waitForSelector('.proto-table');
+    assert(
+      new URL(page.url()).searchParams.get('category'),
+      'Home category opens filtered Activity',
+    );
+    await page.goto(`${baseUrl}/explore?month=2026-09`, { waitUntil: 'networkidle0' });
+    await page.click('.explore-row');
     await page.waitForSelector('.category-detail-hero');
     await new Promise((r) => setTimeout(r, 700));
     assert(

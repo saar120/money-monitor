@@ -198,6 +198,12 @@ export interface Pagination {
   hasMore: boolean;
 }
 
+export interface LedgerTotal {
+  currency: string;
+  income: number;
+  expense: number;
+}
+
 export interface TransactionFilters {
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
@@ -223,7 +229,7 @@ export function getTransactions(filters: TransactionFilters = {}) {
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
-  return request<{ transactions: Transaction[]; pagination: Pagination }>(
+  return request<{ transactions: Transaction[]; pagination: Pagination; totals: LedgerTotal[] }>(
     `/transactions?${params}`,
   );
 }
@@ -249,6 +255,36 @@ export function resolveTransaction(id: number, category: string) {
   return request<{ transaction: Transaction }>(`/transactions/${id}/resolve`, {
     method: 'PATCH',
     body: JSON.stringify({ category }),
+  });
+}
+
+export function reviewTransaction(
+  id: number,
+  data: {
+    expected: import('@shared/transaction-review').TransactionReviewState;
+    category: string;
+    ownerType: OwnerType;
+    ownerMemberId: number | null;
+    included?: boolean;
+    effectiveDate?: string | null;
+  },
+) {
+  return request<{
+    transaction: Transaction;
+    undo: import('@shared/transaction-review').ReviewUndo;
+  }>(`/transactions/${id}/review`, {
+    method: 'PATCH',
+    body: JSON.stringify(data),
+  });
+}
+
+export function undoTransactionReview(
+  id: number,
+  undo: import('@shared/transaction-review').ReviewUndo,
+) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/review/undo`, {
+    method: 'PATCH',
+    body: JSON.stringify(undo),
   });
 }
 

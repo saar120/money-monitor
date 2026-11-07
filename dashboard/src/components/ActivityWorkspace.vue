@@ -1,5 +1,8 @@
 <script setup lang="ts">
 import SelectField from '@/components/ui/select/SelectField.vue';
+import InlineCategory from './InlineCategory.vue';
+import MerchantMark from './MerchantMark.vue';
+import { Switch } from '@/components/ui/switch';
 import {
   computed,
   nextTick,
@@ -7,6 +10,7 @@ import {
   onMounted,
   onUnmounted,
   ref,
+  reactive,
   shallowRef,
   watch,
 } from 'vue';
@@ -40,6 +44,7 @@ import {
   type Account,
   type Category,
   type Member,
+  type LedgerTotal,
   type OwnerType,
   type Transaction,
   type TransactionFilters,
@@ -58,18 +63,67 @@ const filterOpen = ref(false);
 const filterCategory = ref(typeof route.query.category === 'string' ? route.query.category : 'all');
 const filterAccount = ref('all');
 const reviewOnly = ref(false);
-const filterOwner = ref('all');
+const filterOwner = ref(
+  typeof route.query.owner === 'string' &&
+    /^(all|shared|unassigned|member:[1-9]\d*)$/.test(route.query.owner)
+    ? route.query.owner
+    : 'all',
+);
 const filterType = ref('all');
-const filterStatus = ref('all');
-const filterDirection = ref('all');
-const filterInclusion = ref('all');
-const startDate = ref('');
-const endDate = ref('');
+const filterStatus = ref(
+  ['completed', 'pending'].includes(String(route.query.status))
+    ? String(route.query.status)
+    : 'all',
+);
+const filterDirection = ref(
+  ['income', 'expense'].includes(String(route.query.direction))
+    ? String(route.query.direction)
+    : 'all',
+);
+const filterInclusion = ref(
+  ['included', 'ignored'].includes(String(route.query.inclusion))
+    ? String(route.query.inclusion)
+    : 'all',
+);
+const startDate = ref(
+  typeof route.query.startDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(route.query.startDate)
+    ? route.query.startDate
+    : '',
+);
+const endDate = ref(
+  typeof route.query.endDate === 'string' && /^\d{4}-\d{2}-\d{2}$/.test(route.query.endDate)
+    ? route.query.endDate
+    : '',
+);
 const sortBy = ref('date');
 const sortOrder = ref<'asc' | 'desc'>('desc');
 const draftEffectiveDate = ref('');
-const { refresh: refreshReviewCount } = useReviewCount();
+const { reviewCount, refresh: refreshReviewCount } = useReviewCount();
 const filterElement = ref<HTMLElement | null>(null);
+const filterPosition = ref<Record<string, string>>({});
+function positionFilters() {
+  const trigger = filterElement.value;
+  if (!filterOpen.value || !trigger) return;
+  const box = trigger.getBoundingClientRect(),
+    width = Math.min(360, window.innerWidth - 32);
+  const left = Math.min(
+    Math.max(16, language.value === 'he' ? box.left : box.right - width),
+    window.innerWidth - width - 16,
+  );
+  const top = Math.max(16, Math.min(box.bottom + 8, window.innerHeight - 160));
+  filterPosition.value = {
+    position: 'fixed',
+    inset: 'auto',
+    left: `${left}px`,
+    top: `${top}px`,
+    width: `${width}px`,
+    maxHeight: `${window.innerHeight - top - 16}px`,
+  };
+}
+watch(filterOpen, () => {
+  void nextTick(positionFilters);
+});
+
 onClickOutside(
   filterElement,
   () => {
@@ -113,7 +167,7 @@ function sort(column: string) {
 async function confirmReview() {
   const row = selected.value;
   const category = draftCategory.value;
-  if (!row || !category || saving.value) return;
+  if (!row || !category || category === 'uncategorized' || saving.value) return;
   // Edits that failed on this row go with the confirmation, which must not skip them.
   const patch: SavePatch = { ...failureFor(row.id)?.patch, resolve: category };
   if (dateChanged.value) patch.effectiveDate = draftEffectiveDate.value;
@@ -124,6 +178,7 @@ const accounts = ref<Account[]>([]);
 const categories = ref<Category[]>([]);
 const members = ref<Member[]>([]);
 const total = ref(0);
+const ledgerTotals = ref<LedgerTotal[] | null>(null);
 const hasMore = ref(false);
 const loading = ref(true);
 const error = ref('');
@@ -157,6 +212,8 @@ const copy = computed(() =>
   language.value === 'he'
     ? {
         filter: 'סינון',
+        income: 'הכנסות בדוחות',
+        spending: 'הוצאות בדוחות',
         details: 'פרטים',
         account: 'חשבון',
         notes: 'הערות',
@@ -173,6 +230,8 @@ const copy = computed(() =>
       }
     : {
         filter: 'Filter',
+        income: 'Included income',
+        spending: 'Included spending',
         details: 'Details',
         account: 'Account',
         notes: 'Notes',
@@ -189,14 +248,6 @@ const copy = computed(() =>
       },
 );
 
-function preserveRowWidth(element: globalThis.Element) {
-  const row = element as HTMLElement;
-  const widths = Array.from(row.children, (cell) => cell.getBoundingClientRect().width);
-  row.style.width = `${row.getBoundingClientRect().width}px`;
-  Array.from(row.children).forEach((cell, index) => {
-    (cell as HTMLElement).style.width = `${widths[index]}px`;
-  });
-}
 const selected = computed(
   () =>
     rows.value.find((row) => row.id === selectedId.value) ??
@@ -275,9 +326,13 @@ function shiftMonth(delta: number) {
   const [year, number] = month.value.split('-').map(Number) as [number, number];
   month.value = new Date(Date.UTC(year, number - 1 + delta, 1)).toISOString().slice(0, 7);
 }
-function dateLabel(value: string) {
+function dateLabel(value: string, compact = false) {
   const date = new Date(`${value.slice(0, 10)}T12:00:00`);
-  return date.toLocaleDateString(language.value === 'he' ? 'he-IL' : 'en-GB');
+  return date.toLocaleDateString(language.value === 'he' ? 'he-IL' : 'en-US', {
+    month: 'short',
+    day: 'numeric',
+    ...(compact && !searching.value && !hasDateRange.value ? {} : { year: 'numeric' as const }),
+  });
 }
 function signedAmount(row: Transaction) {
   const sign = row.chargedAmount < 0 ? '−' : row.chargedAmount > 0 ? '+' : '';
@@ -357,6 +412,7 @@ async function load(append = false) {
     );
     rows.value = append ? [...rows.value, ...next] : next;
     total.value = result.pagination.total;
+    ledgerTotals.value = result.totals ?? null;
     hasMore.value = result.pagination.hasMore;
     if (!append && !rows.value.some((row) => row.id === selectedId.value)) {
       selectedId.value = null;
@@ -376,6 +432,7 @@ async function load(append = false) {
       if (!append) {
         rows.value = [];
         total.value = 0;
+        ledgerTotals.value = null;
         hasMore.value = false;
         selectedId.value = null;
       }
@@ -396,7 +453,7 @@ type SaveFailure = { row: Transaction; merchant: string; patch: SavePatch };
 // Each edit queues only the field it changed and saves run in order, so a slow save
 // cannot swallow a later edit or replay a value the server has since changed.
 let saveQueue: Promise<unknown> = Promise.resolve();
-const queuedPatches = new Map<number, SavePatch>();
+const queuedPatches = reactive(new Map<number, SavePatch>());
 const queuedResults = new Map<number, Transaction>();
 function queueSave(row: Transaction, patch: SavePatch) {
   pendingSaves.value++;
@@ -440,6 +497,15 @@ function retrySave(failure: SaveFailure) {
 function saveDate() {
   if (selected.value && dateChanged.value)
     void queueSave(selected.value, { effectiveDate: draftEffectiveDate.value });
+}
+const categoryOptions = computed(() => [
+  { value: '', label: t('uncategorized') },
+  ...categories.value.map((item) => ({ value: item.name, label: categoryLabel(item.name) })),
+]);
+function changeRowCategory(row: Transaction, category: string) {
+  selectRow(row);
+  intended.category = draftCategory.value = category;
+  void queueSave(row, { category });
 }
 function isExcludedByHand(row: Transaction) {
   const category = categories.value.find((item) => item.name === row.category);
@@ -511,7 +577,11 @@ async function persistPatch(row: Transaction, patch: SavePatch) {
           intended.included = draftIncluded.value = !updated.ignored;
       }
       if (updated.needsReview !== latest.needsReview) void refreshReviewCount();
-      if (patch.resolve !== undefined || updated.reportingDate !== latest.reportingDate)
+      if (
+        pendingSaves.value === 1 ||
+        patch.resolve !== undefined ||
+        updated.reportingDate !== latest.reportingDate
+      )
         await load();
     }
     if (selectedId.value === row.id) showSaved();
@@ -572,6 +642,7 @@ function toggleLanguage() {
 }
 onMounted(async () => {
   window.addEventListener('keydown', onKeys);
+  window.addEventListener('resize', positionFilters);
   try {
     const [accountData, categoryData, memberData] = await Promise.all([
       getAccounts(),
@@ -598,6 +669,7 @@ onMounted(async () => {
 onBeforeUnmount(saveDate);
 onUnmounted(() => {
   window.removeEventListener('keydown', onKeys);
+  window.removeEventListener('resize', positionFilters);
   clearTimeout(searchTimer);
   clearTimeout(savedTimer);
 });
@@ -649,6 +721,7 @@ watch(search, () => {
 <template>
   <div
     class="proto-shell"
+    :aria-busy="loading"
     :class="{ embedded: !isPreview }"
     :dir="language === 'he' ? 'rtl' : 'ltr'"
   >
@@ -684,26 +757,40 @@ watch(search, () => {
     </aside>
 
     <section class="proto-workspace">
+      <Teleport defer to="#toolbar-actions" :disabled="isPreview"
+        ><div class="toolbar-controls">
+          <div class="proto-month">
+            <button
+              type="button"
+              :aria-label="t('previous')"
+              :disabled="searching && !hasDateRange"
+              @click="shiftMonth(-1)"
+            >
+              <ChevronRight v-if="language === 'he'" :size="17" /><ChevronLeft v-else :size="17" />
+            </button>
+            <span>{{ scopeLabel }}</span>
+            <button
+              type="button"
+              :aria-label="t('next')"
+              :disabled="searching && !hasDateRange"
+              @click="shiftMonth(1)"
+            >
+              <ChevronLeft v-if="language === 'he'" :size="17" /><ChevronRight v-else :size="17" />
+            </button>
+          </div>
+          <SelectField
+            v-model="filterOwner"
+            class="ledger-select"
+            :aria-label="t('owner')"
+            :options="[
+              { value: 'all', label: t('allOwners') },
+              { value: 'shared', label: t('together') },
+              { value: 'unassigned', label: t('unassigned') },
+              ...members.map((member) => ({ value: `member:${member.id}`, label: member.name })),
+            ]"
+          /></div
+      ></Teleport>
       <div class="proto-toolbar">
-        <div class="proto-month">
-          <button
-            type="button"
-            :aria-label="t('previous')"
-            :disabled="searching && !hasDateRange"
-            @click="shiftMonth(-1)"
-          >
-            <ChevronRight v-if="language === 'he'" :size="17" /><ChevronLeft v-else :size="17" />
-          </button>
-          <span>{{ scopeLabel }}</span>
-          <button
-            type="button"
-            :aria-label="t('next')"
-            :disabled="searching && !hasDateRange"
-            @click="shiftMonth(1)"
-          >
-            <ChevronLeft v-if="language === 'he'" :size="17" /><ChevronRight v-else :size="17" />
-          </button>
-        </div>
         <div ref="filterElement" class="proto-filter-wrap" @keydown.esc="closeFilters">
           <button
             type="button"
@@ -717,7 +804,7 @@ watch(search, () => {
             }}</span>
           </button>
           <Transition name="filter-morph">
-            <div v-if="filterOpen" class="proto-filter-popover">
+            <div v-if="filterOpen" class="proto-filter-popover" :style="filterPosition">
               <div class="proto-popover-head">
                 <strong>{{ copy.filter }}</strong
                 ><button type="button" :aria-label="t('cancel')" @click="filterOpen = false">
@@ -819,6 +906,32 @@ watch(search, () => {
             </div>
           </Transition>
         </div>
+        <SelectField
+          v-model="filterAccount"
+          class="activity-quick-filter"
+          :aria-label="t('account')"
+          :options="[
+            { value: 'all', label: t('allAccounts') },
+            ...accounts.map((item) => ({ value: String(item.id), label: item.displayName })),
+          ]"
+        />
+        <SelectField
+          v-model="filterCategory"
+          class="activity-quick-filter"
+          :aria-label="t('category')"
+          :options="[
+            { value: 'all', label: t('allCategories') },
+            ...categories.map((item) => ({ value: item.name, label: categoryLabel(item.name) })),
+          ]"
+        />
+        <button
+          type="button"
+          class="activity-review-filter"
+          :aria-pressed="reviewOnly"
+          @click="reviewOnly = !reviewOnly"
+        >
+          <span class="pending-review-dot" />{{ reviewCount }} {{ t('toReview') }}
+        </button>
         <label class="proto-search"
           ><Search :size="18" /><input
             v-model="search"
@@ -827,317 +940,375 @@ watch(search, () => {
         /></label>
       </div>
 
-      <div class="proto-content">
-        <div class="proto-title">
-          <h1>{{ t('activity') }}</h1>
-          <span v-if="!loadFailed">{{ total }} {{ t('transactions') }}</span>
-        </div>
-        <div v-if="loadFailed" class="proto-error" role="alert">
-          {{ error }} <button type="button" @click="load()">{{ t('retry') }}</button>
-        </div>
+      <section
+        v-if="!loadFailed"
+        class="activity-totals"
+        :aria-label="language === 'he' ? 'סכומים בדוחות לפי מטבע' : 'Included totals by currency'"
+      >
         <div
-          v-for="failure in otherFailures"
-          :key="failure.row.id"
-          class="proto-error"
-          role="alert"
+          v-for="entry in ledgerTotals?.length ? ledgerTotals : [null]"
+          :key="entry?.currency ?? 'unknown'"
+          class="activity-total-currency"
         >
-          <bdi dir="auto">{{ failure.merchant }}</bdi
-          >: {{ copy.saveFailed }}
-          <button type="button" @click="retrySave(failure)">{{ t('retry') }}</button>
+          <div>
+            <span>{{ copy.income }}</span
+            ><strong dir="ltr">{{
+              entry && !loading ? formatAmount(entry.income, entry.currency) : '—'
+            }}</strong>
+          </div>
+          <div>
+            <span>{{ copy.spending }}</span
+            ><strong dir="ltr">{{
+              entry && !loading ? formatAmount(entry.expense, entry.currency) : '—'
+            }}</strong>
+          </div>
+          <div>
+            <span>{{ t('netCashFlow') }}</span
+            ><strong dir="ltr">{{
+              entry
+                ? `${entry.income - entry.expense < 0 ? '−' : ''}${formatAmount(entry.income - entry.expense, entry.currency)}`
+                : '—'
+            }}</strong>
+          </div>
         </div>
-        <div class="proto-table-scroll" tabindex="0" :aria-label="t('activity')">
-          <table v-if="rows.length || !loadFailed" class="proto-table">
-            <colgroup>
-              <col class="proto-date-col" />
-              <col class="proto-merchant-col" />
-              <col class="proto-category-col" />
-              <col class="proto-amount-col" />
-            </colgroup>
-            <thead>
-              <tr>
-                <th
-                  scope="col"
-                  :aria-sort="
-                    sortBy === 'date' ? (sortOrder === 'asc' ? 'ascending' : 'descending') : 'none'
-                  "
+      </section>
+      <div class="proto-content">
+        <div class="proto-ledger-column">
+          <div v-if="isPreview" class="proto-title">
+            <h1>{{ t('activity') }}</h1>
+            <span v-if="!loadFailed">{{ total }} {{ t('transactions') }}</span>
+          </div>
+          <div v-if="loadFailed" class="proto-error" role="alert">
+            {{ error }} <button type="button" @click="load()">{{ t('retry') }}</button>
+          </div>
+          <div
+            v-for="failure in otherFailures"
+            :key="failure.row.id"
+            class="proto-error"
+            role="alert"
+          >
+            <bdi dir="auto">{{ failure.merchant }}</bdi
+            >: {{ copy.saveFailed }}
+            <button type="button" @click="retrySave(failure)">{{ t('retry') }}</button>
+          </div>
+          <div class="proto-table-scroll" tabindex="0" :aria-label="t('activity')">
+            <table v-if="rows.length || !loadFailed" class="proto-table">
+              <colgroup>
+                <col class="proto-date-col" />
+                <col class="proto-merchant-col" />
+                <col class="proto-category-col" />
+                <col class="proto-amount-col" />
+              </colgroup>
+              <thead>
+                <tr>
+                  <th
+                    scope="col"
+                    :aria-sort="
+                      sortBy === 'date'
+                        ? sortOrder === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
+                  >
+                    <button class="table-sort" @click="sort('date')">
+                      {{ t('date')
+                      }}<span v-if="sortBy === 'date'" aria-hidden="true">{{
+                        sortOrder === 'asc' ? '↑' : '↓'
+                      }}</span>
+                    </button>
+                  </th>
+                  <th
+                    scope="col"
+                    :aria-sort="
+                      sortBy === 'description'
+                        ? sortOrder === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
+                  >
+                    <button class="table-sort" @click="sort('description')">
+                      {{ t('description')
+                      }}<span v-if="sortBy === 'description'" aria-hidden="true">{{
+                        sortOrder === 'asc' ? '↑' : '↓'
+                      }}</span>
+                    </button>
+                  </th>
+                  <th scope="col">{{ t('category') }}</th>
+                  <th
+                    scope="col"
+                    :aria-sort="
+                      sortBy === 'chargedAmount'
+                        ? sortOrder === 'asc'
+                          ? 'ascending'
+                          : 'descending'
+                        : 'none'
+                    "
+                  >
+                    <button class="table-sort" @click="sort('chargedAmount')">
+                      {{ t('amount')
+                      }}<span v-if="sortBy === 'chargedAmount'" aria-hidden="true">{{
+                        sortOrder === 'asc' ? '↑' : '↓'
+                      }}</span>
+                    </button>
+                  </th>
+                </tr>
+              </thead>
+              <tbody>
+                <tr
+                  v-for="row in rows"
+                  :id="`proto-row-${row.id}`"
+                  :key="row.id"
+                  :class="{ selected: selectedId === row.id }"
+                  :aria-selected="selectedId === row.id"
+                  tabindex="0"
+                  @click="selectRow(row)"
+                  @keydown.enter.self="selectRow(row)"
+                  @keydown.space.self.prevent="selectRow(row)"
                 >
-                  <button class="table-sort" @click="sort('date')">
-                    {{ t('date')
-                    }}<span v-if="sortBy === 'date'" aria-hidden="true">{{
-                      sortOrder === 'asc' ? '↑' : '↓'
-                    }}</span>
-                  </button>
-                </th>
-                <th
-                  scope="col"
-                  :aria-sort="
-                    sortBy === 'description'
-                      ? sortOrder === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  "
-                >
-                  <button class="table-sort" @click="sort('description')">
-                    {{ t('description')
-                    }}<span v-if="sortBy === 'description'" aria-hidden="true">{{
-                      sortOrder === 'asc' ? '↑' : '↓'
-                    }}</span>
-                  </button>
-                </th>
-                <th scope="col">{{ t('category') }}</th>
-                <th
-                  scope="col"
-                  :aria-sort="
-                    sortBy === 'chargedAmount'
-                      ? sortOrder === 'asc'
-                        ? 'ascending'
-                        : 'descending'
-                      : 'none'
-                  "
-                >
-                  <button class="table-sort" @click="sort('chargedAmount')">
-                    {{ t('amount')
-                    }}<span v-if="sortBy === 'chargedAmount'" aria-hidden="true">{{
-                      sortOrder === 'asc' ? '↑' : '↓'
-                    }}</span>
-                  </button>
-                </th>
-              </tr>
-            </thead>
-            <TransitionGroup tag="tbody" name="ledger-reflow" @before-leave="preserveRowWidth">
-              <tr
-                v-for="row in rows"
-                :id="`proto-row-${row.id}`"
-                :key="row.id"
-                :class="{ selected: selectedId === row.id }"
-                :aria-selected="selectedId === row.id"
-                tabindex="0"
-                @click="selectRow(row)"
-                @keydown.enter.self="selectRow(row)"
-                @keydown.space.self.prevent="selectRow(row)"
+                  <td>
+                    <span class="ledger-date"
+                      ><bdi dir="ltr">{{ dateLabel(row.reportingDate, true) }}</bdi
+                      ><span
+                        v-if="row.needsReview"
+                        class="pending-review-dot"
+                        role="img"
+                        :aria-label="t('needsReview')"
+                    /></span>
+                  </td>
+                  <td class="proto-merchant">
+                    <button
+                      type="button"
+                      class="proto-row-open"
+                      :title="row.description"
+                      @click.stop="selectRow(row)"
+                    >
+                      <MerchantMark :description="row.description" /><bdi dir="auto">{{
+                        normalizeMerchant(row.description)
+                      }}</bdi>
+                    </button>
+                    <small class="proto-mobile-date"
+                      ><bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi></small
+                    >
+                  </td>
+                  <td class="proto-category">
+                    <InlineCategory
+                      :model-value="
+                        queuedPatches.get(row.id)?.category ??
+                        failureFor(row.id)?.patch.category ??
+                        row.category ??
+                        ''
+                      "
+                      :label="`${t('category')}: ${normalizeMerchant(row.description)}`"
+                      :options="categoryOptions"
+                      @update:model-value="changeRowCategory(row, $event)"
+                    />
+                  </td>
+                  <td
+                    class="proto-amount"
+                    :class="row.chargedAmount >= 0 ? 'positive' : 'negative'"
+                  >
+                    <bdi dir="ltr">{{ signedAmount(row) }}</bdi>
+                  </td>
+                </tr>
+              </tbody>
+            </table>
+            <div v-if="loading && !rows.length" class="proto-empty">
+              {{ t('loadingTransactions') }}
+            </div>
+            <div v-else-if="!loading && !loadFailed && !rows.length" class="proto-empty">
+              {{ t('noTransactionsFound') }}
+              <button
+                v-if="activeFilterCount"
+                type="button"
+                class="proto-clear"
+                @click="clearFilters"
               >
-                <td>
-                  <bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi>
-                </td>
-                <td class="proto-merchant">
-                  <button
-                    type="button"
-                    class="proto-row-open"
-                    :title="row.description"
-                    @click.stop="selectRow(row)"
-                  >
-                    <bdi dir="auto">{{ normalizeMerchant(row.description) }}</bdi>
-                  </button>
-                  <span class="proto-merchant-meta">
-                    <span>{{ accountMap.get(row.accountId) ?? copy.account }}</span>
-                    <small v-if="row.needsReview" class="proto-review-flag">{{
-                      t('needsReview')
-                    }}</small>
-                  </span>
-                  <small class="proto-mobile-date"
-                    ><bdi dir="ltr">{{ dateLabel(row.reportingDate) }}</bdi></small
-                  >
-                </td>
-                <td class="proto-category">
-                  <bdi dir="auto">{{ categoryLabel(row.category) }}</bdi>
-                </td>
-                <td class="proto-amount" :class="row.chargedAmount >= 0 ? 'positive' : 'negative'">
-                  <bdi dir="ltr">{{ signedAmount(row) }}</bdi>
-                </td>
-              </tr>
-            </TransitionGroup>
-          </table>
-          <div v-if="loading && !rows.length" class="proto-empty">
-            {{ t('loadingTransactions') }}
-          </div>
-          <div v-else-if="!loading && !loadFailed && !rows.length" class="proto-empty">
-            {{ t('noTransactionsFound') }}
+                {{ t('clear') }}
+              </button>
+            </div>
             <button
-              v-if="activeFilterCount"
+              v-if="hasMore"
               type="button"
-              class="proto-clear"
-              @click="clearFilters"
+              class="proto-more"
+              :disabled="loading"
+              @click="load(true)"
             >
-              {{ t('clear') }}
+              {{ copy.loadMore }}
             </button>
+            <div v-if="!loadFailed" class="activity-table-footer">
+              {{ rows.length }} {{ t('of') }} {{ total }} {{ t('transactions') }}
+            </div>
           </div>
-          <button
-            v-if="hasMore"
-            type="button"
-            class="proto-more"
-            :disabled="loading"
-            @click="load(true)"
-          >
-            {{ copy.loadMore }}
-          </button>
         </div>
-      </div>
-    </section>
 
-    <Transition name="detail-backdrop">
-      <button
-        v-if="selected"
-        type="button"
-        class="proto-backdrop"
-        :aria-label="t('cancel')"
-        @click="closeDetails"
-      />
-    </Transition>
-    <Transition name="detail-panel">
-      <aside v-if="selected" class="proto-inspector" :aria-label="copy.details">
-        <div class="proto-inspector-head">
-          <h2>{{ copy.details }}</h2>
-          <button type="button" :aria-label="t('cancel')" @click="closeDetails">
-            <X :size="18" />
-          </button>
-        </div>
-        <div class="proto-inspector-content">
-          <h3>
-            <bdi dir="auto">{{ selected.description }}</bdi>
-          </h3>
-          <strong
-            class="proto-detail-amount"
-            :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
-            ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
+        <Transition name="detail-backdrop">
+          <button
+            v-if="selected"
+            type="button"
+            class="proto-backdrop"
+            :aria-label="t('cancel')"
+            @click="closeDetails"
+          />
+        </Transition>
+        <Transition name="detail-panel">
+          <aside
+            v-if="selected"
+            class="proto-inspector workspace-surface"
+            :aria-label="copy.details"
           >
-          <p class="proto-detail-meta">
-            {{ accountMap.get(selected.accountId) ?? copy.account }} ·
-            <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
-          </p>
-          <p v-if="selected.needsReview" class="proto-review">
-            {{ selected.reviewReason || t('needsReview') }}
-          </p>
-          <dl
-            v-if="
-              selected.status !== 'completed' ||
-              selected.installmentTotal ||
-              selected.originalCurrency !== selected.chargedCurrency
-            "
-            class="transaction-facts"
-          >
-            <div v-if="selected.status !== 'completed'">
-              <dt>{{ t('status') }}</dt>
-              <dd>{{ t('pending') }}</dd>
+            <div class="proto-inspector-head">
+              <h2 class="sr-only">{{ copy.details }}</h2>
+              <button type="button" :aria-label="t('cancel')" @click="closeDetails">
+                <X :size="18" />
+              </button>
             </div>
-            <div v-if="selected.installmentTotal">
-              <dt>{{ t('installment') }}</dt>
-              <dd>
-                {{ selected.installmentNumber }} {{ t('of') }} {{ selected.installmentTotal }}
-              </dd>
-            </div>
-            <div v-if="selected.originalCurrency !== selected.chargedCurrency">
-              <dt>{{ t('originalAmount') }}</dt>
-              <dd dir="ltr">
-                {{ formatAmount(selected.originalAmount, selected.originalCurrency) }}
-              </dd>
-            </div>
-          </dl>
-          <div class="proto-fields">
-            <label
-              ><span>{{ t('category') }}</span
-              ><SelectField
-                v-model="draftCategory"
-                :options="[
-                  { value: '', label: t('uncategorized') },
-                  ...categories.map((item) => ({
-                    value: item.name,
-                    label: categoryLabel(item.name),
-                  })),
-                ]"
-            /></label>
-            <div class="proto-more-details">
-              <div class="proto-secondary-fields">
+            <div class="proto-inspector-content">
+              <h3>
+                <MerchantMark :description="selected.description" /><bdi dir="auto">{{
+                  normalizeMerchant(selected.description)
+                }}</bdi>
+              </h3>
+              <strong
+                class="proto-detail-amount"
+                :class="selected.chargedAmount >= 0 ? 'positive' : 'negative'"
+                ><bdi dir="ltr">{{ signedAmount(selected) }}</bdi></strong
+              >
+              <p class="proto-detail-meta">
+                <bdi dir="ltr">{{ dateLabel(selected.reportingDate) }}</bdi>
+              </p>
+              <p v-if="selected.needsReview" class="proto-review">
+                {{ selected.reviewReason || t('needsReview') }}
+              </p>
+              <dl
+                v-if="
+                  selected.status !== 'completed' ||
+                  selected.installmentTotal ||
+                  selected.originalCurrency !== selected.chargedCurrency
+                "
+                class="transaction-facts"
+              >
+                <div v-if="selected.status !== 'completed'">
+                  <dt>{{ t('status') }}</dt>
+                  <dd>{{ t('pending') }}</dd>
+                </div>
+                <div v-if="selected.installmentTotal">
+                  <dt>{{ t('installment') }}</dt>
+                  <dd>
+                    {{ selected.installmentNumber }} {{ t('of') }} {{ selected.installmentTotal }}
+                  </dd>
+                </div>
+                <div v-if="selected.originalCurrency !== selected.chargedCurrency">
+                  <dt>{{ t('originalAmount') }}</dt>
+                  <dd dir="ltr">
+                    {{ formatAmount(selected.originalAmount, selected.originalCurrency) }}
+                  </dd>
+                </div>
+              </dl>
+              <div class="proto-fields">
+                <div class="activity-fact">
+                  <span>{{ t('account') }}</span
+                  ><span>{{ accountMap.get(selected.accountId) ?? copy.account }}</span>
+                </div>
                 <label
-                  ><span>{{ t('owner') }}</span
+                  ><span>{{ t('category') }}</span
                   ><SelectField
-                    v-model="draftOwner"
+                    v-model="draftCategory"
                     :options="[
-                      { value: 'shared', label: t('together') },
-                      { value: 'unassigned', label: t('unassigned') },
-                      ...members.map((item) => ({ value: `member:${item.id}`, label: item.name })),
+                      { value: '', label: t('uncategorized') },
+                      ...categories.map((item) => ({
+                        value: item.name,
+                        label: categoryLabel(item.name),
+                      })),
                     ]"
                 /></label>
+                <div class="proto-more-details">
+                  <div class="proto-secondary-fields">
+                    <label
+                      ><span>{{ t('owner') }}</span
+                      ><SelectField
+                        v-model="draftOwner"
+                        :options="[
+                          { value: 'shared', label: t('together') },
+                          { value: 'unassigned', label: t('unassigned') },
+                          ...members.map((item) => ({
+                            value: `member:${item.id}`,
+                            label: item.name,
+                          })),
+                        ]"
+                    /></label>
+
+                    <label v-if="isPreview || selected.memo"
+                      ><span>{{ copy.notes }}</span
+                      ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
+                    </label>
+                  </div>
+                  <div class="activity-fact">
+                    <span>{{ t('bankDate') }}</span
+                    ><bdi dir="ltr">{{ dateLabel(selected.date) }}</bdi>
+                  </div>
+                  <label
+                    ><span>{{ t('effectiveDate') }}</span
+                    ><input v-model="draftEffectiveDate" type="date"
+                  /></label>
+                  <Button
+                    v-if="draftEffectiveDate"
+                    variant="link"
+                    class="justify-start"
+                    @click="draftEffectiveDate = ''"
+                    >{{ language === 'he' ? 'שימוש בתאריך הבנק' : 'Use bank date' }}</Button
+                  >
+                </div>
                 <label class="proto-include"
-                  ><input v-model="draftIncluded" type="checkbox" /><span>{{
-                    t('includeInStatistics')
-                  }}</span></label
-                >
-                <label v-if="isPreview || selected.memo"
-                  ><span>{{ copy.notes }}</span
-                  ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
-                </label>
+                  ><span>{{ t('includeInStatistics') }}</span
+                  ><Switch v-model="draftIncluded" :aria-label="t('includeInStatistics')"
+                /></label>
               </div>
-              <label
-                ><span>{{ t('effectiveDate') }}</span
-                ><input v-model="draftEffectiveDate" type="date" /><small
-                  >{{ t('bankDate') }}: {{ dateLabel(selected.date) }}</small
-                ></label
-              >
-              <Button
-                v-if="draftEffectiveDate"
-                variant="link"
-                class="justify-start"
-                @click="draftEffectiveDate = ''"
-                >{{ language === 'he' ? 'שימוש בתאריך הבנק' : 'Use bank date' }}</Button
-              >
+              <details class="activity-original">
+                <summary>{{ t('description') }}</summary>
+                <p>
+                  <bdi dir="auto">{{ selected.description }}</bdi>
+                </p>
+              </details>
+              <p v-if="selectedFailure" class="proto-error" role="alert">
+                {{ copy.saveFailed }}
+                <button type="button" @click="retrySave(selectedFailure)">{{ t('retry') }}</button>
+              </p>
+              <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
+              <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
             </div>
-          </div>
-          <p v-if="selectedFailure" class="proto-error" role="alert">
-            {{ copy.saveFailed }}
-            <button type="button" @click="retrySave(selectedFailure)">{{ t('retry') }}</button>
-          </p>
-          <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
-          <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
-        </div>
-        <div
-          v-if="(selected.needsReview && !isPreview) || dateChanged"
-          class="proto-inspector-actions"
-        >
-          <Button
-            v-if="selected.needsReview && !isPreview"
-            variant="secondary"
-            class="w-full"
-            :class="{ 'mb-2': dateChanged }"
-            :disabled="saving || !draftCategory"
-            @click="confirmReview"
-            >{{ language === 'he' ? 'אישור התנועה' : 'Confirm review' }}</Button
-          >
-          <button
-            v-if="dateChanged"
-            type="button"
-            class="proto-save"
-            :disabled="saving"
-            @click="saveDate"
-          >
-            {{ saving ? copy.saving : copy.save }}
-          </button>
-        </div>
-      </aside>
-    </Transition>
+            <div
+              v-if="(selected.needsReview && !isPreview) || dateChanged"
+              class="proto-inspector-actions"
+            >
+              <Button
+                v-if="selected.needsReview && !isPreview"
+                variant="filled"
+                class="w-full"
+                :class="{ 'mb-2': dateChanged }"
+                :disabled="saving || !draftCategory || draftCategory === 'uncategorized'"
+                @click="confirmReview"
+                >{{ language === 'he' ? 'אישור התנועה' : 'Confirm review' }}</Button
+              >
+              <button
+                v-if="dateChanged"
+                type="button"
+                class="proto-save"
+                :disabled="saving"
+                @click="saveDate"
+              >
+                {{ saving ? copy.saving : copy.save }}
+              </button>
+            </div>
+          </aside>
+        </Transition>
+      </div>
+    </section>
   </div>
 </template>
 
 <style scoped>
-.transaction-facts {
-  display: grid;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 16px;
-  margin-top: 20px;
-  padding-block: 16px;
-  border-block: 1px solid var(--separator);
-}
-.transaction-facts dt {
-  color: var(--text-secondary);
-  font-size: var(--type-caption);
-}
-.transaction-facts dd {
-  margin: 4px 0 0;
-  font-size: var(--type-control);
-  font-weight: 500;
-  overflow-wrap: anywhere;
-}
-
 .proto-shell {
   display: flex;
   position: relative;
@@ -1148,130 +1319,37 @@ watch(search, () => {
   color: var(--text-primary);
   background: var(--bg-primary);
   font-family: var(--font-ui);
-  font-size: var(--type-body);
-  line-height: 1.5;
+  font-size: 14px;
 }
 .proto-shell.embedded {
   height: 100%;
   min-height: 0;
-}
-.proto-shell * {
-  box-sizing: border-box;
-}
-.proto-sidebar {
-  display: flex;
-  flex: 0 0 200px;
-  flex-direction: column;
-  min-width: 0;
-  background: var(--bg-secondary);
-  border-inline-end: 1px solid var(--separator);
-}
-.proto-brand {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  height: 82px;
-  padding-inline: 18px;
-  color: var(--text-primary);
-  font-size: 16px;
-  font-weight: 700;
-  white-space: nowrap;
-}
-.proto-brand img {
-  width: 28px;
-  height: 28px;
-  border-radius: 7px;
-}
-.proto-nav {
-  display: grid;
-  gap: 5px;
-  padding: 14px 10px;
-}
-.proto-nav a,
-.proto-sidebar-footer a {
-  display: flex;
-  align-items: center;
-  gap: 13px;
-  min-height: 42px;
-  padding: 0 13px;
-  border-radius: 10px;
-  color: var(--text-secondary);
-  text-decoration: none;
-  font-weight: 600;
-}
-.proto-nav a:hover,
-.proto-sidebar-footer a:hover {
-  background: var(--bg-tertiary);
-}
-.proto-nav a.active {
-  color: var(--accent);
-  background: var(--accent-15);
-}
-.proto-nav svg,
-.proto-sidebar-footer svg {
-  flex: none;
-}
-.proto-sidebar-footer {
-  display: grid;
-  gap: 5px;
-  margin-top: auto;
-  padding: 12px 10px 16px;
-  border-top: 1px solid var(--separator);
-}
-.proto-sync {
-  display: flex;
-  align-items: center;
-  gap: 7px;
-  padding: 8px 13px;
-  color: var(--text-tertiary);
-  font-size: 12px;
-}
-.proto-sync i {
-  width: 7px;
-  height: 7px;
-  border-radius: 50%;
-  background: #0aa779;
-}
-.proto-language {
-  justify-self: start;
-  margin-inline-start: 12px;
-  padding: 4px 7px;
-  border: 0;
-  background: none;
-  color: var(--text-secondary);
-  font-size: 12px;
-  cursor: pointer;
 }
 .proto-workspace {
   display: flex;
   flex: 1;
   flex-direction: column;
   min-width: 0;
-  background: var(--bg-primary);
+  min-height: 0;
 }
 .proto-toolbar {
-  min-height: 64px;
   display: flex;
   align-items: center;
-  gap: 12px;
-  min-height: 48px;
-  flex-shrink: 0;
   flex-wrap: wrap;
-  padding: 12px 24px;
-  border-bottom: 1px solid var(--separator);
+  gap: 12px;
+  padding: 24px 24px 0;
+  flex-shrink: 0;
 }
 .proto-month {
   display: flex;
   align-items: center;
-  justify-content: space-between;
   gap: 8px;
-  min-width: 190px;
-  flex-shrink: 0;
-  padding: 4px 0;
-  border: 0;
-  border-radius: 0;
-  background: transparent;
-  font-weight: 650;
+  min-height: 36px;
+  padding-inline: 4px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  font-size: 13px;
   white-space: nowrap;
 }
 .proto-month button,
@@ -1279,289 +1357,296 @@ watch(search, () => {
 .proto-inspector-head button {
   display: grid;
   place-items: center;
-  width: var(--control-height);
-  height: var(--control-height);
+  width: 36px;
+  height: 36px;
   border: 0;
   border-radius: 7px;
-  background: transparent;
   color: var(--text-secondary);
-  cursor: pointer;
+  background: transparent;
 }
 .proto-month button:hover,
 .proto-inspector-head button:hover {
-  background: var(--bg-tertiary);
+  background: var(--row-hover);
 }
 .proto-month button:disabled {
   opacity: 0.35;
+}
+.proto-search {
+  order: -3;
+  display: flex;
+  flex: 1 1 220px;
+  gap: 9px;
+  align-items: center;
+  min-width: 160px;
+  height: 36px;
+  padding: 0 12px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-secondary);
+}
+.proto-search input {
+  width: 100%;
+  min-width: 0;
   background: transparent;
-  cursor: default;
+  border: 0;
+  outline: 0;
+  color: var(--text-primary);
+  font-size: 13px;
+}
+.proto-search:focus-within {
+  outline: 2px solid var(--accent);
+  outline-offset: 2px;
+}
+:deep(.activity-quick-filter) {
+  order: -2;
+  max-width: 180px;
+  flex: 0 1 160px;
+}
+.activity-review-filter {
+  order: -1;
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 36px;
+  padding: 0 13px;
+  border-radius: 8px;
+  background: var(--selection);
+  color: var(--accent);
+  font-size: 13px;
+}
+.activity-review-filter[aria-pressed='true'] {
+  outline: 1px solid var(--accent);
+  outline-offset: -1px;
 }
 .proto-filter-wrap {
   position: relative;
 }
 .proto-filter-button {
   display: flex;
-  align-items: center;
   gap: 8px;
-  height: var(--control-height);
-  padding: 0 13px;
+  align-items: center;
+  height: 36px;
+  padding: 0 12px;
   border: 1px solid var(--separator);
   border-radius: 8px;
-  background: var(--bg-secondary);
+  background: var(--surface-muted);
   color: var(--text-primary);
-  font-weight: 650;
-  cursor: pointer;
-}
-.proto-filter-button:hover {
-  background: var(--bg-tertiary);
+  font-size: 13px;
+  font-weight: 400;
 }
 .proto-filter-count {
-  display: inline-grid;
-  place-items: center;
-  min-width: 18px;
-  height: 18px;
-  padding-inline: 5px;
-  border-radius: 9px;
-  background: var(--accent);
-  color: var(--primary-foreground);
   font-size: 11px;
-  font-weight: 600;
-  font-variant-numeric: tabular-nums;
+  color: var(--accent);
 }
 .proto-filter-popover {
   position: absolute;
-  inset-block-start: 47px;
-  inset-inline-start: 0;
-  z-index: 5;
+  z-index: 12;
+  inset-block-start: 44px;
+  inset-inline-end: 0;
   display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 14px;
+  padding: 18px;
   width: 360px;
   max-width: calc(100vw - 32px);
-  max-height: calc(100dvh - 150px);
-  overflow-y: auto;
-  grid-template-columns: repeat(2, minmax(0, 1fr));
-  padding: 20px;
+  max-height: calc(100dvh - 170px);
+  overflow: auto;
   border: 1px solid var(--separator);
   border-radius: 10px;
-  background: var(--bg-primary);
+  background: var(--surface-overlay);
   box-shadow: var(--shadow-lg);
 }
-.proto-filter-popover {
-  transform-origin: 24px -24px;
-}
-[dir='rtl'] .proto-filter-popover {
-  transform-origin: calc(100% - 24px) -24px;
-}
-/* Controls are ready on the first frame; no stagger or delayed entrance. */
-.filter-morph-leave-active {
-  transition: opacity 80ms ease-out;
-  pointer-events: none;
-}
-.filter-morph-leave-to {
-  opacity: 0;
-}
 .proto-popover-head {
-  grid-column: 1 / -1;
+  grid-column: 1/-1;
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
-.proto-filter-popover label,
-.proto-fields label {
+.proto-filter-popover label {
   display: grid;
   gap: 6px;
-  color: var(--text-secondary);
   font-size: 12px;
-  font-weight: 600;
+  color: var(--text-secondary);
 }
-.proto-filter-popover input:not([type='checkbox']),
-.proto-filter-popover select,
-.proto-fields select,
-.proto-fields input:not([type='checkbox']),
-.proto-fields textarea {
+.proto-filter-popover input:not([type='checkbox']) {
+  height: 36px;
   width: 100%;
-  min-height: var(--control-height);
+  min-width: 0;
   padding: 6px 10px;
   border: 1px solid var(--separator);
-  border-radius: 9px;
-  background: var(--bg-primary);
+  border-radius: 8px;
+  background: var(--surface-muted);
   color: var(--text-primary);
-  font-family: var(--font-ui);
-  font-size: var(--type-body);
+  font-size: 13px;
 }
 .proto-filter-popover .proto-check {
   display: flex;
-  align-items: center;
   gap: 8px;
-  color: var(--text-primary);
-  font-size: 14px;
+  align-items: center;
 }
 .proto-clear {
-  justify-self: start;
-  border: 0;
-  background: none;
   color: var(--accent);
-  font-weight: 650;
-  cursor: pointer;
-}
-.proto-search {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  width: min(310px, 30vw);
-  height: var(--control-height);
-  min-width: 160px;
-  flex: 1 1 180px;
-  margin-inline-start: auto;
-  padding: 0 12px;
-  border: 1px solid var(--separator);
-  border-radius: 8px;
-  background: var(--bg-secondary);
-  color: var(--text-tertiary);
-}
-.proto-search:focus-within {
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
-}
-.proto-search input {
-  width: 100%;
-  border: 0;
-  outline: 0;
   background: transparent;
-  color: var(--text-primary);
-  font: inherit;
+  font-size: 13px;
 }
-.proto-search:focus-within {
-  border-color: var(--accent);
-  outline: 2px solid var(--accent);
-  outline-offset: 2px;
+.activity-totals {
+  padding: 24px 28px;
+  flex-shrink: 0;
+}
+.activity-total-currency {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 20px;
+}
+.activity-total-currency + .activity-total-currency {
+  margin-top: 16px;
+}
+.activity-total-currency > div {
+  display: flex;
+  align-items: baseline;
+  gap: 14px;
+  padding-inline-end: 16px;
+  border-inline-end: 1px solid var(--separator);
+}
+.activity-total-currency > div:last-child {
+  border: 0;
+}
+.activity-total-currency span {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.activity-total-currency strong {
+  white-space: nowrap;
+  font-size: 24px;
+  font-weight: 580;
+  letter-spacing: -0.025em;
+  font-variant-numeric: tabular-nums;
 }
 .proto-content {
   display: flex;
   flex: 1;
-  flex-direction: column;
+  gap: 20px;
+  align-items: flex-start;
+  position: relative;
   min-height: 0;
-  width: 100%;
-  max-width: 1120px;
-  margin-inline: auto;
-  padding: 24px 24px 0;
+  padding: 0 24px 24px;
+}
+.proto-ledger-column {
+  display: flex;
+  flex: 1;
+  flex-direction: column;
+  min-width: 0;
+  min-height: 0;
+  max-height: 100%;
 }
 .proto-title {
   display: flex;
   align-items: baseline;
   gap: 12px;
-  padding: 4px 16px 28px;
+  margin-bottom: 16px;
 }
 .proto-title h1 {
-  margin: 0;
-  font-size: 28px;
-  font-weight: 650;
-  letter-spacing: -0.03em;
+  font-size: 24px;
 }
 .proto-title span {
-  color: var(--text-tertiary);
-  font-size: 14px;
+  color: var(--text-secondary);
+  font-size: 12px;
 }
 .proto-error {
-  margin-block-end: 12px;
-  padding: 10px;
+  margin: 0 0 14px;
+  padding: 12px 14px;
+  border: 1px solid var(--separator);
   border-radius: 8px;
-  background: color-mix(in srgb, var(--destructive) 12%, var(--bg-primary));
+  background: var(--surface);
   color: var(--destructive);
+  font-size: 13px;
 }
 .proto-error button {
-  border: 0;
-  background: none;
-  color: inherit;
-  text-decoration: underline;
-  cursor: pointer;
+  min-height: 36px;
+  color: var(--accent);
+  margin-inline-start: 8px;
 }
 .proto-table-scroll {
-  flex: 1;
   min-height: 0;
   overflow: auto;
-  scrollbar-gutter: stable;
-  padding-inline-end: 16px;
-  margin-inline-end: -16px;
-  outline-offset: -2px;
+  border: 1px solid var(--separator);
+  border-radius: 10px;
+  background: var(--surface);
+  scroll-padding-block: 44px;
 }
 .proto-table {
   width: 100%;
-  min-width: 580px;
-  border-collapse: collapse;
+  min-width: 590px;
   table-layout: fixed;
-}
-.proto-merchant-col {
-  width: auto;
-}
-.proto-category-col {
-  width: 20%;
+  border-collapse: collapse;
 }
 .proto-date-col {
-  width: 112px;
+  width: 110px;
+}
+.proto-merchant-col {
+  width: 36%;
 }
 .proto-amount-col {
-  width: 154px;
+  width: 145px;
 }
-.proto-table thead th {
+.proto-table th {
   position: sticky;
   top: 0;
   z-index: 1;
-  height: var(--control-height);
-  padding-inline: 16px;
+  height: 42px;
+  padding: 0 16px;
   border-bottom: 1px solid var(--separator);
-  background: var(--bg-primary);
+  background: var(--surface-muted);
   color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 600;
   text-align: start;
+  font-size: 12px;
+  font-weight: 500;
 }
-.proto-table thead th:last-child {
+.proto-table th:last-child {
   text-align: end;
 }
 .proto-table td {
-  height: 72px;
-  padding: 16px;
-  overflow: hidden;
+  height: 38px;
+  padding: 0 16px;
   border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
   color: var(--text-primary);
-  text-align: start;
-  text-overflow: ellipsis;
-  white-space: nowrap;
+  font-size: 14px;
 }
 .proto-table tr {
-  cursor: pointer;
-  transition: background-color 0.15s ease;
+  transition: none;
 }
-.proto-table tbody tr[tabindex]:hover {
-  background: color-mix(in srgb, var(--text-primary) 4%, transparent);
+.proto-table tr:hover {
+  background: var(--row-hover);
 }
-.proto-table tbody tr.selected {
-  background: color-mix(in srgb, var(--accent) 7%, transparent);
+.proto-table tr.selected,
+.proto-table tr.selected:hover {
+  background: var(--selection);
 }
 .proto-table tbody tr:focus-visible {
   outline: 2px solid var(--accent);
   outline-offset: -2px;
 }
-.proto-table td:first-child {
-  font-size: 14px;
-  color: var(--text-tertiary);
-}
-.proto-merchant {
-  font-size: 14px;
-  color: var(--text-primary) !important;
-  font-weight: 500;
+.ledger-date {
+  display: inline-flex;
+  align-items: center;
+  gap: 10px;
+  color: var(--text-secondary);
+  white-space: nowrap;
+  font-size: 12px;
 }
 .proto-row-open {
   display: flex;
+  gap: 9px;
   align-items: center;
-  gap: 8px;
   width: 100%;
   min-width: 0;
   padding: 0;
-  color: inherit;
-  font: inherit;
   text-align: start;
+  font-size: 14px;
+  font-weight: 400;
+  color: var(--text-primary);
+  background: none;
 }
 .proto-row-open bdi {
   min-width: 0;
@@ -1569,310 +1654,407 @@ watch(search, () => {
   text-overflow: ellipsis;
   white-space: nowrap;
 }
-.proto-row-open svg {
-  flex: none;
-  color: var(--text-tertiary);
-}
-.proto-merchant-meta {
-  display: flex;
-  align-items: center;
-  gap: 10px;
-  margin-block-start: 5px;
-  color: var(--text-secondary);
-  font-size: 12px;
-  font-weight: 400;
-}
-.proto-merchant-meta > span {
-  overflow: hidden;
-  text-overflow: ellipsis;
-}
-.proto-review-flag {
-  flex: none;
-  color: var(--warning);
-  font-size: 11px;
-  font-weight: 500;
-}
-.proto-merchant .proto-mobile-date {
+.proto-mobile-date {
   display: none;
 }
-.proto-category {
-  font-size: 14px;
-  color: var(--text-secondary) !important;
+.proto-table .proto-category {
+  padding-inline: 4px;
 }
 .proto-amount {
   text-align: end !important;
-  font-weight: 650;
+  white-space: nowrap;
+  font-weight: 450;
   font-variant-numeric: tabular-nums;
 }
-.proto-amount.negative {
-  color: var(--text-primary) !important;
-}
-.proto-detail-amount.negative {
-  color: var(--text-primary) !important;
-}
-.proto-amount.positive,
-.proto-detail-amount.positive {
+.positive {
   color: var(--success) !important;
 }
+.negative {
+  color: var(--text-primary) !important;
+}
 .proto-empty {
-  padding: 70px 20px;
-  color: var(--text-tertiary);
+  padding: 40px 20px;
+  color: var(--text-secondary);
   text-align: center;
 }
 .proto-empty .proto-clear {
   display: block;
-  margin: 8px auto 0;
+  margin: 12px auto 0;
 }
 .proto-more {
   display: block;
-  margin: 22px auto;
-  padding: 8px 12px;
-  border: 0;
-  border-radius: 8px;
-  background: var(--bg-tertiary);
+  margin: 14px auto;
+  padding: 0 12px;
+  background: var(--surface-muted);
   color: var(--accent);
-  cursor: pointer;
+}
+.activity-table-footer {
+  padding: 11px 16px;
+  color: var(--text-secondary);
+  font-size: 12px;
+  border-top: 1px solid var(--separator);
+  background: var(--surface-muted);
 }
 .proto-inspector {
   display: flex;
-  flex: 0 0 350px;
+  flex: 0 0 344px;
   flex-direction: column;
   min-width: 0;
-  border-inline-start: 1px solid var(--separator);
-  background: var(--bg-secondary);
-}
-.proto-backdrop {
-  display: none;
+  max-height: 100%;
+  overflow: auto;
 }
 .proto-inspector-head {
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-height: 64px;
-  flex-shrink: 0;
-  padding: 0 24px;
-  border-bottom: 1px solid var(--separator);
+  min-height: 42px;
+  padding: 8px 14px 0 20px;
 }
 .proto-inspector-head h2 {
-  margin: 0;
-  font-size: 15px;
-  font-weight: 600;
+  font-size: 12px;
+  font-weight: 400;
+  color: var(--text-secondary);
 }
 .proto-inspector-content {
-  flex: 1;
-  overflow: auto;
-  padding: 24px;
+  padding: 0 20px 20px;
+  min-height: 0;
 }
-.proto-review {
-  display: inline-flex;
-  padding: 5px 10px;
-  border-radius: 7px;
-  margin-block: 0 24px;
-  background: color-mix(in srgb, var(--warning) 10%, var(--bg-primary));
-  color: var(--warning);
-  font-size: 12px;
-  font-weight: 700;
+.proto-inspector-content h3 {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  margin: 0 0 14px;
+  font-size: 17px;
+  line-height: 1.4;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+.proto-inspector-content h3 bdi {
+  min-width: 0;
 }
 .proto-detail-amount {
   display: block;
-  margin-top: 17px;
-  font-size: var(--type-title);
-  line-height: 1.1;
-  letter-spacing: -0.035em;
+  font-size: 30px;
+  letter-spacing: -0.025em;
+  line-height: 1.2;
+  font-weight: 600;
   font-variant-numeric: tabular-nums;
 }
-.proto-inspector-content h3 {
-  margin: 0 0 8px;
-  overflow-wrap: anywhere;
-  font-size: var(--type-section);
-  line-height: 1.35;
-}
 .proto-detail-meta {
-  margin: 12px 0 24px;
-  padding-bottom: 24px;
-  border-bottom: 1px solid var(--separator);
+  margin: 8px 0 14px;
   color: var(--text-secondary);
   font-size: 12px;
 }
+.proto-review {
+  display: flex;
+  align-items: start;
+  gap: 8px;
+  margin: 0 0 20px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.proto-review:before {
+  content: '';
+  flex: 0 0 6px;
+  width: 6px;
+  height: 6px;
+  margin-top: 6px;
+  border-radius: 50%;
+  background: var(--accent);
+}
 .proto-fields {
   display: grid;
-  gap: 20px;
+  gap: 14px;
+  padding-block-start: 16px;
+  border-block-start: 1px solid var(--separator);
+}
+.proto-fields label {
+  display: grid;
+  gap: 6px;
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.proto-fields :deep(.ui-select-trigger) {
+  color: var(--text-primary);
+  font-size: 13px;
+  font-weight: 400;
 }
 .proto-secondary-fields {
   display: grid;
-  gap: 20px;
-  padding-block: 0 20px;
-}
-.proto-fields + .proto-error {
-  margin-top: 16px;
+  gap: 14px;
 }
 .proto-fields label.proto-include {
   display: flex;
   align-items: center;
-  gap: 9px;
+  justify-content: space-between;
+  flex-wrap: wrap;
+  gap: 10px;
+  margin-block: 2px;
+  padding-block: 14px;
+  border-block: 1px solid var(--separator);
   color: var(--text-primary);
-  font-size: 14px;
 }
-.proto-fields input[type='checkbox'],
-.proto-filter-popover input[type='checkbox'] {
-  accent-color: var(--accent);
+.proto-fields input:not([type='checkbox']),
+.proto-fields textarea {
+  width: 100%;
+  min-width: 0;
+  height: 36px;
+  padding: 6px 10px;
+  border: 1px solid var(--separator);
+  border-radius: 8px;
+  background: var(--surface-muted);
+  color: var(--text-primary);
+  font: inherit;
 }
 .proto-fields textarea {
-  resize: vertical;
+  height: auto;
+}
+.proto-fields small {
+  font-weight: 400;
+}
+.transaction-facts {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding-block: 14px;
+  border-block: 1px solid var(--separator);
+  margin-block: 16px;
+  font-size: 12px;
+}
+.transaction-facts dt {
+  color: var(--text-secondary);
+}
+.transaction-facts dd {
+  margin: 4px 0 0;
+}
+.activity-original {
+  margin-top: 16px;
+  padding-top: 12px;
+  border-top: 1px solid var(--separator);
+  font-size: 12px;
+}
+.activity-original summary {
+  color: var(--text-secondary);
+  cursor: pointer;
+}
+.activity-original p {
+  margin: 8px 0 0;
+  overflow-wrap: anywhere;
+}
+.proto-saved {
+  margin-block-start: 12px;
+  color: var(--success);
+  font-size: 12px;
 }
 .proto-preview-note {
-  margin-top: 17px;
   color: var(--text-secondary);
   font-size: 12px;
 }
-.proto-saved {
-  color: var(--success);
-  font-size: 12px;
-  font-weight: 650;
-}
 .proto-inspector-actions {
-  padding: 20px 24px;
-  flex-shrink: 0;
-  border-top: 1px solid var(--separator);
+  padding: 0 20px 20px;
 }
 .proto-save {
+  min-height: 36px;
   width: 100%;
-  min-height: var(--control-height);
-  border: 0;
-  border-radius: 9px;
+  border-radius: 8px;
   background: var(--accent);
   color: var(--primary-foreground);
-  font-family: var(--font-ui);
-  font-size: var(--type-body);
-  cursor: pointer;
-}
-.proto-save:hover {
-  background: var(--accent-hover);
+  font-size: 13px;
 }
 .proto-save:disabled {
-  opacity: 0.6;
-  cursor: wait;
+  opacity: 0.5;
+}
+.proto-backdrop {
+  display: none;
+}
+.proto-sidebar {
+  display: flex;
+  flex: 0 0 200px;
+  flex-direction: column;
+  background: var(--bg-secondary);
+  padding: 24px 16px;
+  border-inline-end: 1px solid var(--separator);
+}
+.proto-brand {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  font-weight: 600;
+}
+.proto-brand img {
+  width: 28px;
+  height: 28px;
+}
+.proto-nav {
+  display: grid;
+  gap: 8px;
+  margin-top: 30px;
+}
+.proto-nav a,
+.proto-sidebar-footer a {
+  display: flex;
+  gap: 10px;
+  align-items: center;
+  padding: 10px;
+  color: var(--text-primary);
+}
+.proto-nav .active {
+  background: var(--selection);
+  border-radius: 8px;
+}
+.proto-sidebar-footer {
+  display: grid;
+  gap: 12px;
+  margin-top: auto;
+}
+.proto-sync {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+@media (max-width: 1250px) {
+  .activity-total-currency > div {
+    gap: 8px;
+    flex-wrap: wrap;
+  }
+  .activity-total-currency strong {
+    font-size: 21px;
+  }
 }
 @media (max-width: 1120px) {
   .proto-backdrop {
     display: block;
     position: absolute;
-    inset: 0;
     z-index: 3;
-    width: 100%;
+    inset: 0;
     border: 0;
-    background: #12223d2b;
-    cursor: pointer;
+    background: #0004;
   }
   .proto-inspector {
     position: absolute;
-    inset-block: 0;
-    inset-inline-end: 0;
+    inset-inline-end: 24px;
+    inset-block: 0 24px;
     z-index: 4;
-    width: 330px;
-    box-shadow: 0 8px 36px #162b4833;
+    width: 344px;
+    box-shadow: var(--shadow-lg);
   }
   .proto-content {
-    max-width: 1000px;
+    gap: 0;
   }
 }
-@media (max-width: 900px) {
-  .proto-sidebar {
-    flex-basis: 69px;
-  }
-  .proto-brand {
-    justify-content: center;
-    padding: 0;
-  }
-  .proto-brand span,
-  .proto-nav span,
-  .proto-sidebar-footer a span,
-  .proto-sync,
-  .proto-language {
-    display: none;
-  }
-  .proto-nav {
-    padding-inline: 8px;
-  }
-  .proto-nav a,
-  .proto-sidebar-footer a {
-    justify-content: center;
-    padding: 0;
-  }
+@media (max-width: 640px) {
   .proto-toolbar {
-    padding-inline: 16px;
-  }
-  .proto-content {
-    padding-inline: 16px;
-  }
-  .proto-inspector {
-    width: min(330px, 80vw);
-  }
-}
-@media (max-width: 720px) {
-  .proto-filter-popover {
-    position: fixed;
-    inset-block-start: 112px;
-    inset-inline: 12px;
-    width: auto;
-    max-height: calc(100dvh - 140px);
-    overflow-y: auto;
-    transform-origin: top center;
-  }
-  [dir='rtl'] .proto-filter-popover {
-    transform-origin: top center;
-  }
-
-  .proto-table {
-    min-width: 360px;
-  }
-  .proto-toolbar {
-    gap: 10px;
-    padding-block: 12px;
-  }
-  .proto-date-col {
-    display: none;
-  }
-  .proto-merchant .proto-mobile-date {
-    display: block;
-    margin: 3px 0 0;
-    color: var(--text-tertiary);
-  }
-  .proto-table thead th:first-child,
-  .proto-table td:first-child {
-    display: none;
-  }
-  .proto-merchant-col {
-    width: auto;
-  }
-  .proto-category-col {
-    width: 90px;
-  }
-  .proto-amount-col {
-    width: 144px;
-  }
-  .proto-month {
-    min-width: 135px;
+    padding: 16px 16px 0;
+    gap: 8px;
   }
   .proto-search {
-    width: 150px;
+    flex-basis: 100%;
   }
-}
-@media (prefers-reduced-motion: no-preference) {
-  .proto-table tr.ledger-reflow-move,
-  .proto-table tr.ledger-reflow-enter-active,
-  .proto-table tr.ledger-reflow-leave-active {
-    transition:
-      transform 460ms cubic-bezier(0.22, 1, 0.36, 1),
-      opacity 260ms,
-      background-color 150ms;
+  :deep(.activity-quick-filter) {
+    flex: 1;
+    max-width: none;
   }
-}
-@media (prefers-reduced-motion: reduce) {
-  .proto-table tr,
+  .proto-content {
+    padding: 0 16px 16px;
+  }
+  .activity-totals {
+    padding: 18px 16px;
+  }
+  .activity-total-currency {
+    gap: 8px;
+  }
+  .activity-total-currency span {
+    font-size: 11px;
+  }
+  .activity-total-currency strong {
+    font-size: 18px;
+  }
   .proto-inspector {
-    transition: none;
-    animation: none;
+    inset-inline: 16px;
+    inset-block-end: 16px;
+    width: auto;
   }
+  .proto-sidebar {
+    display: none;
+  }
+}
+
+.proto-inspector {
+  position: relative;
+}
+.proto-inspector-head {
+  position: absolute;
+  inset-block-start: 8px;
+  inset-inline-end: 10px;
+  z-index: 1;
+  padding: 0;
+  min-height: 0;
+}
+.proto-inspector-head h2 {
+  margin: 0;
+}
+.proto-inspector-content {
+  padding: 20px;
+}
+.proto-inspector-content h3 {
+  padding-inline-end: 28px;
+}
+.activity-fact {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  font-size: 13px;
+  min-height: 30px;
+}
+.activity-fact > span:first-child {
+  color: var(--text-secondary);
+  font-size: 12px;
+}
+.proto-fields > label,
+.proto-secondary-fields > label:not(.proto-include):not(:has(textarea)),
+.proto-more-details > label:not(.proto-include) {
+  display: grid;
+  grid-template-columns: 80px minmax(0, 1fr);
+  align-items: center;
+  gap: 10px;
+}
+.proto-fields :deep(.ui-select-trigger) {
+  border-color: transparent;
+  background: transparent;
+  padding-inline: 0;
+}
+.proto-fields :deep(.ui-select-trigger[data-state='open']) {
+  border-color: var(--accent);
+  background: var(--surface-muted);
+}
+.proto-more-details {
+  display: grid;
+  gap: 10px;
+}
+.proto-secondary-fields {
+  gap: 8px;
+}
+.proto-fields {
+  gap: 8px;
+}
+.proto-fields label.proto-include {
+  margin-block-start: 8px;
+}
+.proto-fields small {
+  grid-column: 1/-1;
+}
+@media (max-width: 1120px) {
+  .proto-inspector {
+    position: absolute;
+  }
+}
+
+.activity-table-footer {
+  position: sticky;
+  bottom: 0;
+}
+.activity-original {
+  border-top: 0;
+  padding-top: 0;
 }
 </style>

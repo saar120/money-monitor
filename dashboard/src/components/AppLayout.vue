@@ -139,7 +139,7 @@ async function exitDemo() {
             :title="t(item.label)"
             :aria-label="t(item.label)"
           >
-            <component :is="item.icon" :size="18" :stroke-width="2" />
+            <component :is="item.icon" :size="17" :stroke-width="1.65" />
             <span>{{ t(item.label) }}</span
             ><kbd>{{ item.shortcut }}</kbd>
           </RouterLink>
@@ -156,7 +156,7 @@ async function exitDemo() {
             :title="t(item.label)"
             :aria-label="t(item.label)"
           >
-            <component :is="item.icon" :size="18" :stroke-width="2" />
+            <component :is="item.icon" :size="17" :stroke-width="1.65" />
             <span>{{ t(item.label) }}</span>
             <span v-if="item.path === '/insights' && reviewCount" class="nav-count">{{
               reviewCount
@@ -175,7 +175,7 @@ async function exitDemo() {
             :title="t(item.label)"
             :aria-label="t(item.label)"
           >
-            <component :is="item.icon" :size="18" :stroke-width="2" /><span>{{
+            <component :is="item.icon" :size="17" :stroke-width="1.65" /><span>{{
               t(item.label)
             }}</span>
           </RouterLink>
@@ -200,17 +200,13 @@ async function exitDemo() {
         <span class="demo-dot" /> {{ t('viewingSampleData') }}
         <button @click="exitDemo">{{ t('exitDemo') }}</button>
       </div>
-      <div
-        v-if="!activityWorkspace"
-        class="content-toolbar"
-        :style="isElectron ? '-webkit-app-region: drag' : undefined"
-      >
+      <div class="content-toolbar" :style="isElectron ? '-webkit-app-region: drag' : undefined">
         <span class="toolbar-title" aria-hidden="true">{{ pageTitle }}</span>
         <div id="toolbar-actions" class="toolbar-actions" style="-webkit-app-region: no-drag" />
       </div>
       <main ref="mainEl" class="content-scroll">
         <div class="content-inner">
-          <h1 v-if="!activityWorkspace" class="sr-only">{{ pageTitle }}</h1>
+          <h1 class="sr-only">{{ pageTitle }}</h1>
           <slot />
         </div>
       </main>
