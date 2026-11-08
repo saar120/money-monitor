@@ -9,18 +9,7 @@ import { onClickOutside } from '@vueuse/core';
 import { Button } from '@/components/ui/button';
 import { useReviewCount } from '@/composables/useReviewCount';
 import { useRoute } from 'vue-router';
-import {
-  Bot,
-  ChevronLeft,
-  ChevronRight,
-  Compass,
-  Home,
-  Receipt,
-  Search,
-  Settings,
-  SlidersHorizontal,
-  X,
-} from 'lucide-vue-next';
+import { ChevronLeft, ChevronRight, Search, SlidersHorizontal, X } from 'lucide-vue-next';
 import {
   getAccounts,
   getCategories,
@@ -39,12 +28,11 @@ import {
   type TransactionFilters,
 } from '@/api/client';
 import { formatAmount } from '@/lib/format';
-import { language, setLanguageChoice, t } from '@/lib/language';
+import { language, t } from '@/lib/language';
 import { isValidMonth } from '@/lib/month';
 import { normalizeMerchant } from '@/lib/merchant';
 
 const route = useRoute();
-const isPreview = computed(() => route.name === 'split-prototype');
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
 const month = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
 const search = ref(typeof route.query.search === 'string' ? route.query.search : '');
@@ -180,7 +168,6 @@ const requestedTransactionId = ref(
 const draftCategory = ref('');
 const draftOwner = ref('unassigned');
 const draftIncluded = ref(true);
-const draftMemo = ref('');
 const saved = ref(false);
 const saveRevision = ref(0);
 const saving = computed(() => {
@@ -201,11 +188,10 @@ const saveFailures = computed<SaveFailure[]>(() => {
 const selectedFailure = computed(() => failureFor(selectedId.value));
 // What the user last asked for on the selected row. New edits compare against this,
 // not the saved row, so changing back during a slow save still counts as a change.
-const intended = { category: '', owner: '', included: true, memo: '' };
+const intended = { category: '', owner: '', included: true };
 const otherFailures = computed(() =>
   saveFailures.value.filter((failure) => failure.row.id !== selectedId.value),
 );
-const localEdits = new Map<number, Partial<Transaction>>();
 let requestId = 0;
 let searchTimer: ReturnType<typeof setTimeout> | undefined;
 let savedTimer: ReturnType<typeof setTimeout> | undefined;
@@ -221,13 +207,10 @@ const copy = computed(() =>
         notes: 'הערות',
         save: 'שמירה',
         saving: 'שומר…',
-        onlyPreview: 'אב טיפוס · השינויים נשמרים במסך הזה בלבד',
-        saved: isPreview.value ? 'השינוי מוצג באב הטיפוס' : 'התנועה נשמרה',
-        sync: 'מעודכן',
+        saved: 'התנועה נשמרה',
         all: 'הכול',
         loadMore: 'טעינת תנועות נוספות',
         noSelection: 'בחרו תנועה כדי לראות פרטים',
-        localChanges: 'תצוגה מקדימה בלבד',
         saveFailed: 'לא ניתן לשמור את התנועה. נסו שוב.',
       }
     : {
@@ -239,13 +222,10 @@ const copy = computed(() =>
         notes: 'Notes',
         save: 'Save',
         saving: 'Saving…',
-        onlyPreview: 'Prototype · changes stay on this screen',
-        saved: isPreview.value ? 'Change shown in prototype' : 'Transaction saved',
-        sync: 'Up to date',
+        saved: 'Transaction saved',
         all: 'All',
         loadMore: 'Load more transactions',
         noSelection: 'Select a transaction to see details',
-        localChanges: 'Preview only',
         saveFailed: 'Could not save the transaction. Try again.',
       },
 );
@@ -360,7 +340,6 @@ function selectRow(row: Transaction) {
   intended.category = draftCategory.value = failed.category ?? row.category ?? '';
   intended.owner = draftOwner.value = failed.owner ?? ownerValue(row);
   intended.included = draftIncluded.value = failed.included ?? !row.ignored;
-  intended.memo = draftMemo.value = failed.memo ?? row.memo ?? '';
   draftEffectiveDate.value = failed.effectiveDate ?? row.effectiveDate ?? '';
   saved.value = false;
 }
@@ -410,9 +389,7 @@ async function load(append = false) {
     };
     const result = await getTransactions(filters);
     if (id !== requestId) return;
-    const next = result.transactions.map((row) =>
-      isPreview.value ? { ...row, ...localEdits.get(row.id) } : row,
-    );
+    const next = result.transactions;
     const seen = new Set(append ? rows.value.map((row) => row.id) : []);
     const unique = next.filter((row) => {
       if (seen.has(row.id)) return false;
@@ -454,7 +431,6 @@ type SavePatch = {
   category?: string;
   owner?: string;
   included?: boolean;
-  memo?: string;
   effectiveDate?: string;
   resolve?: string;
 };
@@ -525,18 +501,6 @@ const autosave = createActivityAutosave({
   },
 });
 function queueSave(row: Transaction, patch: SavePatch) {
-  if (isPreview.value) {
-    const edit: Partial<Transaction> = {};
-    if (patch.category !== undefined) edit.category = patch.category || null;
-    if (patch.owner !== undefined) Object.assign(edit, ownerFields(patch.owner));
-    if (patch.included !== undefined) edit.ignored = !patch.included;
-    if (patch.memo !== undefined) edit.memo = patch.memo || null;
-    if (patch.effectiveDate !== undefined) edit.effectiveDate = patch.effectiveDate || null;
-    localEdits.set(row.id, { ...localEdits.get(row.id), ...edit });
-    rows.value = rows.value.map((item) => (item.id === row.id ? { ...item, ...edit } : item));
-    showSaved();
-    return Promise.resolve();
-  }
   return autosave.edit(row, commandPatch(patch));
 }
 function failureFor(rowId: number | null) {
@@ -606,9 +570,6 @@ function onKeys(event: KeyboardEvent) {
       ?.scrollIntoView({ block: 'nearest' });
   }
 }
-function toggleLanguage() {
-  setLanguageChoice(language.value === 'he' ? 'en' : 'he');
-}
 onMounted(async () => {
   window.addEventListener('keydown', onKeys);
   window.addEventListener('resize', positionFilters);
@@ -669,14 +630,13 @@ watch(
   },
 );
 // Category, owner and inclusion save as soon as they change.
-watch([draftCategory, draftOwner, draftIncluded, draftMemo], () => {
+watch([draftCategory, draftOwner, draftIncluded], () => {
   const row = selected.value;
   if (!row) return;
   const patch: SavePatch = {};
   if (draftCategory.value !== intended.category) patch.category = draftCategory.value;
   if (draftOwner.value !== intended.owner) patch.owner = draftOwner.value;
   if (draftIncluded.value !== intended.included) patch.included = draftIncluded.value;
-  if (isPreview.value && draftMemo.value !== intended.memo) patch.memo = draftMemo.value;
   if (!Object.keys(patch).length) return;
   Object.assign(intended, patch);
   void queueSave(row, patch);
@@ -689,45 +649,9 @@ watch(search, () => {
 </script>
 
 <template>
-  <div
-    class="proto-shell"
-    :aria-busy="loading"
-    :class="{ embedded: !isPreview }"
-    :dir="language === 'he' ? 'rtl' : 'ltr'"
-  >
-    <aside v-if="isPreview" class="proto-sidebar" :aria-label="t('mainNavigation')">
-      <div class="proto-brand"><img src="/icon-192.png" alt="" /><span>Money Monitor</span></div>
-      <nav class="proto-nav">
-        <RouterLink to="/" :title="t('home')"
-          ><Home :size="19" /><span>{{ t('home') }}</span></RouterLink
-        >
-        <RouterLink
-          to="/prototype/split-view"
-          class="active"
-          aria-current="page"
-          :title="t('activity')"
-          ><Receipt :size="19" /><span>{{ t('activity') }}</span></RouterLink
-        >
-        <RouterLink to="/explore" :title="t('explore')"
-          ><Compass :size="19" /><span>{{ t('explore') }}</span></RouterLink
-        >
-        <RouterLink to="/chat" :title="t('advisor')"
-          ><Bot :size="19" /><span>{{ t('advisor') }}</span></RouterLink
-        >
-      </nav>
-      <div class="proto-sidebar-footer">
-        <span class="proto-sync"><i />{{ copy.sync }}</span>
-        <RouterLink to="/settings" :title="t('settings')"
-          ><Settings :size="17" /><span>{{ t('settings') }}</span></RouterLink
-        >
-        <button type="button" class="proto-language" @click="toggleLanguage">
-          {{ language === 'he' ? 'EN' : 'עברית' }}
-        </button>
-      </div>
-    </aside>
-
+  <div class="proto-shell embedded" :aria-busy="loading" :dir="language === 'he' ? 'rtl' : 'ltr'">
     <section class="proto-workspace">
-      <Teleport defer to="#toolbar-actions" :disabled="isPreview"
+      <Teleport defer to="#toolbar-actions"
         ><div class="toolbar-controls">
           <div class="proto-month">
             <button
@@ -944,10 +868,6 @@ watch(search, () => {
       </section>
       <div class="proto-content">
         <div class="proto-ledger-column">
-          <div v-if="isPreview" class="proto-title">
-            <h1>{{ t('activity') }}</h1>
-            <span v-if="!loadFailed">{{ total }} {{ t('transactions') }}</span>
-          </div>
           <div v-if="loadFailed" class="proto-error" role="alert">
             {{ error }} <button type="button" @click="load()">{{ t('retry') }}</button>
           </div>
@@ -1209,9 +1129,9 @@ watch(search, () => {
                         ]"
                     /></label>
 
-                    <label v-if="isPreview || selected.memo"
+                    <label v-if="selected.memo"
                       ><span>{{ copy.notes }}</span
-                      ><textarea v-model="draftMemo" rows="3" :readonly="!isPreview" />
+                      ><textarea :value="selected.memo" rows="3" readonly />
                     </label>
                   </div>
                   <div class="activity-fact">
@@ -1245,15 +1165,11 @@ watch(search, () => {
                 {{ copy.saveFailed }}
                 <button type="button" @click="retrySave(selectedFailure)">{{ t('retry') }}</button>
               </p>
-              <p v-if="isPreview" class="proto-preview-note">{{ copy.onlyPreview }}</p>
               <p v-if="saved" class="proto-saved" role="status">{{ copy.saved }}</p>
             </div>
-            <div
-              v-if="(selected.needsReview && !isPreview) || dateChanged"
-              class="proto-inspector-actions"
-            >
+            <div v-if="selected.needsReview || dateChanged" class="proto-inspector-actions">
               <Button
-                v-if="selected.needsReview && !isPreview"
+                v-if="selected.needsReview"
                 variant="filled"
                 class="w-full"
                 :class="{ 'mb-2': dateChanged }"
@@ -1509,19 +1425,6 @@ watch(search, () => {
   min-width: 0;
   min-height: 0;
   max-height: 100%;
-}
-.proto-title {
-  display: flex;
-  align-items: baseline;
-  gap: 12px;
-  margin-bottom: 16px;
-}
-.proto-title h1 {
-  font-size: 24px;
-}
-.proto-title span {
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 .proto-error {
   margin: 0 0 14px;
@@ -1816,10 +1719,6 @@ watch(search, () => {
   color: var(--success);
   font-size: 12px;
 }
-.proto-preview-note {
-  color: var(--text-secondary);
-  font-size: 12px;
-}
 .proto-inspector-actions {
   padding: 0 20px 20px;
 }
@@ -1836,50 +1735,6 @@ watch(search, () => {
 }
 .proto-backdrop {
   display: none;
-}
-.proto-sidebar {
-  display: flex;
-  flex: 0 0 200px;
-  flex-direction: column;
-  background: var(--bg-secondary);
-  padding: 24px 16px;
-  border-inline-end: 1px solid var(--separator);
-}
-.proto-brand {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  font-weight: 600;
-}
-.proto-brand img {
-  width: 28px;
-  height: 28px;
-}
-.proto-nav {
-  display: grid;
-  gap: 8px;
-  margin-top: 30px;
-}
-.proto-nav a,
-.proto-sidebar-footer a {
-  display: flex;
-  gap: 10px;
-  align-items: center;
-  padding: 10px;
-  color: var(--text-primary);
-}
-.proto-nav .active {
-  background: var(--selection);
-  border-radius: 8px;
-}
-.proto-sidebar-footer {
-  display: grid;
-  gap: 12px;
-  margin-top: auto;
-}
-.proto-sync {
-  color: var(--text-secondary);
-  font-size: 12px;
 }
 @media (max-width: 1250px) {
   .activity-total-currency > div {
@@ -1942,9 +1797,6 @@ watch(search, () => {
     inset-inline: 16px;
     inset-block-end: 16px;
     width: auto;
-  }
-  .proto-sidebar {
-    display: none;
   }
 }
 

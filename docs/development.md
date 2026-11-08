@@ -1,6 +1,6 @@
 # Development
 
-For the approved app-wide visual and interaction direction, see [the design language](design-language.md) and its [finance UI references](research/finance-ui-references.md).
+For the approved app-wide visual and interaction direction, see [the design language](design-language.md).
 
 ## Find the implementation
 

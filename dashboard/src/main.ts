@@ -52,14 +52,6 @@ const router = createRouter({
   ],
 });
 
-if (import.meta.env.DEV) {
-  router.addRoute({
-    path: '/prototype/split-view',
-    name: 'split-prototype',
-    component: () => import('./components/ActivityWorkspace.vue'),
-  });
-}
-
 // Resume unfinished onboarding; config.json also exists before setup is completed.
 let setupCheck:
   | { kind: 'unchecked' | 'failed' | 'checked' }

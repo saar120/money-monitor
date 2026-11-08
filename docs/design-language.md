@@ -1,23 +1,6 @@
 # Money Monitor design language
 
-Approved design direction, 7 November 2026. Saar approved the working Home, Activity, and Review prototype and requested production implementation in a new session, followed by a SOL loop review. Scope: the complete desktop design language, beginning with those three screens and their shared components. iPhone shares the principles but is not part of this implementation pass. The current production conventions remain in the [desktop guide](../dashboard/README.md) and [iPhone guide](../mobile/README.md) until their corresponding components change.
-
-The Vue desktop application now applies this direction to Home, Activity, Review, and their shared shell and controls. The approved synthetic prototype remains the visual reference. Production transaction edits use the existing API; Review adds atomic confirmation and a conditional Undo. iPhone adoption remains a separate pass.
-
-Money Monitor should feel calm, approachable, and precise. Use clear financial hierarchy, compact working surfaces, and visible paths from a number to its underlying records. The foundation combines Mercury's desktop organization, Revolut's emphasis on money, and Copilot's direct manipulation of personal finance data. Retain blue as the brand and interaction color, following Saar's preference. The approved refinement keeps tables contained while reducing shadows, repeated outlines, and colored controls after the stronger depth study proved too prominent. Preserve the compact scale in both themes. The working prototype is the selected visual baseline; earlier oversized, highly technical, sage-accented, and heavily elevated concepts are superseded.
-
-## Product references
-
-The [finance UI research](research/finance-ui-references.md) separates documented product behavior from proposed applications here.
-
-| Reference                                                                               | Role in this direction                                                                                                                                                                                                       |
-| --------------------------------------------------------------------------------------- | ---------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------------- |
-| [Mercury](https://mercury.com/blog/updated-transactions-page)                           | Desktop workspace structure, chart and table filters that stay aligned, and efficient transaction tools. Its [public demo](https://demo.mercury.com) also provides a working reference for surface hierarchy and navigation. |
-| [Revolut](https://www.revolut.com/best-budget-planner/)                                 | Prominent amounts, recognizable financial objects, and quick movement from overview into spending categories and net worth.                                                                                                  |
-| [Copilot Money](https://help.copilot.money/en/articles/6778561-copilot-money-for-macos) | Direct category editing, keyboard access, and coherent transaction presentation across views.                                                                                                                                |
-| [Monzo](https://monzo.com/help/monzo-perks/trends-spending-and-balance-web)             | Clear separation of spending, balance, and targets; useful explanations of progress over time.                                                                                                                               |
-
-Borrow product patterns selectively. Revolut's campaign photography and subscription promotions do not determine Money Monitor's working surfaces. Mercury's business operations do not determine its navigation. Brand fonts, logos, and proprietary artwork remain with their owners.
+Current visual and interaction conventions for the desktop app. Use the [desktop guide](../dashboard/README.md) and [iPhone guide](../mobile/README.md) for platform behavior and implementation.
 
 ## Visual foundations
 
@@ -41,13 +24,13 @@ Canvas and surface tones express hierarchy. Give each working surface one fine p
 
 Green expresses an explicitly positive state, amber an attention condition, and red an error, destructive action, or breached limit. Ordinary spending is neutral. A larger income or expense is not automatically good or bad; accompany comparisons with precise labels. Category colors are a separate mapping from status colors.
 
-Use the approved prototype's platform sans typography and tabular numerals for money, with appropriate Hebrew fallbacks. Satoshi was an exploratory direction, not a selected font asset. The desktop scale is 12px captions, 13px controls, 14px body, 16px section titles, and 24px page titles. Keep summary values at 24–30px and leading monetary values around 30–36px. The first concepts were oversized; use the working prototype and these compact targets rather than measuring generated lettering. Metadata is quieter than values, but essential information never depends on tiny or low-contrast text. Preserve platform typography on iPhone and scale it through native accessibility settings.
+Use platform sans typography and tabular numerals for money, with appropriate Hebrew fallbacks. The desktop scale is 12px captions, 13px controls, 14px body, 16px section titles, and 24px page titles. Keep summary values at 24–30px and leading monetary values around 30–36px. Metadata is quieter than values, but essential information never depends on tiny or low-contrast text. Preserve platform typography on iPhone and scale it through native accessibility settings.
 
 Use spacing steps of 4, 8, 12, 16, 24, 32, and 48px. Default desktop content gutters to 24px, panel padding to 20px, and gaps between related groups to 16–24px. Use 8px control corners, 12px grouped surfaces, and 16px overlays. Keep desktop controls at the existing 36px baseline and iPhone touch targets at least 44pt. Single-line desktop ledger rows begin around 36–40px; rows with a second meaningful line begin around 44–48px. These measurements are baselines, not fixed heights that can clip translated text. Let short queues leave quiet space instead of enlarging their rows or adding filler.
 
 ## Depth and component states
 
-The first 7 November depth studies made tables more contained but added too much visual weight through shadows, beveled edges, and colored category pills. The revised direction keeps containment and removes that repeated emphasis. The [follow-up research](research/finance-ui-references.md#contained-without-shouting) informs these choices; exact colors, dimensions, and treatments below are Money Monitor design decisions, not competitor specifications or measured usability results. The shared desktop primitives now implement this treatment; the Activity references show the same state in both themes.
+Keep tables contained through a subtle perimeter and surface tone. Reserve shadows for floating overlays. The shared desktop primitives apply the same states in light and dark themes.
 
 | Layer            | Treatment                                                                                | Where it applies                                                       |
 | ---------------- | ---------------------------------------------------------------------------------------- | ---------------------------------------------------------------------- |
@@ -88,7 +71,7 @@ Clicking an aggregate opens the records that explain it, preserving the displaye
 
 Reuse the transaction identity row, amount formatting, category picker, owner picker, period selector, filter chips, detail surface, and feedback patterns throughout the app. Different workflows can have different save boundaries: Activity preserves its current immediate category/owner/inclusion edits and explicit Effective Date save; Review commits the decision through Confirm and next. Show unsaved, saving, saved, and failed states accurately.
 
-In Review, keep the queue order stable, offer Skip for the current session, and show completed and remaining counts separately. Skipped items remain unresolved. Advance only after a successful complete decision. An Undo action must restore the committed fields and review state; introduce it with actual backend support. Failed or conflicting writes retain the draft and expose recovery.
+In Review, keep the queue order stable, offer Skip for the current session, and show completed and remaining counts separately. Skipped items remain unresolved. Advance only after a successful complete decision. An Undo action must restore the committed fields and review state; use the versioned backend receipt and reject an Undo that would overwrite a newer edit. Failed or conflicting writes retain the draft and expose recovery.
 
 Use 100–150ms for pointer feedback and 160–220ms for short detail transitions. Keyboard navigation updates immediately. Keep the detail surface stable as selection changes. Honor reduced motion and avoid replaying number animations for unchanged data.
 
@@ -118,6 +101,6 @@ Totals, charts, and lists must describe the same filters and financial scope. Ke
 
 Extend the shared tokens in [desktop styles](../dashboard/src/style.css) and the semantic roles in the [iPhone theme](../mobile/src/theme.ts). Keep role names and intent aligned while using native navigation, sheets, focus, and gestures on each platform. Prefer extending the current shared components over a new UI framework or a second component family.
 
-Validate the direction across Home, Activity, and Review together: overview, dense data, and repeated decisions. Show light/dark and Hebrew/English states, including a narrow desktop window. Once those establish the primitives, apply them to the remaining screens and update the platform guides alongside the implementation. Keep a small synthetic component/state gallery for future changes.
+Validate shared components across Home, Activity, and Review together: overview, dense data, and repeated decisions. Cover light/dark and Hebrew/English states, including a narrow desktop window. Update the platform guides alongside behavior changes.
 
 Acceptance covers selection and focus visibility, full monetary values, coherent chart/list filters, draft preservation, loading/error/empty/partial data states, keyboard paths, reduced motion, and mobile text scaling. Use the existing [synthetic QA](development.md#synthetic-ui-qa); keep personal data and exploratory screenshots outside the repository.

@@ -16,4 +16,9 @@ electron/**/*.cjs
 electron/**/*.cjs.map
 electron/**/*.js.map
 electron/**/*.mjs.map
-mobile/docs/screenshots/blue-ledger/advisor-*.png
+
+# Local QA output
+coverage/
+playwright-report/
+test-results/
+**/screenshots/
