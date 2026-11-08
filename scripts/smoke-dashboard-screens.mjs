@@ -86,6 +86,11 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
     memberId: 1,
     credentials: { email: 'sample@example.invalid', password: 'synthetic-only' },
   });
+  connection.sqlite
+    .prepare(
+      'UPDATE transactions SET needs_review = 1, review_reason = ? WHERE id IN (SELECT id FROM transactions ORDER BY date DESC LIMIT 3)',
+    )
+    .run('Synthetic review regression');
   await app.listen({ host: '127.0.0.1', port: 0 });
   process.send({ port: app.server.address().port });
 } else {
@@ -179,14 +184,16 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
             getAppVersion: () => '0.6.0-qa',
             onOpenSettings: () => () => {},
             getAutoUpdateEnabled: async () => true,
+            getUpdateState: async () => ({ status: 'idle', operationId: 0, revision: 0 }),
             setAutoUpdateEnabled: async () => ({ success: true }),
             onUpdateStatus: (callback) => {
               updateListener = callback;
               return () => {};
             },
             checkForUpdates: async () => {
-              updateListener?.({ status: 'up-to-date' });
-              return { updateAvailable: false };
+              const state = { status: 'up-to-date', operationId: 1, revision: 1 };
+              updateListener?.(state);
+              return state;
             },
             getMobileAccessState: async () => state,
             setMobileAccessEnabled: async (enabled) => {
@@ -218,16 +225,38 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       let advisorSessionCounter = 0;
       let advisorSends = 0;
       let advisorFailure = false;
+      let failReview = false;
+      const reviewCommands = [];
       await page.setRequestInterception(true);
       page.on('request', async (request) => {
         const url = new URL(request.url());
         if (!url.pathname.startsWith('/api/')) return request.continue();
+        if (
+          request.method() === 'POST' &&
+          /\/api\/transactions\/\d+\/commands$/.test(url.pathname)
+        ) {
+          reviewCommands.push({ path: url.pathname, command: JSON.parse(request.postData()) });
+          if (failReview) {
+            failReview = false;
+            const accepted = await fetch(api + url.pathname, {
+              method: 'POST',
+              headers: { 'Content-Type': 'application/json' },
+              body: request.postData(),
+            });
+            const body = await accepted.text();
+            return request.respond({
+              status: accepted.ok ? 503 : accepted.status,
+              contentType: 'application/json',
+              body: accepted.ok ? '{"error":"Synthetic response loss after commit"}' : body,
+            });
+          }
+        }
         if (url.pathname === '/api/scrape/events')
           return request.respond({
             status: 200,
             contentType: 'text/event-stream',
             body: fixtureEvent
-              ? `data: ${JSON.stringify({ type: fixtureEvent, accountId: 1, message: 'Synthetic sign-in prompt' })}\n\n`
+              ? `data: ${JSON.stringify({ type: fixtureEvent, accountId: 1, sessionId: 1, challengeId: '11111111-1111-4111-8111-111111111112', message: 'Synthetic sign-in prompt' })}\n\n`
               : ': synthetic QA\n\n',
           });
         if (url.pathname === '/api/scrape/otp' || url.pathname === '/api/scrape/manual-action')
@@ -239,14 +268,26 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         if (url.pathname.startsWith('/api/ai/sessions')) {
           const id = url.pathname.split('/')[4];
           let data;
+          if (url.pathname.includes('/replies/')) {
+            const replyId = url.pathname.split('/')[6];
+            const reply = advisorSessions.get(id)?.replies.find((item) => item.id === replyId);
+            return request.respond({
+              status: reply ? 200 : 404,
+              contentType: 'application/json',
+              body: JSON.stringify(reply ? { reply } : { error: 'not_found' }),
+            });
+          }
           if (request.method() === 'POST') {
             const meta = {
-              id: `synthetic-${++advisorSessionCounter}`,
+              id:
+                JSON.parse(request.postData() || '{}').id ??
+                `synthetic-${advisorSessionCounter + 1}`,
               title: 'New conversation',
               createdAt: new Date().toISOString(),
               updatedAt: new Date().toISOString(),
             };
-            advisorSessions.set(meta.id, { meta, messages: [] });
+            advisorSessionCounter++;
+            advisorSessions.set(meta.id, { meta, messages: [], replies: [] });
             data = { session: meta };
           } else if (request.method() === 'DELETE') {
             advisorSessions.delete(id);
@@ -263,7 +304,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         }
         if (url.pathname === '/api/ai/chat') {
           advisorSends++;
-          const { sessionId, message } = JSON.parse(request.postData());
+          const { sessionId, message, submissionId } = JSON.parse(request.postData());
           await new Promise((resolve) => setTimeout(resolve, 250));
           if (advisorFailure)
             return request.respond({
@@ -285,13 +326,22 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
           const session = advisorSessions.get(sessionId);
           session.meta.title = 'Spending review';
           session.messages.push(
-            { role: 'user', content: message },
-            { role: 'assistant', content, chart },
+            { id: `${submissionId}:user`, role: 'user', content: message },
+            { id: `${submissionId}:assistant`, role: 'assistant', content, chart },
           );
+          session.replies.push({
+            id: submissionId,
+            sessionId,
+            state: 'completed',
+            text: content,
+            chart,
+          });
           const events = [
+            { type: 'accepted', replyId: submissionId },
             { type: 'status', text: 'Reviewing sample data' },
             { type: 'text_delta', text: content },
             { type: 'chart', chart },
+            { type: 'result', text: content },
           ];
           return request.respond({
             status: 200,
@@ -625,6 +675,71 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         '#3478ab',
         'Saved color survives inspector changes',
       );
+
+      await visit('/insights');
+      await page.waitForSelector('.review-inspector');
+      const reviewName = await page.$eval('.review-inspector h4', (el) => el.textContent.trim());
+      const reviewId = await page.$eval('.review-inspector', (el) => el.dataset.transactionId);
+      const baseline = (await (await fetch(api + '/api/transactions/' + reviewId)).json())
+        .transaction;
+      assert(baseline, 'The selected review card has a canonical transaction');
+      const categories = await (await fetch(api + '/api/categories')).json();
+      const category = categories.categories.find((row) => !row.ignoredFromStats).name;
+      await selectOption(
+        page,
+        '.review-inspector-body > label:first-of-type [role="combobox"]',
+        category,
+      );
+      await selectOption(
+        page,
+        '.review-inspector-body > label:nth-of-type(2) [role="combobox"]',
+        'shared',
+      );
+      if (await page.$eval('.review-check input', (el) => el.checked))
+        await page.click('.review-check input');
+      reviewCommands.length = 0;
+      failReview = true;
+      await page.click('.review-inspector-footer button');
+      await page.waitForSelector('.ledger-notice');
+      assert.equal(
+        await page.$eval('.review-inspector h4', (el) => el.textContent.trim()),
+        reviewName,
+      );
+      const rejected = await (await fetch(api + '/api/transactions/' + baseline.id)).json();
+      assert.equal(
+        rejected.transaction.resourceVersion,
+        baseline.resourceVersion + 1,
+        'A lost response follows one accepted financial command',
+      );
+      const acceptedResponse = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/transactions/${baseline.id}/commands`) &&
+          response.status() === 200,
+      );
+      await page.$eval('.ledger-notice button', (button) => {
+        button.click();
+        button.click();
+      });
+      await acceptedResponse;
+      await page.waitForFunction(
+        (id) => document.querySelector('.review-inspector')?.dataset.transactionId !== id,
+        {},
+        String(baseline.id),
+      );
+      assert.equal(reviewCommands.length, 2);
+      assert.deepEqual(
+        reviewCommands[1],
+        reviewCommands[0],
+        'Review retries the exact same command',
+      );
+      const reviewed = (await (await fetch(api + '/api/transactions/' + baseline.id)).json())
+        .transaction;
+      assert.equal(reviewed.resourceVersion, baseline.resourceVersion + 1);
+      assert.equal(reviewed.category, category);
+      assert.equal(reviewed.expenseOwnerType, 'shared');
+      assert.equal(reviewed.ignored, true);
+      assert.equal(reviewed.needsReview, false);
+      assert.equal(reviewed.date, baseline.date);
 
       await visit('/chat');
       assert.equal(await page.$eval('.advisor-send', (el) => el.disabled), true);

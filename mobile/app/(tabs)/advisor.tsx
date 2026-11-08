@@ -1,9 +1,12 @@
+import { randomUUID } from 'expo-crypto';
+import { MobileRequestError } from '@/request-error';
 import { Canvas, Path, Skia } from '@shopify/react-native-skia';
 import { GlassView, isGlassEffectAPIAvailable } from 'expo-glass-effect';
 import { SymbolView } from 'expo-symbols';
 import { useEffect, useRef, useState } from 'react';
 import {
   ActivityIndicator,
+  AppState,
   I18nManager,
   Keyboard,
   KeyboardAvoidingView,
@@ -26,6 +29,7 @@ import { t, useLanguage } from '@/localization';
 import { formatUnsignedMoney } from '@/money';
 import {
   createAdvisorSession,
+  getAdvisorReply,
   getAdvisorSession,
   listAdvisorSessions,
   streamAdvisorReply,
@@ -83,8 +87,19 @@ export default function AdvisorScreen() {
   const [messages, setMessages] = useState<AdvisorMessage[]>([]);
   const [input, setInput] = useState('');
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [busy, setBusy] = useState(false);
-  const [loading, setLoading] = useState(false);
+  type ConversationOperation =
+    | { kind: 'ready' | 'opening' | 'failed-known' }
+    | {
+        kind: 'submitting' | 'receiving' | 'reconciling' | 'outcome-unknown';
+        sessionId: string;
+        replyId: string;
+        question: string;
+      };
+  const [operation, setOperation] = useState<ConversationOperation>({ kind: 'ready' });
+  const busy = ['submitting', 'receiving', 'reconciling'].includes(operation.kind);
+  const loading = operation.kind === 'opening';
+  const observation = useRef<AbortController | null>(null);
+  const pendingReply = useRef<Extract<ConversationOperation, { replyId: string }> | null>(null);
   const [statusText, setStatusText] = useState('');
   const [error, setError] = useState('');
   const [keyboardOpen, setKeyboardOpen] = useState(false);
@@ -92,6 +107,29 @@ export default function AdvisorScreen() {
   const GlassSurface = supportsGlass ? GlassView : View;
   const messageScroll = useRef<ScrollView>(null);
   const selectionVersion = useRef(0);
+  useEffect(
+    () => () => {
+      selectionVersion.current++;
+      observation.current?.abort();
+    },
+    [],
+  );
+  const foregroundReconcile = useRef<() => void>(() => {});
+  foregroundReconcile.current = () => {
+    const pending = pendingReply.current;
+    if (pending && credential) void reconcile(pending, selectionVersion.current);
+  };
+  useEffect(() => {
+    const listener = AppState.addEventListener('change', (state) => {
+      if (state !== 'active') {
+        selectionVersion.current++;
+        observation.current?.abort();
+        if (pendingReply.current)
+          setOperation({ ...pendingReply.current, kind: 'outcome-unknown' });
+      } else foregroundReconcile.current();
+    });
+    return () => listener.remove();
+  }, []);
   const lastUserText = messages.filter((message) => message.role === 'user').at(-1)?.content ?? '';
   const chatHebrew = input || lastUserText ? isHebrewText(input || lastUserText) : appHebrew;
 
@@ -152,7 +190,7 @@ export default function AdvisorScreen() {
     if (!credential || status !== 'ready') return;
     let live = true;
     const version = selectionVersion.current;
-    setLoading(true);
+    setOperation({ kind: 'opening' });
     void listAdvisorSessions(credential)
       .then(async (items) => {
         if (!live) return;
@@ -162,6 +200,14 @@ export default function AdvisorScreen() {
           if (live && selectionVersion.current === version) {
             setActiveId(items[0].id);
             setMessages(session.messages);
+            const reply = session.replies?.findLast((item) => item.state === 'generating');
+            if (reply)
+              pendingReply.current = {
+                kind: 'outcome-unknown',
+                sessionId: items[0].id,
+                replyId: reply.id,
+                question: session.messages.at(-1)?.content ?? '',
+              };
           }
         }
       })
@@ -169,88 +215,147 @@ export default function AdvisorScreen() {
         if (live) setError(caught instanceof Error ? caught.message : 'Chats could not load.');
       })
       .finally(() => {
-        if (live) setLoading(false);
+        if (live && selectionVersion.current === version)
+          setOperation(
+            pendingReply.current
+              ? { ...pendingReply.current, kind: 'outcome-unknown' }
+              : { kind: 'ready' },
+          );
       });
     return () => {
       live = false;
     };
   }, [credential, status]);
 
-  if (status !== 'ready') return <ConnectionState />;
+  if (status !== 'ready' || (source !== 'fixture' && !credential)) return <ConnectionState />;
 
   async function openSession(id: string) {
     if (!credential || busy) return;
     const version = ++selectionVersion.current;
+    observation.current?.abort();
+    pendingReply.current = null;
     setHistoryOpen(false);
     setError('');
-    setLoading(true);
+    setOperation({ kind: 'opening' });
     try {
       const session = await getAdvisorSession(credential, id);
       if (selectionVersion.current !== version) return;
       setActiveId(id);
       setMessages(session.messages);
+      const reply = session.replies?.findLast((reply) => reply.state === 'generating');
+      if (reply) {
+        const pending = {
+          kind: 'outcome-unknown' as const,
+          sessionId: id,
+          replyId: reply.id,
+          question: session.messages.at(-1)?.content ?? '',
+        };
+        pendingReply.current = pending;
+        setOperation(pending);
+      } else setOperation({ kind: 'ready' });
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'Chat could not load.');
-    } finally {
-      setLoading(false);
+      if (selectionVersion.current === version) {
+        setError(caught instanceof Error ? caught.message : t('advisorReplyFailed'));
+        setOperation({ kind: 'failed-known' });
+      }
     }
   }
-
+  async function reconcile(pending: NonNullable<typeof pendingReply.current>, version: number) {
+    if (!credential || selectionVersion.current !== version) return;
+    setOperation({ ...pending, kind: 'reconciling' });
+    try {
+      const reply = await getAdvisorReply(credential, pending.sessionId, pending.replyId);
+      if (selectionVersion.current !== version) return;
+      if (reply.state === 'generating') {
+        setOperation({ ...pending, kind: 'outcome-unknown' });
+        return;
+      }
+      const session = await getAdvisorSession(credential, pending.sessionId);
+      if (selectionVersion.current !== version) return;
+      setMessages(session.messages);
+      pendingReply.current = null;
+      setOperation({ kind: reply.state === 'completed' ? 'ready' : 'failed-known' });
+      if (reply.state !== 'completed') setError(t('advisorReplyFailed'));
+    } catch (caught) {
+      if (selectionVersion.current !== version) return;
+      if (caught instanceof MobileRequestError && caught.kind === 'api' && caught.status === 404) {
+        pendingReply.current = null;
+        setOperation({ kind: 'failed-known' });
+        setInput(pending.question);
+      } else setOperation({ ...pending, kind: 'outcome-unknown' });
+      setError(caught instanceof Error ? caught.message : 'Reply outcome unknown');
+    }
+  }
   async function send() {
     const text = input.trim();
-    if (!text || busy || !credential) return;
-    ++selectionVersion.current;
-    setBusy(true);
+    if (!text || busy || !credential || pendingReply.current) return;
+    const version = ++selectionVersion.current;
+    const id = activeId ?? randomUUID();
+    const replyId = randomUUID();
+    const pending = { kind: 'submitting' as const, sessionId: id, replyId, question: text };
+    pendingReply.current = pending;
+    setOperation(pending);
     setInput('');
     setError('');
+    const controller = new AbortController();
+    observation.current = controller;
     const replyInHebrew = isHebrewText(text);
     setStatusText(replyInHebrew ? 'חושב…' : 'Thinking…');
-    let id = activeId;
     try {
-      if (!id) {
-        const session = await createAdvisorSession(credential);
-        id = session.id;
+      if (!activeId) {
+        const session = await createAdvisorSession(credential, id);
+        if (selectionVersion.current !== version) return;
         setActiveId(id);
-        setSessions((current) => [session, ...current]);
+        setSessions((items) => [session, ...items]);
       }
-      setMessages((current) => [
-        ...current,
-        { role: 'user', content: text, timestamp: new Date().toISOString() },
+      setMessages((items) => [
+        ...items,
+        {
+          id: `${replyId}:user`,
+          provisional: true,
+          role: 'user',
+          content: text,
+          timestamp: new Date().toISOString(),
+        },
       ]);
       let response = '';
       let chart: AdvisorChart | undefined;
-      await streamAdvisorReply(credential, id, text, (event) => {
-        if (event.type === 'status')
-          setStatusText(replyInHebrew ? 'בודק נתונים…' : (event.text ?? 'Thinking…'));
-        if (event.type === 'text_delta') response += event.text ?? '';
-        if (event.type === 'result') response = event.text ?? response;
-        if (event.type === 'chart') chart = event.chart;
-        if (event.type === 'error') setError(event.text ?? 'The advisor could not reply.');
-        if (event.type === 'text_delta' || event.type === 'result' || event.type === 'chart') {
-          const content = response;
-          const graph = chart;
-          setMessages((current) => {
-            const last = current.at(-1);
-            const assistant = {
-              role: 'assistant' as const,
-              content,
+      await streamAdvisorReply(
+        credential,
+        id,
+        text,
+        replyId,
+        (event) => {
+          if (selectionVersion.current !== version) return;
+          if (event.type === 'accepted') setOperation({ ...pending, kind: 'receiving' });
+          if (event.type === 'status')
+            setStatusText(replyInHebrew ? 'בודק נתונים…' : (event.text ?? 'Thinking…'));
+          if (event.type === 'text_delta') response += event.text ?? '';
+          if (event.type === 'result') response = event.text ?? response;
+          if (event.type === 'chart') chart = event.chart;
+          if (['text_delta', 'result', 'chart'].includes(event.type)) {
+            const assistant: AdvisorMessage = {
+              id: `${replyId}:assistant`,
+              provisional: true,
+              role: 'assistant',
+              content: response,
+              chart,
               timestamp: new Date().toISOString(),
-              chart: graph,
             };
-            return last?.role === 'assistant' && last.timestamp === 'streaming'
-              ? [...current.slice(0, -1), { ...assistant, timestamp: 'streaming' }]
-              : [...current, { ...assistant, timestamp: 'streaming' }];
-          });
-        }
-      });
-      const saved = await getAdvisorSession(credential, id);
-      setMessages(saved.messages);
-      setSessions(await listAdvisorSessions(credential));
-    } catch (caught) {
-      setError(caught instanceof Error ? caught.message : 'The advisor could not reply.');
+            setMessages((items) => [
+              ...items.filter((item) => item.id !== assistant.id),
+              assistant,
+            ]);
+          }
+        },
+        controller.signal,
+      );
+      await reconcile(pending, version);
+    } catch {
+      if (selectionVersion.current === version) await reconcile(pending, version);
     } finally {
-      setBusy(false);
-      setStatusText('');
+      if (observation.current === controller) observation.current = null;
+      if (selectionVersion.current === version) setStatusText('');
     }
   }
 
@@ -260,6 +365,17 @@ export default function AdvisorScreen() {
       style={[styles.root, { backgroundColor: colors.background }]}
       testID="advisor-screen"
     >
+      {operation.kind === 'outcome-unknown' ? (
+        <Pressable
+          accessibilityRole="button"
+          onPress={() => {
+            const pending = pendingReply.current;
+            if (pending) void reconcile(pending, selectionVersion.current);
+          }}
+        >
+          <Text style={{ color: colors.accent, padding: 16 }}>{t('tryAgain')}</Text>
+        </Pressable>
+      ) : null}
       <View
         style={[
           styles.header,
@@ -298,7 +414,9 @@ export default function AdvisorScreen() {
               setActiveId(null);
               setMessages([]);
               setError('');
-              setLoading(false);
+              observation.current?.abort();
+              pendingReply.current = null;
+              setOperation({ kind: 'ready' });
             }}
             style={({ pressed }) => [
               styles.iconButton,
@@ -408,7 +526,7 @@ export default function AdvisorScreen() {
             </View>
           );
         })}
-        {busy && statusText && messages.at(-1)?.timestamp !== 'streaming' ? (
+        {busy && statusText && !messages.at(-1)?.provisional ? (
           <View
             style={[
               styles.progress,
@@ -463,7 +581,7 @@ export default function AdvisorScreen() {
         <Pressable
           accessibilityLabel={t('advisorSendMessage')}
           accessibilityRole="button"
-          disabled={!input.trim() || busy || !credential}
+          disabled={!input.trim() || busy || !credential || operation.kind === 'outcome-unknown'}
           onPress={() => void send()}
           style={[
             styles.send,

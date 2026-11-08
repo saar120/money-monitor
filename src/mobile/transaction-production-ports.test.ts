@@ -1,5 +1,4 @@
-import { eq } from 'drizzle-orm';
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import {
   insertAccount,
@@ -81,6 +80,7 @@ describe('production mobile transaction ports', () => {
       {
         id: project('transaction', transaction.id),
         occurredOn: '2026-07-15',
+        resourceVersion: 1,
         displayName: 'רמי לוי Market',
         amount: { value: '42.50', currencyCode: 'ILS' },
         direction: 'debit',
@@ -163,7 +163,13 @@ describe('production mobile transaction ports', () => {
     const read = ports(testDb);
     const updated = read.update(
       project('transaction', transaction.id),
-      { category: category.label, included: false, reviewed: true },
+      {
+        commandId: '00000000-0000-4000-8000-000000000010',
+        expectedVersion: 1,
+        category: category.label,
+        included: false,
+        reviewed: true,
+      },
       CONTEXT,
     );
 
@@ -179,45 +185,29 @@ describe('production mobile transaction ports', () => {
     });
   });
 
-  it('delegates category changes so canonical ownership rules remain authoritative', () => {
+  it('uses canonical category ownership without a detached category write', () => {
     const testDb = database();
     const account = insertAccount(testDb.db);
-    const category = insertCategory(testDb.db, { name: 'dining', label: 'Dining' });
-    const transaction = insertTransaction(testDb.db, account.id, {
-      needsReview: true,
-      category: null,
-      expenseOwnerType: 'unassigned',
+    const category = insertCategory(testDb.db, {
+      name: 'dining',
+      label: 'Dining',
+      defaultOwnerType: 'shared',
     });
-    const updateCategory = vi.fn((transactionId: number, name: string) => {
-      testDb.db
-        .update(schema.transactions)
-        .set({
-          category: name,
-          needsReview: false,
-          reviewReason: null,
-          expenseOwnerType: 'shared',
-        })
-        .where(eq(schema.transactions.id, transactionId))
-        .run();
-      return transaction;
-    });
-    const read = createProductionMobileTransactionPorts({
-      db: testDb.db,
-      publicIdKey: KEY,
-      updateCategory,
-    });
-
-    const updated = read.update(
+    const transaction = insertTransaction(testDb.db, account.id, { needsReview: true });
+    const updated = ports(testDb).update(
       project('transaction', transaction.id),
-      { category: category.label },
+      {
+        commandId: '00000000-0000-4000-8000-000000000011',
+        expectedVersion: 1,
+        category: category.label,
+      },
       CONTEXT,
     );
-
-    expect(updateCategory).toHaveBeenCalledWith(transaction.id, category.name);
     expect(updated).toMatchObject({
       category: { label: 'Dining' },
       needsReview: false,
       owner: { kind: 'shared' },
+      resourceVersion: 2,
     });
   });
 
@@ -414,5 +404,37 @@ describe('production mobile transaction ports', () => {
     );
     expect(read.detail(project('transaction', future.id), CONTEXT)).toBeNull();
     expect(read.detail(project('transaction', 999_999), CONTEXT)).toBeNull();
+  });
+  it('replays the accepted mobile projection before visibility and display-name validation', () => {
+    const testDb = database();
+    const member = insertMember(testDb.db, { name: 'Synthetic owner' });
+    const account = insertAccount(testDb.db);
+    const category = insertCategory(testDb.db, { name: 'synthetic', label: 'Synthetic category' });
+    const row = insertTransaction(testDb.db, account.id, {
+      date: '2026-07-15',
+      processedDate: '2026-07-15',
+    });
+    const adapter = ports(testDb);
+    const id = project('transaction', row.id);
+    const patch = {
+      commandId: '11111111-1111-4111-8111-111111111112',
+      expectedVersion: 1,
+      category: category.label,
+      owner: member.name,
+      effectiveDate: '2026-08-01',
+    };
+    const context = { ...CONTEXT, clientId: 'synthetic-phone' };
+    const accepted = adapter.update(id, patch, context);
+    expect(accepted.resourceVersion).toBe(2);
+    expect(adapter.detail(id, context)).toBeNull();
+    testDb.sqlite
+      .prepare('UPDATE categories SET label = ? WHERE id = ?')
+      .run('Renamed category', category.id);
+    testDb.sqlite
+      .prepare('UPDATE members SET name = ?, is_active = 0 WHERE id = ?')
+      .run('Renamed owner', member.id);
+    expect(adapter.update(id, patch, context)).toEqual(accepted);
+    expect(testDb.db.select().from(schema.mutationReceipts).all()).toHaveLength(1);
+    expect(testDb.db.select().from(schema.transactions).get()?.resourceVersion).toBe(2);
   });
 });

@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import { getCategories, getTransactions, type Category, type Transaction } from '../api/client';
@@ -25,6 +25,9 @@ function setMonth(event: Event) {
 const loading = ref(true);
 const error = ref('');
 let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 
 function previousMonth(key: string) {
   const [year, number] = key.split('-').map(Number) as [number, number];
@@ -40,10 +43,13 @@ async function load() {
   const id = ++requestId;
   loading.value = true;
   error.value = '';
+  rows.value = [];
   try {
     const categoryData = await getCategories();
+    if (id !== requestId) return;
     const matching: Transaction[] = [];
     let offset = 0;
+    const seen = new Set<number>();
     while (true) {
       const page = await getTransactions({
         startDate: `${previousMonth(month.value)}-01`,
@@ -53,8 +59,12 @@ async function load() {
         offset,
       });
       if (id !== requestId) return;
+      const unseen = page.transactions.filter((row) => !seen.has(row.id));
+      if (page.pagination.hasMore && !unseen.length)
+        throw new Error('Transaction pages did not advance');
+      for (const row of unseen) seen.add(row.id);
       matching.push(
-        ...page.transactions.filter(
+        ...unseen.filter(
           (item) =>
             normalizeMerchant(item.description) === name.value &&
             item.category !== 'income' &&
@@ -127,42 +137,44 @@ const activityLink = (transaction: Transaction) => ({
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </div>
-    <section class="merchant-hero">
-      <span>{{ t('netSpending') }}</span>
-      <strong>{{ loading ? '—' : `${total < 0 ? '−' : ''}${formatCurrency(total)}` }}</strong>
-      <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
-        delta === 0
-          ? t('sameAsLastMonth')
-          : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
-      }}</small>
-      <p>
-        {{ categoryLabel }} · {{ currentRows.length }}
-        {{ t('transactions') }}
-      </p>
-    </section>
-    <div class="ledger-section-heading explore-subheading">
-      <h2>{{ t('transactions') }}</h2>
-      <span>{{ month }}</span>
-    </div>
-    <div class="ledger-list merchant-transactions">
-      <RouterLink
-        v-for="item in currentRows"
-        :key="item.id"
-        :to="activityLink(item)"
-        class="explore-row"
-      >
-        <span class="explore-row-title"
-          ><bdi dir="auto">{{ item.description }}</bdi></span
+    <template v-else>
+      <section class="merchant-hero">
+        <span>{{ t('netSpending') }}</span>
+        <strong>{{ loading ? '—' : `${total < 0 ? '−' : ''}${formatCurrency(total)}` }}</strong>
+        <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
+          delta === 0
+            ? t('sameAsLastMonth')
+            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
+        }}</small>
+        <p>
+          {{ categoryLabel }} · {{ currentRows.length }}
+          {{ t('transactions') }}
+        </p>
+      </section>
+      <div class="ledger-section-heading explore-subheading">
+        <h2>{{ t('transactions') }}</h2>
+        <span>{{ month }}</span>
+      </div>
+      <div class="ledger-list merchant-transactions">
+        <RouterLink
+          v-for="item in currentRows"
+          :key="item.id"
+          :to="activityLink(item)"
+          class="explore-row"
         >
-        <small>{{ item.reportingDate }}</small>
-        <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
-          >{{ item.chargedAmount > 0 ? '+' : '' }}{{ formatCurrency(item.chargedAmount) }}</strong
-        >
-        <ArrowRight :size="15" />
-      </RouterLink>
-      <p v-if="!loading && !currentRows.length" class="ledger-empty">
-        {{ t('noMerchantTransactions') }}
-      </p>
-    </div>
+          <span class="explore-row-title"
+            ><bdi dir="auto">{{ item.description }}</bdi></span
+          >
+          <small>{{ item.reportingDate }}</small>
+          <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
+            >{{ item.chargedAmount > 0 ? '+' : '' }}{{ formatCurrency(item.chargedAmount) }}</strong
+          >
+          <ArrowRight :size="15" />
+        </RouterLink>
+        <p v-if="!loading && !currentRows.length" class="ledger-empty">
+          {{ t('noMerchantTransactions') }}
+        </p>
+      </div>
+    </template>
   </div>
 </template>

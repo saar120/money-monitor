@@ -5,7 +5,7 @@ import { currentLocale } from './locale-state';
 import { Text } from './LocalizedText';
 import DateTimePicker from '@react-native-community/datetimepicker';
 import { SymbolView, type SFSymbol } from 'expo-symbols';
-import { useEffect, useState } from 'react';
+import { useRef, useEffect, useState } from 'react';
 import {
   FlatList,
   Modal,
@@ -66,11 +66,13 @@ export function ActivityFiltersSheet({
   const [draft, setDraft] = useState(value);
   const [picker, setPicker] = useState<ChoiceKey | null>(null);
 
+  const wasVisible = useRef(false);
   useEffect(() => {
-    if (visible) {
+    if (visible && !wasVisible.current) {
       setDraft(value);
       setPicker(null);
     }
+    wasVisible.current = visible;
   }, [value, visible]);
 
   const datesValid =

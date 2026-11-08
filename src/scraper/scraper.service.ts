@@ -14,11 +14,10 @@ import type {
 } from '../shared/types.js';
 import { toIsraelDateStr, todayInIsrael } from '../shared/dates.js';
 import { getAccountType } from '../shared/types.js';
+import { enqueuePostImport, runPostImport } from '../services/post-import.js';
 import { waitForOtp } from './otp-bridge.js';
 import { waitForManualAction } from './manual-action-bridge.js';
 import { broadcastSseEvent } from '../api/sse.js';
-import { batchCategorize } from '../ai/agent.js';
-import { applyOwnership } from '../services/ownership.js';
 import { ensureChromium } from './chromium.js';
 import { resolveChargedCurrency } from './transaction-currency.js';
 import { oneZeroDateFieldsOverlap } from '../services/transaction-identity.js';
@@ -265,6 +264,7 @@ export async function scrapeAccount(
   try {
     const accountType = getAccountType(account.companyId as CompanyId);
     const executablePath = await ensureChromium();
+    signal?.throwIfAborted();
 
     const scraper = createScraper({
       companyId: CompanyTypes[account.companyId as keyof typeof CompanyTypes],
@@ -282,31 +282,43 @@ export async function scrapeAccount(
     if (account.manualLogin) {
       (scraper as any).login = async () => {
         // Ask the user to log in manually via the dashboard
-        await waitForManualAction(account.id, () => {
-          broadcastSseEvent({
-            type: 'manual-action-required',
-            accountId: account.id,
-            message: `Please log in manually for ${account.displayName}. A browser window is open — complete the login there, then click "Done" here.`,
-          });
-        });
+        await waitForManualAction(
+          account.id,
+          (challenge) => {
+            broadcastSseEvent({
+              type: 'manual-action-required',
+              ...challenge,
+              accountId: account.id,
+              message: `Please log in manually for ${account.displayName}. A browser window is open — complete the login there, then click "Done" here.`,
+            });
+          },
+          { sessionId, signal },
+        );
 
         return { success: true };
       };
     }
 
     const otpCodeRetriever = async () => {
-      return waitForOtp(account.id, () => {
-        broadcastSseEvent({
-          type: 'otp-required',
-          accountId: account.id,
-          message: `OTP required for ${account.displayName}`,
-        });
-      });
+      return waitForOtp(
+        account.id,
+        (challenge) => {
+          broadcastSseEvent({
+            type: 'otp-required',
+            ...challenge,
+            accountId: account.id,
+            message: `OTP required for ${account.displayName}`,
+          });
+        },
+        { sessionId, signal },
+      );
     };
 
     // Cast to any since credential shape varies by company
     // eslint-disable-next-line @typescript-eslint/no-explicit-any
     const result = await scraper.scrape({ ...(credentials as any), otpCodeRetriever });
+
+    signal?.throwIfAborted();
 
     if (!result.success) {
       console.error(
@@ -348,129 +360,139 @@ export async function scrapeAccount(
     const newIds: number[] = [];
     let parentRef = account;
 
-    for (const scraperAccount of result.accounts ?? []) {
-      const targetAccount = resolveAccountForCard(parentRef, scraperAccount);
+    const processingJobId = db.transaction(() => {
+      for (const scraperAccount of result.accounts ?? []) {
+        const targetAccount = resolveAccountForCard(parentRef, scraperAccount);
 
-      // Keep parent reference up to date so the next card sees the correct accountNumber
-      if (targetAccount.id === parentRef.id) {
-        parentRef = targetAccount;
-      }
+        // Keep parent reference up to date so the next card sees the correct accountNumber
+        if (targetAccount.id === parentRef.id) {
+          parentRef = targetAccount;
+        }
 
-      if (scraperAccount.balance != null) {
-        db.update(accounts)
-          .set({ balance: scraperAccount.balance })
-          .where(eq(accounts.id, targetAccount.id))
-          .run();
+        if (scraperAccount.balance != null) {
+          db.update(accounts)
+            .set({ balance: scraperAccount.balance })
+            .where(eq(accounts.id, targetAccount.id))
+            .run();
 
-        db.insert(accountBalanceHistory)
+          db.insert(accountBalanceHistory)
+            .values({
+              accountId: targetAccount.id,
+              date: todayInIsrael(),
+              balance: scraperAccount.balance,
+            })
+            .onConflictDoUpdate({
+              target: [accountBalanceHistory.accountId, accountBalanceHistory.date],
+              set: { balance: scraperAccount.balance },
+            })
+            .run();
+        }
+
+        const txns = (scraperAccount.txns ?? []).filter((txn) => txn.status !== 'pending');
+        const mappedTxns = txns.map((txn) => mapTransaction(targetAccount.id, txn));
+        const existing =
+          account.companyId === 'oneZero'
+            ? db
+                .select()
+                .from(transactions)
+                .where(eq(transactions.accountId, targetAccount.id))
+                .all()
+            : [];
+        const imported = existing.filter((row) => hasOneZeroReference(row.meta));
+        const existingHashes = new Set(existing.map((row) => row.hash));
+        const importMatches = findOneZeroImportMatches(mappedTxns, imported, existingHashes);
+        let accountFound = 0;
+        let accountNew = 0;
+
+        for (const [index, txn] of txns.entries()) {
+          accountFound++;
+
+          const mapped = mappedTxns[index];
+          try {
+            const importedId = importMatches.get(index);
+            if (importedId != null && !existingHashes.has(mapped.hash)) {
+              db.update(transactions)
+                .set({ hash: mapped.hash })
+                .where(eq(transactions.id, importedId))
+                .run();
+              existingHashes.add(mapped.hash);
+              continue;
+            }
+            const insertResult = db
+              .insert(transactions)
+              .values({
+                ...mapped,
+                expenseOwnerType: targetAccount.memberId != null ? 'member' : 'unassigned',
+                expenseOwnerMemberId: targetAccount.memberId ?? null,
+                ownerSource: targetAccount.memberId != null ? 'account' : 'unassigned',
+                ownerConfidence: targetAccount.memberId != null ? 1 : null,
+                scrapeSessionId: sessionId ?? null,
+              })
+              .onConflictDoNothing({ target: transactions.hash })
+              .run();
+            if (insertResult.changes > 0) {
+              accountNew++;
+              newIds.push(Number(insertResult.lastInsertRowid));
+            }
+          } catch (dbErr) {
+            console.error(
+              `[Scrape] DB insert failed for txn "${txn.description}":`,
+              dbErr instanceof Error ? dbErr.message : dbErr,
+            );
+            throw dbErr;
+          }
+        }
+
+        const durationMs = Date.now() - startMs;
+        db.insert(scrapeLogs)
           .values({
             accountId: targetAccount.id,
-            date: todayInIsrael(),
-            balance: scraperAccount.balance,
-          })
-          .onConflictDoUpdate({
-            target: [accountBalanceHistory.accountId, accountBalanceHistory.date],
-            set: { balance: scraperAccount.balance },
+            sessionId: sessionId ?? null,
+            status: 'success',
+            transactionsFound: accountFound,
+            transactionsNew: accountNew,
+            durationMs,
+            startedAt,
+            completedAt: new Date().toISOString(),
           })
           .run();
-      }
 
-      const txns = (scraperAccount.txns ?? []).filter((txn) => txn.status !== 'pending');
-      const mappedTxns = txns.map((txn) => mapTransaction(targetAccount.id, txn));
-      const existing =
-        account.companyId === 'oneZero'
-          ? db.select().from(transactions).where(eq(transactions.accountId, targetAccount.id)).all()
-          : [];
-      const imported = existing.filter((row) => hasOneZeroReference(row.meta));
-      const existingHashes = new Set(existing.map((row) => row.hash));
-      const importMatches = findOneZeroImportMatches(mappedTxns, imported, existingHashes);
-      let accountFound = 0;
-      let accountNew = 0;
-
-      for (const [index, txn] of txns.entries()) {
-        accountFound++;
-
-        const mapped = mappedTxns[index];
-        try {
-          const importedId = importMatches.get(index);
-          if (importedId != null && !existingHashes.has(mapped.hash)) {
-            db.update(transactions)
-              .set({ hash: mapped.hash })
-              .where(eq(transactions.id, importedId))
-              .run();
-            existingHashes.add(mapped.hash);
-            continue;
-          }
-          const insertResult = db
-            .insert(transactions)
-            .values({
-              ...mapped,
-              expenseOwnerType: targetAccount.memberId != null ? 'member' : 'unassigned',
-              expenseOwnerMemberId: targetAccount.memberId ?? null,
-              ownerSource: targetAccount.memberId != null ? 'account' : 'unassigned',
-              ownerConfidence: targetAccount.memberId != null ? 1 : null,
-              scrapeSessionId: sessionId ?? null,
-            })
-            .onConflictDoNothing({ target: transactions.hash })
-            .run();
-          if (insertResult.changes > 0) {
-            accountNew++;
-            newIds.push(Number(insertResult.lastInsertRowid));
-          }
-        } catch (dbErr) {
-          console.error(
-            `[Scrape] DB insert failed for txn "${txn.description}":`,
-            dbErr instanceof Error ? dbErr.message : dbErr,
-          );
-        }
-      }
-
-      const durationMs = Date.now() - startMs;
-      db.insert(scrapeLogs)
-        .values({
+        allResults.push({
+          success: true,
           accountId: targetAccount.id,
-          sessionId: sessionId ?? null,
-          status: 'success',
           transactionsFound: accountFound,
           transactionsNew: accountNew,
           durationMs,
-          startedAt,
-          completedAt: new Date().toISOString(),
-        })
+        });
+      }
+
+      // Update lastScrapedAt for all accounts sharing this credential
+      db.update(accounts)
+        .set({ lastScrapedAt: new Date().toISOString() })
+        .where(eq(accounts.credentialsRef, account.credentialsRef))
         .run();
 
-      allResults.push({
-        success: true,
-        accountId: targetAccount.id,
-        transactionsFound: accountFound,
-        transactionsNew: accountNew,
-        durationMs,
-      });
-    }
-
-    // Update lastScrapedAt for all accounts sharing this credential
-    db.update(accounts)
-      .set({ lastScrapedAt: new Date().toISOString() })
-      .where(eq(accounts.credentialsRef, account.credentialsRef))
-      .run();
-
-    // Fire categorization in background — caller can await if needed
-    const categorizePending: Promise<void> | null =
-      newIds.length > 0
-        ? batchCategorize(newIds.length, newIds)
-            .then(() => {
-              applyOwnership({ ids: newIds });
-            })
-            .catch((err) => {
-              console.error(
-                '[Scrape] Background categorization failed:',
-                err instanceof Error ? err.message : err,
-              );
-            })
-        : null;
+      return enqueuePostImport(`scrape:${sessionId ?? 'single'}:${account.id}`, newIds);
+    });
+    const categorizePending = runPostImport(processingJobId, signal);
 
     return { results: allResults, categorizePending };
   } catch (err) {
+    if (signal?.aborted)
+      return {
+        results: [
+          {
+            success: false,
+            accountId: account.id,
+            transactionsFound: 0,
+            transactionsNew: 0,
+            durationMs: Date.now() - startMs,
+            error: 'Cancelled',
+            errorType: 'CANCELLED',
+          },
+        ],
+        categorizePending: null,
+      };
     const durationMs = Date.now() - startMs;
     const errorMessage = err instanceof Error ? err.message : String(err);
     console.error(

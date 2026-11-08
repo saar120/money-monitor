@@ -61,18 +61,22 @@ export async function runAlertAgent(opts: {
     streamFn: streamSimple,
   });
 
-  return new Promise<string | null>((resolve) => {
+  return new Promise<string | null>((resolve, reject) => {
     let turnCount = 0;
     let resolved = false;
 
-    const finish = (text: string) => {
+    const finish = (text: string, error?: string) => {
       if (resolved) return;
       resolved = true;
       unsubscribe();
+      if (error) {
+        reject(new Error(error));
+        return;
+      }
       const trimmed = text.trim();
 
       if (trimmed === '') {
-        resolve(null);
+        reject(new Error('alert_empty_result'));
         return;
       }
 
@@ -80,32 +84,47 @@ export async function runAlertAgent(opts: {
       const messageMatch = trimmed.match(/<message>([\s\S]*?)<\/message>\s*$/);
       const content = messageMatch ? messageMatch[1].trim() : trimmed;
 
-      // Detect [SILENT] anywhere in the response
-      if (content === '[SILENT]' || content === '') {
+      // Only an explicit SILENT result advances a silent analysis.
+      if (content === '[SILENT]') {
         resolve(null);
         return;
       }
 
+      if (!content) {
+        reject(new Error('alert_empty_result'));
+        return;
+      }
       resolve(content);
     };
 
     const unsubscribe = agent.subscribe((event: AgentEvent) => {
       if (event.type === 'turn_end') {
         turnCount++;
-        if (turnCount >= ALERT_MAX_TURNS) {
+        if (
+          turnCount >= ALERT_MAX_TURNS &&
+          event.message.role === 'assistant' &&
+          event.message.stopReason === 'toolUse'
+        ) {
+          finish('', 'alert_turn_limit');
           agent.abort();
         }
       }
       if (event.type === 'agent_end') {
         const lastMsg = event.messages[event.messages.length - 1];
-        if (lastMsg && 'stopReason' in lastMsg && lastMsg.stopReason === 'error') {
-          finish('');
+        if (
+          lastMsg &&
+          'stopReason' in lastMsg &&
+          (lastMsg.stopReason === 'error' || lastMsg.stopReason === 'aborted')
+        ) {
+          finish('', 'alert_generation_failed');
           return;
         }
         finish(extractAssistantText(event.messages));
       }
     });
 
-    agent.prompt(opts.userMessage).catch(() => finish(''));
+    void Promise.resolve()
+      .then(() => agent.prompt(opts.userMessage))
+      .catch(() => finish('', 'alert_generation_failed'));
   });
 }

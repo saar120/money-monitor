@@ -65,7 +65,9 @@ export function isDemoMode(): boolean {
   return _isDemoMode;
 }
 
-export function swapToDemo(): void {
+export function swapToDemo(
+  prepare?: (database: typeof db, connection: BetterSqlite3Database) => void,
+): void {
   if (_isDemoMode) return;
 
   // Demo edits are disposable; rebuild the sample data with dates relative to today.
@@ -83,6 +85,8 @@ export function swapToDemo(): void {
     migrate(newDb, { migrationsFolder });
     runBackfills(newDb, newSqlite);
     if (usesElectronUserData) hardenOwnerOnlySqliteFiles(demoDbPath);
+
+    prepare?.(newDb, newSqlite);
 
     // Only commit state after everything succeeds
     demoSqlite = newSqlite;

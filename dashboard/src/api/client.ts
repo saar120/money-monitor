@@ -1,3 +1,4 @@
+import { createSseParser } from '../../../src/shared/sse-parser';
 import { openScrapeStream } from './scrape-stream';
 const BASE_URL = '/api';
 
@@ -20,6 +21,18 @@ export function clearApiToken(): void {
   localStorage.removeItem(API_TOKEN_KEY);
 }
 
+export class ApiError extends Error {
+  readonly code: string;
+  readonly status: number;
+  readonly current?: Transaction;
+  constructor(code: string, status: number, current?: Transaction) {
+    super(code);
+    this.code = code;
+    this.status = status;
+    this.current = current;
+  }
+}
+
 async function request<T>(path: string, options?: RequestInit): Promise<T> {
   const headers: Record<string, string> = {
     ...(options?.body ? { 'Content-Type': 'application/json' } : {}),
@@ -37,7 +50,7 @@ async function request<T>(path: string, options?: RequestInit): Promise<T> {
   });
   if (!res.ok) {
     const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((error as { error: string }).error || res.statusText);
+    throw new ApiError(error.code ?? error.error ?? res.statusText, res.status, error.current);
   }
   if (res.status === 204) return undefined as T;
   return res.json() as Promise<T>;
@@ -139,12 +152,20 @@ export interface OneZeroImportCommitResult {
   duplicates: number;
 }
 
-function oneZeroImportRequest<T>(accountId: number, file: File, commit = false) {
+function oneZeroImportRequest<T>(
+  accountId: number,
+  file: File,
+  commit = false,
+  commandId?: string,
+) {
   const query = new URLSearchParams({ fileName: file.name });
   if (commit) query.set('commit', 'true');
   return request<T>(`/accounts/${accountId}/onezero/import?${query}`, {
     method: 'POST',
-    headers: { 'Content-Type': 'application/octet-stream' },
+    headers: {
+      'Content-Type': 'application/octet-stream',
+      ...(commandId ? { 'X-Money-Monitor-Command-Id': commandId } : {}),
+    },
     body: file,
   });
 }
@@ -153,14 +174,16 @@ export function previewOneZeroImport(accountId: number, file: File) {
   return oneZeroImportRequest<OneZeroImportPreview>(accountId, file);
 }
 
-export function commitOneZeroImport(accountId: number, file: File) {
-  return oneZeroImportRequest<OneZeroImportCommitResult>(accountId, file, true);
+export function commitOneZeroImport(accountId: number, file: File, commandId: string) {
+  return oneZeroImportRequest<OneZeroImportCommitResult>(accountId, file, true, commandId);
 }
 
 // ─── Transactions ───
 
 export interface Transaction {
   id: number;
+  resourceVersion?: number;
+  inclusionSource?: string;
   accountId: number;
   identifier: number | null;
   date: string;
@@ -238,34 +261,22 @@ export function getActivitySince(since: string) {
   );
 }
 
-export function ignoreTransaction(id: number, ignored: boolean) {
-  return request<{ transaction: Transaction }>(`/transactions/${id}/ignore`, {
-    method: 'PATCH',
-    body: JSON.stringify({ ignored }),
-  });
-}
-
-export function resolveTransaction(id: number, category: string) {
-  return request<{ transaction: Transaction }>(`/transactions/${id}/resolve`, {
-    method: 'PATCH',
-    body: JSON.stringify({ category }),
-  });
-}
-
-export function updateTransactionOwner(
-  id: number,
-  data: { ownerType: OwnerType; ownerMemberId?: number | null },
-) {
-  return request<{ transaction: Transaction }>(`/transactions/${id}/owner`, {
-    method: 'PATCH',
-    body: JSON.stringify(data),
-  });
-}
-
-export function updateTransactionEffectiveDate(id: number, effectiveDate: string | null) {
-  return request<{ transaction: Transaction }>(`/transactions/${id}/effective-date`, {
-    method: 'PATCH',
-    body: JSON.stringify({ effectiveDate }),
+export type TransactionPatch = {
+  category?: string | null;
+  ignored?: boolean;
+  effectiveDate?: string | null;
+  reviewed?: true;
+  owner?: { type: OwnerType; memberId?: number | null };
+};
+export type TransactionCommand = {
+  commandId: string;
+  expectedVersion: number;
+  patch: TransactionPatch;
+};
+export function saveTransactionCommand(id: number, command: TransactionCommand) {
+  return request<{ commandId: string; transaction: Transaction }>(`/transactions/${id}/commands`, {
+    method: 'POST',
+    body: JSON.stringify(command),
   });
 }
 
@@ -276,6 +287,7 @@ export function getNeedsReviewCount() {
 // ─── Summary ───
 
 export interface RecurringPayment {
+  resourceVersion?: number;
   accountId: number;
   merchantKey: string;
   name: string;
@@ -300,6 +312,7 @@ export interface RecurringPayments {
   totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
   asOfDate: string;
   classificationPending: boolean;
+  classificationStatus?: 'pending' | 'complete' | 'unavailable';
 }
 
 export interface RecurringPaymentDetail {
@@ -331,10 +344,17 @@ export function getRecurringPaymentDetail(payment: RecurringPayment) {
 export function saveRecurringPaymentDecision(
   payment: RecurringPayment,
   decision: 'include' | 'exclude' | 'auto',
+  commandId: string,
 ) {
-  return request<RecurringPayments>('/recurring-payments/decision', {
+  if (payment.resourceVersion === undefined) throw new ApiError('update_required', 426);
+  return request<{
+    receipt: { commandId: string; resourceVersion: number };
+    result: RecurringPayments | null;
+  }>('/recurring-payments/decision', {
     method: 'PUT',
     body: JSON.stringify({
+      commandId,
+      expectedVersion: payment.resourceVersion,
       accountId: payment.accountId,
       currencyCode: payment.currencyCode,
       merchantKey: payment.merchantKey,
@@ -438,15 +458,18 @@ export function createScrapeEventSource() {
   return openScrapeStream(`${BASE_URL}/scrape/events`, getApiToken() ?? '');
 }
 
-export function submitOtp(accountId: number, code: string) {
+export function submitOtp(accountId: number, code: string, challengeId: string) {
   return request<{ success: boolean }>('/scrape/otp', {
     method: 'POST',
-    body: JSON.stringify({ accountId, code }),
+    body: JSON.stringify({ accountId, code, challengeId }),
   });
 }
 
-export function confirmManualLogin(accountId: number) {
-  return request<{ success: boolean }>(`/scrape/manual-confirm/${accountId}`, { method: 'POST' });
+export function confirmManualLogin(accountId: number, challengeId: string) {
+  return request<{ success: boolean }>(`/scrape/manual-confirm/${accountId}`, {
+    method: 'POST',
+    body: JSON.stringify({ challengeId }),
+  });
 }
 
 // ─── Scrape Sessions ───
@@ -475,6 +498,7 @@ export interface ScrapeSession {
   startedAt: string;
   completedAt: string | null;
   logs: ScrapeLogEntry[];
+  revision?: number;
 }
 
 export function getScrapeSessions(params: { limit?: number; offset?: number } = {}) {
@@ -482,9 +506,14 @@ export function getScrapeSessions(params: { limit?: number; offset?: number } = 
   Object.entries(params).forEach(([key, value]) => {
     if (value !== undefined) query.set(key, String(value));
   });
-  return request<{ sessions: ScrapeSession[]; activeSessions: ScrapeSession[] }>(
-    `/scrape/sessions?${query}`,
-  );
+  return request<{
+    sessions: ScrapeSession[];
+    activeSessions: ScrapeSession[];
+    challenges?: {
+      otp: { accountId: number; challengeId: string; sessionId?: number }[];
+      manual: { accountId: number; challengeId: string; sessionId?: number }[];
+    };
+  }>(`/scrape/sessions?${query}`);
 }
 
 export function cancelScrapeSession(sessionId: number) {
@@ -542,13 +571,6 @@ export function updateCategory(
 
 export function deleteCategory(id: number) {
   return request<{ deleted: boolean }>(`/categories/${id}`, { method: 'DELETE' });
-}
-
-export function updateTransactionCategory(id: number, category: string | null) {
-  return request<{ transaction: Transaction }>(`/transactions/${id}`, {
-    method: 'PATCH',
-    body: JSON.stringify({ category }),
-  });
 }
 
 // ─── Members & Ownership ───
@@ -642,6 +664,7 @@ export interface SessionMeta {
 }
 
 export interface SessionMessage {
+  id?: string;
   type: 'message';
   role: 'user' | 'assistant';
   content: string;
@@ -652,14 +675,18 @@ export interface SessionMessage {
 export interface SessionData {
   meta: SessionMeta;
   messages: SessionMessage[];
+  replies?: AdvisorReply[];
 }
 
 export function getChatSessions() {
   return request<{ sessions: SessionMeta[] }>('/ai/sessions');
 }
 
-export function createChatSession() {
-  return request<{ session: SessionMeta }>('/ai/sessions', { method: 'POST' });
+export function createChatSession(id?: string) {
+  return request<{ session: SessionMeta }>('/ai/sessions', {
+    method: 'POST',
+    body: JSON.stringify({ id }),
+  });
 }
 
 export function getChatSession(id: string) {
@@ -673,6 +700,8 @@ export function deleteChatSession(id: string) {
 // ─── AI ───
 
 export interface ChatMessage {
+  id?: string;
+  provisional?: boolean;
   role: 'user' | 'assistant';
   content: string;
   chart?: AdvisorChart;
@@ -685,66 +714,80 @@ export interface AdvisorChart {
   points: { label: string; value: number }[];
 }
 
+export interface AdvisorReply {
+  id: string;
+  sessionId: string;
+  state: 'generating' | 'completed' | 'failed' | 'interrupted' | 'cancelled';
+  text?: string;
+  chart?: AdvisorChart;
+}
+export function getChatReply(sessionId: string, replyId: string) {
+  return request<{ reply: AdvisorReply }>(`/ai/sessions/${sessionId}/replies/${replyId}`);
+}
 export type ChatStreamEvent =
+  | { type: 'accepted'; replyId: string }
   | { type: 'text_delta' | 'status' | 'result' | 'error'; text: string }
   | { type: 'chart'; chart: AdvisorChart };
-
 export async function* aiChatStream(
   sessionId: string,
   message: string,
+  submissionId: string,
+  signal?: AbortSignal,
 ): AsyncGenerator<ChatStreamEvent> {
   const token = getApiToken();
-  const headers: Record<string, string> = { 'Content-Type': 'application/json' };
-  if (token) headers['Authorization'] = `Bearer ${token}`;
-
-  const res = await fetch(`${BASE_URL}/ai/chat`, {
+  const response = await fetch(`${BASE_URL}/ai/chat`, {
     method: 'POST',
-    headers,
-    body: JSON.stringify({ sessionId, message }),
+    signal,
+    headers: {
+      'Content-Type': 'application/json',
+      ...(token ? { Authorization: `Bearer ${token}` } : {}),
+    },
+    body: JSON.stringify({ sessionId, message, submissionId }),
   });
-
-  if (!res.ok || !res.body) {
-    const error = await res.json().catch(() => ({ error: res.statusText }));
-    throw new Error((error as { error: string }).error || res.statusText);
+  if (!response.ok || !response.body) {
+    const error = await response.json().catch(() => ({ error: response.statusText }));
+    throw new ApiError(error.code ?? error.error ?? response.statusText, response.status);
   }
-
-  const reader = res.body.getReader();
-  const decoder = new TextDecoder();
-  let buffer = '';
-  let currentEvent = '';
-
+  const events: ChatStreamEvent[] = [];
+  let terminal = false;
+  const parser = createSseParser(({ event, data }) => {
+    const value = JSON.parse(data) as { text?: string; chart?: AdvisorChart; replyId?: string };
+    if (event === 'accepted' && value.replyId)
+      events.push({ type: 'accepted', replyId: value.replyId });
+    else if (event === 'chart' && value.chart) events.push({ type: 'chart', chart: value.chart });
+    else if (
+      ['text_delta', 'status', 'result', 'error'].includes(event) &&
+      typeof value.text === 'string'
+    ) {
+      if (event === 'result' || event === 'error') terminal = true;
+      events.push({
+        type: event as 'text_delta' | 'status' | 'result' | 'error',
+        text: value.text,
+      });
+    }
+  });
+  const reader = response.body.pipeThrough(new TextDecoderStream()).getReader();
   try {
     while (true) {
       const { done, value } = await reader.read();
-      if (done) break;
-
-      buffer += decoder.decode(value, { stream: true });
-      const lines = buffer.split('\n');
-      buffer = lines.pop() ?? '';
-
-      for (const line of lines) {
-        if (line.startsWith('event: ')) {
-          currentEvent = line.slice(7);
-        } else if (line.startsWith('data: ') && currentEvent) {
-          const data = JSON.parse(line.slice(6)) as { text?: string; chart?: AdvisorChart };
-          if (currentEvent === 'chart' && data.chart) yield { type: 'chart', chart: data.chart };
-          else if (currentEvent !== 'chart' && typeof data.text === 'string')
-            yield {
-              type: currentEvent as 'text_delta' | 'status' | 'result' | 'error',
-              text: data.text,
-            };
-          currentEvent = '';
-        }
+      if (done) {
+        parser.finish();
+        while (events.length) yield events.shift()!;
+        if (!terminal) throw new Error('Reply outcome unknown');
+        return;
       }
+      parser.push(value);
+      while (events.length) yield events.shift()!;
     }
   } finally {
-    reader.cancel();
+    await reader.cancel().catch(() => {});
   }
 }
 
 // ─── Assets ───
 
 export interface Holding {
+  resourceVersion?: number;
   id: number;
   name: string;
   type: string;
@@ -868,6 +911,21 @@ export function createHolding(
   });
 }
 
+export type HoldingPricesCommand = {
+  commandId: string;
+  updates: Array<{
+    id: number;
+    expectedVersion: number;
+    quantity: number;
+    lastPrice: number | null;
+  }>;
+};
+export function saveHoldingPrices(assetId: number, command: HoldingPricesCommand) {
+  return request<{ commandId: string; asset: Asset }>(`/assets/${assetId}/holding-commands`, {
+    method: 'POST',
+    body: JSON.stringify(command),
+  });
+}
 export function updateHolding(
   id: number,
   data: { quantity?: number; costBasis?: number; lastPrice?: number | null; notes?: string | null },

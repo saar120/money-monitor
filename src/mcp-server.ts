@@ -349,6 +349,8 @@ export function buildMoneyMonitorMcpServer(accessMode: McpAccessMode = 'read-onl
       description:
         'Assign a category to a transaction. Confidence below 0.8 flags it for manual review.',
       inputSchema: z.object({
+        command_id: z.string().uuid(),
+        expected_version: z.number().int().positive(),
         transaction_id: z.number(),
         category: z.string(),
         confidence: z.number().min(0).max(1),

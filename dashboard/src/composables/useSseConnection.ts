@@ -1,48 +1,55 @@
-import { ref, onUnmounted } from 'vue';
+import { computed, ref, onUnmounted } from 'vue';
 import { createScrapeEventSource } from '../api/client';
-
 export type SseHandlers = Record<string, (data: Record<string, unknown>) => void>;
-
 export function useSseConnection(handlers: SseHandlers) {
-  const isConnected = ref(false);
-
-  let eventSource: ReturnType<typeof createScrapeEventSource> | null = null;
-  let reconnectTimer: ReturnType<typeof setTimeout> | null = null;
-
-  function connect() {
-    disconnect();
-
-    eventSource = createScrapeEventSource();
-    isConnected.value = true;
-
-    eventSource.onmessage = (event) => {
-      const data = JSON.parse(event.data) as Record<string, unknown>;
-      const type = data.type as string | undefined;
-      if (type && handlers[type]) {
-        handlers[type](data);
-      }
-    };
-
-    eventSource.onerror = () => {
-      eventSource?.close();
-      isConnected.value = false;
-      reconnectTimer = setTimeout(connect, 3000);
-    };
-  }
-
+  const state = ref<'disconnected' | 'connecting' | 'open' | 'reconnect-wait' | 'disposed'>(
+    'disconnected',
+  );
+  let source: ReturnType<typeof createScrapeEventSource> | null = null;
+  let timer: ReturnType<typeof setTimeout> | null = null;
+  let generation = 0;
   function disconnect() {
-    if (reconnectTimer) {
-      clearTimeout(reconnectTimer);
-      reconnectTimer = null;
-    }
-    if (eventSource) {
-      eventSource.close();
-      eventSource = null;
-    }
-    isConnected.value = false;
+    generation++;
+    if (timer) clearTimeout(timer);
+    timer = null;
+    source?.close();
+    source = null;
+    if (state.value !== 'disposed') state.value = 'disconnected';
   }
-
-  onUnmounted(disconnect);
-
-  return { connect, disconnect, isConnected };
+  function connect() {
+    if (state.value === 'disposed') return;
+    disconnect();
+    const attempt = generation;
+    state.value = 'connecting';
+    const connection = createScrapeEventSource();
+    source = connection;
+    connection.onopen = () => {
+      if (attempt === generation) state.value = 'open';
+    };
+    connection.onmessage = (event) => {
+      if (attempt !== generation) return;
+      let data: Record<string, unknown>;
+      try {
+        data = JSON.parse(event.data);
+      } catch {
+        return;
+      }
+      if (typeof data.type === 'string') handlers[data.type]?.(data);
+    };
+    connection.onerror = () => {
+      if (attempt !== generation) return;
+      connection.close();
+      source = null;
+      state.value = 'reconnect-wait';
+      timer = setTimeout(() => {
+        timer = null;
+        if (attempt === generation) connect();
+      }, 3000);
+    };
+  }
+  onUnmounted(() => {
+    disconnect();
+    state.value = 'disposed';
+  });
+  return { connect, disconnect, state, isConnected: computed(() => state.value === 'open') };
 }

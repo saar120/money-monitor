@@ -1,10 +1,11 @@
+import { FinancialCommandError } from './financial-command.js';
+import { commandTransaction as applyTransactionCommand } from './transaction-command.js';
 import { and, count, desc, eq, gte, inArray, lt, lte, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions } from '../db/schema.js';
 import { searchTransactionIds } from '../db/queries.js';
-import { isCategoryIgnored } from './categories.js';
-import { applyOwnership, ownerFilterConditions } from './ownership.js';
+import { ownerFilterConditions } from './ownership.js';
 import type { OwnerType } from '../shared/types.js';
 
 // ── Filter builder (moved from helpers.ts) ──
@@ -180,76 +181,46 @@ export function getNeedsReviewCount(): number {
 
 // ── Writes ──
 
-export function resolveReview(id: number, category: string) {
-  const [initial] = db
-    .update(transactions)
-    .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
-    .where(eq(transactions.id, id))
-    .returning()
-    .all();
-  if (!initial) return null;
-  applyOwnership({ ids: [id] });
-  return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
-}
-
-export function setTransactionIgnored(id: number, ignored: boolean) {
-  const [updated] = db
-    .update(transactions)
-    .set({ ignored })
-    .where(eq(transactions.id, id))
-    .returning()
-    .all();
-  return updated ?? null;
-}
-
-export function updateTransactionCategory(id: number, category: string | null) {
-  const [initial] = db
-    .update(transactions)
-    .set({ category, needsReview: false, reviewReason: null, ignored: isCategoryIgnored(category) })
-    .where(eq(transactions.id, id))
-    .returning()
-    .all();
-  if (!initial) return null;
-  applyOwnership({ ids: [id] });
-  return db.select().from(transactions).where(eq(transactions.id, id)).get() ?? null;
-}
-
-export function updateTransactionEffectiveDate(id: number, effectiveDate: string | null) {
-  const [updated] = db
-    .update(transactions)
-    .set({ effectiveDate })
-    .where(eq(transactions.id, id))
-    .returning()
-    .all();
-  return updated ?? null;
-}
-
 export function categorizeTransaction(input: {
   transactionId: number;
   category: string;
   confidence?: number;
   reviewReason?: string;
+  commandId?: string;
+  expectedVersion?: number;
 }) {
-  const existing = db
-    .select({ id: transactions.id })
-    .from(transactions)
-    .where(eq(transactions.id, input.transactionId))
-    .get();
-  if (!existing) return { ok: false as const, error: 'Transaction not found', status: 404 };
+  if (!input.commandId || input.expectedVersion === undefined)
+    return { ok: false as const, error: 'update_required', status: 426 };
+  try {
+    const outcome = applyTransactionCommand(
+      input.transactionId,
+      {
+        commandId: input.commandId,
+        expectedVersion: input.expectedVersion,
+        patch: {
+          category: input.category,
+          confidence: input.confidence,
+          reviewReason: input.reviewReason,
+        },
+      },
+      'financial-tools',
+      db,
+    );
+    return {
+      ok: true as const,
+      transactionId: outcome.transaction.id,
+      category: outcome.transaction.category,
+      resourceVersion: outcome.transaction.resourceVersion,
+      commandId: outcome.commandId,
+    };
+  } catch (cause) {
+    if (cause instanceof FinancialCommandError)
+      return { ok: false as const, error: cause.code, status: cause.status };
+    throw cause;
+  }
+}
 
-  const needsReview = input.confidence !== undefined && input.confidence < 0.8;
-
-  db.update(transactions)
-    .set({
-      category: input.category,
-      confidence: input.confidence ?? null,
-      needsReview,
-      reviewReason: needsReview ? (input.reviewReason ?? 'Low confidence categorization') : null,
-      ignored: isCategoryIgnored(input.category),
-    })
-    .where(eq(transactions.id, input.transactionId))
-    .run();
-  applyOwnership({ ids: [input.transactionId] });
-
-  return { ok: true as const, transactionId: input.transactionId, category: input.category };
+export { transactionCommandSchema } from './transaction-command.js';
+export function commandTransaction(id: number, input: unknown, clientId: string) {
+  return applyTransactionCommand(id, input, clientId, db);
 }

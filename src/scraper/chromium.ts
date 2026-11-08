@@ -10,6 +10,7 @@ const CHROME_BUILD_ID = '156.0.8078.47';
 const cacheDir = join(dataDir, 'puppeteer-cache');
 
 let cachedPath: string | undefined;
+let installing: Promise<string> | null = null;
 
 /**
  * Ensure Chrome is downloaded and return its executable path.
@@ -18,6 +19,13 @@ let cachedPath: string | undefined;
 export async function ensureChromium(): Promise<string> {
   if (cachedPath) return cachedPath;
 
+  if (installing) return installing;
+  installing = installChromium().finally(() => {
+    installing = null;
+  });
+  return installing;
+}
+async function installChromium(): Promise<string> {
   const platform = detectBrowserPlatform();
   if (!platform) {
     throw new Error(`Unsupported platform: ${process.platform} ${process.arch}`);

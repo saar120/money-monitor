@@ -3,7 +3,7 @@ import SelectField from '@/components/ui/select/SelectField.vue';
 import { useMonthSwipe } from '@/composables/useMonthSwipe';
 import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
-import { computed, onMounted, onUnmounted, ref, watch } from 'vue';
+import { computed, onMounted, onUnmounted, ref, watch, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
 import { use } from 'echarts/core';
 import { CanvasRenderer } from 'echarts/renderers';
@@ -74,6 +74,9 @@ const syncMotion = () => {
   reduceMotion.value = motionPreference.matches;
 };
 let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 
 function monthRange(month: string, throughDay?: number) {
   const [year, number] = month.split('-').map(Number) as [number, number];

@@ -7,6 +7,7 @@ import type { HoldingRow } from './assets.js';
 
 const coin: HoldingRow = {
   id: 1,
+  resourceVersion: 1,
   assetId: 1,
   name: 'Sample coin',
   type: 'crypto',

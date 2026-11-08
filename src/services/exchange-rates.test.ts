@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach, vi } from 'vitest';
 
 describe('exchange-rates service', () => {
-  let getExchangeRates: typeof import('./exchange-rates.js')['getExchangeRates'];
-  let convertToIls: typeof import('./exchange-rates.js')['convertToIls'];
+  let getExchangeRates: (typeof import('./exchange-rates.js'))['getExchangeRates'];
+  let convertToIls: (typeof import('./exchange-rates.js'))['convertToIls'];
   let mockFetch: ReturnType<typeof vi.fn>;
 
   beforeEach(async () => {
@@ -16,13 +16,14 @@ describe('exchange-rates service', () => {
       if (url.includes('boi.org.il')) {
         return Promise.resolve({
           ok: true,
-          json: () => Promise.resolve({
-            exchangeRates: [
-              { key: 'USD', currentExchangeRate: 3.6 },
-              { key: 'EUR', currentExchangeRate: 3.9 },
-              { key: 'GBP', currentExchangeRate: 4.5 },
-            ],
-          }),
+          json: () =>
+            Promise.resolve({
+              exchangeRates: [
+                { key: 'USD', currentExchangeRate: 3.6 },
+                { key: 'EUR', currentExchangeRate: 3.9 },
+                { key: 'GBP', currentExchangeRate: 4.5 },
+              ],
+            }),
         });
       }
       if (url.includes('coingecko')) {
@@ -124,9 +125,10 @@ describe('exchange-rates service', () => {
         if (url.includes('boi.org.il')) {
           return Promise.resolve({
             ok: true,
-            json: () => Promise.resolve({
-              exchangeRates: [{ key: 'USD', currentExchangeRate: 3.6 }],
-            }),
+            json: () =>
+              Promise.resolve({
+                exchangeRates: [{ key: 'USD', currentExchangeRate: 3.6 }],
+              }),
           });
         }
         if (url.includes('coingecko')) {
@@ -142,5 +144,24 @@ describe('exchange-rates service', () => {
       expect(result.rates).toEqual({ ILS: 1 });
       expect(result.stale).toBe(true);
     });
+  });
+  it('cools down a failed first request without claiming a successful fetch time', async () => {
+    const now = vi.spyOn(Date, 'now').mockReturnValue(100_000);
+    mockFetch.mockRejectedValue(new Error('offline'));
+    try {
+      expect(await getExchangeRates()).toMatchObject({
+        stale: true,
+        fetchedAt: '',
+        status: 'unavailable',
+      });
+      now.mockReturnValue(159_999);
+      await getExchangeRates();
+      expect(mockFetch).toHaveBeenCalledTimes(2);
+      now.mockReturnValue(160_001);
+      await getExchangeRates();
+      expect(mockFetch).toHaveBeenCalledTimes(4);
+    } finally {
+      now.mockRestore();
+    }
   });
 });

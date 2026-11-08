@@ -1,3 +1,9 @@
+import { createSseParser } from '../../src/shared/sse-parser.ts';
+import {
+  MobileRequestError,
+  invalidateAuthentication,
+  terminalAuthenticationError,
+} from './request-error.ts';
 import { t, type MessageKey } from './translations.ts';
 import { currentLanguage } from './locale-state.ts';
 import { currentLocale } from './locale-state.ts';
@@ -44,6 +50,7 @@ export type ExploreMonth = {
 };
 export type CashflowMonth = Pick<ExploreMonth, 'month' | 'label' | 'income' | 'spending'>;
 export type RecurringPayment = {
+  resourceVersion?: number;
   accountId: string;
   merchantKey: string;
   name: string;
@@ -67,6 +74,7 @@ export type RecurringPayments = {
   totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
   asOfDate: string;
   classificationPending: boolean;
+  classificationStatus?: 'pending' | 'complete' | 'unavailable';
 };
 export type RecurringPaymentDetail = {
   payment: RecurringPayment;
@@ -82,7 +90,7 @@ export type RecurringPaymentDetail = {
 };
 export type TransactionUpdate = Partial<
   Pick<Transaction, 'category' | 'owner' | 'included' | 'effectiveDate'>
-> & { reviewed?: true };
+> & { reviewed?: true; commandId?: string; expectedVersion?: number };
 
 export type AdvisorChart = {
   kind: 'bar' | 'line';
@@ -91,6 +99,8 @@ export type AdvisorChart = {
   points: { label: string; value: number }[];
 };
 export type AdvisorMessage = {
+  id?: string;
+  provisional?: boolean;
   role: 'user' | 'assistant';
   content: string;
   timestamp: string;
@@ -110,11 +120,19 @@ export async function listAdvisorSessions(
   return sessions as AdvisorSession[];
 }
 
-export async function createAdvisorSession(credential: PairingCredential): Promise<AdvisorSession> {
+export async function createAdvisorSession(
+  credential: PairingCredential,
+  id?: string,
+): Promise<AdvisorSession> {
   const root = object(
     await requestJson(`${credential.baseURL}${advisorPath}`, {
       method: 'POST',
-      headers: { Authorization: `Bearer ${credential.token}` },
+      headers: {
+        Authorization: `Bearer ${credential.token}`,
+        'X-Money-Monitor-Server-Id': credential.serverId,
+        'Content-Type': 'application/json',
+      },
+      body: JSON.stringify({ id }),
     }),
     'advisor session',
   );
@@ -125,7 +143,7 @@ export async function createAdvisorSession(credential: PairingCredential): Promi
 export async function getAdvisorSession(
   credential: PairingCredential,
   id: string,
-): Promise<{ meta: AdvisorSession; messages: AdvisorMessage[] }> {
+): Promise<{ meta: AdvisorSession; messages: AdvisorMessage[]; replies?: AdvisorReply[] }> {
   const root = object(
     await authorizedGet(credential, `${advisorPath}/${encodeURIComponent(id)}`),
     'advisor session',
@@ -137,76 +155,157 @@ export async function getAdvisorSession(
   return {
     meta: object(session.meta, 'advisor session') as AdvisorSession,
     messages: session.messages as AdvisorMessage[],
+    replies: Array.isArray(session.replies) ? (session.replies as AdvisorReply[]) : undefined,
   };
 }
 
+export type AdvisorReply = {
+  id: string;
+  sessionId: string;
+  state: 'generating' | 'completed' | 'failed' | 'interrupted' | 'cancelled';
+  text?: string;
+  chart?: AdvisorChart;
+};
+export async function getAdvisorReply(
+  credential: PairingCredential,
+  sessionId: string,
+  replyId: string,
+): Promise<AdvisorReply> {
+  const root = object(
+    await authorizedGet(
+      credential,
+      `${advisorPath}/${encodeURIComponent(sessionId)}/replies/${encodeURIComponent(replyId)}`,
+    ),
+    'reply',
+  );
+  verifyServer(root, credential);
+  return object(object(root.data, 'reply outcome').reply, 'reply') as AdvisorReply;
+}
 export function streamAdvisorReply(
   credential: PairingCredential,
   id: string,
   message: string,
+  submissionId: string,
   onEvent: (event: {
-    type: 'text_delta' | 'status' | 'result' | 'error' | 'chart';
+    type: 'accepted' | 'text_delta' | 'status' | 'result' | 'error' | 'chart';
     text?: string;
     chart?: AdvisorChart;
+    replyId?: string;
   }) => void,
+  signal?: AbortSignal,
 ): Promise<void> {
   return new Promise((resolve, reject) => {
     const xhr = new XMLHttpRequest();
     let offset = 0;
-    let buffer = '';
-    let kind = '';
     let identityChecked = false;
+    let terminal = false;
+    let settled = false;
+    const finish = (error?: Error) => {
+      if (settled) return;
+      settled = true;
+      signal?.removeEventListener('abort', abort);
+      xhr.onprogress = null;
+      xhr.onload = null;
+      xhr.onerror = null;
+      xhr.ontimeout = null;
+      xhr.onabort = null;
+      if (error) reject(error);
+      else resolve();
+    };
+    const abort = () => {
+      xhr.abort();
+      finish(new MobileRequestError('cancelled', 'Cancelled'));
+    };
+    if (signal?.aborted) {
+      finish(new MobileRequestError('cancelled', 'Cancelled'));
+      return;
+    }
+    const parser = createSseParser(({ event, data }) => {
+      const payload = JSON.parse(data) as { text?: string; chart?: AdvisorChart; replyId?: string };
+      if (['accepted', 'text_delta', 'status', 'result', 'error', 'chart'].includes(event)) {
+        if (event === 'result' || event === 'error') terminal = true;
+        onEvent({
+          type: event as 'accepted' | 'text_delta' | 'status' | 'result' | 'error' | 'chart',
+          ...payload,
+        });
+      }
+    });
     xhr.open('POST', `${credential.baseURL}${advisorPath}/${encodeURIComponent(id)}/messages`);
     xhr.setRequestHeader('Authorization', `Bearer ${credential.token}`);
     xhr.setRequestHeader('Content-Type', 'application/json');
     xhr.timeout = 120_000;
     const consume = () => {
-      if (!identityChecked && xhr.readyState >= 2 && xhr.status >= 200 && xhr.status < 300) {
-        identityChecked = true;
+      if (settled || xhr.status < 200 || xhr.status >= 300) return;
+      if (!identityChecked) {
         if (xhr.getResponseHeader('X-Money-Monitor-Server-Id') !== credential.serverId) {
+          finish(
+            new MobileRequestError(
+              'network-unknown',
+              t('theRespondingMacDoesNotMatchThePairedMac'),
+            ),
+          );
           xhr.abort();
-          reject(new Error('The responding Mac does not match the paired Mac.'));
           return;
         }
+        identityChecked = true;
       }
-      buffer += xhr.responseText.slice(offset);
-      offset = xhr.responseText.length;
-      const frames = buffer.split('\n');
-      buffer = frames.pop() ?? '';
-      for (const line of frames) {
-        if (line.startsWith('event: ')) kind = line.slice(7);
-        else if (line.startsWith('data: ') && kind) {
-          try {
-            const payload = JSON.parse(line.slice(6)) as { text?: string; chart?: AdvisorChart };
-            if (['text_delta', 'status', 'result', 'error', 'chart'].includes(kind))
-              onEvent({
-                type: kind as 'text_delta' | 'status' | 'result' | 'error' | 'chart',
-                ...payload,
-              });
-          } catch {
-            /* Ignore an invalid event; the saved session remains authoritative. */
-          }
-          kind = '';
-        }
+      try {
+        parser.push(xhr.responseText.slice(offset));
+        offset = xhr.responseText.length;
+      } catch (cause) {
+        finish(
+          new MobileRequestError(
+            'network-unknown',
+            'Invalid reply stream',
+            undefined,
+            undefined,
+            cause,
+          ),
+        );
+        xhr.abort();
       }
     };
     xhr.onprogress = consume;
     xhr.onload = () => {
       consume();
-      if (xhr.status >= 200 && xhr.status < 300) resolve();
+      if (settled) return;
+      try {
+        parser.finish();
+      } catch {
+        finish(new MobileRequestError('network-unknown', 'Invalid reply stream'));
+        return;
+      }
+      if (xhr.status >= 200 && xhr.status < 300)
+        finish(
+          terminal ? undefined : new MobileRequestError('network-unknown', 'Reply outcome unknown'),
+        );
       else {
         let body: unknown = null;
         try {
           body = JSON.parse(xhr.responseText);
         } catch {
-          /* Use the status fallback. */
+          /* Use a safe status error. */
         }
-        reject(apiError(body, xhr.status));
+        const error = apiError(body, xhr.status);
+        if (
+          terminalAuthenticationError(error) &&
+          xhr.getResponseHeader('X-Money-Monitor-Server-Id') === credential.serverId
+        )
+          invalidateAuthentication({
+            url: `${credential.baseURL}${advisorPath}`,
+            authorization: `Bearer ${credential.token}`,
+            code: (error as MobileRequestError).code!,
+          });
+        finish(error);
       }
     };
-    xhr.onerror = () => reject(new Error('The Mac connection was interrupted.'));
-    xhr.ontimeout = () => reject(new Error('The advisor took too long to respond.'));
-    xhr.send(JSON.stringify({ message }));
+    xhr.onerror = () =>
+      finish(new MobileRequestError('network-unknown', 'The Mac connection was interrupted.'));
+    xhr.ontimeout = () =>
+      finish(new MobileRequestError('timeout', 'The advisor took too long to respond.'));
+    xhr.onabort = () => finish(new MobileRequestError('cancelled', 'Cancelled'));
+    signal?.addEventListener('abort', abort, { once: true });
+    xhr.send(JSON.stringify({ message, submissionId }));
   });
 }
 
@@ -266,11 +365,22 @@ function apiError(body: unknown, status: number): Error {
   try {
     const error = object(object(body, 'error response').error, 'error');
     const message = text(error.message, 'error message');
-    if (currentLanguage() !== 'he') return new Error(message);
+    const code = typeof error.code === 'string' ? error.code : 'unknown';
+    if (currentLanguage() !== 'he') return new MobileRequestError('api', message, code, status);
     const key = typeof error.code === 'string' ? MOBILE_ERROR_MESSAGES[error.code] : undefined;
-    return new Error(key ? t(key) : t('macRequestFailed', { code: status }));
+    return new MobileRequestError(
+      'api',
+      key ? t(key) : t('macRequestFailed', { code: status }),
+      code,
+      status,
+    );
   } catch {
-    return new Error(t('macRequestFailed', { code: status }));
+    return new MobileRequestError(
+      'api',
+      t('macRequestFailed', { code: status }),
+      'unknown',
+      status,
+    );
   }
 }
 
@@ -303,20 +413,60 @@ async function requestJson(
   externalSignal?: AbortSignal,
 ): Promise<unknown> {
   const controller = new AbortController();
-  const abort = () => controller.abort();
-  if (externalSignal?.aborted) controller.abort();
+  let abortKind: 'timeout' | 'cancelled' | null = null;
+  const abort = () => {
+    if (!abortKind) {
+      abortKind = 'cancelled';
+      controller.abort();
+    }
+  };
+  if (externalSignal?.aborted) abort();
   externalSignal?.addEventListener('abort', abort, { once: true });
-  const timeout = setTimeout(abort, 10_000);
+  const timeout = setTimeout(() => {
+    if (!abortKind) {
+      abortKind = 'timeout';
+      controller.abort();
+    }
+  }, 10_000);
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
     const body: unknown = await response.json().catch(() => null);
-    if (!response.ok) throw apiError(body, response.status);
+    controller.signal.throwIfAborted();
+    if (!response.ok) {
+      const error = apiError(body, response.status);
+      const expectedServer = new Headers(init.headers).get('X-Money-Monitor-Server-Id');
+      if (terminalAuthenticationError(error)) {
+        if (!expectedServer || response.headers.get('X-Money-Monitor-Server-Id') !== expectedServer)
+          throw new MobileRequestError(
+            'network-unknown',
+            t('theRespondingMacDoesNotMatchThePairedMac'),
+          );
+        invalidateAuthentication({
+          url,
+          authorization: new Headers(init.headers).get('Authorization') ?? '',
+          code: (error as MobileRequestError).code!,
+        });
+      }
+      throw error;
+    }
     return body;
   } catch (error) {
-    if (controller.signal.aborted && !externalSignal?.aborted) {
-      throw new Error(t('theMacDidNotRespondInTime'), { cause: error });
-    }
-    throw error;
+    if (abortKind)
+      throw new MobileRequestError(
+        abortKind,
+        abortKind === 'timeout' ? t('theMacDidNotRespondInTime') : 'Cancelled',
+        undefined,
+        undefined,
+        error,
+      );
+    if (error instanceof MobileRequestError) throw error;
+    throw new MobileRequestError(
+      'network-unknown',
+      error instanceof Error ? error.message : 'Connection interrupted',
+      undefined,
+      undefined,
+      error,
+    );
   } finally {
     clearTimeout(timeout);
     externalSignal?.removeEventListener('abort', abort);
@@ -328,7 +478,11 @@ function authorizedGet(credential: PairingCredential, path: string, signal?: Abo
     `${credential.baseURL}${path}`,
     {
       method: 'GET',
-      headers: { Accept: 'application/json', Authorization: `Bearer ${credential.token}` },
+      headers: {
+        Accept: 'application/json',
+        Authorization: `Bearer ${credential.token}`,
+        'X-Money-Monitor-Server-Id': credential.serverId,
+      },
     },
     signal,
   );
@@ -418,7 +572,30 @@ export async function fetchHomeData(
     unknown: t('budgetUnavailable'),
   };
 
+  const cacheability =
+    meta.cacheability && typeof meta.cacheability === 'object'
+      ? object(meta.cacheability, 'cacheability')
+      : {};
+  const completeness =
+    meta.completeness && typeof meta.completeness === 'object'
+      ? object(meta.completeness, 'completeness')
+      : {};
+  const snapshot =
+    typeof meta.snapshotId === 'string' &&
+    typeof meta.calculatedAt === 'string' &&
+    typeof cacheability.staleAt === 'string' &&
+    typeof cacheability.deleteAfter === 'string'
+      ? {
+          id: meta.snapshotId,
+          calculatedAt: meta.calculatedAt,
+          staleAt: cacheability.staleAt,
+          deleteAfter: cacheability.deleteAfter,
+          complete: completeness.status === 'complete',
+          cacheable: cacheability.status === 'cacheable',
+        }
+      : undefined;
   return {
+    snapshot,
     currentDate: date(period.endDate, 'overview end date'),
     monthKey: text(period.month, 'overview month'),
     month: new Intl.DateTimeFormat(currentLocale(), { month: 'long', timeZone: 'UTC' }).format(
@@ -547,6 +724,12 @@ function parseRecurringPayment(raw: unknown): RecurringPayment {
   )
     throw new Error('The Mac returned an invalid recurring payment.');
   return {
+    resourceVersion:
+      typeof payment.resourceVersion === 'number' &&
+      Number.isSafeInteger(payment.resourceVersion) &&
+      payment.resourceVersion >= 0
+        ? payment.resourceVersion
+        : undefined,
     accountId: text(payment.accountId, 'account ID'),
     merchantKey: text(payment.merchantKey, 'merchant key'),
     name: text(payment.name, 'payment name'),
@@ -583,6 +766,11 @@ function parseRecurringPayments(
   return {
     asOfDate: date(data.asOfDate, 'recurring payment date'),
     classificationPending: boolean(data.classificationPending ?? false, 'classification state'),
+    classificationStatus: ['pending', 'complete', 'unavailable'].includes(
+      String(data.classificationStatus),
+    )
+      ? (data.classificationStatus as RecurringPayments['classificationStatus'])
+      : undefined,
     payments: data.payments.map(parseRecurringPayment),
     suggestions: data.suggestions.map(parseRecurringPayment),
     excluded: data.excluded.map(parseRecurringPayment),
@@ -647,24 +835,49 @@ export async function saveRecurringPaymentDecision(
   credential: PairingCredential,
   payment: RecurringPayment,
   decision: 'include' | 'exclude' | 'auto',
-): Promise<RecurringPayments> {
-  return parseRecurringPayments(
+  commandId: string,
+): Promise<{
+  receipt: { commandId: string; resourceVersion: number };
+  result: RecurringPayments | null;
+}> {
+  if (payment.resourceVersion === undefined)
+    throw new MobileRequestError('api', t('mobileErrorUpgradeRequired'), 'upgrade_required', 426);
+  const root = object(
     await requestJson(`${credential.baseURL}/api/mobile/v1/recurring-payments/decision`, {
       method: 'PUT',
       headers: {
         Accept: 'application/json',
         'Content-Type': 'application/json',
         Authorization: `Bearer ${credential.token}`,
+        'X-Money-Monitor-Server-Id': credential.serverId,
       },
       body: JSON.stringify({
+        commandId,
+        expectedVersion: payment.resourceVersion,
         accountId: payment.accountId,
         currencyCode: payment.currencyCode,
         merchantKey: payment.merchantKey,
         decision,
       }),
     }),
-    credential,
+    'decision response',
   );
+  verifyServer(root, credential);
+  const data = object(root.data, 'decision outcome');
+  const receipt = object(data.receipt, 'decision receipt');
+  if (
+    receipt.commandId !== commandId ||
+    !Number.isSafeInteger(receipt.resourceVersion) ||
+    (receipt.resourceVersion as number) < 1
+  )
+    throw new Error('Invalid decision receipt');
+  return {
+    receipt: { commandId, resourceVersion: receipt.resourceVersion as number },
+    result:
+      data.result === null
+        ? null
+        : parseRecurringPayments({ data: data.result, meta: root.meta }, credential),
+  };
 }
 
 export async function fetchExploreMonth(
@@ -779,6 +992,12 @@ function mapTransaction(value: unknown): Transaction {
         : amount.value;
   return {
     id: text(item.id, 'transaction ID'),
+    resourceVersion:
+      typeof item.resourceVersion === 'number' &&
+      Number.isSafeInteger(item.resourceVersion) &&
+      item.resourceVersion > 0
+        ? item.resourceVersion
+        : undefined,
     occurredAt: `${occurredOn}T12:00:00Z`,
     merchant: text(item.displayName, 'transaction name'),
     amount: signedAmount,
@@ -922,6 +1141,7 @@ export async function updateTransaction(
           Accept: 'application/json',
           'Content-Type': 'application/json',
           Authorization: `Bearer ${credential.token}`,
+          'X-Money-Monitor-Server-Id': credential.serverId,
         },
         body: JSON.stringify(update),
       },

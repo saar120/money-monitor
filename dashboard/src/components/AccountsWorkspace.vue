@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import {
@@ -55,7 +56,8 @@ const active = ref(true);
 const manualOnly = ref(false);
 const showBrowser = ref(false);
 const loading = ref(true);
-const saving = ref(false);
+const saveOperation = useFormOperation();
+const saving = saveOperation.pending;
 const syncing = ref(false);
 const error = ref('');
 const message = ref('');
@@ -151,6 +153,7 @@ function accountValue(account: Account) {
   return account.accountNumber ? `•••• ${account.accountNumber.slice(-4)}` : '';
 }
 function select(account: Account) {
+  if (saving.value || deleting.value || syncing.value) return;
   selectedId.value = account.id;
   name.value = account.displayName;
   memberId.value = account.memberId == null ? '' : String(account.memberId);
@@ -181,32 +184,33 @@ async function load(createdAccountId?: number) {
 }
 async function save() {
   const account = selected.value;
-  if (!account || !name.value.trim()) return;
-  saving.value = true;
+  if (!account || !name.value.trim() || saving.value || deleting.value) return;
   error.value = '';
   message.value = '';
-  try {
-    const result = await updateAccount(account.id, {
+  const outcome = await saveOperation.run(
+    account.id,
+    {
       displayName: name.value.trim(),
-      ...(memberId.value ? { memberId: Number(memberId.value) } : {}),
+      memberId: memberId.value ? Number(memberId.value) : undefined,
       isActive: active.value,
       manualScrapeOnly: manualOnly.value,
       showBrowser: showBrowser.value,
       manualLogin: manualLogin.value,
       stalenessDays: stalenessDays.value ? Number(stalenessDays.value) : null,
-    });
+    },
+    (draft) => updateAccount(account.id, draft),
+  );
+  if (outcome.status === 'accepted') {
     const index = accounts.value.findIndex((item) => item.id === account.id);
-    accounts.value[index] = result.account;
-    select(result.account);
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.saveError;
-  } finally {
-    saving.value = false;
-  }
+    if (index !== -1) accounts.value[index] = outcome.result.account;
+    select(outcome.result.account);
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : copy.value.saveError;
 }
+
 async function sync() {
   const account = selected.value;
-  if (!account) return;
+  if (!account || syncing.value || saving.value || deleting.value) return;
   syncing.value = true;
   error.value = '';
   message.value = '';
@@ -220,7 +224,7 @@ async function sync() {
   }
 }
 async function removeAccount() {
-  if (!selected.value || deleting.value) return;
+  if (!selected.value || deleting.value || saving.value || syncing.value) return;
   deleting.value = true;
   error.value = '';
   try {

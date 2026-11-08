@@ -135,6 +135,7 @@ interface LiveSession {
   accountIds: number[];
   accounts: Record<number, LiveAccountStatus>;
   startedAt: number; // Date.now() timestamp
+  status?: string;
 }
 
 const liveSession = ref<LiveSession | null>(null);
@@ -149,6 +150,8 @@ const {
   otpSubmitting,
   otpDialogOpen: otpDialog,
   showOtpDialog,
+  dismissAll,
+  rehydrate,
   handleOtpSubmit,
   manualLoginLabel: manualLoginAccountName,
   manualLoginSubmitting,
@@ -240,7 +243,8 @@ async function loadData() {
         trigger: active.trigger,
         accountIds: parsedIds,
         accounts: accountsMap,
-        startedAt: Date.now(),
+        startedAt: Date.parse(active.startedAt),
+        status: active.status,
       };
       startElapsedTimer();
     }
@@ -302,6 +306,15 @@ function stopElapsedTimer() {
 }
 
 const { connect: connectSse } = useSseConnection({
+  connected: () => {
+    void rehydrate(getAccountName);
+    liveSession.value = null;
+    void loadData();
+  },
+  'session-updated': (data) => {
+    if (liveSession.value && liveSession.value.sessionId === data.sessionId)
+      liveSession.value.status = data.status as string;
+  },
   'session-started': (data) => {
     const accountsMap: Record<number, LiveAccountStatus> = {};
     for (const id of data.accountIds as number[]) {
@@ -317,7 +330,7 @@ const { connect: connectSse } = useSseConnection({
     startElapsedTimer();
   },
   'account-scrape-started': (data) => {
-    if (liveSession.value) {
+    if (liveSession.value && liveSession.value.sessionId === data.sessionId) {
       liveSession.value.accounts[data.accountId as number] = {
         accountId: data.accountId as number,
         status: 'scraping',
@@ -325,7 +338,7 @@ const { connect: connectSse } = useSseConnection({
     }
   },
   'account-scrape-done': (data) => {
-    if (liveSession.value) {
+    if (liveSession.value && liveSession.value.sessionId === data.sessionId) {
       liveSession.value.accounts[data.accountId as number] = {
         accountId: data.accountId as number,
         status: 'done',
@@ -336,7 +349,7 @@ const { connect: connectSse } = useSseConnection({
     }
   },
   'account-scrape-error': (data) => {
-    if (liveSession.value) {
+    if (liveSession.value && liveSession.value.sessionId === data.sessionId) {
       liveSession.value.accounts[data.accountId as number] = {
         accountId: data.accountId as number,
         status: 'error',
@@ -346,6 +359,8 @@ const { connect: connectSse } = useSseConnection({
     }
   },
   'session-completed': (data) => {
+    if (liveSession.value && liveSession.value.sessionId !== data.sessionId) return;
+    dismissAll();
     liveSession.value = null;
     stopElapsedTimer();
     if (data.status === 'error' && data.error) {
@@ -357,10 +372,20 @@ const { connect: connectSse } = useSseConnection({
     });
   },
   'otp-required': (data) => {
-    showOtpDialog(data.accountId as number, getAccountName(data.accountId as number));
+    showOtpDialog(
+      data.accountId as number,
+      getAccountName(data.accountId as number),
+      data.challengeId as string,
+      data.sessionId as number,
+    );
   },
   'manual-action-required': (data) => {
-    showManualLoginDialog(data.accountId as number, getAccountName(data.accountId as number));
+    showManualLoginDialog(
+      data.accountId as number,
+      getAccountName(data.accountId as number),
+      data.challengeId as string,
+      data.sessionId as number,
+    );
   },
 });
 
@@ -419,7 +444,13 @@ const latestSession = computed(() => sessions.value[0]);
         <div class="sync-running-actions">
           <span><Clock class="h-4 w-4" />{{ elapsedSeconds }}s</span>
           <Button variant="secondary" size="sm" @click="handleCancel">
-            <Square class="h-3.5 w-3.5" />{{ copy.cancel }}
+            <Square class="h-3.5 w-3.5" />{{
+              liveSession.status === 'cancelling'
+                ? language === 'he'
+                  ? 'מבטל…'
+                  : 'Cancelling…'
+                : copy.cancel
+            }}
           </Button>
         </div>
       </div>

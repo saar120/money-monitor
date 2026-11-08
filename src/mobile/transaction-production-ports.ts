@@ -1,6 +1,11 @@
 import { and, desc, eq, gt, gte, inArray, isNull, lt, lte, or, sql, type SQL } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
+import {
+  applyTransactionCommand,
+  transactionCommandSchema,
+} from '../services/transaction-command.js';
+import { acceptFinancialCommand, FinancialCommandError } from '../services/financial-command.js';
 import { MobileBootstrapSectionReadError } from './bootstrap-adapter.js';
 import {
   boundedMobileText,
@@ -31,7 +36,6 @@ type MobileTransactionListData = MobileTransactionListEnvelope['data'];
 export interface ProductionMobileTransactionPortOptions {
   db: MoneyMonitorDatabase;
   publicIdKey: string;
-  updateCategory?: (transactionId: number, category: string) => unknown | null;
 }
 
 export interface ProductionMobileTransactionPorts {
@@ -53,6 +57,7 @@ export interface ProductionMobileTransactionPorts {
 
 interface ProjectableTransactionRow {
   transactionId: number;
+  resourceVersion: number;
   occurredOn: string;
   reportingOn: string;
   description: string;
@@ -108,6 +113,7 @@ export function createProductionMobileTransactionPorts(
     }
     return {
       id: publicId('transaction', row.transactionId),
+      resourceVersion: row.resourceVersion,
       occurredOn: financialDate(row.occurredOn),
       displayName: mobileTransactionDisplayName(row.description),
       amount: projectMobileMoney(Math.abs(row.chargedAmount), row.chargedCurrency),
@@ -166,6 +172,7 @@ export function createProductionMobileTransactionPorts(
 
   const selection = {
     transactionId: schema.transactions.id,
+    resourceVersion: schema.transactions.resourceVersion,
     occurredOn: schema.transactions.date,
     reportingOn: schema.transactions.reportingDate,
     description: schema.transactions.description,
@@ -359,67 +366,107 @@ export function createProductionMobileTransactionPorts(
     patch: MobileTransactionUpdate,
     context: Readonly<MobileTransactionReadContext>,
   ) {
-    const transactionId = localTransactionId(publicTransactionId);
-    if (transactionId === null) return null;
-    const values: Partial<typeof schema.transactions.$inferInsert> = {};
-    if (patch.category !== undefined) {
-      const matches = options.db
-        .select({ name: schema.categories.name, ignored: schema.categories.ignoredFromStats })
-        .from(schema.categories)
-        .where(
-          or(
-            eq(schema.categories.label, patch.category),
-            eq(schema.categories.name, patch.category),
-          ),
-        )
-        .all();
-      if (matches.length !== 1) throw new Error('Category is unavailable');
-      if (options.updateCategory) {
-        if (options.updateCategory(transactionId, matches[0]!.name) === null) return null;
-      } else {
-        values.category = matches[0]!.name;
-        values.ignored = matches[0]!.ignored;
-        values.needsReview = false;
-        values.reviewReason = null;
-      }
-    }
-    if (patch.owner !== undefined) {
-      if (patch.owner === 'Shared' || patch.owner === 'Unassigned') {
-        values.expenseOwnerType = patch.owner === 'Shared' ? 'shared' : 'unassigned';
-        values.expenseOwnerMemberId = null;
-      } else {
-        const matches = options.db
-          .select({ id: schema.members.id })
-          .from(schema.members)
-          .where(and(eq(schema.members.name, patch.owner), eq(schema.members.isActive, true)))
-          .all();
-        if (matches.length !== 1) throw new Error('Owner is unavailable');
-        values.expenseOwnerType = 'member';
-        values.expenseOwnerMemberId = matches[0]!.id;
-      }
-      values.ownerSource = 'manual';
-      values.ownerConfidence = 1;
-      values.ownerReviewReason = null;
-    }
-    if (patch.included !== undefined) values.ignored = !patch.included;
-    if (patch.effectiveDate !== undefined) values.effectiveDate = patch.effectiveDate;
-    if (patch.reviewed) {
-      values.needsReview = false;
-      values.reviewReason = null;
-    }
-    if (Object.keys(values).length > 0) {
-      options.db
-        .update(schema.transactions)
-        .set(values)
-        .where(
-          and(
-            eq(schema.transactions.id, transactionId),
-            lte(schema.transactions.reportingDate, context.financialDate),
-          ),
-        )
-        .run();
-    }
-    return detail(publicTransactionId, context);
+    if (!patch.commandId || patch.expectedVersion === undefined)
+      throw new FinancialCommandError('update_required', 426);
+    return acceptFinancialCommand(
+      options.db,
+      context.clientId ?? 'mobile',
+      patch.commandId,
+      { kind: 'mobile-transaction', publicTransactionId, patch },
+      () => {
+        const transactionId = localTransactionId(publicTransactionId);
+        if (transactionId === null) throw new FinancialCommandError('not_found', 404);
+        const values: import('zod').z.infer<
+          typeof import('../services/transaction-command.js').transactionCommandSchema
+        >['patch'] = {};
+        if (patch.category !== undefined) {
+          const matches = options.db
+            .select({ name: schema.categories.name, ignored: schema.categories.ignoredFromStats })
+            .from(schema.categories)
+            .where(
+              or(
+                eq(schema.categories.label, patch.category),
+                eq(schema.categories.name, patch.category),
+              ),
+            )
+            .all();
+          if (matches.length !== 1) throw new FinancialCommandError('validation_error', 400);
+          values.category = matches[0]!.name;
+        }
+        if (patch.owner !== undefined) {
+          if (patch.owner === 'Shared' || patch.owner === 'Unassigned') {
+            values.owner = {
+              type: patch.owner === 'Shared' ? 'shared' : 'unassigned',
+              memberId: null,
+            };
+          } else {
+            const matches = options.db
+              .select({ id: schema.members.id })
+              .from(schema.members)
+              .where(and(eq(schema.members.name, patch.owner), eq(schema.members.isActive, true)))
+              .all();
+            if (matches.length !== 1) throw new FinancialCommandError('validation_error', 400);
+            values.owner = { type: 'member', memberId: matches[0]!.id };
+          }
+        }
+        if (patch.included !== undefined) values.ignored = !patch.included;
+        if (patch.effectiveDate !== undefined) values.effectiveDate = patch.effectiveDate;
+        if (patch.reviewed) values.reviewed = true;
+        // Restrict writes to resources the same authenticated read could expose.
+        if (!detail(publicTransactionId, context))
+          throw new FinancialCommandError('not_found', 404);
+        const outcome = applyTransactionCommand(
+          transactionId,
+          transactionCommandSchema.parse({
+            commandId: patch.commandId,
+            expectedVersion: patch.expectedVersion,
+            patch: values,
+          }),
+          options.db,
+        );
+        const row = outcome.transaction;
+        const account = options.db
+          .select()
+          .from(schema.accounts)
+          .where(eq(schema.accounts.id, row.accountId))
+          .get();
+        const category = row.category
+          ? options.db
+              .select()
+              .from(schema.categories)
+              .where(eq(schema.categories.name, row.category))
+              .get()
+          : null;
+        const member = row.expenseOwnerMemberId
+          ? options.db
+              .select()
+              .from(schema.members)
+              .where(eq(schema.members.id, row.expenseOwnerMemberId))
+              .get()
+          : null;
+        return projectRow({
+          transactionId: row.id,
+          resourceVersion: row.resourceVersion,
+          occurredOn: row.date,
+          reportingOn: row.reportingDate,
+          description: row.description,
+          chargedAmount: row.chargedAmount,
+          chargedCurrency: row.chargedCurrency,
+          transactionStatus: row.status,
+          categoryName: row.category,
+          categoryId: category?.id ?? null,
+          categoryLabel: category?.label ?? null,
+          accountId: account?.id ?? null,
+          accountName: account?.displayName ?? null,
+          accountNumber: account?.accountNumber ?? null,
+          needsReview: row.needsReview,
+          ignored: row.ignored,
+          effectiveOn: row.effectiveDate,
+          ownerType: row.expenseOwnerType,
+          ownerName: member?.name ?? null,
+        }) as MobileTransactionDetail;
+      },
+    );
   }
 
   return Object.freeze({ list, detail, update, reviewOptions });

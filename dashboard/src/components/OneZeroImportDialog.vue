@@ -20,12 +20,26 @@ const emit = defineEmits<{
   imported: [];
 }>();
 
-const file = ref<BrowserFile | null>(null);
-const preview = ref<OneZeroImportPreview | null>(null);
-const checking = ref(false);
-const importing = ref(false);
-const imported = ref(false);
-const error = ref('');
+type Selection = { file: BrowserFile; accountId: number; generation: number; commandId: string };
+type ImportState =
+  | { kind: 'empty' }
+  | { kind: 'checking'; selection: Selection }
+  | {
+      kind: 'preview-ready' | 'blocked' | 'importing' | 'imported';
+      selection: Selection;
+      preview: OneZeroImportPreview;
+    }
+  | { kind: 'error'; selection?: Selection; preview?: OneZeroImportPreview; message: string };
+const state = ref<ImportState>({ kind: 'empty' });
+let generation = 0;
+const file = computed(() =>
+  'selection' in state.value ? (state.value.selection?.file ?? null) : null,
+);
+const preview = computed(() => ('preview' in state.value ? (state.value.preview ?? null) : null));
+const checking = computed(() => state.value.kind === 'checking');
+const importing = computed(() => state.value.kind === 'importing');
+const imported = computed(() => state.value.kind === 'imported');
+const error = computed(() => (state.value.kind === 'error' ? state.value.message : ''));
 const fileInput = ref<BrowserInput | null>(null);
 
 const copy = computed(() =>
@@ -140,62 +154,79 @@ const outcomes = computed(() => {
 });
 
 function reset() {
-  file.value = null;
-  preview.value = null;
-  checking.value = false;
-  importing.value = false;
-  imported.value = false;
-  error.value = '';
+  generation++;
+  state.value = { kind: 'empty' };
   if (fileInput.value) fileInput.value.value = '';
 }
-watch(
-  () => props.open,
-  (open) => {
-    if (!open) reset();
-  },
-);
-
+watch(() => [props.open, props.account?.id] as const, reset);
 function close(open: boolean) {
   if (!importing.value) emit('update:open', open);
 }
-
 async function chooseFile(event: Event) {
+  if (importing.value) return;
   const input = event.target as BrowserInput;
-  const chosen = input.files?.[0] ?? null;
-  file.value = null;
-  preview.value = null;
-  error.value = '';
-  if (!chosen || !props.account) return;
+  const chosen = input.files?.[0];
+  const request = ++generation;
+  if (!chosen || !props.account) {
+    state.value = { kind: 'empty' };
+    return;
+  }
   if (!/\.xlsx?$/i.test(chosen.name)) {
-    error.value = copy.value.badFile;
+    state.value = { kind: 'error', message: copy.value.badFile };
     input.value = '';
     return;
   }
-  file.value = chosen;
-  checking.value = true;
+  const selection = {
+    file: chosen,
+    accountId: props.account.id,
+    generation: request,
+    commandId: crypto.randomUUID(),
+  };
+  state.value = { kind: 'checking', selection };
   try {
-    preview.value = await previewOneZeroImport(props.account.id, chosen);
+    const value = await previewOneZeroImport(selection.accountId, chosen);
+    if (request !== generation || !props.open) return;
+    state.value = {
+      kind: value.ambiguousCount || value.invalidRows.length ? 'blocked' : 'preview-ready',
+      selection,
+      preview: value,
+    };
   } catch (cause) {
-    error.value =
-      cause instanceof Error && language.value === 'en' ? cause.message : copy.value.failed;
-  } finally {
-    checking.value = false;
+    if (request === generation)
+      state.value = {
+        kind: 'error',
+        selection,
+        message:
+          cause instanceof Error && language.value === 'en' ? cause.message : copy.value.failed,
+      };
   }
 }
-
 async function confirm() {
-  if (!canImport.value || !props.account || !file.value) return;
-  importing.value = true;
-  error.value = '';
+  const current = state.value;
+  if (
+    !canImport.value ||
+    !('selection' in current) ||
+    !current.selection ||
+    !('preview' in current) ||
+    !current.preview
+  )
+    return;
+  const { selection, preview } = current;
+  state.value = { kind: 'importing', selection, preview };
   try {
-    await commitOneZeroImport(props.account.id, file.value);
-    imported.value = true;
+    await commitOneZeroImport(selection.accountId, selection.file, selection.commandId);
+    if (selection.generation !== generation) return;
+    state.value = { kind: 'imported', selection, preview };
     emit('imported');
   } catch (cause) {
-    error.value =
-      cause instanceof Error && language.value === 'en' ? cause.message : copy.value.failed;
-  } finally {
-    importing.value = false;
+    if (selection.generation === generation)
+      state.value = {
+        kind: 'error',
+        selection,
+        preview,
+        message:
+          cause instanceof Error && language.value === 'en' ? cause.message : copy.value.failed,
+      };
   }
 }
 

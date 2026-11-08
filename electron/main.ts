@@ -1,3 +1,4 @@
+import type { UpdateSnapshot } from './update-state.js';
 import {
   app,
   BrowserWindow,
@@ -281,12 +282,12 @@ async function startMobileAccessIfEnabled(): Promise<void> {
     const connection = await import('../dist/db/connection.js');
     const { db } = connection;
     const { getNetWorth, getNetWorthHistory } = await import('../dist/services/net-worth.js');
-    const { updateTransactionCategory } = await import('../dist/services/transactions.js');
     const { createProductionMobileAccess } =
       await import('../dist/mobile/production-mobile-access.js');
     const { createMobileServer } = await import('../dist/mobile/mobile-server.js');
     const advisorSessions = await import('../dist/ai/sessions.js');
     const { chat: advisorChat } = await import('../dist/ai/agent.js');
+    const { advisorReplies } = await import('../dist/ai/advisor-replies.js');
 
     const mobileServerId = config.MOBILE_SERVER_ID;
     if (!mobileServerId || !config.MOBILE_PUBLIC_ID_KEY) {
@@ -317,7 +318,6 @@ async function startMobileAccessIfEnabled(): Promise<void> {
           ? value.series.map((point) => ({ date: point.date, total: point.total }))
           : [];
       },
-      updateTransactionCategory,
       // The bootstrap ports intentionally retain the real database used for
       // device credentials. While the desktop swaps to its demo database,
       // fail the entire mobile snapshot closed instead of mixing sources.
@@ -350,7 +350,9 @@ async function startMobileAccessIfEnabled(): Promise<void> {
               create: advisorSessions.createSession,
               get: advisorSessions.getSession,
               append: advisorSessions.appendMessage,
-              chat: (history) => advisorChat(history, undefined, { mobileReadOnly: true }),
+              replies: advisorReplies,
+              chat: (history, context) =>
+                advisorChat(history, undefined, { mobileReadOnly: true, ...context }),
             },
           });
           try {
@@ -596,12 +598,58 @@ function setAutoUpdateEnabled(enabled: boolean): void {
 }
 
 function sendUpdateStatus(
-  status: string,
-  info?: { version?: string; percent?: number; error?: string },
+  status: UpdateSnapshot['status'],
+  data: { version?: string; percent?: number; error?: string } = {},
 ) {
-  mainWindow?.webContents.send('auto-update:status', { status, ...info });
+  const operationId = updateSnapshot.operationId;
+  const revision = updateSnapshot.revision + 1;
+  if (updateSnapshot.status === 'ready' && status !== 'ready') {
+    if (status === 'error') updateSnapshot = { ...updateSnapshot, warning: data.error, revision };
+  } else if (status === 'ready' || status === 'available') {
+    if (!data.version) return;
+    updateSnapshot = { status, version: data.version, operationId, revision };
+  } else if (status === 'downloading') {
+    if (!('version' in updateSnapshot)) return;
+    updateSnapshot = {
+      status,
+      version: updateSnapshot.version,
+      percent: Math.max(0, Math.min(100, data.percent ?? 0)),
+      operationId,
+      revision,
+    };
+  } else if (status === 'error')
+    updateSnapshot = { status, error: data.error ?? 'Update failed', operationId, revision };
+  else updateSnapshot = { status, operationId, revision };
+  mainWindow?.webContents.send('auto-update:status', updateSnapshot);
 }
 
+let updateSnapshot: UpdateSnapshot = { status: 'idle', operationId: 0, revision: 0 };
+let updateCheck: Promise<UpdateSnapshot> | null = null;
+let installOnQuit = false;
+function installAcceptedUpdate() {
+  if (updateSnapshot.status !== 'ready' || isQuitting) return;
+  installOnQuit = true;
+  isQuitting = true;
+  app.quit();
+}
+async function checkForUpdate(): Promise<UpdateSnapshot> {
+  if (updateCheck) return updateCheck;
+  if (isQuitting || updateSnapshot.status === 'ready' || updateSnapshot.status === 'downloading')
+    return updateSnapshot;
+  updateSnapshot = {
+    status: 'checking',
+    operationId: updateSnapshot.operationId + 1,
+    revision: updateSnapshot.revision + 1,
+  };
+  const check = autoUpdater
+    .checkForUpdatesAndNotify()
+    .then(() => updateSnapshot)
+    .finally(() => {
+      if (updateCheck === check) updateCheck = null;
+    });
+  updateCheck = check;
+  return check;
+}
 function setupAutoUpdater() {
   autoUpdater.autoDownload = true;
   autoUpdater.autoInstallOnAppQuit = true;
@@ -641,8 +689,7 @@ function setupAutoUpdater() {
       ? await dialog.showMessageBox(mainWindow, options)
       : await dialog.showMessageBox(options);
     if (response === 0) {
-      isQuitting = true;
-      autoUpdater.quitAndInstall();
+      installAcceptedUpdate();
     }
   });
 
@@ -653,14 +700,16 @@ function setupAutoUpdater() {
 
   ipcMain.handle('auto-update:check', async (event) => {
     assertTrustedRenderer(event);
-    const result = await autoUpdater.checkForUpdatesAndNotify();
-    return { updateAvailable: !!result?.updateInfo };
+    return checkForUpdate();
   });
 
   ipcMain.handle('auto-update:install', (event) => {
     assertTrustedRenderer(event);
-    isQuitting = true;
-    autoUpdater.quitAndInstall();
+    installAcceptedUpdate();
+  });
+  ipcMain.handle('auto-update:get-state', (event) => {
+    assertTrustedRenderer(event);
+    return updateSnapshot;
   });
 
   ipcMain.handle('auto-update:get-enabled', (event) => {
@@ -680,7 +729,7 @@ function setupAutoUpdater() {
   });
 
   if (isAutoUpdateEnabled()) {
-    autoUpdater.checkForUpdatesAndNotify();
+    void checkForUpdate().catch(() => {});
     startPeriodicChecks();
   }
 }
@@ -689,7 +738,7 @@ function startPeriodicChecks() {
   stopPeriodicChecks();
   updateCheckTimer = setInterval(() => {
     console.log('[AutoUpdater] Periodic update check');
-    autoUpdater.checkForUpdatesAndNotify();
+    void checkForUpdate().catch(() => {});
   }, UPDATE_CHECK_INTERVAL);
 }
 
@@ -856,7 +905,8 @@ app.whenReady().then(async () => {
     // Restart all background services and reload the page.
     powerMonitor.on('resume', () => {
       console.log('[Electron] System resumed from sleep — restarting background services');
-      onResume();
+      if (!isQuitting)
+        void onResume().catch((error) => console.error('[Electron] Wake recovery failed:', error));
       void mobileAccessControl?.resume();
       mainWindow?.webContents.reload();
     });
@@ -872,11 +922,24 @@ app.whenReady().then(async () => {
       quitting = true;
       e.preventDefault();
       (async () => {
-        await mobileAccessControl?.shutdown();
-        await shutdown();
+        const deadline = setTimeout(() => app.exit(1), 30_000);
+        try {
+          const results = await Promise.allSettled([mobileAccessControl?.shutdown(), shutdown()]);
+          const failures = results.filter((result) => result.status === 'rejected');
+          if (failures.length)
+            throw new AggregateError(
+              failures.map((result) => result.reason),
+              'Shutdown failed',
+            );
+        } finally {
+          clearTimeout(deadline);
+        }
       })()
         .catch((err) => console.error('[Electron] Shutdown error:', err))
-        .finally(() => app.exit(0));
+        .finally(() => {
+          if (installOnQuit) autoUpdater.quitAndInstall();
+          else app.quit();
+        });
     });
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);

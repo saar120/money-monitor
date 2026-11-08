@@ -121,7 +121,6 @@ export interface ProductionMobileAccessOptions {
   readNetWorthIls: ProductionMobileBootstrapPortOptions['readNetWorthIls'];
   readNetWorth?: MobileOverviewPortsOptions['readNetWorth'];
   readNetWorthHistory?: MobileOverviewPortsOptions['readNetWorthHistory'];
-  updateTransactionCategory?: (transactionId: number, category: string) => unknown | null;
   /** Fail closed when the desktop data source is not safe to expose. */
   isMobileReadAvailable?: () => boolean;
   fallbackCurrencyCode?: string;
@@ -173,7 +172,6 @@ export function createProductionMobileAccess(
   const transactionPorts = createProductionMobileTransactionPorts({
     db: options.db,
     publicIdKey: options.publicIdKey,
-    updateCategory: options.updateTransactionCategory,
   });
   const publicId = createMobilePublicIdProjector(options.publicIdKey);
   const resolveAccountId = (publicAccountId: string) => {
@@ -276,18 +274,26 @@ export function createProductionMobileAccess(
         currencyCode: string;
         merchantKey: string;
         decision: 'include' | 'exclude' | 'auto';
+        commandId: string;
+        expectedVersion: number;
       },
       asOfDate: string,
+      clientId: string,
     ) => {
       assertMobileReadAvailable();
-      saveRecurringPaymentDecision(options.db, {
-        ...input,
-        accountId: resolveAccountId(input.accountId),
-      });
-      return projectMobileRecurringPayments(
-        await readRecurringPayments(options.db, asOfDate),
-        publicId,
+      const receipt = saveRecurringPaymentDecision(
+        options.db,
+        {
+          ...input,
+          accountId: resolveAccountId(input.accountId),
+        },
+        clientId,
       );
+      const projection = await readRecurringPayments(options.db, asOfDate).catch(() => null);
+      return {
+        receipt,
+        result: projection ? projectMobileRecurringPayments(projection, publicId) : null,
+      };
     },
   });
 

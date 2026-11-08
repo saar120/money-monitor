@@ -110,6 +110,7 @@ export const summaryQuerySchema = z.object({
 // ─── AI ───
 
 export const sessionChatSchema = z.object({
+  submissionId: z.string().uuid().optional(),
   sessionId: z.string().uuid(),
   message: z.string().min(1).max(10000),
 });
@@ -132,6 +133,7 @@ export const recategorizeSchema = z.object({
 // ─── OTP ───
 
 export const otpSubmitSchema = z.object({
+  challengeId: z.string().uuid(),
   accountId: z.coerce.number().int().positive(),
   code: z.string().min(1).max(20),
 });

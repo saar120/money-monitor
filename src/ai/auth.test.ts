@@ -19,6 +19,8 @@ vi.mock('../paths.js', () => ({
 const mockReadFileSync = vi.fn().mockReturnValue('{}');
 const mockWriteFileSync = vi.fn();
 vi.mock('node:fs', () => ({
+  renameSync: vi.fn(),
+  rmSync: vi.fn(),
   readFileSync: mockReadFileSync,
   writeFileSync: mockWriteFileSync,
   mkdirSync: vi.fn(),
@@ -170,9 +172,9 @@ describe('OAuth logout', () => {
 
     expect(hasOpenAICodexOAuth()).toBe(false);
     expect(mockWriteFileSync).toHaveBeenCalledWith(
-      '/tmp/test-auth/oauth-credentials.json',
+      expect.stringMatching(/^\/tmp\/test-auth\/oauth-credentials\.json\..+\.tmp$/),
       expect.stringMatching(/^sealed:v1:/),
-      { mode: 0o600 },
+      { mode: 0o600, flag: 'wx' },
     );
   });
 

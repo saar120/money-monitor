@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import {
   DropdownMenuRoot,
   DropdownMenuTrigger,
@@ -281,7 +282,8 @@ const nwTooltipFormatter = (v: number): string => formatCurrency(v);
 // ─── Asset Dialog ───
 const showAssetDialog = ref(false);
 const mutationError = ref('');
-const deleting = ref(false);
+const deleteOperation = useFormOperation();
+const deleting = deleteOperation.pending;
 const editingAsset = ref<Asset | null>(null);
 const assetForm = ref({
   name: '',
@@ -294,9 +296,11 @@ const assetForm = ref({
   initialValue: 0,
   initialCostBasis: 0,
 });
-const assetSaving = ref(false);
+const assetOperation = useFormOperation();
+const assetSaving = assetOperation.pending;
 
 function openAddAsset() {
+  if (assetSaving.value || liabilitySaving.value || deleting.value) return;
   editingAsset.value = null;
   assetForm.value = {
     name: '',
@@ -314,6 +318,7 @@ function openAddAsset() {
 }
 
 function openEditAsset(asset: Asset) {
+  if (assetSaving.value || liabilitySaving.value || deleting.value) return;
   editingAsset.value = asset;
   assetForm.value = {
     name: asset.name,
@@ -334,46 +339,47 @@ const assetValid = computed(() => assetForm.value.name.trim() && assetForm.value
 const assetCategory = computed(() => getAssetCategory(assetForm.value.type));
 
 async function handleSaveAsset() {
-  if (!assetValid.value) return;
-  assetSaving.value = true;
+  if (!assetValid.value || assetSaving.value) return;
+  const target = editingAsset.value?.id;
   mutationError.value = '';
-  try {
-    const linked =
-      assetForm.value.linkedAccountId === 'none'
-        ? undefined
-        : Number(assetForm.value.linkedAccountId);
-    const data = {
-      name: assetForm.value.name.trim(),
-      type: assetForm.value.type,
-      currency: assetForm.value.currency,
-      institution: assetForm.value.institution.trim() || undefined,
-      liquidity: assetForm.value.liquidity,
-      linkedAccountId: linked ?? undefined,
-      notes: assetForm.value.notes.trim() || undefined,
-      ...(assetCategory.value === 'real_estate' && !editingAsset.value
-        ? {
-            initialValue: assetForm.value.initialValue || undefined,
-            initialCostBasis: assetForm.value.initialCostBasis || undefined,
-          }
-        : {}),
-    };
-    if (editingAsset.value) {
-      await updateAsset(editingAsset.value.id, {
-        ...data,
-        institution: data.institution ?? null,
-        linkedAccountId: linked ?? null,
-        notes: data.notes ?? null,
-      });
-    } else {
-      await createAsset(data);
-    }
+  const outcome = await assetOperation.run(
+    target ?? 'new',
+    { ...assetForm.value },
+    async (draft) => {
+      const linked = draft.linkedAccountId === 'none' ? undefined : Number(draft.linkedAccountId);
+      const data = {
+        name: draft.name.trim(),
+        type: draft.type,
+        currency: draft.currency,
+        institution: draft.institution.trim() || undefined,
+        liquidity: draft.liquidity,
+        linkedAccountId: linked ?? undefined,
+        notes: draft.notes.trim() || undefined,
+        ...(assetCategory.value === 'real_estate' && !target
+          ? {
+              initialValue: draft.initialValue || undefined,
+              initialCostBasis: draft.initialCostBasis || undefined,
+            }
+          : {}),
+      };
+      if (target) {
+        await updateAsset(target, {
+          ...data,
+          institution: data.institution ?? null,
+          linkedAccountId: linked ?? null,
+          notes: data.notes ?? null,
+        });
+      } else {
+        await createAsset(data);
+      }
+    },
+  );
+  if (outcome.status === 'accepted') {
     showAssetDialog.value = false;
-    refreshAll();
-  } catch (cause) {
-    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
-  } finally {
-    assetSaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ─── Liability Dialog ───
@@ -389,9 +395,11 @@ const liabilityForm = ref({
   startDate: '',
   notes: '',
 });
-const liabilitySaving = ref(false);
+const liabilityOperation = useFormOperation();
+const liabilitySaving = liabilityOperation.pending;
 
 function openAddLiability() {
+  if (assetSaving.value || liabilitySaving.value || deleting.value) return;
   editingLiability.value = null;
   liabilityForm.value = {
     name: '',
@@ -408,6 +416,7 @@ function openAddLiability() {
 }
 
 function openEditLiability(liability: Liability) {
+  if (assetSaving.value || liabilitySaving.value || deleting.value) return;
   editingLiability.value = liability;
   liabilityForm.value = {
     name: liability.name,
@@ -431,39 +440,41 @@ const liabilityValid = computed(
 );
 
 async function handleSaveLiability() {
-  if (!liabilityValid.value) return;
-  liabilitySaving.value = true;
+  if (!liabilityValid.value || liabilitySaving.value) return;
+  const target = editingLiability.value?.id;
   mutationError.value = '';
-  try {
-    const data = {
-      name: liabilityForm.value.name.trim(),
-      type: liabilityForm.value.type,
-      currency: liabilityForm.value.currency.trim() || undefined,
-      originalAmount: Number(liabilityForm.value.originalAmount),
-      currentBalance: Number(liabilityForm.value.currentBalance),
-      interestRate: liabilityForm.value.interestRate
-        ? Number(liabilityForm.value.interestRate)
-        : undefined,
-      startDate: liabilityForm.value.startDate || undefined,
-      notes: liabilityForm.value.notes.trim() || undefined,
-    };
-    if (editingLiability.value) {
-      await updateLiability(editingLiability.value.id, {
-        ...data,
-        interestRate: data.interestRate ?? null,
-        startDate: data.startDate ?? null,
-        notes: data.notes ?? null,
-      });
-    } else {
-      await createLiability(data);
-    }
+  const outcome = await liabilityOperation.run(
+    target ?? 'new',
+    { ...liabilityForm.value },
+    async (draft) => {
+      const data = {
+        name: draft.name.trim(),
+        type: draft.type,
+        currency: draft.currency.trim() || undefined,
+        originalAmount: Number(draft.originalAmount),
+        currentBalance: Number(draft.currentBalance),
+        interestRate: draft.interestRate ? Number(draft.interestRate) : undefined,
+        startDate: draft.startDate || undefined,
+        notes: draft.notes.trim() || undefined,
+      };
+      if (target) {
+        await updateLiability(target, {
+          ...data,
+          interestRate: data.interestRate ?? null,
+          startDate: data.startDate ?? null,
+          notes: data.notes ?? null,
+        });
+      } else {
+        await createLiability(data);
+      }
+    },
+  );
+  if (outcome.status === 'accepted') {
     showLiabilityDialog.value = false;
-    refreshAll();
-  } catch (cause) {
-    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
-  } finally {
-    liabilitySaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ─── Delete confirmations ───
@@ -473,33 +484,31 @@ const deletingLiability = ref<{ id: number; name: string } | null>(null);
 async function handleDeleteAsset() {
   const target = deletingAsset.value;
   if (!target || deleting.value) return;
-  deleting.value = true;
   mutationError.value = '';
-  try {
-    await deleteAsset(target.id);
-    deletingAsset.value = null;
-    await refreshAll();
-  } catch (cause) {
-    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
-  } finally {
-    deleting.value = false;
-  }
+  const outcome = await deleteOperation.run('Asset:' + target.id, target, () =>
+    deleteAsset(target.id),
+  );
+  if (outcome.status === 'accepted') {
+    if (deletingAsset.value?.id === target.id) deletingAsset.value = null;
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 async function handleDeleteLiability() {
   const target = deletingLiability.value;
   if (!target || deleting.value) return;
-  deleting.value = true;
   mutationError.value = '';
-  try {
-    await deleteLiability(target.id);
-    deletingLiability.value = null;
-    await refreshAll();
-  } catch (cause) {
-    mutationError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
-  } finally {
-    deleting.value = false;
-  }
+  const outcome = await deleteOperation.run('Liability:' + target.id, target, () =>
+    deleteLiability(target.id),
+  );
+  if (outcome.status === 'accepted') {
+    if (deletingLiability.value?.id === target.id) deletingLiability.value = null;
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ─── Helpers ───

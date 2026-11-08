@@ -1,15 +1,10 @@
+import { randomUUID } from 'node:crypto';
+import { advisorReplies } from '../ai/advisor-replies.js';
 import { rmSync, writeFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { afterAll, expect, it, vi } from 'vitest';
 import { createMobileServer } from './mobile-server.js';
-import {
-  appendMessage,
-  beginSessionReply,
-  createSession,
-  endSessionReply,
-  getSession,
-  listSessions,
-} from '../ai/sessions.js';
+import { appendMessage, createSession, getSession, listSessions } from '../ai/sessions.js';
 import type { ChatEvent } from '../ai/agent.js';
 
 const { dir } = vi.hoisted(() => ({
@@ -78,6 +73,7 @@ it('authenticates, streams, saves a calculated chart, and continues a reopened c
       create: createSession,
       get: getSession,
       append: appendMessage,
+      replies: advisorReplies,
       chat,
     },
   });
@@ -92,7 +88,7 @@ it('authenticates, streams, saves a calculated chart, and continues a reopened c
       method: 'POST',
       url: `${path}/${id}/messages`,
       headers,
-      payload: { message: 'Show my spending' },
+      payload: { submissionId: randomUUID(), message: 'Show my spending' },
     });
     expect(first.statusCode).toBe(200);
     expect(first.headers['cache-control']).toBe('no-store');
@@ -107,39 +103,26 @@ it('authenticates, streams, saves a calculated chart, and continues a reopened c
       method: 'POST',
       url: `${path}/${id}/messages`,
       headers,
-      payload: { message: 'And next?' },
+      payload: { submissionId: randomUUID(), message: 'And next?' },
     });
     expect(second.body).toContain('Mac reply 3');
     expect(second.body).not.toContain('event: chart');
     expect(chat).toHaveBeenCalledTimes(2);
     expect(getSession(id)?.messages).toHaveLength(4);
     expect(getSession(id)?.messages.at(-1)?.chart).toBeUndefined();
-    expect(beginSessionReply(id)).toBe(true);
-    try {
-      const mobileWhileDesktopBusy = await server.app.inject({
-        method: 'POST',
-        url: `${path}/${id}/messages`,
-        headers,
-        payload: { message: 'While the Mac is replying' },
-      });
-      expect(mobileWhileDesktopBusy.statusCode).toBe(409);
-    } finally {
-      endSessionReply(id);
-    }
-    expect(getSession(id)?.messages).toHaveLength(4);
     const pending = server.app.inject({
       method: 'POST',
       url: `${path}/${id}/messages`,
       headers,
-      payload: { message: 'A third question' },
+      payload: { submissionId: randomUUID(), message: 'A third question' },
     });
     await started;
-    expect(beginSessionReply(id)).toBe(false);
+    expect(advisorReplies.busy(id)).toBe(true);
     const overlap = await server.app.inject({
       method: 'POST',
       url: `${path}/${id}/messages`,
       headers,
-      payload: { message: 'An overlapping question' },
+      payload: { submissionId: randomUUID(), message: 'An overlapping question' },
     });
     expect(overlap.statusCode).toBe(409);
     expect(overlap.json().error.code).toBe('advisor_reply_in_progress');

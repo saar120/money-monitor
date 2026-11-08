@@ -1,22 +1,25 @@
-import type { Ref } from 'vue';
+import { onScopeDispose, type Ref } from 'vue';
 import { language } from '@/lib/language';
 // Leave charts, controls, and vertical scrolling to their own gestures.
 export function useMonthSwipe(month: Ref<string>) {
-  let start: { x: number; y: number } | null = null;
+  let start: { x: number; y: number; pointerId: number } | null = null;
+  const cancel = () => {
+    start = null;
+  };
+  onScopeDispose(cancel);
   return {
     onPointerdown(event: PointerEvent) {
       start = null;
-      if (event.pointerType === 'mouse') return;
+      if (!event.isPrimary || event.pointerType === 'mouse') return;
       if ((event.target as Element).closest('button,a,input,select,canvas,[data-scrub]')) return;
-      start = { x: event.clientX, y: event.clientY };
+      start = { x: event.clientX, y: event.clientY, pointerId: event.pointerId };
     },
-    onPointercancel() {
-      start = null;
-    },
+    onPointercancel: cancel,
+    onLostpointercapture: cancel,
     onPointerup(event: PointerEvent) {
       const origin = start;
       start = null;
-      if (!origin) return;
+      if (!origin || origin.pointerId !== event.pointerId) return;
       const dx = event.clientX - origin.x;
       if (Math.abs(dx) < 65 || Math.abs(dx) < Math.abs(event.clientY - origin.y) * 2) return;
       const [year, number] = month.value.split('-').map(Number) as [number, number];

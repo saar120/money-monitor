@@ -16,8 +16,9 @@ export default function MerchantScreen() {
   const colors = useAppColors();
   const { name, month } = useLocalSearchParams<{ name: string; month?: string }>();
   const { home, status } = useMoneyData();
-  const { months, loading } = useExploreHistory();
+  const { months, loading, error: historyError, retry: retryHistory } = useExploreHistory();
   if (status !== 'ready' || !home) return <ConnectionState />;
+  if (historyError) return <ConnectionState error={historyError} onRetry={retryHistory} />;
   return (
     <>
       {months.length ? (

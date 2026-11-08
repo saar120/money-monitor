@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { ref, computed, onMounted, watch, watchEffect } from 'vue';
+import { useFormOperation } from '@/composables/useFormOperation';
+import { ref, computed, onMounted, watch, watchEffect, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
 import { ToggleGroupRoot, ToggleGroupItem } from 'reka-ui';
 import {
@@ -50,12 +51,16 @@ const loading = ref(false);
 const error = ref('');
 const loadFailed = ref(false);
 let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 const activePeriod = ref<'monthly' | 'yearly'>('monthly');
 
 // Dialog state
 const showDialog = ref(false);
 const editingBudget = ref<Budget | null>(null);
-const saving = ref(false);
+const budgetOperation = useFormOperation();
+const saving = budgetOperation.pending;
 
 // Form state
 const formName = ref('');
@@ -126,6 +131,7 @@ async function loadData() {
 onMounted(loadData);
 watch(selectedMonth, () => {
   expandedBudgetId.value = null;
+  progressData.value = [];
   void loadData();
 });
 
@@ -182,6 +188,7 @@ function openCreate() {
 }
 
 function openEdit(budget: Budget) {
+  if (saving.value || deleting.value) return;
   editingBudget.value = budget;
   formName.value = budget.name;
   formAmount.value = budget.amount;
@@ -205,37 +212,33 @@ function toggleCategory(name: string) {
 
 async function saveBudget() {
   const amount = Number(formAmount.value);
-  if (!formName.value || !amount || formCategoryNames.value.length === 0) return;
-
-  saving.value = true;
-  try {
-    const payload = {
+  if (saving.value || !formName.value || !amount || formCategoryNames.value.length === 0) return;
+  const target = editingBudget.value?.id;
+  const outcome = await budgetOperation.run(
+    target ?? 'new',
+    {
       name: formName.value,
       amount,
       period: formPeriod.value,
-      categoryNames: formCategoryNames.value,
+      categoryNames: [...formCategoryNames.value],
       alertThreshold: formAlertThreshold.value,
       alertEnabled: formAlertEnabled.value,
       color: formColor.value,
-    };
-    if (editingBudget.value) {
-      await updateBudgetApi(editingBudget.value.id, payload);
-    } else {
-      await createBudget(payload);
-    }
+    },
+    (draft) => (target ? updateBudgetApi(target, draft) : createBudget(draft)),
+  );
+  if (outcome.status === 'accepted') {
     showDialog.value = false;
-    await loadData();
-  } catch (e: unknown) {
-    error.value = e instanceof Error ? e.message : 'Failed to save budget';
-  } finally {
-    saving.value = false;
-  }
+    void loadData();
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Failed to save budget';
 }
 
 const deleteOpen = ref(false);
 const deleteTarget = ref<{ id: number; name: string } | null>(null);
 const deleting = ref(false);
 function askDelete(id: number, name: string) {
+  if (saving.value || deleting.value) return;
   deleteTarget.value = { id, name };
   error.value = '';
   deleteOpen.value = true;

@@ -119,7 +119,12 @@ describe('mobile bootstrap adapter', () => {
         capabilities: ['mobile.read'],
         compatibility: { status: 'not_evaluated', reason: null },
       },
-      cacheability: { status: 'cacheable', maxAgeSeconds: 300 },
+      cacheability: {
+        status: 'cacheable',
+        maxAgeSeconds: 300,
+        staleAt: '2026-07-16T10:00:00.000Z',
+        deleteAfter: '2026-07-22T10:00:00.000Z',
+      },
       completeness: { status: 'complete', sectionErrors: [] },
     });
     expect(result.data.home.aggregates.netWorth.amount.value).toBe('128430.2700');

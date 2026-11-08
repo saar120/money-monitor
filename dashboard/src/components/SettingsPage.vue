@@ -1,4 +1,6 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
+import type { UpdateSnapshot } from '../../../electron/update-state';
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { ref, onMounted, onUnmounted, computed } from 'vue';
 import {
@@ -103,7 +105,8 @@ function onThemeChange(value: string) {
 
 const activeTab = ref<'general' | 'connections' | 'advanced'>('general');
 const loading = ref(true);
-const saving = ref(false);
+const settingsOperation = useFormOperation();
+const saving = settingsOperation.pending;
 const error = ref('');
 const success = ref('');
 const data = ref<SettingsResponse | null>(null);
@@ -178,6 +181,7 @@ function markDirty(key: string) {
   dirtySecrets.value.add(key);
 }
 
+let mounted = true;
 onMounted(async () => {
   try {
     const [settingsData, providersData] = await Promise.all([
@@ -185,6 +189,7 @@ onMounted(async () => {
       getAIProviders().catch(() => ({ providers: [] as AIProvider[] })),
     ]);
 
+    if (!mounted) return;
     data.value = settingsData;
     providers.value = providersData.providers;
     demoMode.value = data.value.demoMode ?? false;
@@ -221,18 +226,21 @@ onMounted(async () => {
   }
 
   // Auto-update listener
-  if (electronAPI?.getAutoUpdateEnabled) {
+  if (mounted && electronAPI?.getAutoUpdateEnabled) {
     try {
       autoUpdateEnabled.value = await electronAPI.getAutoUpdateEnabled();
     } catch {
-      updateStatus.value = 'unavailable';
+      updateSnapshot.value = { status: 'unavailable', operationId: 0, revision: 0 };
     }
-    cleanupUpdateListener = electronAPI.onUpdateStatus((data) => {
-      updateStatus.value = data.status;
-      if (data.version) updateVersion.value = data.version;
-      if (data.percent != null) updatePercent.value = data.percent;
-      if (data.error) updateError.value = data.error;
-    });
+    if (!mounted) return;
+    cleanupUpdateListener = electronAPI.onUpdateStatus(applyUpdateSnapshot);
+    if (electronAPI.getUpdateState) {
+      try {
+        applyUpdateSnapshot(await electronAPI.getUpdateState());
+      } catch {
+        updateReadError.value = t('couldNotLoad');
+      }
+    }
   }
 });
 
@@ -245,32 +253,52 @@ const electronAPI = (
       getAppVersion: () => string;
       getAutoUpdateEnabled: () => Promise<boolean>;
       setAutoUpdateEnabled: (enabled: boolean) => Promise<{ success: boolean }>;
-      checkForUpdates: () => Promise<{ updateAvailable: boolean }>;
+      checkForUpdates: () => Promise<UpdateSnapshot>;
+      getUpdateState?: () => Promise<UpdateSnapshot>;
       installUpdate: () => void;
-      onUpdateStatus: (
-        cb: (data: { status: string; version?: string; percent?: number; error?: string }) => void,
-      ) => () => void;
+      onUpdateStatus: (cb: (data: UpdateSnapshot) => void) => () => void;
     };
   }
 ).electronAPI;
 const appVersion = electronAPI?.getAppVersion?.() ?? '';
 const autoUpdateEnabled = ref(true);
-const updateStatus = ref<string>('idle');
-const updateVersion = ref('');
-const updatePercent = ref(0);
-const updateError = ref('');
-const checkingForUpdates = computed(() => updateStatus.value === 'checking');
+const updateSnapshot = ref<UpdateSnapshot>({ status: 'idle', operationId: 0, revision: 0 });
+const updateReadError = ref('');
+const updateRequest = ref(false);
+const updateStatus = computed(() => updateSnapshot.value.status);
+const updateVersion = computed(() =>
+  'version' in updateSnapshot.value ? updateSnapshot.value.version : '',
+);
+const updatePercent = computed(() =>
+  updateSnapshot.value.status === 'downloading' ? updateSnapshot.value.percent : 0,
+);
+const updateError = computed(() =>
+  updateSnapshot.value.status === 'error' ? updateSnapshot.value.error : updateReadError.value,
+);
+const checkingForUpdates = computed(() => updateStatus.value === 'checking' || updateRequest.value);
+function applyUpdateSnapshot(value: UpdateSnapshot) {
+  if (mounted && value.revision >= updateSnapshot.value.revision) updateSnapshot.value = value;
+}
 let cleanupUpdateListener: (() => void) | null = null;
 
 onUnmounted(() => {
+  mounted = false;
   cleanupUpdateListener?.();
 });
 
+let preferenceWrite: Promise<unknown> = Promise.resolve();
+let preferenceRevision = 0;
 async function toggleAutoUpdate(enabled: boolean) {
+  const revision = ++preferenceRevision;
   autoUpdateEnabled.value = enabled;
   try {
-    await electronAPI?.setAutoUpdateEnabled(enabled);
+    const write = preferenceWrite
+      .catch(() => {})
+      .then(() => electronAPI?.setAutoUpdateEnabled(enabled));
+    preferenceWrite = write;
+    await write;
   } catch (cause) {
+    if (!mounted || revision !== preferenceRevision) return;
     autoUpdateEnabled.value = !enabled;
     error.value = localized(
       cause instanceof Error ? cause.message : t('couldNotLoad'),
@@ -280,18 +308,20 @@ async function toggleAutoUpdate(enabled: boolean) {
 }
 
 async function manualCheckForUpdates() {
-  updateStatus.value = 'checking';
-  updateError.value = '';
+  if (updateRequest.value || !electronAPI) return;
+  updateRequest.value = true;
+  updateReadError.value = '';
   try {
-    await electronAPI?.checkForUpdates();
+    applyUpdateSnapshot(await electronAPI.checkForUpdates());
   } catch (cause) {
-    updateStatus.value = 'error';
-    updateError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+    updateReadError.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+  } finally {
+    updateRequest.value = false;
   }
 }
 
 function installUpdate() {
-  electronAPI?.installUpdate();
+  if (updateSnapshot.value.status === 'ready') electronAPI?.installUpdate();
 }
 
 const updateStatusText = computed(() => {
@@ -330,6 +360,7 @@ const demoMode = ref(false);
 const togglingDemo = ref(false);
 
 async function handleDemoToggle(enabled: boolean) {
+  if (togglingDemo.value) return;
   togglingDemo.value = true;
   try {
     await toggleDemoMode(enabled);
@@ -371,6 +402,7 @@ const {
 });
 
 async function logoutOpenaiOAuth() {
+  if (loggingOutOpenai.value) return;
   loggingOutOpenai.value = true;
   error.value = '';
   try {
@@ -389,7 +421,7 @@ async function logoutOpenaiOAuth() {
 // ── Save ─────────────────────────────────────────────────────────────────────
 
 async function save() {
-  saving.value = true;
+  if (saving.value) return;
   error.value = '';
   success.value = '';
   try {
@@ -427,23 +459,25 @@ async function save() {
       'TYPESAFE_API_KEY',
     ] as const;
     for (const key of secretKeys) {
-      if (dirtySecrets.value.has(key) && form.value[key]) {
+      if (dirtySecrets.value.has(key)) {
         updates[key] = form.value[key] as string;
       }
     }
-    await updateSettings(updates);
+    const outcome = await settingsOperation.run('settings', updates, updateSettings);
+    if (outcome.status === 'retired') return;
+    if (outcome.status === 'failed') throw outcome.error;
     success.value = localized(
       'Settings saved. Some changes may require a restart.',
       'ההגדרות נשמרו. ייתכן שצריך להפעיל מחדש את האפליקציה כדי להחיל חלק מהשינויים.',
     );
-    dirtySecrets.value.clear();
+    for (const key of secretKeys)
+      if (updates[key] !== undefined && form.value[key] === updates[key])
+        dirtySecrets.value.delete(key);
   } catch (e) {
     error.value = localized(
       e instanceof Error ? e.message : 'Failed to save settings',
       'לא ניתן לשמור את ההגדרות. נסו שוב.',
     );
-  } finally {
-    saving.value = false;
   }
 }
 </script>

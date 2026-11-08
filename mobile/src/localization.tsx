@@ -32,28 +32,46 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   const deviceLanguage: Language = locales[0]?.languageCode === 'he' ? 'he' : 'en';
   const [choice, setChoiceState] = useState<LanguageChoice | null>(null);
   const language = !choice || choice === 'system' ? deviceLanguage : choice;
+  if (choice) setActiveLanguage(language);
   const pathname = usePathname();
-  const reopenSettings = useRef(false);
+  const settingsHandoff = useRef<{ id: number; language: Language } | null>(null);
+  const choiceGeneration = useRef(0);
+  const preferenceWrites = useRef<Promise<void>>(Promise.resolve());
 
   // The language key below remounts navigation at a root tab; return to the screen that changed it.
   useEffect(() => {
-    if (!reopenSettings.current || !rootTabFromPath(pathname)) return;
-    reopenSettings.current = false;
+    const handoff = settingsHandoff.current;
+    if (
+      !handoff ||
+      handoff.id !== choiceGeneration.current ||
+      handoff.language !== language ||
+      !rootTabFromPath(pathname)
+    )
+      return;
+    settingsHandoff.current = null;
     router.push('/settings');
-  }, [pathname]);
+  }, [pathname, language]);
 
   useEffect(() => {
+    if (choice !== null) return;
+    const generation = choiceGeneration.current;
+    let current = true;
     const fallback = choiceFromNativeDirection(deviceLanguage, I18nManager.isRTL);
     void SecureStore.getItemAsync(STORAGE_KEY)
       .then((saved) => {
+        if (!current || generation !== choiceGeneration.current) return;
         const next = saved === 'en' || saved === 'he' ? saved : fallback;
         setActiveLanguage(next === 'system' ? deviceLanguage : next);
         setChoiceState(next);
       })
       .catch(() => {
+        if (!current || generation !== choiceGeneration.current) return;
         setActiveLanguage(fallback === 'system' ? deviceLanguage : fallback);
         setChoiceState(fallback);
       });
+    return () => {
+      current = false;
+    };
   }, [deviceLanguage]);
 
   useEffect(() => {
@@ -64,11 +82,16 @@ export function LanguageProvider({ children }: { children: ReactNode }) {
   }, [choice, language]);
 
   function setChoice(next: LanguageChoice) {
+    choiceGeneration.current++;
     const nextLanguage = next === 'system' ? deviceLanguage : next;
-    reopenSettings.current = nextLanguage !== language;
+    settingsHandoff.current =
+      nextLanguage !== language ? { id: choiceGeneration.current, language: nextLanguage } : null;
     setActiveLanguage(nextLanguage);
     setChoiceState(next);
-    void SecureStore.setItemAsync(STORAGE_KEY, next).catch(() => undefined);
+    preferenceWrites.current = preferenceWrites.current
+      .catch(() => {})
+      .then(() => SecureStore.setItemAsync(STORAGE_KEY, next));
+    void preferenceWrites.current.catch(() => {});
   }
 
   if (!choice) return null;

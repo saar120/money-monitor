@@ -8,10 +8,14 @@ export type MobileHealthResult =
 export async function checkMobileHealth(
   pairing: PairingQrPayload,
   timeoutMs = 8000,
+  signal?: AbortSignal,
 ): Promise<MobileHealthResult> {
   const endpoint = `${pairing.baseURL}/api/mobile/v1/health`;
   const controller = new AbortController();
-  const timeout = setTimeout(() => controller.abort(), timeoutMs);
+  const abort = () => controller.abort();
+  if (signal?.aborted) controller.abort();
+  signal?.addEventListener('abort', abort, { once: true });
+  const timeout = setTimeout(abort, timeoutMs);
 
   try {
     const response = await fetch(endpoint, {
@@ -53,5 +57,6 @@ export async function checkMobileHealth(
     };
   } finally {
     clearTimeout(timeout);
+    signal?.removeEventListener('abort', abort);
   }
 }

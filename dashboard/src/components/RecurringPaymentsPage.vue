@@ -1,6 +1,7 @@
 <script setup lang="ts">
 import { computed, onMounted, onUnmounted, ref } from 'vue';
 import {
+  ApiError,
   getRecurringPaymentDetail,
   getRecurringPayments,
   saveRecurringPaymentDecision,
@@ -32,8 +33,15 @@ let detailRequest = 0;
 let refreshTimer: ReturnType<typeof setTimeout> | undefined;
 let requestVersion = 0;
 let disposed = false;
+let pollFailures = 0;
+let pendingDecision: {
+  key: string;
+  decision: string;
+  commandId: string;
+  payment: RecurringPayment;
+} | null = null;
 
-function scheduleRefresh() {
+function scheduleRefresh(delay = 5000) {
   clearTimeout(refreshTimer);
   if (!result.value?.classificationPending || disposed) return;
   refreshTimer = setTimeout(async () => {
@@ -42,11 +50,18 @@ function scheduleRefresh() {
       const refreshed = await getRecurringPayments();
       if (disposed || version !== requestVersion) return;
       result.value = refreshed;
-      scheduleRefresh();
+      pollFailures = 0;
+      error.value = '';
     } catch {
-      // Review remains usable while the Mac is unavailable.
+      if (!disposed && version === requestVersion) {
+        pollFailures++;
+        error.value = t('recurringLoadError');
+      }
+    } finally {
+      if (!disposed && version === requestVersion)
+        scheduleRefresh(Math.min(30000, 5000 * 2 ** Math.min(pollFailures, 3)));
     }
-  }, 5_000);
+  }, delay);
 }
 
 async function load() {
@@ -67,16 +82,37 @@ async function load() {
 }
 
 async function decide(payment: RecurringPayment, decision: 'include' | 'exclude' | 'auto') {
+  if (saving.value) return;
+  const key = `${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`;
+  if (pendingDecision && (pendingDecision.key !== key || pendingDecision.decision !== decision)) {
+    error.value = 'Retry the previous choice to reconcile it first.';
+    return;
+  }
+  pendingDecision ??= { key, decision, commandId: crypto.randomUUID(), payment: { ...payment } };
   const version = ++requestVersion;
   clearTimeout(refreshTimer);
   saving.value = `${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`;
   error.value = '';
   try {
-    const saved = await saveRecurringPaymentDecision(payment, decision);
+    const saved = await saveRecurringPaymentDecision(
+      pendingDecision.payment,
+      decision,
+      pendingDecision.commandId,
+    );
     if (disposed || version !== requestVersion) return;
-    result.value = saved;
-    scheduleRefresh();
-  } catch {
+    pendingDecision = null;
+    if (saved.result) {
+      result.value = saved.result;
+      scheduleRefresh();
+    } else void load();
+  } catch (cause) {
+    if (cause instanceof ApiError && cause.status < 500) {
+      pendingDecision = null;
+      if (cause.code === 'mutation_conflict') {
+        const current = await getRecurringPayments().catch(() => null);
+        if (current && !disposed && version === requestVersion) result.value = current;
+      }
+    }
     if (!disposed && version === requestVersion)
       error.value = 'Could not save your choice. Try again.';
   } finally {
@@ -137,6 +173,18 @@ onUnmounted(() => {
     </div>
     <template v-else-if="result">
       <p v-if="error" role="alert" class="text-sm text-destructive">{{ error }}</p>
+      <div
+        v-if="result.classificationStatus === 'unavailable'"
+        role="status"
+        class="text-sm text-text-secondary"
+      >
+        {{
+          language === 'he'
+            ? 'הסיווג האוטומטי אינו זמין כרגע.'
+            : 'Automatic classification is currently unavailable.'
+        }}
+        <Button variant="secondary" size="sm" @click="load">{{ t('retry') }}</Button>
+      </div>
       <div v-if="result.totals.length" class="subscription-totals">
         <div v-for="total in result.totals" :key="total.currencyCode" class="subscription-total">
           <p class="text-[12px] text-text-secondary">

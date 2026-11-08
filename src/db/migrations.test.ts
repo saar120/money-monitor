@@ -275,4 +275,36 @@ describe('database migrations', () => {
 
     sqlite.close();
   });
+  it('preserves legacy inclusion intent and versions later business writes', () => {
+    const sqlite = new Database(':memory:');
+    try {
+      const journal = JSON.parse(readFileSync(journalPath, 'utf8')) as {
+        entries: Array<{ tag: string }>;
+      };
+      for (const { tag } of journal.entries) {
+        if (tag === '0025_financial_commands') break;
+        applyMigrationFile(sqlite, tag);
+      }
+      sqlite.exec(
+        "INSERT INTO accounts(company_id, display_name, credentials_ref) VALUES ('oneZero', 'Synthetic bank', 'synthetic');",
+      );
+      sqlite.exec(
+        "INSERT INTO transactions(account_id, date, processed_date, original_amount, charged_amount, description, hash, ignored) VALUES (1, '2026-01-01', '2026-01-01', -1, -1, 'Synthetic', 'synthetic', 1);",
+      );
+      applyMigrationFile(sqlite, '0025_financial_commands');
+      expect(
+        sqlite
+          .prepare('SELECT ignored, inclusion_source, resource_version FROM transactions')
+          .get(),
+      ).toEqual({ ignored: 1, inclusion_source: 'legacy', resource_version: 1 });
+      sqlite.exec("UPDATE transactions SET category = 'food';");
+      expect(
+        sqlite
+          .prepare('SELECT ignored, inclusion_source, resource_version FROM transactions')
+          .get(),
+      ).toEqual({ ignored: 1, inclusion_source: 'legacy', resource_version: 2 });
+    } finally {
+      sqlite.close();
+    }
+  });
 });

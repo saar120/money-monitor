@@ -21,7 +21,7 @@ A read-only presentation of the last accepted financial snapshot when the iPhone
 _Avoid_: Offline mode, cached mode
 
 **Stale Saved View**:
-A Saved View whose age is significant enough that current balances and conclusions require an explicit warning.
+A Saved View at least 24 hours past its accepted snapshot calculation time, shown with an explicit warning. Saved Views are removed after 7 days; reads and restarts do not renew retention.
 _Avoid_: Expired data, broken sync
 
 **Partial Snapshot**:

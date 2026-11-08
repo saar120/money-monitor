@@ -1,21 +1,55 @@
-import { ref, type Ref } from 'vue';
+import { computed, onScopeDispose, shallowRef } from 'vue';
 
-export function useApi<T>(fetcher: () => Promise<T>) {
-  const data: Ref<T | null> = ref(null);
-  const loading = ref(false);
-  const error = ref<string | null>(null);
+type Resource<T> =
+  | { status: 'idle'; data: null; error: null; scope: string }
+  | { status: 'loading' | 'refreshing'; data: T | null; error: null; scope: string }
+  | { status: 'ready'; data: T; error: null; scope: string }
+  | { status: 'failed'; data: T | null; error: string; scope: string };
 
+export function useApi<T>(fetcher: () => Promise<T>, scope: () => string = () => '') {
+  const state = shallowRef<Resource<T>>({
+    status: 'idle',
+    data: null,
+    error: null,
+    scope: scope(),
+  });
+  let generation = 0;
+  onScopeDispose(() => {
+    generation++;
+  });
   async function execute() {
-    loading.value = true;
-    error.value = null;
+    const request = ++generation;
+    const key = scope();
+    const retained = state.value.scope === key ? state.value.data : null;
+    state.value = {
+      status: retained === null ? 'loading' : 'refreshing',
+      data: retained,
+      error: null,
+      scope: key,
+    };
     try {
-      data.value = await fetcher();
-    } catch (err) {
-      error.value = err instanceof Error ? err.message : 'Unknown error';
-    } finally {
-      loading.value = false;
+      const data = await fetcher();
+      if (request === generation && key === scope())
+        state.value = { status: 'ready', data, error: null, scope: key };
+    } catch (cause) {
+      if (request === generation && key === scope())
+        state.value = {
+          status: 'failed',
+          data: retained,
+          error: cause instanceof Error ? cause.message : 'Unknown error',
+          scope: key,
+        };
     }
   }
-
-  return { data, loading, error, execute };
+  return {
+    state,
+    accept(data: T) {
+      generation++;
+      state.value = { status: 'ready', data, error: null, scope: scope() };
+    },
+    data: computed(() => (state.value.scope === scope() ? state.value.data : null)),
+    loading: computed(() => ['loading', 'refreshing'].includes(state.value.status)),
+    error: computed(() => state.value.error),
+    execute,
+  };
 }

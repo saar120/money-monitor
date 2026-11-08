@@ -27,6 +27,14 @@ export interface MobileErrorEnvelope {
 }
 
 export const MOBILE_ERROR_DEFINITIONS = {
+  mutation_conflict: {
+    statusCode: 409,
+    message: 'This item changed. Reload it before saving again.',
+  },
+  command_id_reused: {
+    statusCode: 409,
+    message: 'This command ID was already used for another change.',
+  },
   invalid_request: {
     statusCode: 400,
     message: 'The request could not be processed.',

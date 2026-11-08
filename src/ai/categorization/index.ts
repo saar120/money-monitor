@@ -45,6 +45,7 @@ async function categorizeBatch(
   sourceTransactions: Transaction[],
 ): Promise<{ categorized: number }> {
   if (sourceTransactions.length === 0) return { categorized: 0 };
+  const database = db;
   const categoryRows = getCategories();
   if (categoryRows.length === 0) return { categorized: 0 };
 
@@ -56,25 +57,35 @@ async function categorizeBatch(
   const ignoredCategories = new Set(
     categoryRows.filter((category) => category.ignoredFromStats).map((category) => category.name),
   );
-  db.transaction((tx) => {
+  // A database switch or a human edit retires the prediction's input identity.
+  if (db !== database) return { categorized: 0 };
+  let categorized = 0;
+  database.transaction((tx) => {
     for (const { id, category, confidence, reviewReason } of predictions) {
+      const source = sourceTransactions.find((row) => row.id === id)!;
       const needsReview = confidence !== undefined && confidence < 0.8;
-      tx.update(transactions)
+      const applied = tx
+        .update(transactions)
         .set({
           category,
           confidence: confidence ?? null,
           needsReview,
           reviewReason: needsReview ? (reviewReason ?? 'Low confidence categorization') : null,
-          ignored: ignoredCategories.has(category),
+          ...(source.inclusionSource === 'category'
+            ? { ignored: ignoredCategories.has(category) }
+            : {}),
         })
-        .where(eq(transactions.id, id))
+        .where(
+          and(eq(transactions.id, id), eq(transactions.resourceVersion, source.resourceVersion)),
+        )
         .run();
+      if (applied.changes) {
+        applyOwnership({ ids: [id] });
+        categorized += 1;
+      }
     }
   });
-  if (predictions.length > 0) {
-    applyOwnership({ ids: sourceTransactions.map(({ id }) => id) });
-  }
-  return { categorized: predictions.length };
+  return { categorized };
 }
 
 export async function batchCategorize(

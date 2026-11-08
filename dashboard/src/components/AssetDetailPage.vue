@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, computed, onMounted } from 'vue';
+import { ref, computed, watch, onScopeDispose } from 'vue';
 import { useRoute, useRouter } from 'vue-router';
 import { getAsset, type Asset } from '@/api/client';
 import { getAssetCategory } from '@/lib/asset-categories';
@@ -20,15 +20,29 @@ const asset = ref<Asset | null>(null);
 const loading = ref(true);
 const error = ref<string | null>(null);
 
-onMounted(async () => {
-  try {
-    asset.value = await getAsset(assetId.value);
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to load';
-  } finally {
-    loading.value = false;
-  }
+let generation = 0;
+onScopeDispose(() => {
+  generation++;
 });
+watch(
+  assetId,
+  async (id) => {
+    const request = ++generation;
+    asset.value = null;
+    loading.value = true;
+    error.value = null;
+    try {
+      const accepted = await getAsset(id);
+      if (request === generation) asset.value = accepted;
+    } catch (cause) {
+      if (request === generation)
+        error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
+    } finally {
+      if (request === generation) loading.value = false;
+    }
+  },
+  { immediate: true },
+);
 
 const category = computed(() => (asset.value ? getAssetCategory(asset.value.type) : null));
 </script>
@@ -59,16 +73,23 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
     <template v-else-if="asset">
       <SimpleValueDetail
         v-if="category === 'simple_value'"
+        :key="assetId"
         :asset-id="assetId"
         :initial-asset="asset"
       />
       <RealEstateDetail
         v-else-if="category === 'real_estate'"
+        :key="assetId"
         :asset-id="assetId"
         :initial-asset="asset"
       />
-      <CryptoDetail v-else-if="category === 'crypto'" :asset-id="assetId" :initial-asset="asset" />
-      <BrokerageDetail v-else :asset-id="assetId" :initial-asset="asset" />
+      <CryptoDetail
+        v-else-if="category === 'crypto'"
+        :key="assetId"
+        :asset-id="assetId"
+        :initial-asset="asset"
+      />
+      <BrokerageDetail v-else :key="assetId" :asset-id="assetId" :initial-asset="asset" />
     </template>
   </div>
 </template>

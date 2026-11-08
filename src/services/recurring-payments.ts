@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { acceptFinancialCommand, FinancialCommandError } from './financial-command.js';
 import { and, eq, gte, lt, sql } from 'drizzle-orm';
 import { createHash } from 'node:crypto';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
@@ -8,6 +10,7 @@ import * as schema from '../db/schema.js';
 export type RecurringFrequency = 'monthly' | 'everyTwoMonths';
 
 export interface RecurringPayment {
+  resourceVersion?: number;
   accountId: number;
   merchantKey: string;
   name: string;
@@ -32,6 +35,7 @@ export interface RecurringPaymentsResult {
   totals: Array<{ currencyCode: string; monthlyCost: number; annualCost: number }>;
   asOfDate: string;
   classificationPending: boolean;
+  classificationStatus?: 'pending' | 'complete' | 'unavailable';
 }
 
 export interface RecurringTransaction {
@@ -111,37 +115,65 @@ export interface RecurringPaymentDecision {
   accountId: number;
   currencyCode: string;
   merchantKey: string;
-  decision: 'include' | 'exclude';
+  decision: 'include' | 'exclude' | 'auto';
+  resourceVersion?: number;
 }
 
 function paymentId(payment: RecurringPayment): string {
   return `${payment.accountId}\0${payment.currencyCode}\0${payment.merchantKey}`;
 }
 
+export const recurringDecisionCommandSchema = z
+  .object({
+    commandId: z.string().uuid(),
+    expectedVersion: z.number().int().nonnegative(),
+    accountId: z.number().int().positive(),
+    currencyCode: z.string().min(1).max(10),
+    merchantKey: z.string().regex(/^[a-f0-9]{64}$/),
+    decision: z.enum(['include', 'exclude', 'auto']),
+  })
+  .strict();
 export function saveRecurringPaymentDecision(
   db: BetterSQLite3Database<typeof schema>,
-  input: Omit<RecurringPaymentDecision, 'decision'> & { decision: 'include' | 'exclude' | 'auto' },
-): void {
-  const identity = and(
-    eq(schema.recurringPaymentDecisions.accountId, input.accountId),
-    eq(schema.recurringPaymentDecisions.currencyCode, input.currencyCode),
-    eq(schema.recurringPaymentDecisions.merchantKey, input.merchantKey),
+  input: z.infer<typeof recurringDecisionCommandSchema>,
+  clientId = 'desktop',
+) {
+  const command = recurringDecisionCommandSchema.parse(input);
+  return acceptFinancialCommand(
+    db,
+    clientId,
+    command.commandId,
+    { kind: 'recurring', ...command },
+    () => {
+      const identity = and(
+        eq(schema.recurringPaymentDecisions.accountId, command.accountId),
+        eq(schema.recurringPaymentDecisions.currencyCode, command.currencyCode),
+        eq(schema.recurringPaymentDecisions.merchantKey, command.merchantKey),
+      );
+      const current = db.select().from(schema.recurringPaymentDecisions).where(identity).get();
+      if ((current?.resourceVersion ?? 0) !== command.expectedVersion)
+        throw new FinancialCommandError('mutation_conflict', 409);
+      const resourceVersion = command.expectedVersion + 1;
+      db.insert(schema.recurringPaymentDecisions)
+        .values({
+          accountId: command.accountId,
+          currencyCode: command.currencyCode,
+          merchantKey: command.merchantKey,
+          decision: command.decision,
+          resourceVersion,
+        })
+        .onConflictDoUpdate({
+          target: [
+            schema.recurringPaymentDecisions.accountId,
+            schema.recurringPaymentDecisions.currencyCode,
+            schema.recurringPaymentDecisions.merchantKey,
+          ],
+          set: { decision: command.decision, resourceVersion },
+        })
+        .run();
+      return { commandId: command.commandId, resourceVersion, decision: command.decision };
+    },
   );
-  if (input.decision === 'auto') {
-    db.delete(schema.recurringPaymentDecisions).where(identity).run();
-  } else {
-    db.insert(schema.recurringPaymentDecisions)
-      .values({ ...input, decision: input.decision })
-      .onConflictDoUpdate({
-        target: [
-          schema.recurringPaymentDecisions.accountId,
-          schema.recurringPaymentDecisions.currencyCode,
-          schema.recurringPaymentDecisions.merchantKey,
-        ],
-        set: { decision: input.decision },
-      })
-      .run();
-  }
 }
 
 type PatternMatch = {
@@ -293,7 +325,7 @@ export function discoverRecurringPayments(
   const decisionByKey = new Map(
     decisions.map((item) => [
       `${item.accountId}\0${item.currencyCode}\0${item.merchantKey}`,
-      item.decision,
+      item.decision === 'auto' ? undefined : item.decision,
     ]),
   );
   const groups = new Map<string, RecurringTransaction[]>();
@@ -333,6 +365,10 @@ export function discoverRecurringPayments(
     const usualAmount = profile.usualAmount;
     const monthlyCost = round(usualAmount * pattern.monthlyFactor);
     const payment: RecurringPayment = {
+      resourceVersion:
+        decisions.find(
+          (entry) => `${entry.accountId}\0${entry.currencyCode}\0${entry.merchantKey}` === key,
+        )?.resourceVersion ?? 0,
       accountId: entries[0].accountId,
       merchantKey: key.split('\0')[2],
       name: merchantName(entries.at(-1)!.description),
@@ -403,9 +439,13 @@ async function classifyRecurringPayments(
     return !cached;
   });
   if (apiKey === failedApiKey && Date.now() < classificationRetryAfter) {
-    return discoverRecurringPayments(rows, asOfDate, decisions, judgments);
+    return {
+      ...discoverRecurringPayments(rows, asOfDate, decisions, judgments),
+      classificationStatus: 'unavailable',
+    };
   }
 
+  let unavailable = false;
   for (let offset = 0; offset < pending.length; offset += CLASSIFICATION_BATCH) {
     const batchApiKey = config.TYPESAFE_API_KEY;
     if (!batchApiKey || (batchApiKey === failedApiKey && Date.now() < classificationRetryAfter))
@@ -414,9 +454,10 @@ async function classifyRecurringPayments(
     const batchKey = `${createHash('sha256').update(batchApiKey).digest('hex')}|${batch.map(classificationCacheKey).join('|')}`;
     let work = classificationInFlight.get(batchKey);
     if (!work) {
-      work = evaluateClassificationBatch(batch).finally(() =>
-        classificationInFlight.delete(batchKey),
-      );
+      const task = evaluateClassificationBatch(batch, batchApiKey);
+      work = task.finally(() => {
+        if (classificationInFlight.get(batchKey) === work) classificationInFlight.delete(batchKey);
+      });
       classificationInFlight.set(batchKey, work);
     }
     try {
@@ -426,6 +467,7 @@ async function classifyRecurringPayments(
         failedApiKey = batchApiKey;
         classificationRetryAfter = Date.now() + 60_000;
       }
+      unavailable = true;
       console.warn(
         'Subscription classification unavailable:',
         error instanceof Error ? error.message : error,
@@ -437,10 +479,17 @@ async function classifyRecurringPayments(
       if (judgment) judgments.set(paymentId(payment), judgment);
     }
   }
-  return discoverRecurringPayments(rows, asOfDate, decisions, judgments);
+  return {
+    ...discoverRecurringPayments(rows, asOfDate, decisions, judgments),
+    classificationStatus:
+      unavailable || config.TYPESAFE_API_KEY !== apiKey ? 'unavailable' : 'complete',
+  };
 }
 
-async function evaluateClassificationBatch(batch: readonly RecurringPayment[]): Promise<void> {
+async function evaluateClassificationBatch(
+  batch: readonly RecurringPayment[],
+  apiKey: string,
+): Promise<void> {
   const questions: Record<string, TypeSafeQuestion> = {};
   batch.forEach((_, index) => {
     questions[`candidate_${index}`] = {
@@ -464,6 +513,7 @@ async function evaluateClassificationBatch(batch: readonly RecurringPayment[]): 
     },
     questions,
   });
+  if (config.TYPESAFE_API_KEY !== apiKey) return;
   batch.forEach((payment, index) => {
     const answer = response.answers[`candidate_${index}`];
     if (answer?.type !== 'choice' || !(answer.choice in classificationCriteria)) return;
@@ -471,11 +521,17 @@ async function evaluateClassificationBatch(batch: readonly RecurringPayment[]): 
       choice: answer.choice as Classification,
       probability: answer.probabilities[answer.choice] ?? 0,
     });
+    while (classificationCache.size > 500)
+      classificationCache.delete(classificationCache.keys().next().value!);
   });
 }
 
 function classificationCacheKey(payment: RecurringPayment): string {
-  return `${paymentId(payment)}\0${payment.occurrences}\0${payment.lastChargeDate}\0${payment.usualAmount}`;
+  return `${createHash('sha256')
+    .update(config.TYPESAFE_API_KEY ?? '')
+    .digest(
+      'hex',
+    )}\0${paymentId(payment)}\0${payment.name}\0${payment.frequency}\0${payment.occurrences}\0${payment.lastChargeDate}\0${payment.usualAmount}`;
 }
 
 export async function readRecurringPayments(
@@ -492,7 +548,8 @@ export async function readRecurringPayments(
       classifyRecurringPayments(rows, asOfDate, decisions),
       new Promise<RecurringPaymentsResult>((resolve) => {
         timeout = setTimeout(
-          () => resolve({ ...initial, classificationPending: true }),
+          () =>
+            resolve({ ...initial, classificationPending: true, classificationStatus: 'pending' }),
           CLASSIFICATION_WAIT_MS,
         );
       }),

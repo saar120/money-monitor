@@ -29,8 +29,9 @@ export default function MonthlyComparisonScreen() {
   const colors = useAppColors();
   const { month } = useLocalSearchParams<{ month?: string }>();
   const { home, status } = useMoneyData();
-  const { months, loading } = useExploreHistory();
+  const { months, loading, error: historyError, retry: retryHistory } = useExploreHistory();
   if (status !== 'ready' || !home) return <ConnectionState />;
+  if (historyError) return <ConnectionState error={historyError} onRetry={retryHistory} />;
   return (
     <ScrollView
       style={{ backgroundColor: colors.background }}

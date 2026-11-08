@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted } from 'vue';
 import {
@@ -30,6 +31,7 @@ import { TrendingUp, TrendingDown, Loader2, Plus } from 'lucide-vue-next';
 
 const { chartPrimary } = useChartTheme();
 
+const mutationError = ref('');
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
   language.value === 'he'
@@ -58,11 +60,18 @@ const copy = computed(() =>
 );
 
 // ── Data fetching ──
-const assetApi = useApi<Asset>(() => getAsset(props.assetId));
-const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 }),
+const assetApi = useApi<Asset>(
+  () => getAsset(props.assetId),
+  () => String(props.assetId),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
+const movementsApi = useApi<{ movements: Movement[]; total: number }>(
+  () => getMovements(props.assetId, { limit: 50 }),
+  () => String(props.assetId),
+);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(
+  () => getAssetSnapshots(props.assetId),
+  () => String(props.assetId),
+);
 
 onMounted(() => {
   movementsApi.execute();
@@ -94,9 +103,11 @@ const contributionMovements = computed(() =>
 // ── Update Value Dialog ──
 const showUpdateDialog = ref(false);
 const updateForm = ref({ currentValue: 0, contribution: 0 });
-const saving = ref(false);
+const savingOperation = useFormOperation();
+const saving = savingOperation.pending;
 
 function openUpdateDialog() {
+  if (saving.value) return;
   updateForm.value = {
     currentValue: asset.value?.holdings?.[0]?.quantity ?? 0,
     contribution: 0,
@@ -105,19 +116,22 @@ function openUpdateDialog() {
 }
 
 async function handleUpdate() {
-  saving.value = true;
-  try {
-    await updateAssetValue(props.assetId, {
-      currentValue: updateForm.value.currentValue,
-      contribution: updateForm.value.contribution > 0 ? updateForm.value.contribution : undefined,
+  if (saving.value) return;
+  const assetId = props.assetId;
+
+  mutationError.value = '';
+  const outcome = await savingOperation.run(assetId, { ...updateForm.value }, async (draft) => {
+    await updateAssetValue(assetId, {
+      currentValue: draft.currentValue,
+      contribution: draft.contribution > 0 ? draft.contribution : undefined,
     });
+  });
+  if (outcome.status === 'accepted') {
     showUpdateDialog.value = false;
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    saving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ── Chart ──
@@ -151,6 +165,17 @@ function formatMovementDate(iso: string) {
 
 <template>
   <div class="asset-view min-w-0 animate-fade-in-up">
+    <p v-if="mutationError" role="alert" class="text-destructive text-[14px]">
+      {{ mutationError }}
+    </p>
+    <div
+      v-if="assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value"
+      role="alert"
+      class="text-destructive text-[14px]"
+    >
+      {{ assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value }}
+      <Button variant="secondary" size="sm" @click="refreshAll">{{ t('retry') }}</Button>
+    </div>
     <!-- Loading skeleton -->
     <div v-if="assetApi.loading.value && !asset">
       <Skeleton class="h-8 w-64 mb-2" />
@@ -158,7 +183,7 @@ function formatMovementDate(iso: string) {
     </div>
 
     <!-- Error state -->
-    <div v-else-if="assetApi.error.value" class="text-center py-12">
+    <div v-else-if="assetApi.error.value && !asset" class="text-center py-12">
       <p class="text-destructive text-[14px]">{{ assetApi.error.value }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
         t('retry')

@@ -15,14 +15,16 @@ import {
 
 const router = useRouter();
 const isElectron = !!(window as unknown as { electronAPI?: unknown }).electronAPI;
-const step = ref(1);
+const step = ref<1 | 2>(1);
 const stepContent = ref<HTMLElement | null>(null);
-async function goToStep(value: number) {
+async function goToStep(value: 1 | 2) {
   step.value = value;
   await nextTick();
   stepContent.value?.focus();
 }
-const saving = ref(false);
+const completion = ref<'editing' | 'saving' | 'failed' | 'accepted'>('editing');
+const saving = computed(() => completion.value === 'saving');
+let completionAccepted = false;
 const error = ref('');
 const copy = computed(() =>
   language.value === 'he'
@@ -67,19 +69,21 @@ const copy = computed(() =>
 
 async function finish(destination: string) {
   if (saving.value) return;
-  saving.value = true;
+  completion.value = 'saving';
+  const selectedLanguage = languageChoice.value;
   error.value = '';
   try {
     // Security is prepared by the desktop app; finishing only records this choice.
     const current = await getSettings();
-    if (current.isElectron) {
-      await updateSettings({ ONBOARDING_COMPLETED: 'true', APP_LANGUAGE: languageChoice.value });
+    if (current.isElectron && !completionAccepted) {
+      await updateSettings({ ONBOARDING_COMPLETED: 'true', APP_LANGUAGE: selectedLanguage });
+      completionAccepted = true;
     }
     await router.replace(destination);
+    completion.value = 'accepted';
   } catch {
+    completion.value = 'failed';
     error.value = copy.value.failed;
-  } finally {
-    saving.value = false;
   }
 }
 </script>

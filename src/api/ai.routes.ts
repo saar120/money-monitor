@@ -1,20 +1,14 @@
+import {
+  advisorReplies,
+  ReplyAdmissionError,
+  streamAdvisorOperation,
+} from '../ai/advisor-replies.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { chat, batchCategorize, recategorize } from '../ai/agent.js';
 import { categorizeSchema, recategorizeSchema, sessionChatSchema } from './validation.js';
 import { validateBody } from './helpers.js';
-import { advisorChartSchema, type AdvisorChart } from '../ai/advisor-chart.js';
-import {
-  createSession,
-  getSession,
-  listSessions,
-  deleteSession,
-  appendMessage,
-  removeLastUserMessage,
-  getSessionMessages,
-  beginSessionReply,
-  endSessionReply,
-} from '../ai/sessions.js';
+import { createSession, getSession, listSessions, deleteSession } from '../ai/sessions.js';
 
 export async function aiRoutes(app: FastifyInstance) {
   // ── Session CRUD ───────────────────────────────────────────────────────
@@ -23,8 +17,10 @@ export async function aiRoutes(app: FastifyInstance) {
     return { sessions: listSessions() };
   });
 
-  app.post('/api/ai/sessions', async () => {
-    const meta = createSession();
+  app.post('/api/ai/sessions', async (request, reply) => {
+    const parsed = z.object({ id: z.string().uuid().optional() }).safeParse(request.body ?? {});
+    if (!parsed.success) return reply.code(400).send({ error: 'Invalid session ID' });
+    const meta = createSession(parsed.data.id);
     return { session: meta };
   });
 
@@ -41,6 +37,8 @@ export async function aiRoutes(app: FastifyInstance) {
     const { id } = request.params;
     if (!z.uuid().safeParse(id).success)
       return reply.code(400).send({ error: 'Invalid session ID' });
+    if (advisorReplies.busy(id))
+      return reply.code(409).send({ error: 'This chat is still receiving a reply.' });
     const deleted = deleteSession(id);
     if (!deleted) return reply.status(404).send({ error: 'Session not found' });
     return { deleted: true };
@@ -48,69 +46,40 @@ export async function aiRoutes(app: FastifyInstance) {
 
   // ── Chat (session-based) ──────────────────────────────────────────────
 
+  app.get<{ Params: { id: string; replyId: string } }>(
+    '/api/ai/sessions/:id/replies/:replyId',
+    async (request, reply) => {
+      if (
+        !z.uuid().safeParse(request.params.id).success ||
+        !z.uuid().safeParse(request.params.replyId).success
+      )
+        return reply.code(400).send({ error: 'Invalid reply ID' });
+      const operation = advisorReplies.read(request.params.id, request.params.replyId);
+      return operation ? { reply: operation } : reply.code(404).send({ error: 'Reply not found' });
+    },
+  );
   app.post('/api/ai/chat', async (request, reply) => {
     const data = validateBody(sessionChatSchema, request.body, reply);
     if (!data) return;
-
-    // Load session messages
-    const history = getSessionMessages(data.sessionId);
-    if (!history) return reply.status(404).send({ error: 'Session not found' });
-    if (!beginSessionReply(data.sessionId))
-      return reply.status(409).send({ error: 'This chat is still receiving a reply.' });
-
+    if (!data.submissionId)
+      return reply
+        .code(426)
+        .send({ code: 'update_required', error: 'Update Money Monitor to send a question.' });
     try {
-      // Append user message to session file
-      if (!appendMessage(data.sessionId, 'user', data.message))
-        return reply.status(500).send({ error: 'Message could not be saved' });
-
-      // Build full conversation for the agent
-      const conversationHistory = [...history, { role: 'user' as const, content: data.message }];
-
-      reply.hijack();
-      reply.raw.writeHead(200, {
-        'Content-Type': 'text/event-stream',
-        'Cache-Control': 'no-cache',
-        Connection: 'keep-alive',
-        'X-Accel-Buffering': 'no',
-      });
-
-      let assistantResponse = '';
-      let chart: AdvisorChart | undefined;
-      let failed = false;
-
-      try {
-        for await (const event of chat(conversationHistory)) {
-          if (event.type === 'error') failed = true;
-          if (event.type === 'chart') {
-            const valid = advisorChartSchema.safeParse(event.chart);
-            if (valid.success) {
-              chart = valid.data;
-              reply.raw.write(`event: chart\ndata: ${JSON.stringify({ chart })}\n\n`);
-            }
-            continue;
-          }
-          reply.raw.write(
-            `event: ${event.type}\ndata: ${JSON.stringify({ text: event.text })}\n\n`,
-          );
-          if (event.type === 'result') {
-            assistantResponse = event.text;
-          }
-        }
-
-        // Append assistant response to session file
-        if (assistantResponse || chart) {
-          appendMessage(data.sessionId, 'assistant', assistantResponse, chart);
-        }
-      } catch (err) {
-        failed = true;
-        const message = err instanceof Error ? err.message : 'AI chat failed';
-        reply.raw.write(`event: error\ndata: ${JSON.stringify({ text: message })}\n\n`);
-      } finally {
-        if (failed && !assistantResponse && !chart) removeLastUserMessage(data.sessionId);
-        reply.raw.end();
-      }
-    } finally {
-      endSessionReply(data.sessionId);
+      const operation = advisorReplies.start(
+        data.sessionId,
+        { id: data.submissionId, clientId: 'desktop', message: data.message },
+        (history, context) => chat(history, undefined, context),
+      );
+      return await streamAdvisorOperation(reply, operation);
+    } catch (cause) {
+      if (cause instanceof ReplyAdmissionError)
+        return reply
+          .code(
+            cause.code === 'not_found' ? 404 : cause.code === 'reply_storage_failed' ? 500 : 409,
+          )
+          .send({ error: cause.message, code: cause.code });
+      throw cause;
     }
   });
 

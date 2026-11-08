@@ -10,16 +10,16 @@ export function createAgentTool<T extends TSchema>(opts: {
   description: string;
   label: string;
   parameters: T;
-  execute: (params: Static<T>) => Promise<string>;
+  execute: (params: Static<T>, context: { toolCallId: string }) => Promise<string>;
 }): AgentTool<T, Record<string, never>> {
   return {
     name: opts.name,
     description: opts.description,
     label: opts.label,
     parameters: opts.parameters,
-    execute: async (_toolCallId, params) => {
+    execute: async (toolCallId, params) => {
       try {
-        const text = await opts.execute(params);
+        const text = await opts.execute(params, { toolCallId });
         return { content: [{ type: 'text', text }], details: {} };
       } catch (e) {
         const message = e instanceof Error ? e.message : String(e);

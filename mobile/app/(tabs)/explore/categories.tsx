@@ -7,13 +7,7 @@ import { formatMonthShort } from '@/locale-state';
 import { Text } from '@/LocalizedText';
 import { useLocalSearchParams } from 'expo-router';
 import { useState } from 'react';
-import {
-  ActivityIndicator,
-  ScrollView,
-  StyleSheet,
-  useWindowDimensions,
-  View,
-} from 'react-native';
+import { ActivityIndicator, ScrollView, StyleSheet, useWindowDimensions, View } from 'react-native';
 import { ConnectionState } from '@/ConnectionState';
 import { MonthPicker } from '@/MonthPicker';
 import { useExploreHistory, useMoneyData } from '@/MoneyData';
@@ -25,10 +19,11 @@ export default function CategoriesScreen() {
   const colors = useAppColors();
   const { month } = useLocalSearchParams<{ month?: string }>();
   const { home, status } = useMoneyData();
-  const { months, loading } = useExploreHistory();
+  const { months, loading, error: historyError, retry: retryHistory } = useExploreHistory();
   const currentMonth = months.find((item) => item.month === month) ?? months.at(-1);
   const selected = months.find((item) => item.month === currentMonth?.month) ?? currentMonth;
   if (status !== 'ready' || !home) return <ConnectionState />;
+  if (historyError) return <ConnectionState error={historyError} onRetry={retryHistory} />;
 
   return (
     <ScrollView
@@ -129,7 +124,11 @@ function CategoryList({
                       styles.delta,
                       {
                         color:
-                          delta > 0 ? colors.warning : delta < 0 ? colors.positive : colors.secondary,
+                          delta > 0
+                            ? colors.warning
+                            : delta < 0
+                              ? colors.positive
+                              : colors.secondary,
                       },
                     ]}
                   >

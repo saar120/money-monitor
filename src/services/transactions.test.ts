@@ -1,6 +1,7 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
-import { insertAccount, insertTransaction, insertCategory } from '../__tests__/helpers/fixtures.js';
+import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
@@ -16,13 +17,10 @@ vi.mock('../db/connection.js', () => ({
 }));
 
 const {
+  commandTransaction,
   listTransactions,
   buildTransactionFilters,
   getNeedsReviewCount,
-  resolveReview,
-  setTransactionIgnored,
-  updateTransactionCategory,
-  updateTransactionEffectiveDate,
   categorizeTransaction,
 } = await import('./transactions.js');
 
@@ -270,110 +268,6 @@ describe('transactions service', () => {
     });
   });
 
-  // ── resolveReview ──
-
-  describe('resolveReview', () => {
-    it('clears needsReview flag and sets category', () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, {
-        needsReview: true,
-        reviewReason: 'test',
-      });
-
-      const updated = resolveReview(tx.id, 'food');
-      expect(updated).not.toBeNull();
-      expect(updated!.needsReview).toBe(false);
-      expect(updated!.category).toBe('food');
-      expect(updated!.reviewReason).toBeNull();
-    });
-
-    it('returns null for non-existent transaction', () => {
-      const result = resolveReview(99999, 'food');
-      expect(result).toBeNull();
-    });
-  });
-
-  // ── setTransactionIgnored ──
-
-  describe('updateTransactionEffectiveDate', () => {
-    it('sets and clears the reporting override', () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { date: '2026-09-01' });
-
-      const moved = updateTransactionEffectiveDate(tx.id, '2026-08-31');
-      expect(moved?.effectiveDate).toBe('2026-08-31');
-      expect(moved?.reportingDate).toBe('2026-08-31');
-
-      const reset = updateTransactionEffectiveDate(tx.id, null);
-      expect(reset?.effectiveDate).toBeNull();
-      expect(reset?.reportingDate).toBe('2026-09-01');
-    });
-  });
-
-  // ── setTransactionIgnored ──
-
-  describe('setTransactionIgnored', () => {
-    it('sets the ignored flag', () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { ignored: false });
-
-      const updated = setTransactionIgnored(tx.id, true);
-      expect(updated).not.toBeNull();
-      expect(updated!.ignored).toBe(true);
-    });
-
-    it('returns null for non-existent transaction', () => {
-      const result = setTransactionIgnored(99999, true);
-      expect(result).toBeNull();
-    });
-  });
-
-  // ── updateTransactionCategory ──
-
-  describe('updateTransactionCategory', () => {
-    it('updates category and clears review state', () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, {
-        needsReview: true,
-        reviewReason: 'test',
-      });
-
-      const updated = updateTransactionCategory(tx.id, 'transport');
-      expect(updated).not.toBeNull();
-      expect(updated!.category).toBe('transport');
-      expect(updated!.needsReview).toBe(false);
-      expect(updated!.reviewReason).toBeNull();
-    });
-
-    it('can set category to null', () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { category: 'food' });
-
-      const updated = updateTransactionCategory(tx.id, null);
-      expect(updated).not.toBeNull();
-      expect(updated!.category).toBeNull();
-    });
-
-    it('returns null for non-existent transaction', () => {
-      const result = updateTransactionCategory(99999, 'food');
-      expect(result).toBeNull();
-    });
-
-    it('sets ignored when category has ignoredFromStats=true', () => {
-      insertCategory(testDb.db, {
-        name: 'internal-transfer',
-        label: 'Internal',
-        ignoredFromStats: true,
-      });
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const updated = updateTransactionCategory(tx.id, 'internal-transfer');
-      expect(updated).not.toBeNull();
-      expect(updated!.ignored).toBe(true);
-    });
-  });
-
   // ── categorizeTransaction ──
 
   describe('categorizeTransaction', () => {
@@ -382,6 +276,8 @@ describe('transactions service', () => {
       const tx = insertTransaction(testDb.db, account.id);
 
       const result = categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: tx.id,
         category: 'food',
         confidence: 0.95,
@@ -397,6 +293,8 @@ describe('transactions service', () => {
       const tx = insertTransaction(testDb.db, account.id);
 
       const result = categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: tx.id,
         category: 'food',
         confidence: 0.5,
@@ -417,6 +315,8 @@ describe('transactions service', () => {
       const tx = insertTransaction(testDb.db, account.id);
 
       categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: tx.id,
         category: 'food',
         confidence: 0.3,
@@ -429,6 +329,8 @@ describe('transactions service', () => {
 
     it('returns 404 for non-existent transaction', () => {
       const result = categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: 99999,
         category: 'food',
         confidence: 0.9,
@@ -444,6 +346,8 @@ describe('transactions service', () => {
       const tx = insertTransaction(testDb.db, account.id);
 
       categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: tx.id,
         category: 'food',
         confidence: 0.8,
@@ -457,6 +361,8 @@ describe('transactions service', () => {
       const tx = insertTransaction(testDb.db, account.id);
 
       const result = categorizeTransaction({
+        commandId: randomUUID(),
+        expectedVersion: 1,
         transactionId: tx.id,
         category: 'food',
       });
@@ -464,6 +370,57 @@ describe('transactions service', () => {
 
       // Without confidence, needsReview should be false
       expect(getNeedsReviewCount()).toBe(0);
+    });
+  });
+});
+
+describe('atomic financial commands', () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+  });
+  it('replays a lost outcome, rejects ID reuse and stale edits, and validates before writing', () => {
+    const account = insertAccount(testDb.db);
+    const row = insertTransaction(testDb.db, account.id, { needsReview: true });
+    const command = {
+      commandId: '00000000-0000-4000-8000-000000000001',
+      expectedVersion: 1,
+      patch: { category: 'food', ignored: true, reviewed: true, owner: { type: 'shared' } },
+    };
+    const first = commandTransaction(row.id, command, 'device-a');
+    expect(first.transaction).toMatchObject({
+      resourceVersion: 2,
+      category: 'food',
+      ignored: true,
+      needsReview: false,
+      expenseOwnerType: 'shared',
+      date: row.date,
+    });
+    expect(commandTransaction(row.id, command, 'device-a')).toEqual(first);
+    expect(() =>
+      commandTransaction(row.id, { ...command, patch: { ignored: false } }, 'device-a'),
+    ).toThrow('command_id_reused');
+    expect(() =>
+      commandTransaction(
+        row.id,
+        { ...command, commandId: '00000000-0000-4000-8000-000000000002' },
+        'device-b',
+      ),
+    ).toThrow('mutation_conflict');
+    expect(() =>
+      commandTransaction(
+        row.id,
+        {
+          ...command,
+          commandId: '00000000-0000-4000-8000-000000000003',
+          expectedVersion: 2,
+          patch: { category: 'food', owner: { type: 'member', memberId: 9999 } },
+        },
+        'device-a',
+      ),
+    ).toThrow('validation_error');
+    expect(listTransactions({}).transactions[0]).toEqual(first.transaction);
+    expect(testDb.sqlite.prepare('SELECT count(*) AS n FROM mutation_receipts').get()).toEqual({
+      n: 1,
     });
   });
 });

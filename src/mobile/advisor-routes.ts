@@ -1,8 +1,12 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import type { ChatEvent, ChatMessage } from '../ai/agent.js';
-import { advisorChartSchema, type AdvisorChart } from '../ai/advisor-chart.js';
-import { beginSessionReply, endSessionReply } from '../ai/sessions.js';
+import type { AdvisorChart } from '../ai/advisor-chart.js';
+import {
+  ReplyAdmissionError,
+  streamAdvisorOperation,
+  type advisorReplies,
+} from '../ai/advisor-replies.js';
 import type { Session, SessionMeta, SessionSummary } from '../ai/sessions.js';
 import { MobileApiError, createMobileSuccessEnvelope } from './contract.js';
 import {
@@ -11,17 +15,26 @@ import {
 } from './mobile-auth.js';
 
 const idSchema = z.uuid();
-const messageSchema = z.object({ message: z.string().trim().min(1).max(4000) }).strict();
+const messageSchema = z
+  .object({
+    submissionId: z.string().uuid().optional(),
+    message: z.string().trim().min(1).max(4000),
+  })
+  .strict();
 
 export interface MobileAdvisorDependencies {
   authenticator: MobileCredentialAuthenticator;
   server: { id: string };
   available?: () => boolean;
   list(): SessionSummary[];
-  create(): SessionMeta;
+  create(id?: string): SessionMeta;
   get(id: string): Session | null;
   append(id: string, role: 'user' | 'assistant', content: string, chart?: AdvisorChart): unknown;
-  chat(history: ChatMessage[]): AsyncGenerator<ChatEvent>;
+  replies?: typeof advisorReplies;
+  chat(
+    history: ChatMessage[],
+    context?: { replyId: string; signal: AbortSignal },
+  ): AsyncGenerator<ChatEvent>;
 }
 
 export function registerMobileAdvisorRoutes(
@@ -54,7 +67,9 @@ export function registerMobileAdvisorRoutes(
   app.post('/api/mobile/v1/advisor/sessions', { onRequest: auth }, async (request) => {
     available();
     limit(request.mobileDevice!.id);
-    return envelope({ session: deps.create() });
+    const input = z.object({ id: idSchema.optional() }).safeParse(request.body ?? {});
+    if (!input.success) throw new MobileApiError('validation_error');
+    return envelope({ session: deps.create(input.data.id) });
   });
   app.get<{ Params: { id: string } }>(
     '/api/mobile/v1/advisor/sessions/:id',
@@ -68,6 +83,21 @@ export function registerMobileAdvisorRoutes(
       return envelope({ session });
     },
   );
+  app.get<{ Params: { id: string; replyId: string } }>(
+    '/api/mobile/v1/advisor/sessions/:id/replies/:replyId',
+    { onRequest: auth },
+    async (request) => {
+      available();
+      if (
+        !idSchema.safeParse(request.params.id).success ||
+        !idSchema.safeParse(request.params.replyId).success
+      )
+        throw new MobileApiError('validation_error');
+      const operation = deps.replies?.read(request.params.id, request.params.replyId);
+      if (!operation) throw new MobileApiError('route_not_found');
+      return envelope({ reply: operation });
+    },
+  );
   app.post<{ Params: { id: string } }>(
     '/api/mobile/v1/advisor/sessions/:id/messages',
     { onRequest: auth },
@@ -77,52 +107,31 @@ export function registerMobileAdvisorRoutes(
         throw new MobileApiError('validation_error');
       const body = messageSchema.safeParse(request.body);
       if (!body.success) throw new MobileApiError('validation_error');
+      if (!body.data.submissionId || !deps.replies) throw new MobileApiError('upgrade_required');
       limit(request.mobileDevice!.id);
-      const session = deps.get(request.params.id);
-      if (!session) throw new MobileApiError('route_not_found');
-      if (!beginSessionReply(request.params.id))
-        throw new MobileApiError('advisor_reply_in_progress');
       try {
-        if (!deps.append(request.params.id, 'user', body.data.message))
-          throw new MobileApiError('internal_server_error');
-
-        reply.hijack();
-        reply.raw.writeHead(200, {
-          'Content-Type': 'text/event-stream; charset=utf-8',
-          'Cache-Control': 'no-store',
-          Connection: 'keep-alive',
-          'X-Accel-Buffering': 'no',
-          'X-Money-Monitor-Server-Id': deps.server.id,
-        });
-        const emit = (event: string, data: unknown) =>
-          reply.raw.write(`event: ${event}\ndata: ${JSON.stringify(data)}\n\n`);
-        let result = '';
-        let chart: AdvisorChart | undefined;
-        try {
-          for await (const event of deps.chat([
-            ...session.messages.map((m) => ({ role: m.role, content: m.content })),
-            { role: 'user', content: body.data.message },
-          ])) {
-            if (event.type === 'chart') {
-              const valid = advisorChartSchema.safeParse(event.chart);
-              if (valid.success) {
-                chart = valid.data;
-                emit('chart', { chart });
-              }
-            } else {
-              emit(event.type, { text: event.text });
-              if (event.type === 'result') result = event.text;
-            }
-          }
-          if ((result || chart) && !deps.append(request.params.id, 'assistant', result, chart))
-            emit('error', { text: 'Reply could not be saved.' });
-        } catch {
-          emit('error', { text: 'The advisor could not finish this reply.' });
-        } finally {
-          reply.raw.end();
-        }
-      } finally {
-        endSessionReply(request.params.id);
+        const operation = deps.replies.start(
+          request.params.id,
+          {
+            id: body.data.submissionId,
+            clientId: request.mobileDevice!.id,
+            message: body.data.message,
+          },
+          (history, context) => deps.chat(history, context),
+        );
+        return await streamAdvisorOperation(reply, operation, deps.server.id);
+      } catch (cause) {
+        if (cause instanceof ReplyAdmissionError)
+          throw new MobileApiError(
+            cause.code === 'not_found'
+              ? 'route_not_found'
+              : cause.code === 'reply_in_progress'
+                ? 'advisor_reply_in_progress'
+                : cause.code === 'submission_id_reused'
+                  ? 'command_id_reused'
+                  : 'internal_server_error',
+          );
+        throw cause;
       }
     },
   );

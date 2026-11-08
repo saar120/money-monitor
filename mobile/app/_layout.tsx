@@ -11,11 +11,13 @@ import {
 } from 'expo-router';
 import { StatusBar } from 'expo-status-bar';
 import { useEffect } from 'react';
-import { Settings, useColorScheme } from 'react-native';
+import { Settings, useColorScheme, View, Pressable } from 'react-native';
 import { GestureHandlerRootView } from 'react-native-gesture-handler';
 import { AuthGate } from '@/security/AuthGate';
 import { selectFixtureScenario } from '@/fixture-selection';
-import { MoneyDataProvider } from '@/MoneyData';
+import { Text } from '@/LocalizedText';
+import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { MoneyDataProvider, useMoneyData } from '@/MoneyData';
 import { LAST_ROOT_TAB_KEY, rootTabFromPath } from '@/navigation-state';
 import { useAppColors } from '@/theme';
 import { LanguageProvider, t, useLanguage } from '@/localization';
@@ -69,6 +71,7 @@ function AppLayout() {
       >
         <AuthGate previewLocked={previewLocked}>
           <MoneyDataProvider>
+            <SavedViewNotice />
             <NavigationPersistence />
             <Stack
               screenOptions={{
@@ -121,4 +124,36 @@ function NavigationPersistence() {
   }, [pathname]);
 
   return null;
+}
+
+function SavedViewNotice() {
+  const { availability, reload } = useMoneyData();
+  const colors = useAppColors();
+  const insets = useSafeAreaInsets();
+  if (availability !== 'saved-view' && availability !== 'stale-saved-view') return null;
+  return (
+    <View
+      accessibilityRole="alert"
+      style={{
+        paddingTop: insets.top,
+        backgroundColor: colors.surface,
+        paddingHorizontal: 20,
+        flexDirection: 'row',
+        alignItems: 'center',
+        justifyContent: 'space-between',
+      }}
+    >
+      <Text
+        style={{
+          color: availability === 'stale-saved-view' ? colors.warning : colors.secondary,
+          paddingVertical: 12,
+        }}
+      >
+        {t(availability === 'stale-saved-view' ? 'staleSavedView' : 'savedView')}
+      </Text>
+      <Pressable accessibilityRole="button" onPress={() => void reload()} style={{ padding: 12 }}>
+        <Text style={{ color: colors.accent }}>{t('tryAgain')}</Text>
+      </Pressable>
+    </View>
+  );
 }

@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it, vi } from 'vitest';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
-import { transactions } from '../db/schema.js';
+import { transactions, postImportJobs, accounts } from '../db/schema.js';
 import type { ScraperTransaction } from '../shared/types.js';
 import { computeLegacyTransactionHash } from '../services/transaction-identity.js';
 
@@ -161,5 +161,28 @@ describe('One Zero scraper after statement import', () => {
     const result = await scrapeAccount(account);
     expect(result.results[0]).toMatchObject({ transactionsNew: 1 });
     expect(testDb.db.select().from(transactions).all()).toHaveLength(3);
+  });
+  it('rolls back bank rows and balances when their durable enrichment job cannot commit', async () => {
+    const account = insertAccount(testDb.db, { companyId: 'oneZero', accountNumber: 'synthetic' });
+    scrape.mockResolvedValue({
+      success: true,
+      accounts: [
+        {
+          accountNumber: 'synthetic',
+          balance: 1234,
+          txns: [scraped('Synthetic new transaction', -9)],
+        },
+      ],
+    });
+    testDb.sqlite.exec(
+      "CREATE TRIGGER reject_enrichment BEFORE INSERT ON post_import_jobs BEGIN SELECT RAISE(ABORT, 'synthetic enqueue failure'); END;",
+    );
+    const result = await scrapeAccount(account);
+    expect(result.results[0]).toMatchObject({ success: false });
+    expect(testDb.db.select().from(transactions).all()).toHaveLength(0);
+    expect(testDb.db.select().from(postImportJobs).all()).toHaveLength(0);
+    expect(
+      testDb.db.select().from(accounts).where(eq(accounts.id, account.id)).get(),
+    ).toMatchObject({ balance: null, lastScrapedAt: null });
   });
 });

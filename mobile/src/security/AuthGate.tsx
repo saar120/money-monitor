@@ -7,7 +7,7 @@ import { useCallback, useEffect, useRef, useState, type ReactNode } from 'react'
 import { AppState, Linking, Pressable, StyleSheet, View } from 'react-native';
 import { useAppColors } from '@/theme';
 
-type GateState = 'checking' | 'locked' | 'setup-required' | 'unlocked';
+type GateState = 'checking' | 'authenticating' | 'locked' | 'setup-required' | 'unlocked';
 
 export function AuthGate({
   children,
@@ -21,55 +21,86 @@ export function AuthGate({
   const [hasUnlocked, setHasUnlocked] = useState(false);
   const [message, setMessage] = useState(t('financialInformationStaysHiddenUntilYouUnlock'));
   const needsAuthenticationAfterBackground = useRef(false);
+  const generation = useRef(0);
+  const mounted = useRef(true);
+  const activeAttempt = useRef<Promise<void> | null>(null);
 
-  const authenticate = useCallback(async () => {
-    if (previewLocked) return;
-    const [hardware, enrolled] = await Promise.all([
-      LocalAuthentication.hasHardwareAsync(),
-      LocalAuthentication.isEnrolledAsync(),
-    ]);
-    // Simulators cannot authenticate; production hardware must never bypass the gate.
-    if (!Device.isDevice) {
-      setHasUnlocked(true);
-      setState('unlocked');
-      return;
-    }
-
-    if (!hardware || !enrolled) {
-      setState('setup-required');
-      setMessage(t('setUpFaceIDOrDeviceAuthenticationInIPhoneSettingsToUnlockMoneyMonitor'));
-      return;
-    }
-
-    setState('locked');
-    const result = await LocalAuthentication.authenticateAsync({
-      promptMessage: t('unlockMoneyMonitor'),
-      cancelLabel: t('keepLocked'),
-      fallbackLabel: t('useDevicePasscode'),
-      disableDeviceFallback: false,
+  const authenticate = useCallback((): Promise<void> => {
+    if (previewLocked || !mounted.current) return Promise.resolve();
+    if (activeAttempt.current) return activeAttempt.current;
+    const attempt = ++generation.current;
+    setState('authenticating');
+    const current = () =>
+      mounted.current && generation.current === attempt && AppState.currentState !== 'background';
+    const promise = (async () => {
+      try {
+        const [hardware, enrolled] = await Promise.all([
+          LocalAuthentication.hasHardwareAsync(),
+          LocalAuthentication.isEnrolledAsync(),
+        ]);
+        if (!current()) return;
+        if (!Device.isDevice) {
+          setHasUnlocked(true);
+          setState('unlocked');
+          return;
+        }
+        if (!hardware || !enrolled) {
+          setState('setup-required');
+          setMessage(t('setUpFaceIDOrDeviceAuthenticationInIPhoneSettingsToUnlockMoneyMonitor'));
+          return;
+        }
+        const result = await LocalAuthentication.authenticateAsync({
+          promptMessage: t('unlockMoneyMonitor'),
+          cancelLabel: t('keepLocked'),
+          fallbackLabel: t('useDevicePasscode'),
+          disableDeviceFallback: false,
+        });
+        if (!current()) return;
+        if (result.success) {
+          setHasUnlocked(true);
+          setState('unlocked');
+          setMessage(t('financialInformationStaysHiddenUntilYouUnlock'));
+        } else {
+          setState('locked');
+          setMessage(t('moneyMonitorIsStillLockedTryAgainWhenYouAreReady'));
+        }
+      } catch {
+        if (current()) {
+          setState('locked');
+          setMessage(t('moneyMonitorIsStillLockedTryAgainWhenYouAreReady'));
+        }
+      }
+    })().finally(() => {
+      if (activeAttempt.current === promise) activeAttempt.current = null;
     });
-    if (result.success) {
-      setHasUnlocked(true);
-      setState('unlocked');
-      setMessage(t('financialInformationStaysHiddenUntilYouUnlock'));
-    } else {
-      setMessage(t('moneyMonitorIsStillLockedTryAgainWhenYouAreReady'));
-    }
+    activeAttempt.current = promise;
+    return promise;
   }, [previewLocked]);
 
   useEffect(() => {
+    mounted.current = true;
     void authenticate();
     const subscription = AppState.addEventListener('change', (nextState) => {
       if (nextState === 'background') {
+        generation.current++;
         needsAuthenticationAfterBackground.current = true;
         setState('locked');
       }
       if (nextState === 'active' && needsAuthenticationAfterBackground.current) {
         needsAuthenticationAfterBackground.current = false;
-        void authenticate();
+        const pending = activeAttempt.current;
+        if (pending)
+          void pending.finally(() => {
+            if (mounted.current && AppState.currentState === 'active') void authenticate();
+          });
+        else void authenticate();
       }
     });
-    return () => subscription.remove();
+    return () => {
+      mounted.current = false;
+      generation.current++;
+      subscription.remove();
+    };
   }, [authenticate]);
 
   return (

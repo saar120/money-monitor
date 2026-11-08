@@ -28,6 +28,12 @@ Money Monitor for iPhone is a thin, private client of the Mac app. The Mac remai
 - **Advisor** streams Mac-generated replies and charts and reopens saved conversations.
 - `MoneyDataProvider` owns pairing state, shared overview data, fixture selection, and invalidation after review actions. Feature screens call typed API helpers directly; there is no app-wide state framework or client-side financial calculation layer.
 
+## Saved View and protected edits
+
+A complete authenticated snapshot is saved in an AES-GCM encrypted file with its key in the device-only, unlocked Keychain. Saved View is read-only, becomes stale 24 hours after the snapshot calculation, and is removed after 7 days. Reading or restarting does not renew it. Partial snapshots never replace a complete Saved View. Pairing changes, verified revocation, malformed storage, and backward clock movement remove display rights.
+
+Transaction edits and recurring decisions carry a stable command ID and the displayed resource version. An uncertain response is reconciled before a newer edit; a conflict retains the draft against the current accepted version. Older Mac versions remain readable but cannot accept these protected writes. Advisor replies likewise have persistent IDs; leaving the screen stops observation while the Mac continues the accepted reply.
+
 ## UI rules
 
 - Use semantic roles from `src/theme.ts`; do not add screen-local canvas or surface colors.

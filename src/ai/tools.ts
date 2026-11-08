@@ -1,3 +1,4 @@
+import { createHash, randomUUID } from 'node:crypto';
 import { Type } from '@earendil-works/pi-ai';
 import { StringEnum } from '@earendil-works/pi-ai';
 import { sql, eq, desc } from 'drizzle-orm';
@@ -99,7 +100,10 @@ export function buildGetSpendingSummaryTool() {
   });
 }
 
-export function buildCategorizeTransactionTool(categoryNames: string[]) {
+export function buildCategorizeTransactionTool(
+  categoryNames: string[],
+  replyId: string = randomUUID(),
+) {
   const categorySchema =
     categoryNames.length > 0
       ? StringEnum(categoryNames as unknown as string[], { description: 'The category to assign' })
@@ -112,6 +116,10 @@ export function buildCategorizeTransactionTool(categoryNames: string[]) {
     label: 'Categorizing transaction',
     parameters: Type.Object({
       transaction_id: Type.Number({ description: 'The transaction ID' }),
+      expected_version: Type.Number({
+        minimum: 1,
+        description: 'The resourceVersion returned by query_transactions. Never infer it.',
+      }),
       category: categorySchema,
       confidence: Type.Number({
         minimum: 0,
@@ -122,13 +130,20 @@ export function buildCategorizeTransactionTool(categoryNames: string[]) {
         Type.String({ description: 'Reason if confidence is low (<0.8)' }),
       ),
     }),
-    execute: async (args) =>
-      categorizeTransaction({
+    execute: async (args, context) => {
+      const digest = createHash('sha256')
+        .update(replyId + ':' + context.toolCallId)
+        .digest('hex');
+      const commandId = `${digest.slice(0, 8)}-${digest.slice(8, 12)}-4${digest.slice(13, 16)}-8${digest.slice(17, 20)}-${digest.slice(20, 32)}`;
+      return categorizeTransaction({
+        command_id: commandId,
+        expected_version: args.expected_version,
         transaction_id: args.transaction_id,
         category: String(args.category),
         confidence: args.confidence,
         review_reason: args.review_reason,
-      }),
+      });
+    },
   });
 }
 
@@ -443,6 +458,8 @@ export function getSpendingSummary(input: {
 }
 
 export function categorizeTransaction(input: {
+  command_id: string;
+  expected_version: number;
   transaction_id: number;
   category: string;
   confidence?: number;
@@ -450,6 +467,8 @@ export function categorizeTransaction(input: {
 }): string {
   const result = categorizeTx({
     transactionId: input.transaction_id,
+    commandId: input.command_id,
+    expectedVersion: input.expected_version,
     category: input.category,
     confidence: input.confidence,
     reviewReason: input.review_reason,

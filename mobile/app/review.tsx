@@ -1,3 +1,4 @@
+import { MobileRequestError } from '@/request-error';
 import { currentLocale } from '@/locale-state';
 import { Text } from '@/LocalizedText';
 import { t, useLanguage } from '@/localization';
@@ -5,7 +6,7 @@ import { categoryLabel, ownerLabel } from '@/translations';
 import * as Haptics from 'expo-haptics';
 import { Stack, router } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useReducer, useRef, useState } from 'react';
 import {
   ActivityIndicator,
   Animated,
@@ -20,11 +21,18 @@ import {
 } from 'react-native';
 import { useReducedMotion } from 'react-native-reanimated';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
+import { ConnectionState } from '@/ConnectionState';
 import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { useActivityTransactions, useMoneyData } from '@/MoneyData';
 import type { Transaction } from '@/fixtures';
 import { formatMoney } from '@/money';
-import { getReviewViewState, reviewConfirmation } from '@/review-state';
+import {
+  createReviewSession,
+  reviewQueue,
+  reviewSessionReducer,
+  getReviewViewState,
+  reviewConfirmation,
+} from '@/review-state';
 import { useAppColors, type AppColors } from '@/theme';
 import type { TransactionUpdate } from '@/mobile-api';
 
@@ -34,32 +42,28 @@ export default function ReviewScreen() {
   const { width } = useWindowDimensions();
   const { language } = useLanguage();
   const reduceMotion = useReducedMotion();
-  const { home, reload, saveTransaction, loadReviewOptions } = useMoneyData();
+  const { home, reload, saveTransaction, loadReviewOptions, canMutate } = useMoneyData();
   const { transactions, loading, error } = useActivityTransactions('', 'review');
-  const [dismissedIds, setDismissedIds] = useState(() => new Set<string>());
-  const [overrides, setOverrides] = useState<
-    Record<string, Partial<Pick<Transaction, 'category' | 'included' | 'owner'>>>
-  >({});
-  // "Later" sends a card to the back of this session's queue; it stays unreviewed on the Mac.
-  const [laterIds, setLaterIds] = useState<string[]>([]);
-  const unreviewed = transactions.filter((transaction) => !dismissedIds.has(transaction.id));
-  const queue = [
-    ...unreviewed.filter((transaction) => !laterIds.includes(transaction.id)),
-    ...laterIds.flatMap((id) => unreviewed.find((transaction) => transaction.id === id) ?? []),
-  ];
-  // Keep the saved card on screen while the provider refreshes the queue.
-  const [heldCard, setHeldCard] = useState<Transaction | null>(null);
-  const sourceCurrent = heldCard ?? queue[0] ?? null;
-  const current = sourceCurrent ? { ...sourceCurrent, ...overrides[sourceCurrent.id] } : null;
+  const [session, dispatch] = useReducer(reviewSessionReducer, undefined, createReviewSession);
+  const queue = reviewQueue(session);
+  const current = session.card ? { ...session.card, ...session.draft } : null;
+  const sourceIdentity = transactions
+    .map((row) => [row.id, row.resourceVersion, row.category, row.owner, row.included].join(':'))
+    .join('|');
+  useEffect(() => {
+    dispatch({ type: 'sync', transactions });
+  }, [sourceIdentity]);
   const [sessionTotal, setSessionTotal] = useState(home?.reviewCount ?? 0);
-  const [saving, setSaving] = useState(false);
+  const saving = session.phase === 'saving' || session.phase === 'departing';
   const [picker, setPicker] = useState<'category' | 'owner' | null>(null);
   const [options, setOptions] = useState({ categories: [] as string[], owners: [] as string[] });
-  const [saveError, setSaveError] = useState<string | null>(null);
+  const [optionError, setOptionError] = useState<string | null>(null);
+  const saveError = session.error ?? optionError;
   const departure = useRef(new Animated.Value(0)).current;
   const arrival = useRef(new Animated.Value(1)).current;
   const burst = useRef(new Animated.Value(1)).current;
-  const busy = useRef(false);
+  const activeAction = useRef<number | null>(null);
+  const actionId = useRef(0);
   const mounted = useRef(true);
   const completionScale = useRef(new Animated.Value(1)).current;
   const initializedQueue = useRef(false);
@@ -75,20 +79,21 @@ export default function ReviewScreen() {
   useEffect(() => {
     void loadReviewOptions()
       .then(setOptions)
-      .catch(() => setSaveError(t('reviewOptionsCouldNotBeLoaded')));
+      .catch(() => setOptionError(t('reviewOptionsCouldNotBeLoaded')));
   }, [loadReviewOptions]);
 
   useEffect(() => {
     mounted.current = true;
     return () => {
       mounted.current = false;
+      activeAction.current = null;
       departure.stopAnimation();
       arrival.stopAnimation();
     };
   }, [arrival, departure]);
 
   // Slides the held card away, runs `next` to change the queue, then springs in the next card.
-  async function advance(next: () => void) {
+  async function advance(id: number) {
     if (!reduceMotion) {
       await new Promise<void>((resolve) =>
         Animated.timing(departure, {
@@ -99,11 +104,10 @@ export default function ReviewScreen() {
         }).start(() => resolve()),
       );
     }
-    if (!mounted.current) return;
+    if (!mounted.current || activeAction.current !== id) return;
     departure.setValue(0);
     arrival.setValue(reduceMotion ? 1 : 0);
-    next();
-    setHeldCard(null);
+    dispatch({ type: 'motion-finished', actionId: id });
     if (!reduceMotion) {
       Animated.spring(arrival, {
         toValue: 1,
@@ -116,60 +120,79 @@ export default function ReviewScreen() {
   }
 
   async function later() {
-    if (!current || busy.current || saving) return;
-    const { id } = current;
-    busy.current = true;
-    setHeldCard(current);
+    if (!current || activeAction.current !== null || saving) return;
+    const id = ++actionId.current;
+    activeAction.current = id;
+    dispatch({ type: 'later', cardId: current.id, actionId: id });
     void Haptics.selectionAsync().catch(() => {});
-    await advance(() => setLaterIds((ids) => [...ids.filter((value) => value !== id), id]));
-    busy.current = false;
-  }
-
-  async function complete(update: TransactionUpdate) {
-    if (!current || busy.current || saving) return;
-    busy.current = true;
-    setHeldCard(current);
-    setSaving(true);
-    setSaveError(null);
     try {
-      await saveTransaction(current.id, update);
-      if (!mounted.current) return;
-      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-      await advance(() => setDismissedIds((ids) => new Set(ids).add(current.id)));
-    } catch {
-      if (!mounted.current) return;
-      departure.setValue(0);
-      setSaveError(t('thisTransactionCouldNotBeSaved'));
+      await advance(id);
     } finally {
-      busy.current = false;
-      if (mounted.current) setSaving(false);
+      if (activeAction.current === id) activeAction.current = null;
     }
   }
-
+  async function complete(update: TransactionUpdate) {
+    if (!current || activeAction.current !== null || saving) return;
+    const id = ++actionId.current;
+    activeAction.current = id;
+    dispatch({ type: 'save', cardId: current.id, actionId: id });
+    try {
+      const accepted = await saveTransaction(
+        current.id,
+        { ...session.draft, ...update },
+        current.resourceVersion,
+      );
+      if (!mounted.current || activeAction.current !== id) return;
+      dispatch({ type: 'accepted', actionId: id, transaction: accepted });
+      void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
+      await advance(id);
+    } catch (cause) {
+      if (mounted.current && activeAction.current === id) {
+        departure.setValue(0);
+        dispatch({
+          type: 'failed',
+          actionId: id,
+          message: t('thisTransactionCouldNotBeSaved'),
+          current: cause instanceof MobileRequestError ? cause.current : undefined,
+        });
+      }
+    } finally {
+      if (activeAction.current === id) activeAction.current = null;
+    }
+  }
   async function saveField(
     transaction: Transaction,
     update: Pick<TransactionUpdate, 'included'> | Pick<TransactionUpdate, 'owner'>,
   ) {
-    if (saving) return;
-    const previous = overrides[transaction.id];
-    setSaving(true);
-    setOverrides((values) => ({
-      ...values,
-      [transaction.id]: { ...values[transaction.id], ...update },
-    }));
-    setSaveError(null);
+    if (saving || activeAction.current !== null) return;
+    const id = ++actionId.current;
+    activeAction.current = id;
+    dispatch({ type: 'save', cardId: transaction.id, actionId: id, patch: update });
     try {
-      await saveTransaction(transaction.id, update);
-      await Haptics.selectionAsync();
-    } catch {
-      setOverrides((values) => ({ ...values, [transaction.id]: previous ?? {} }));
-      setSaveError(t('thisTransactionCouldNotBeSaved'));
+      const accepted = await saveTransaction(transaction.id, update, transaction.resourceVersion);
+      if (mounted.current && activeAction.current === id)
+        dispatch({ type: 'field-accepted', actionId: id, transaction: accepted, patch: update });
+      void Haptics.selectionAsync().catch(() => {});
+    } catch (cause) {
+      if (mounted.current && activeAction.current === id)
+        dispatch({
+          type: 'failed',
+          actionId: id,
+          message: t('thisTransactionCouldNotBeSaved'),
+          current: cause instanceof MobileRequestError ? cause.current : undefined,
+          ...(cause instanceof MobileRequestError &&
+          cause.kind === 'api' &&
+          (cause.status ?? 500) < 500 &&
+          cause.code !== 'mutation_conflict'
+            ? { rejectedPatch: update }
+            : {}),
+        });
     } finally {
-      setSaving(false);
+      if (activeAction.current === id) activeAction.current = null;
     }
   }
 
-  const reviewed = dismissedIds.size;
+  const reviewed = session.reviewedIds.length;
   const remaining = Math.max(0, sessionTotal - reviewed);
   const progress = sessionTotal ? reviewed / sessionTotal : 1;
   const viewState = getReviewViewState({
@@ -208,6 +231,7 @@ export default function ReviewScreen() {
     return () => celebration.stop();
   }, [burst, completionScale, reduceMotion, reviewed, viewState]);
 
+  if (!canMutate) return <ConnectionState />;
   return (
     <>
       <Stack.Screen options={{ title: t('review'), headerBackTitle: t('back') }} />
@@ -493,8 +517,8 @@ export default function ReviewScreen() {
                 onPress={() =>
                   void complete(
                     reviewConfirmation(
-                      overrides[current.id]?.category,
-                      overrides[current.id]?.included ?? (current.included ? undefined : false),
+                      session.draft.category,
+                      session.draft.included ?? (current.included ? undefined : false),
                     ),
                   )
                 }
@@ -539,10 +563,7 @@ export default function ReviewScreen() {
           setPicker(null);
           if (!current) return;
           void Haptics.selectionAsync().catch(() => {});
-          setOverrides((values) => ({
-            ...values,
-            [current.id]: { ...values[current.id], category },
-          }));
+          dispatch({ type: 'draft', cardId: current.id, patch: { category } });
         }}
         selected={current?.category}
         visible={picker === 'category'}

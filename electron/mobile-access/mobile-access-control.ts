@@ -120,8 +120,7 @@ export type MobileAccessPairingCreationResult =
   | { status: 'unavailable'; reason: MobileAccessControlError };
 
 export type MobileAccessPairingActionResult =
-  | { status: string }
-  | { status: 'operation_failed'; reason: MobileAccessControlError };
+  { status: string } | { status: 'operation_failed'; reason: MobileAccessControlError };
 
 export interface MobileAccessControlOptions {
   runtime: MobileAccessRuntimeControl;
@@ -148,7 +147,9 @@ export class MobileAccessControl {
   private readonly deviceRegistry: MobileAccessDeviceRegistry;
   private readonly onPairingManagerChanged?: MobileAccessControlOptions['onPairingManagerChanged'];
   private enabled = false;
-  private recoveryActive = false;
+  private lifecycle: 'active' | 'stopping' | 'stopped' = 'stopped';
+  private generation = 0;
+  private recovery: Promise<MobileAccessControlSnapshot> | null = null;
   private recoveryTimer: ReturnType<typeof setTimeout> | undefined;
   private runtimeState: MobileAccessRuntimeState = INITIAL_RUNTIME_STATE;
   private pairingManager: MobileAccessPairingManager | null = null;
@@ -167,7 +168,8 @@ export class MobileAccessControl {
   startFromConfiguration(enabled: boolean): Promise<MobileAccessControlSnapshot> {
     return this.serialize(async () => {
       this.enabled = enabled;
-      this.recoveryActive = enabled;
+      this.lifecycle = 'active';
+      this.generation++;
       this.runtimeState = await this.runtime.start(enabled);
       this.reconcilePairingManager();
       this.scheduleRecovery();
@@ -188,7 +190,8 @@ export class MobileAccessControl {
       }
 
       this.enabled = enabled;
-      this.recoveryActive = enabled;
+      this.lifecycle = 'active';
+      this.generation++;
       this.runtimeState = enabled ? await this.runtime.start(true) : await this.runtime.disable();
       this.reconcilePairingManager();
       this.scheduleRecovery();
@@ -197,19 +200,35 @@ export class MobileAccessControl {
   }
 
   resume(): Promise<MobileAccessControlSnapshot> {
-    return this.serialize(async () => {
-      this.runtimeState = await this.runtime.resume();
+    if (this.lifecycle !== 'active' || !this.enabled) return Promise.resolve(this.snapshot());
+    if (this.recovery) return this.recovery;
+    const generation = this.generation;
+    const recovery = this.serialize(async () => {
+      if (generation !== this.generation || this.lifecycle !== 'active') return this.snapshot();
+      const result = await this.runtime.resume();
+      if (generation !== this.generation || this.lifecycle !== 'active') return this.snapshot();
+      this.runtimeState = result;
       this.reconcilePairingManager();
       this.scheduleRecovery();
       return this.snapshot();
     });
+    this.recovery = recovery;
+    void recovery
+      .finally(() => {
+        if (this.recovery === recovery) this.recovery = null;
+      })
+      .catch(() => {});
+    return recovery;
   }
 
   shutdown(): Promise<MobileAccessControlSnapshot> {
+    this.lifecycle = 'stopping';
+    this.generation++;
+    this.scheduleRecovery();
+    this.setPairingManager(null, null);
     return this.serialize(async () => {
-      this.recoveryActive = false;
-      this.scheduleRecovery();
       this.runtimeState = await this.runtime.shutdown();
+      this.lifecycle = 'stopped';
       this.setPairingManager(null, null);
       return this.snapshot();
     });
@@ -295,13 +314,17 @@ export class MobileAccessControl {
   private scheduleRecovery(): void {
     clearTimeout(this.recoveryTimer);
     this.recoveryTimer = undefined;
-    if (!this.recoveryActive) return;
+    if (this.lifecycle !== 'active' || !this.enabled) return;
+    const generation = this.generation;
 
     // Tailscale may become ready after startup/wake. Keep checking the owned
     // route even after success so a later transport restart also recovers.
     // Rearm after completion to avoid queuing checks behind slow CLI calls.
     this.recoveryTimer = setTimeout(() => {
-      void this.resume();
+      if (generation === this.generation && this.lifecycle === 'active')
+        void this.resume().catch(() => {
+          this.scheduleRecovery();
+        });
     }, 30_000);
     this.recoveryTimer.unref();
   }

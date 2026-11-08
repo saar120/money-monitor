@@ -7,7 +7,8 @@ import DateTimePicker from '@react-native-community/datetimepicker';
 import * as Haptics from 'expo-haptics';
 import { Stack, useLocalSearchParams } from 'expo-router';
 import { SymbolView } from 'expo-symbols';
-import { useState } from 'react';
+import { useEffect, useRef, useState } from 'react';
+import { MobileRequestError } from '@/request-error';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
 import { CategoryPickerSheet } from '@/CategoryPickerSheet';
 import { ConnectionState } from '@/ConnectionState';
@@ -24,6 +25,7 @@ export default function TransactionDetailScreen() {
   const sourceTransaction = result.transaction;
   const [edits, setEdits] = useState<{
     id: string;
+    resourceVersion?: number;
     category?: string;
     effectiveDate?: string;
     needsReview?: boolean;
@@ -32,12 +34,30 @@ export default function TransactionDetailScreen() {
   const [saveError, setSaveError] = useState<string | null>(null);
   const [categoryVisible, setCategoryVisible] = useState(false);
   const [categories, setCategories] = useState<string[]>([]);
+  const [optionsLoading, setOptionsLoading] = useState(false);
+  const scope = useRef(0);
+  const operation = useRef<symbol | null>(null);
+  const optionsRequest = useRef(0);
+  useEffect(() => {
+    scope.current++;
+    operation.current = null;
+    optionsRequest.current++;
+    setSaving(null);
+    setOptionsLoading(false);
+    setCategoryVisible(false);
+    setSaveError(null);
+    return () => {
+      scope.current++;
+      operation.current = null;
+      optionsRequest.current++;
+    };
+  }, [id]);
   const transaction =
     sourceTransaction && edits?.id === sourceTransaction.id
       ? { ...sourceTransaction, ...edits }
       : sourceTransaction;
 
-  if (money.status !== 'ready') return <ConnectionState />;
+  if (money.status !== 'ready' || !money.canMutate) return <ConnectionState />;
 
   if (result.loading && !transaction) {
     return (
@@ -70,6 +90,7 @@ export default function TransactionDetailScreen() {
     ...(money.source === 'fixture' ? { hour: 'numeric', minute: '2-digit' } : {}),
   }).format(new Date(transaction.occurredAt));
   const transactionId = transaction.id;
+  const resourceVersion = transaction.resourceVersion;
   const currentCategory = transaction.category;
   const currentEffectiveDate = transaction.effectiveDate;
 
@@ -77,7 +98,10 @@ export default function TransactionDetailScreen() {
     field: 'category' | 'effectiveDate',
     update: Pick<TransactionUpdate, 'category'> | Pick<TransactionUpdate, 'effectiveDate'>,
   ) {
-    if (saving) return;
+    if (operation.current || !money.canMutate) return;
+    const acceptedScope = scope.current;
+    const token = Symbol();
+    operation.current = token;
     const previous = edits;
     setEdits((value) => ({
       ...(value?.id === transactionId ? value : { id: transactionId }),
@@ -86,46 +110,80 @@ export default function TransactionDetailScreen() {
     setSaving(field);
     setSaveError(null);
     try {
-      await money.saveTransaction(transactionId, update);
-      await Haptics.selectionAsync();
-    } catch {
-      setEdits(previous);
+      const accepted = await money.saveTransaction(transactionId, update, resourceVersion);
+      if (scope.current !== acceptedScope) return;
+      setEdits((value) => ({
+        ...value,
+        id: transactionId,
+        resourceVersion: accepted.resourceVersion,
+      }));
+      void Haptics.selectionAsync().catch(() => {});
+    } catch (cause) {
+      if (scope.current !== acceptedScope) return;
+      // A transport failure can follow acceptance; retain the draft for receipt replay.
+      if (cause instanceof MobileRequestError && cause.current)
+        setEdits({ ...cause.current, ...update });
+      else if (
+        cause instanceof MobileRequestError &&
+        cause.kind === 'api' &&
+        (cause.status ?? 500) < 500
+      )
+        setEdits(previous);
       setSaveError(t('thisTransactionCouldNotBeSaved'));
     } finally {
-      setSaving(null);
+      if (operation.current === token) {
+        operation.current = null;
+        setSaving(null);
+      }
     }
   }
 
   async function confirmReview() {
-    if (saving) return;
+    if (operation.current || !money.canMutate) return;
+    const acceptedScope = scope.current;
+    const token = Symbol();
+    operation.current = token;
     setSaving('reviewed');
     setSaveError(null);
     try {
-      await money.saveTransaction(transactionId, { reviewed: true });
+      const accepted = await money.saveTransaction(
+        transactionId,
+        { reviewed: true },
+        resourceVersion,
+      );
+      if (scope.current !== acceptedScope) return;
       setEdits((value) => ({
         ...(value?.id === transactionId ? value : { id: transactionId }),
         needsReview: false,
+        resourceVersion: accepted.resourceVersion,
       }));
       void Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success).catch(() => {});
-    } catch {
-      setSaveError(t('thisTransactionCouldNotBeSaved'));
+    } catch (cause) {
+      if (scope.current === acceptedScope && cause instanceof MobileRequestError && cause.current)
+        setEdits({ ...cause.current });
+      if (scope.current === acceptedScope) setSaveError(t('thisTransactionCouldNotBeSaved'));
     } finally {
-      setSaving(null);
+      if (operation.current === token) {
+        operation.current = null;
+        setSaving(null);
+      }
     }
   }
 
   async function chooseCategory() {
-    if (saving) return;
-    setSaving('category');
+    if (operation.current || optionsLoading || !money.canMutate) return;
+    const request = ++optionsRequest.current;
+    setOptionsLoading(true);
     setSaveError(null);
     try {
       const { categories } = await money.loadReviewOptions();
+      if (request !== optionsRequest.current) return;
       setCategories(categories);
-      setSaving(null);
       setCategoryVisible(true);
     } catch {
-      setSaving(null);
-      setSaveError(t('categoriesCouldNotBeLoaded'));
+      if (request === optionsRequest.current) setSaveError(t('categoriesCouldNotBeLoaded'));
+    } finally {
+      if (request === optionsRequest.current) setOptionsLoading(false);
     }
   }
 
@@ -175,7 +233,7 @@ export default function TransactionDetailScreen() {
         {transaction.needsReview ? (
           <Pressable
             accessibilityRole="button"
-            disabled={saving !== null}
+            disabled={saving !== null || optionsLoading}
             onPress={() => void confirmReview()}
             style={({ pressed }) => [
               styles.confirm,
@@ -197,12 +255,12 @@ export default function TransactionDetailScreen() {
           <DetailRow
             label={t('category')}
             value={saving === 'category' ? t('saving') : categoryLabel(transaction.category)}
-            disabled={saving !== null}
+            disabled={saving !== null || optionsLoading}
             onPress={() => void chooseCategory()}
             testID="transaction-category"
           />
           <DatePickerRow
-            disabled={saving !== null}
+            disabled={saving !== null || optionsLoading}
             onChange={(value) => {
               const effectiveDate = financialDate(value);
               if (effectiveDate !== currentEffectiveDate) {
@@ -222,7 +280,11 @@ export default function TransactionDetailScreen() {
 
         <View style={[styles.group, styles.secondGroup, { backgroundColor: colors.surface }]}>
           <DetailRow label={t('date')} value={date} />
-          <DetailRow label={t('account')} value={transaction.account} last={!transaction.description} />
+          <DetailRow
+            label={t('account')}
+            value={transaction.account}
+            last={!transaction.description}
+          />
           {transaction.description ? (
             <DetailRow label={t('description')} value={transaction.description} last />
           ) : null}

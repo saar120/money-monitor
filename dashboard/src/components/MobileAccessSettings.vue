@@ -100,6 +100,10 @@ const error = ref('');
 const qrImage = ref('');
 const qrExpiresAt = ref('');
 const qrDeviceName = ref('');
+let mounted = true;
+let generation = 0;
+let qrGeneration = 0;
+let refreshRequest: Promise<void> | null = null;
 let refreshTimer: ReturnType<typeof setInterval> | null = null;
 
 const supported = computed(
@@ -201,38 +205,53 @@ function formatDate(value: string | null): string {
   }).format(date);
 }
 
-async function refresh(): Promise<void> {
-  if (!electronAPI?.getMobileAccessState) {
+function refresh(): Promise<void> {
+  if (refreshRequest) return refreshRequest;
+  if (!mounted || !electronAPI?.getMobileAccessState) {
     loading.value = false;
-    return;
+    return Promise.resolve();
   }
-  try {
-    snapshot.value = await electronAPI.getMobileAccessState();
-    if (snapshot.value.pendingRequests.some((request) => request.status === 'pending_approval')) {
-      clearQr();
-    }
-    if (snapshot.value.lastActionError) {
-      error.value = friendlyError(snapshot.value.lastActionError);
-    } else {
-      revokeOpen.value = false;
-    }
-  } catch {
-    error.value = localized(
-      'Mobile Access status could not be loaded.',
-      'לא ניתן לטעון את מצב הגישה מהטלפון.',
-    );
-  } finally {
-    loading.value = false;
-  }
+  const attempt = generation;
+  const request = electronAPI
+    .getMobileAccessState()
+    .then((value) => {
+      if (!mounted || attempt !== generation) return;
+      snapshot.value = value;
+      if (
+        !value.enabled ||
+        value.pendingRequests.some((item) => item.status === 'pending_approval')
+      )
+        clearQr();
+      if (value.lastActionError) error.value = friendlyError(value.lastActionError);
+    })
+    .catch(() => {
+      if (mounted && attempt === generation)
+        error.value = localized(
+          'Mobile Access status could not be loaded.',
+          'לא ניתן לטעון את מצב הגישה מהטלפון.',
+        );
+    })
+    .finally(() => {
+      if (mounted && attempt === generation) loading.value = false;
+      if (refreshRequest === request) refreshRequest = null;
+    });
+  refreshRequest = request;
+  return request;
+}
+function actionPending() {
+  return changingEnabled.value || pairing.value || retrying.value || !!actionId.value;
 }
 
 async function toggleEnabled(enabled: boolean): Promise<void> {
-  if (!electronAPI?.setMobileAccessEnabled) return;
+  if (!electronAPI?.setMobileAccessEnabled || actionPending()) return;
+  const attempt = ++generation;
   changingEnabled.value = true;
   error.value = '';
   clearQr();
   try {
-    snapshot.value = await electronAPI.setMobileAccessEnabled(enabled);
+    const value = await electronAPI.setMobileAccessEnabled(enabled);
+    if (!mounted || attempt !== generation) return;
+    snapshot.value = value;
     if (snapshot.value.lastActionError) {
       error.value = friendlyError(snapshot.value.lastActionError);
     } else {
@@ -246,41 +265,49 @@ async function toggleEnabled(enabled: boolean): Promise<void> {
 }
 
 async function createPairing(device?: MobileAccessDevice): Promise<void> {
-  if (!electronAPI?.createMobilePairing) return;
+  if (!electronAPI?.createMobilePairing || actionPending()) return;
   pairing.value = true;
   actionId.value = device?.id ?? '';
   error.value = '';
   clearQr();
+  const attempt = ++qrGeneration;
   try {
     const result = await electronAPI.createMobilePairing(device?.id);
+    if (!mounted || attempt !== qrGeneration) return;
     if (result.status !== 'created') {
       error.value = friendlyError(result.reason);
       return;
     }
-    // The nonce is rendered directly into the QR and is never displayed as
-    // text, logged, persisted, or placed on the clipboard.
-    qrImage.value = await QRCode.toDataURL(result.encodedPayload, {
+    const image = await QRCode.toDataURL(result.encodedPayload, {
       errorCorrectionLevel: 'M',
       margin: 2,
       width: 232,
       color: { dark: '#111827', light: '#FFFFFF' },
     });
+    if (!mounted || attempt !== qrGeneration || Date.parse(result.expiresAt) <= Date.now()) return;
+    qrImage.value = image;
     qrExpiresAt.value = result.expiresAt;
     qrDeviceName.value = device?.name ?? '';
   } catch {
-    error.value = 'A pairing code could not be created.';
+    if (mounted && attempt === qrGeneration) error.value = 'A pairing code could not be created.';
   } finally {
-    pairing.value = false;
-    actionId.value = '';
+    // Retiring QR output does not release the in-flight create request early.
+    if (mounted) {
+      pairing.value = false;
+      actionId.value = '';
+    }
   }
 }
 
 async function retryTransport(): Promise<void> {
-  if (!electronAPI?.retryMobileAccess) return;
+  if (!electronAPI?.retryMobileAccess || actionPending()) return;
+  const attempt = ++generation;
   retrying.value = true;
   error.value = '';
   try {
-    snapshot.value = await electronAPI.retryMobileAccess();
+    const value = await electronAPI.retryMobileAccess();
+    if (!mounted || attempt !== generation) return;
+    snapshot.value = value;
   } catch {
     error.value = 'The private connection could not be checked.';
   } finally {
@@ -290,11 +317,13 @@ async function retryTransport(): Promise<void> {
 
 async function decidePairing(pairingId: string, approve: boolean): Promise<void> {
   const action = approve ? electronAPI?.approveMobilePairing : electronAPI?.rejectMobilePairing;
-  if (!action) return;
+  if (!action || actionPending()) return;
+  generation++;
   actionId.value = pairingId;
   error.value = '';
   try {
     const result = await action(pairingId);
+    if (!mounted) return;
     if (!['approved', 'rejected', 'already_approved', 'already_rejected'].includes(result.status)) {
       error.value = 'The pairing request is no longer available.';
     }
@@ -315,13 +344,16 @@ function askRevoke(device: MobileAccessDevice) {
 }
 async function revokeDevice(): Promise<void> {
   const device = revokeTarget.value;
-  if (!device) return;
+  if (!device || actionPending()) return;
+  const attempt = ++generation;
   if (!electronAPI?.revokeMobileDevice || device.revokedAt) return;
 
   actionId.value = device.id;
   error.value = '';
   try {
-    snapshot.value = await electronAPI.revokeMobileDevice(device.id);
+    const value = await electronAPI.revokeMobileDevice(device.id);
+    if (!mounted || attempt !== generation) return;
+    snapshot.value = value;
     if (snapshot.value.lastActionError) {
       error.value = friendlyError(snapshot.value.lastActionError);
     } else {
@@ -335,6 +367,7 @@ async function revokeDevice(): Promise<void> {
 }
 
 function clearQr(): void {
+  qrGeneration++;
   qrImage.value = '';
   qrExpiresAt.value = '';
   qrDeviceName.value = '';
@@ -346,13 +379,16 @@ function expireQrIfNeeded(): void {
 
 onMounted(async () => {
   await refresh();
+  if (!mounted) return;
   refreshTimer = setInterval(() => {
     expireQrIfNeeded();
-    if (snapshot.value?.enabled) void refresh();
+    if (snapshot.value?.enabled && !actionPending()) void refresh();
   }, 2_000);
 });
 
 onUnmounted(() => {
+  mounted = false;
+  generation++;
   if (refreshTimer) clearInterval(refreshTimer);
   clearQr();
 });

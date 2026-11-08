@@ -169,7 +169,12 @@ function getCategoriesWithRules(): CategoryWithRules[] {
 export async function* chat(
   conversationHistory: ChatMessage[],
   images?: ImageContent[],
-  options: { mobileReadOnly?: boolean } = {},
+  options: {
+    mobileReadOnly?: boolean;
+    signal?: AbortSignal;
+    replyId?: string;
+    telegram?: { chatId: number; sessionId: string };
+  } = {},
 ): AsyncGenerator<ChatEvent> {
   const cats = getCategoriesWithRules();
   const { ignored } = partitionCategories(cats);
@@ -208,7 +213,7 @@ export async function* chat(
     buildGetSpendingTrendsTool(),
     buildDetectRecurringTransactionsTool(),
     buildGetTopMerchantsTool(),
-    buildCategorizeTransactionTool(categoryNames),
+    buildCategorizeTransactionTool(categoryNames, options.replyId),
     buildAddCategoryTool(),
     buildGetCategoryRulesTool(),
     buildUpdateCategoryRulesTool(),
@@ -227,7 +232,15 @@ export async function* chat(
     buildGetAlertSettingsTool(),
     buildUpdateAlertSettingsTool(),
     buildGetLatestScrapeTransactionsTool(),
-    buildGenerateTableImageTool(),
+    ...(options.telegram && options.replyId
+      ? [
+          buildGenerateTableImageTool({
+            replyId: options.replyId,
+            recipientId: options.telegram.chatId,
+            sessionId: options.telegram.sessionId,
+          }),
+        ]
+      : []),
   ];
   let chart: AdvisorChart | null = null;
   const chartTool = createAgentTool({
@@ -271,6 +284,11 @@ export async function* chat(
   type QueueItem = ChatEvent | { done: true };
   const queue: QueueItem[] = [];
   let waiting: (() => void) | null = null;
+  const wake = () => {
+    const resume = waiting;
+    waiting = null;
+    resume?.();
+  };
   const push = (item: QueueItem) => {
     queue.push(item);
     if (waiting) {
@@ -285,8 +303,15 @@ export async function* chat(
     });
 
   let turnCount = 0;
-
-  agent.subscribe((event: AgentEvent) => {
+  let settled = false;
+  const finish = (event: ChatEvent) => {
+    if (settled) return;
+    settled = true;
+    push(event);
+    push({ done: true });
+  };
+  const unsubscribe = agent.subscribe((event: AgentEvent) => {
+    if (settled) return;
     if (event.type === 'message_update' && event.assistantMessageEvent.type === 'text_delta') {
       push({ type: 'text_delta', text: event.assistantMessageEvent.delta });
     }
@@ -296,12 +321,11 @@ export async function* chat(
     if (event.type === 'turn_end') {
       turnCount++;
       if (turnCount >= getMaxTurns()) {
-        agent.abort();
-        push({
+        finish({
           type: 'result',
           text: 'I reached the maximum number of steps. Please try a more specific question.',
         });
-        push({ done: true });
+        agent.abort();
       }
     }
     if (event.type === 'agent_end') {
@@ -312,14 +336,12 @@ export async function* chat(
           'errorMessage' in lastMsg && lastMsg.errorMessage
             ? String(lastMsg.errorMessage)
             : 'The AI provider returned an error. Please check your API key and try again.';
-        push({ type: 'error', text: errorText });
-        push({ done: true });
+        finish({ type: 'error', text: errorText });
         return;
       }
       const finalText = extractAssistantText(event.messages);
       if (chart) push({ type: 'chart', chart });
-      push({ type: 'result', text: finalText });
-      push({ done: true });
+      finish({ type: 'result', text: finalText });
     }
   });
 
@@ -330,21 +352,37 @@ export async function* chat(
   }
 
   const lastMsg = conversationHistory[conversationHistory.length - 1];
-  const promptPromise = agent.prompt(lastMsg.content, images).catch((err) => {
-    push({ type: 'error', text: err instanceof Error ? err.message : String(err) });
-    push({ done: true });
+  const abort = () => {
+    finish({ type: 'error', text: 'Reply cancelled' });
+    agent.abort();
+  };
+  options.signal?.addEventListener('abort', abort, { once: true });
+  if (options.signal?.aborted) abort();
+  const promptPromise = (
+    options.signal?.aborted ? Promise.resolve() : agent.prompt(lastMsg.content, images)
+  ).catch((err) => {
+    finish({ type: 'error', text: err instanceof Error ? err.message : String(err) });
   });
 
-  while (true) {
-    await pull();
-    while (queue.length > 0) {
-      const item = queue.shift()!;
-      if ('done' in item) {
-        await promptPromise;
-        return;
+  try {
+    while (true) {
+      await pull();
+      while (queue.length > 0) {
+        const item = queue.shift()!;
+        if ('done' in item) return;
+        yield item;
       }
-      yield item;
     }
+  } finally {
+    if (!settled) {
+      settled = true;
+      agent.abort();
+    }
+    unsubscribe();
+    options.signal?.removeEventListener('abort', abort);
+    wake();
+    queue.length = 0;
+    await promptPromise;
   }
 }
 

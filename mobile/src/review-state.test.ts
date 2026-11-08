@@ -64,3 +64,38 @@ test('a retried confirmation still sends the category picked before the failed s
   });
   assert.deepEqual(reviewConfirmation(undefined, false), { reviewed: true });
 });
+
+test('review persistence and card motion advance once while Later remains unreviewed', async () => {
+  const { createReviewSession, reviewSessionReducer } = await import('./review-state.ts');
+  const { fixtureScenarios } = await import('./fixtures.ts');
+  const card = fixtureScenarios.normal.transactions[0];
+  let state = reviewSessionReducer(createReviewSession(), { type: 'sync', transactions: [card] });
+  state = reviewSessionReducer(state, {
+    type: 'draft',
+    cardId: card.id,
+    patch: { category: 'Travel' },
+  });
+  state = reviewSessionReducer(state, { type: 'save', cardId: card.id, actionId: 1 });
+  state = reviewSessionReducer(state, {
+    type: 'failed',
+    actionId: 1,
+    message: 'Synthetic failure',
+  });
+  assert.equal(state.card?.id, card.id);
+  assert.equal(state.draft.category, 'Travel');
+  state = reviewSessionReducer(state, { type: 'later', cardId: card.id, actionId: 2 });
+  state = reviewSessionReducer(state, { type: 'motion-finished', actionId: 2 });
+  assert.equal(state.reviewedIds.length, 0);
+  assert.equal(state.card?.id, card.id);
+  state = reviewSessionReducer(state, { type: 'save', cardId: card.id, actionId: 3 });
+  state = reviewSessionReducer(state, {
+    type: 'accepted',
+    actionId: 3,
+    transaction: { ...card, needsReview: false },
+  });
+  assert.equal(state.phase, 'departing');
+  state = reviewSessionReducer(state, { type: 'motion-finished', actionId: 3 });
+  assert.equal(state.phase, 'complete');
+  assert.deepEqual(state.reviewedIds, [card.id]);
+  assert.equal(reviewSessionReducer(state, { type: 'motion-finished', actionId: 3 }), state);
+});

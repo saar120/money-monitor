@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import type { OAuthAuth, OAuthCredentials, OAuthCredential } from '@earendil-works/pi-ai';
 import { anthropicProvider } from '@earendil-works/pi-ai/providers/anthropic';
@@ -34,17 +35,31 @@ export function loadCredentials(): void {
 }
 
 /** Persist credentials to disk (skips write if unchanged). */
-function saveCredentials(): void {
-  const json = JSON.stringify(credentials, null, 2);
+function saveCredentials(next = credentials): void {
+  const json = JSON.stringify(next, null, 2);
   if (json === lastSavedJson) return;
   mkdirSync(dataDir, { recursive: true });
-  writeFileSync(
-    CREDENTIALS_PATH,
-    sealSecretFile(json, config.CREDENTIALS_MASTER_KEY, isElectronMode),
-    { mode: 0o600 },
-  );
+  const temporary = `${CREDENTIALS_PATH}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, sealSecretFile(json, config.CREDENTIALS_MASTER_KEY, isElectronMode), {
+      mode: 0o600,
+      flag: 'wx',
+    });
+    renameSync(temporary, CREDENTIALS_PATH);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
+  credentials = next;
   lastSavedJson = json;
 }
+const generations = new Map<string, number>();
+const currentGeneration = (provider: string) => generations.get(provider) ?? 0;
+const retire = (provider: string) => {
+  const next = currentGeneration(provider) + 1;
+  generations.set(provider, next);
+  return next;
+};
+const refreshes = new Map<string, { generation: number; promise: Promise<OAuthCredentials> }>();
 
 // ── Generic OAuth flow factory ─────────────────────────────────────────────
 
@@ -62,80 +77,97 @@ export interface OAuthFlow {
 }
 
 function createOAuthFlow(providerKey: string, oauth: OAuthAuth): OAuthFlow {
-  let pendingResolve: ((code: string) => void) | null = null;
-  let pendingReject: ((err: Error) => void) | null = null;
-  let pendingLogin: Promise<void> | null = null;
-  let abortController: AbortController | null = null;
-
+  type Attempt = {
+    generation: number;
+    controller: AbortController;
+    resolve: (code: string) => void;
+    reject: (cause: Error) => void;
+    login: Promise<void>;
+    rejectUrl: (cause: Error) => void;
+    submitted: boolean;
+  };
+  let attempt: Attempt | null = null;
   function start(): Promise<string> {
-    if (pendingResolve) {
-      throw new Error('OAuth flow already in progress');
-    }
-
+    if (attempt) return Promise.reject(new Error('OAuth flow already in progress'));
     return new Promise<string>((resolveUrl, rejectUrl) => {
-      abortController = new AbortController();
-      const codePromise = new Promise<string>((resolve, reject) => {
-        pendingResolve = resolve;
-        pendingReject = reject;
+      let resolveCode!: (code: string) => void;
+      let rejectCode!: (cause: Error) => void;
+      const code = new Promise<string>((resolve, reject) => {
+        resolveCode = resolve;
+        rejectCode = reject;
       });
-
-      pendingLogin = oauth
-        .login({
-          signal: abortController.signal,
-          notify: (event) => {
-            if (event.type === 'auth_url') resolveUrl(event.url);
-          },
-          prompt: (prompt) => (prompt.type === 'select' ? Promise.resolve('browser') : codePromise),
+      void code.catch(() => {});
+      const next: Attempt = {
+        generation: retire(providerKey),
+        controller: new AbortController(),
+        resolve: resolveCode,
+        reject: rejectCode,
+        login: Promise.resolve(),
+        rejectUrl,
+        submitted: false,
+      };
+      attempt = next;
+      next.login = Promise.resolve()
+        .then(() =>
+          oauth.login({
+            signal: next.controller.signal,
+            notify: (event) => {
+              if (attempt === next && event.type === 'auth_url') resolveUrl(event.url);
+            },
+            prompt: (prompt) => (prompt.type === 'select' ? Promise.resolve('browser') : code),
+          }),
+        )
+        .then((value) => {
+          if (
+            attempt !== next ||
+            currentGeneration(providerKey) !== next.generation ||
+            next.controller.signal.aborted
+          )
+            throw new Error('OAuth flow cancelled');
+          saveCredentials({ ...credentials, [providerKey]: value });
+          resolveUrl('');
         })
-        .then((creds) => {
-          credentials[providerKey] = creds;
-          saveCredentials();
-        })
-        .catch((err) => {
-          rejectUrl(err);
+        .catch((cause) => {
+          rejectUrl(cause);
+          throw cause;
         })
         .finally(() => {
-          pendingResolve = null;
-          pendingReject = null;
-          pendingLogin = null;
-          abortController = null;
+          if (attempt === next) attempt = null;
         });
+      void next.login.catch(() => {});
     });
   }
-
   async function complete(code: string): Promise<void> {
-    if (!pendingResolve) {
-      // OpenAI Codex can finish through its localhost callback before the UI
-      // submits the manually pasted code. Treat that successful race as done.
+    const current = attempt;
+    if (!current) {
       if (hasOAuth()) return;
       throw new Error('No OAuth flow in progress');
     }
-    pendingResolve(code);
-    if (pendingLogin) {
-      await pendingLogin;
+    if (!current.submitted) {
+      current.submitted = true;
+      current.resolve(code);
     }
+    await current.login;
   }
-
   function cancel(): void {
-    abortController?.abort();
-    if (pendingReject) {
-      pendingReject(new Error('OAuth flow cancelled'));
-    }
-    pendingResolve = null;
-    pendingReject = null;
-    pendingLogin = null;
+    retire(providerKey);
+    const current = attempt;
+    attempt = null;
+    if (!current) return;
+    const error = new Error('OAuth flow cancelled');
+    current.controller.abort();
+    current.reject(error);
+    current.rejectUrl(error);
   }
-
-  function hasOAuth(): boolean {
+  function hasOAuth() {
     return !!credentials[providerKey]?.refresh;
   }
-
-  function logout(): void {
-    if (!(providerKey in credentials)) return;
-    delete credentials[providerKey];
-    saveCredentials();
+  function logout() {
+    cancel();
+    const next = { ...credentials };
+    delete next[providerKey];
+    saveCredentials(next);
   }
-
   return { start, complete, cancel, logout, hasOAuth };
 }
 
@@ -176,16 +208,31 @@ export async function resolveApiKey(provider: string): Promise<string | undefine
     try {
       const oauth = oauthProviders[provider];
       if (oauth) {
+        const generation = currentGeneration(provider);
         let credential: OAuthCredential = {
           ...credentials[provider],
           type: 'oauth',
         } as OAuthCredential;
         if (!credential.expires || credential.expires <= Date.now() + 60_000) {
-          credential = await oauth.refresh(credential, new AbortController().signal);
+          let refresh = refreshes.get(provider);
+          if (!refresh || refresh.generation !== generation) {
+            const promise = oauth.refresh(credential, new AbortController().signal);
+            refresh = { generation, promise };
+            refreshes.set(provider, refresh);
+            void promise
+              .finally(() => {
+                if (refreshes.get(provider) === refresh) refreshes.delete(provider);
+              })
+              .catch(() => {});
+          }
+          const refreshed = await refresh.promise;
+          if (generation !== currentGeneration(provider))
+            throw new Error('OAuth credentials replaced');
+          credential = { ...refreshed, type: 'oauth' } as OAuthCredential;
+          saveCredentials({ ...credentials, [provider]: credential });
         }
-        credentials[provider] = credential;
-        saveCredentials();
-        return (await oauth.toAuth(credential)).apiKey;
+        if (generation === currentGeneration(provider))
+          return (await oauth.toAuth(credential)).apiKey;
       }
     } catch (err) {
       console.error(

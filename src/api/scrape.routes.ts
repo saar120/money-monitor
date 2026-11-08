@@ -4,9 +4,12 @@ import { db, isDemoMode } from '../db/connection.js';
 import { accounts, scrapeLogs, scrapeSessions } from '../db/schema.js';
 import { scrapeLogsQuerySchema, scrapeSessionsQuerySchema, otpSubmitSchema } from './validation.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
-import { addSseClient, removeSseClient, broadcastSseEvent } from './sse.js';
-import { submitOtp } from '../scraper/otp-bridge.js';
-import { confirmManualAction } from '../scraper/manual-action-bridge.js';
+import { addSseClient, removeSseClient } from './sse.js';
+import { pendingOtpChallenges, submitOtp } from '../scraper/otp-bridge.js';
+import {
+  pendingManualActionChallenges,
+  confirmManualAction,
+} from '../scraper/manual-action-bridge.js';
 import {
   cancelSession,
   hasActiveSessions,
@@ -71,8 +74,8 @@ export async function scrapeRoutes(app: FastifyInstance) {
     const data = validateBody(otpSubmitSchema, request.body, reply);
     if (!data) return;
 
-    const { accountId, code } = data;
-    const accepted = submitOtp(accountId, code);
+    const { accountId, code, challengeId } = data;
+    const accepted = submitOtp(accountId, code, challengeId);
 
     if (!accepted) {
       return reply.status(404).send({ error: 'No pending OTP request for this account' });
@@ -89,7 +92,8 @@ export async function scrapeRoutes(app: FastifyInstance) {
       const accountId = parseIntParam(request.params.accountId, 'account ID', reply);
       if (accountId === null) return;
 
-      const accepted = confirmManualAction(accountId);
+      const body = request.body as { challengeId?: string } | null;
+      const accepted = confirmManualAction(accountId, undefined, body?.challengeId);
       if (!accepted) {
         return reply.status(404).send({ error: 'No pending manual login for this account' });
       }
@@ -140,7 +144,6 @@ export async function scrapeRoutes(app: FastifyInstance) {
       const cancelled = cancelSession(sessionId);
       if (!cancelled) return reply.status(404).send({ error: 'No active session found' });
 
-      broadcastSseEvent({ type: 'session-completed', sessionId, status: 'cancelled' });
       return reply.send({ success: true });
     },
   );
@@ -185,10 +188,15 @@ export async function scrapeRoutes(app: FastifyInstance) {
 
     const activeSessionsList = getActiveSessions().map((a) => ({
       ...a.session,
+      revision: a.revision,
       logs: [],
     }));
 
-    return reply.send({ sessions: sessionsWithLogs, activeSessions: activeSessionsList });
+    return reply.send({
+      sessions: sessionsWithLogs,
+      activeSessions: activeSessionsList,
+      challenges: { otp: pendingOtpChallenges(), manual: pendingManualActionChallenges() },
+    });
   });
 
   // ─── Single session detail ───

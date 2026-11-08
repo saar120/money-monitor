@@ -126,14 +126,17 @@ describe('mobile recurring payments route', () => {
   it('validates authenticated review decisions on the paired Mac', async () => {
     const decide = vi.fn(
       (
-        _input: { accountId: string; currencyCode: string; merchantKey: string; decision: string },
+        _input: {
+          accountId: string;
+          currencyCode: string;
+          merchantKey: string;
+          decision: string;
+          commandId: string;
+        },
         asOfDate: string,
       ) => ({
-        payments: [],
-        suggestions: [],
-        excluded: [],
-        totals: [],
-        asOfDate,
+        receipt: { commandId: _input.commandId, resourceVersion: 1 },
+        result: { payments: [], suggestions: [], excluded: [], totals: [], asOfDate },
       }),
     );
     const server = createMobileServer({
@@ -159,6 +162,8 @@ describe('mobile recurring payments route', () => {
       currencyCode: 'ILS',
       merchantKey: 'netflix',
       decision: 'exclude',
+      commandId: '11111111-1111-4111-8111-111111111112',
+      expectedVersion: 0,
     };
     expect((await server.app.inject({ method: 'PUT', url, payload })).statusCode).toBe(401);
     const headers = { authorization: `Bearer ${token}` };
@@ -174,7 +179,7 @@ describe('mobile recurring payments route', () => {
     ).toBe(400);
     const response = await server.app.inject({ method: 'PUT', url, headers, payload });
     expect(response.statusCode).toBe(200);
-    expect(decide).toHaveBeenCalledWith(payload, '2026-09-26');
+    expect(decide).toHaveBeenCalledWith(payload, '2026-09-26', device.id);
   });
 
   it('serves authenticated payment details with charge history', async () => {

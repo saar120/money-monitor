@@ -87,6 +87,7 @@ export const mobileTransactionItemSchema = z
   .object({
     id: transactionIdSchema,
     occurredOn: bootstrapFinancialDateSchema,
+    resourceVersion: z.number().int().positive().optional(),
     displayName: z.string().trim().min(1).max(160),
     amount: bootstrapMoneySchema.strict(),
     direction: mobileTransactionDirectionSchema,
@@ -134,6 +135,8 @@ export const mobileTransactionDetailSchema = mobileTransactionItemSchema
 
 export const mobileTransactionUpdateSchema = z
   .object({
+    commandId: z.string().uuid().optional(),
+    expectedVersion: z.number().int().positive().optional(),
     category: z.string().trim().min(1).max(80).optional(),
     owner: z.string().trim().min(1).max(80).optional(),
     included: z.boolean().optional(),
@@ -141,7 +144,10 @@ export const mobileTransactionUpdateSchema = z
     reviewed: z.literal(true).optional(),
   })
   .strict()
-  .refine((value) => Object.keys(value).length > 0, 'At least one update is required');
+  .refine(
+    (value) => Object.keys(value).some((key) => !['commandId', 'expectedVersion'].includes(key)),
+    'At least one update is required',
+  );
 
 export type MobileTransactionUpdate = z.infer<typeof mobileTransactionUpdateSchema>;
 
@@ -223,8 +229,7 @@ export interface MobileTransactionValidationIssue {
 }
 
 export type MobileTransactionValidationResult<T> =
-  | { success: true; data: T }
-  | { success: false; issues: MobileTransactionValidationIssue[] };
+  { success: true; data: T } | { success: false; issues: MobileTransactionValidationIssue[] };
 
 function validateEnvelope<T>(
   input: unknown,

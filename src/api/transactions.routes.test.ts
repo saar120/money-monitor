@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
-import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
+import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 let testDb: TestDb;
 
@@ -291,190 +291,46 @@ describe('transactions routes', () => {
     });
   });
 
-  // ── PATCH /api/transactions/:id ──
-
-  describe('PATCH /api/transactions/:id', () => {
-    it('updates transaction category', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const res = await server.inject({
+  it('keeps old-client reads and rejects unversioned writes', async () => {
+    const account = insertAccount(testDb.db);
+    const row = insertTransaction(testDb.db, account.id);
+    for (const suffix of ['', '/resolve', '/owner', '/effective-date', '/ignore']) {
+      const result = await server.inject({
         method: 'PATCH',
-        url: `/api/transactions/${tx.id}`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { category: 'food' },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transaction.category).toBe('food');
-    });
-
-    it('returns 404 for non-existent transaction', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/transactions/99999',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { category: 'food' },
-      });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it('returns 400 for invalid id', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/transactions/abc',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { category: 'food' },
-      });
-      expect(res.statusCode).toBe(400);
-    });
-  });
-
-  // ── PATCH /api/transactions/:id/owner ──
-
-  describe('PATCH /api/transactions/:id/effective-date', () => {
-    it('sets and clears an effective date', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { date: '2026-09-01' });
-
-      const moved = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/effective-date`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { effectiveDate: '2026-08-31' },
-      });
-      expect(moved.statusCode).toBe(200);
-      expect(JSON.parse(moved.body).transaction.reportingDate).toBe('2026-08-31');
-
-      const reset = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/effective-date`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { effectiveDate: null },
-      });
-      expect(reset.statusCode).toBe(200);
-      expect(JSON.parse(reset.body).transaction.reportingDate).toBe('2026-09-01');
-    });
-
-    it('rejects invalid calendar dates', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/effective-date`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { effectiveDate: '2026-02-30' },
-      });
-
-      expect(res.statusCode).toBe(400);
-    });
-  });
-
-  // ── PATCH /api/transactions/:id/owner ──
-
-  describe('PATCH /api/transactions/:id/owner', () => {
-    it('sets manual transaction owner', async () => {
-      const member = insertMember(testDb.db, { name: 'Dana' });
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/owner`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { ownerType: 'member', ownerMemberId: member.id },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transaction.expenseOwnerType).toBe('member');
-      expect(body.transaction.expenseOwnerMemberId).toBe(member.id);
-      expect(body.transaction.ownerSource).toBe('manual');
-    });
-  });
-
-  // ── PATCH /api/transactions/:id/ignore ──
-
-  describe('PATCH /api/transactions/:id/ignore', () => {
-    it('sets ignored flag', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/ignore`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { ignored: true },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transaction.ignored).toBe(true);
-    });
-
-    it('returns 404 for non-existent transaction', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/transactions/99999/ignore',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { ignored: true },
-      });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it('returns 400 for missing ignored field', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/ignore`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        url: `/api/transactions/${row.id}${suffix}`,
+        headers: authHeaders(),
         payload: {},
       });
-      expect(res.statusCode).toBe(400);
+      expect(result.statusCode).toBe(426);
+      expect(result.json().code).toBe('update_required');
+    }
+    const result = await server.inject({
+      method: 'POST',
+      url: `/api/transactions/${row.id}/commands`,
+      headers: authHeaders(),
+      payload: {
+        commandId: '00000000-0000-4000-8000-000000000001',
+        expectedVersion: 1,
+        patch: { effectiveDate: '2026-08-31', ignored: true },
+      },
     });
-  });
-
-  // ── PATCH /api/transactions/:id/resolve ──
-
-  describe('PATCH /api/transactions/:id/resolve', () => {
-    it('resolves a review', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id, { needsReview: true });
-
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/resolve`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { category: 'food' },
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transaction.needsReview).toBe(false);
-      expect(body.transaction.category).toBe('food');
+    expect(result.statusCode).toBe(200);
+    expect(result.json().transaction).toMatchObject({
+      resourceVersion: 2,
+      reportingDate: '2026-08-31',
+      date: row.date,
+      ignored: true,
     });
-
-    it('returns 404 for non-existent transaction', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/transactions/99999/resolve',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { category: 'food' },
-      });
-      expect(res.statusCode).toBe(404);
+    const replay = await server.inject({
+      method: 'POST',
+      url: `/api/transactions/${row.id}/commands`,
+      headers: authHeaders(),
+      payload: {
+        commandId: '00000000-0000-4000-8000-000000000001',
+        expectedVersion: 1,
+        patch: { effectiveDate: '2026-08-31', ignored: true },
+      },
     });
-
-    it('returns 400 for missing category', async () => {
-      const account = insertAccount(testDb.db);
-      const tx = insertTransaction(testDb.db, account.id);
-
-      const res = await server.inject({
-        method: 'PATCH',
-        url: `/api/transactions/${tx.id}/resolve`,
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: {},
-      });
-      expect(res.statusCode).toBe(400);
-    });
+    expect(replay.json()).toEqual(result.json());
   });
 });

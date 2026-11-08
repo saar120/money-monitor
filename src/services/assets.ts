@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { acceptFinancialCommand, FinancialCommandError } from './financial-command.js';
 import { eq, and, gte, lte, desc, asc, count, sql, inArray } from 'drizzle-orm';
 import { db, sqlite } from '../db/connection.js';
 import { assets, holdings, accounts, assetSnapshots, assetMovements } from '../db/schema.js';
@@ -48,6 +50,7 @@ export function computeHoldingValues(h: HoldingRow, rates: Record<string, number
 
   return {
     id: h.id,
+    resourceVersion: h.resourceVersion,
     name: h.name,
     type: h.type,
     currency: h.currency,
@@ -200,8 +203,13 @@ export function buildAssetResponse(
 // ── Snapshot internals ──
 
 async function generateAssetSnapshot(assetId: number): Promise<void> {
-  const holdingRows = db.select().from(holdings).where(eq(holdings.assetId, assetId)).all();
+  const database = db;
   const { rates } = await getExchangeRates();
+  if (database !== db) return;
+  generateAssetSnapshotWithRates(assetId, rates);
+}
+function generateAssetSnapshotWithRates(assetId: number, rates: Record<string, number>) {
+  const holdingRows = db.select().from(holdings).where(eq(holdings.assetId, assetId)).all();
 
   let totalValueIls = 0;
   let totalValue = 0;
@@ -1118,4 +1126,63 @@ export async function deleteMovement(movementId: number) {
   }
 
   return { ok: true as const };
+}
+
+export const holdingPricesCommandSchema = z
+  .object({
+    commandId: z.string().uuid(),
+    updates: z
+      .array(
+        z
+          .object({
+            id: z.number().int().positive(),
+            expectedVersion: z.number().int().positive(),
+            quantity: z.number().finite().nonnegative(),
+            lastPrice: z.number().finite().nonnegative().nullable(),
+          })
+          .strict(),
+      )
+      .min(1)
+      .max(100)
+      .refine((rows) => new Set(rows.map((row) => row.id)).size === rows.length),
+  })
+  .strict();
+export async function commandHoldingPrices(assetId: number, input: unknown) {
+  const command = holdingPricesCommandSchema.parse(input);
+  const database = db;
+  const { rates } = await getExchangeRates();
+  if (database !== db) throw new FinancialCommandError('mutation_conflict', 409);
+  return acceptFinancialCommand(
+    database,
+    'desktop',
+    command.commandId,
+    { kind: 'holding-prices', assetId, ...command },
+    () => {
+      const asset = database.select().from(assets).where(eq(assets.id, assetId)).get();
+      if (!asset) throw new FinancialCommandError('not_found', 404);
+      for (const update of command.updates) {
+        const current = database
+          .select()
+          .from(holdings)
+          .where(and(eq(holdings.id, update.id), eq(holdings.assetId, assetId)))
+          .get();
+        if (!current) throw new FinancialCommandError('not_found', 404);
+        if (current.resourceVersion !== update.expectedVersion)
+          throw new FinancialCommandError('mutation_conflict', 409);
+      }
+      for (const update of command.updates)
+        database
+          .update(holdings)
+          .set({
+            quantity: update.quantity,
+            lastPrice: update.lastPrice,
+            lastPriceDate: todayInIsrael(),
+            updatedAt: new Date().toISOString(),
+          })
+          .where(eq(holdings.id, update.id))
+          .run();
+      generateAssetSnapshotWithRates(assetId, rates);
+      return { commandId: command.commandId, asset: buildAssetResponse(asset, rates) };
+    },
+  );
 }

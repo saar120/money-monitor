@@ -1,3 +1,4 @@
+import { FinancialCommandError } from '../services/financial-command.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import { summaryQuerySchema } from './validation.js';
@@ -6,6 +7,7 @@ import { getSpendingSummary } from '../services/summary.js';
 import {
   readRecurringPaymentDetail,
   readRecurringPayments,
+  recurringDecisionCommandSchema,
   saveRecurringPaymentDecision,
 } from '../services/recurring-payments.js';
 import { db } from '../db/connection.js';
@@ -28,18 +30,22 @@ export async function summaryRoutes(app: FastifyInstance) {
     return detail;
   });
   app.put('/api/recurring-payments/decision', async (request, reply) => {
-    const parsed = z
-      .object({
-        accountId: z.number().int().positive(),
-        currencyCode: z.string().min(1).max(10),
-        merchantKey: z.string().min(1).max(160),
-        decision: z.enum(['include', 'exclude', 'auto']),
-      })
-      .strict()
-      .safeParse(request.body);
+    const body = request.body as Record<string, unknown> | null;
+    if (!body?.commandId || body.expectedVersion === undefined)
+      return reply
+        .code(426)
+        .send({ code: 'update_required', error: 'Update Money Monitor to save changes.' });
+    const parsed = recurringDecisionCommandSchema.safeParse(body);
     if (!parsed.success) return reply.code(400).send({ error: 'Invalid payment decision' });
-    saveRecurringPaymentDecision(db, parsed.data);
-    return readRecurringPayments(db, todayInIsrael());
+    try {
+      const receipt = saveRecurringPaymentDecision(db, parsed.data);
+      const result = await readRecurringPayments(db, todayInIsrael()).catch(() => null);
+      return { receipt, result };
+    } catch (cause) {
+      if (cause instanceof FinancialCommandError)
+        return reply.code(cause.status).send({ code: cause.code, error: cause.code });
+      throw cause;
+    }
   });
   app.get('/api/transactions/summary', async (request, reply) => {
     const data = validateQuery(summaryQuerySchema, request.query, reply);

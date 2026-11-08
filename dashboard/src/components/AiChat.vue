@@ -1,14 +1,14 @@
 <script setup lang="ts">
-import { ref, computed, nextTick } from 'vue';
+import { ref, computed, nextTick, onUnmounted } from 'vue';
 import { useMediaQuery } from '@vueuse/core';
 import {
   aiChatStream,
+  getChatReply,
+  ApiError,
   createChatSession,
   getChatSession,
   type SessionMeta,
-  type SessionMessage,
   type ChatMessage,
-  type AdvisorChart,
 } from '../api/client';
 import { Button } from '@/components/ui/button';
 import { Textarea } from '@/components/ui/textarea';
@@ -20,12 +20,33 @@ import { language, t, type LanguageLabel } from '@/lib/language';
 
 const messages = ref<ChatMessage[]>([]);
 const input = ref('');
-const loading = ref(false);
-const sessionLoading = ref(false);
+type ConversationOperation =
+  | { kind: 'ready' | 'session-failed' | 'failed-known' }
+  | { kind: 'loading-session'; sessionId: string }
+  | {
+      kind: 'submitting' | 'receiving' | 'reconciling' | 'outcome-unknown';
+      sessionId: string;
+      replyId: string;
+      question: string;
+    };
+const operation = ref<ConversationOperation>({ kind: 'ready' });
+const loading = computed(
+  () =>
+    operation.value.kind === 'submitting' ||
+    operation.value.kind === 'receiving' ||
+    operation.value.kind === 'reconciling',
+);
+const sessionLoading = computed(() => operation.value.kind === 'loading-session');
+const sessionLoadFailed = computed(() => operation.value.kind === 'session-failed');
+const sendFailed = computed(() => operation.value.kind === 'failed-known');
+const replyUnknown = computed(() => operation.value.kind === 'outcome-unknown');
 const historyPending = ref(false);
-const sessionLoadFailed = ref(false);
-const sendFailed = ref(false);
-const replyUnknown = ref(false);
+let generation = 0;
+let observation: globalThis.AbortController | null = null;
+onUnmounted(() => {
+  generation++;
+  observation?.abort();
+});
 const composer = ref<HTMLElement | null>(null);
 const busy = computed(() => loading.value || sessionLoading.value || historyPending.value);
 const status = ref('');
@@ -74,141 +95,143 @@ function focusComposer() {
 
 async function selectSession(session: SessionMeta) {
   if (busy.value) return;
-  sessionLoading.value = true;
-  sessionLoadFailed.value = false;
-  sendFailed.value = false;
-  replyUnknown.value = false;
+  const attempt = ++generation;
+  operation.value = { kind: 'loading-session', sessionId: session.id };
   try {
     const { session: data } = await getChatSession(session.id);
+    if (attempt !== generation) return;
     activeSession.value = session;
+    messages.value = data.messages.map((message) => ({ ...message }));
     if (compact.value) sidebarOpen.value = false;
-    messages.value = data.messages.map((m: SessionMessage) => ({
-      role: m.role,
-      content: m.content,
-      chart: m.chart,
-    }));
+    const pending = data.replies
+      ?.slice()
+      .reverse()
+      .find((reply) => reply.state === 'generating');
+    operation.value = pending
+      ? {
+          kind: 'outcome-unknown',
+          sessionId: session.id,
+          replyId: pending.id,
+          question: data.messages[data.messages.length - 1]?.content ?? '',
+        }
+      : { kind: 'ready' };
     await scrollToBottom(true);
   } catch {
-    sessionLoadFailed.value = true;
-  } finally {
-    sessionLoading.value = false;
+    if (attempt === generation) operation.value = { kind: 'session-failed' };
   }
 }
-
 function handleNewChat(session: SessionMeta) {
-  sessionLoadFailed.value = false;
-  sendFailed.value = false;
-  replyUnknown.value = false;
+  generation++;
+  observation?.abort();
+  operation.value = { kind: 'ready' };
   if (compact.value) sidebarOpen.value = false;
   activeSession.value = session;
   messages.value = [];
 }
-
 function handleDeletedSession(id: string) {
   if (activeSession.value?.id !== id) return;
+  generation++;
+  observation?.abort();
+  operation.value = { kind: 'ready' };
   activeSession.value = null;
   messages.value = [];
   input.value = '';
-  sessionLoadFailed.value = false;
-  sendFailed.value = false;
-  replyUnknown.value = false;
 }
-
-async function ensureSession(): Promise<string> {
-  if (activeSession.value) return activeSession.value.id;
-  const { session } = await createChatSession();
-  activeSession.value = session;
-  sidebarRef.value?.loadSessions();
-  return session.id;
-}
-
-async function sendMessage(text?: string) {
-  const messageText = text ?? input.value.trim();
-  if (!messageText || busy.value) return;
-
-  sessionLoadFailed.value = false;
-  sendFailed.value = false;
-  replyUnknown.value = false;
-  const questionIndex = messages.value.length;
-  messages.value.push({ role: 'user', content: messageText });
-  input.value = '';
-  loading.value = true;
-  status.value = '';
-  await scrollToBottom();
-
-  let sessionId: string | undefined;
-  let serverFailed = false;
+async function reconcile(
+  pending: Extract<ConversationOperation, { replyId: string }>,
+  attempt: number,
+) {
+  if (attempt !== generation) return;
+  operation.value = { ...pending, kind: 'reconciling' };
   try {
-    sessionId = await ensureSession();
-    // Accumulate response without showing partial text —
-    // the typing indicator stays visible until the full message is ready.
-    let accumulated = '';
-    let chart: AdvisorChart | undefined;
-
-    for await (const event of aiChatStream(sessionId, messageText)) {
-      if (event.type === 'text_delta') {
-        accumulated += event.text;
-      } else if (event.type === 'status') {
-        status.value = event.text;
-      } else if (event.type === 'result') {
-        accumulated = event.text;
-      } else if (event.type === 'chart') {
-        chart = event.chart;
-      } else if (event.type === 'error') {
-        serverFailed = true;
-        throw new Error(event.text);
+    const { reply } = await getChatReply(pending.sessionId, pending.replyId);
+    if (attempt !== generation) return;
+    if (reply.state === 'generating') {
+      operation.value = { ...pending, kind: 'outcome-unknown' };
+      return;
+    }
+    const { session } = await getChatSession(pending.sessionId);
+    if (attempt !== generation) return;
+    activeSession.value = session.meta;
+    messages.value = session.messages.map((message) => ({ ...message }));
+    operation.value = { kind: reply.state === 'completed' ? 'ready' : 'failed-known' };
+    if (reply.state !== 'completed') input.value = pending.question;
+  } catch (cause) {
+    if (attempt !== generation) return;
+    if (cause instanceof ApiError && cause.status === 404) {
+      messages.value = messages.value.filter((message) => message.id !== `${pending.replyId}:user`);
+      input.value = pending.question;
+      operation.value = { kind: 'failed-known' };
+    } else operation.value = { ...pending, kind: 'outcome-unknown' };
+  }
+}
+async function sendMessage(text?: string) {
+  const question = text ?? input.value.trim();
+  if (!question || busy.value || replyUnknown.value) return;
+  const attempt = ++generation;
+  const sessionId = activeSession.value?.id ?? crypto.randomUUID();
+  const replyId = crypto.randomUUID();
+  const pending = { kind: 'submitting' as const, sessionId, replyId, question };
+  operation.value = pending;
+  input.value = '';
+  status.value = '';
+  messages.value.push({
+    id: `${replyId}:user`,
+    role: 'user',
+    content: question,
+    provisional: true,
+  });
+  const controller = new globalThis.AbortController();
+  observation?.abort();
+  observation = controller;
+  try {
+    if (!activeSession.value) {
+      const { session } = await createChatSession(sessionId);
+      if (attempt !== generation) return;
+      activeSession.value = session;
+      void sidebarRef.value?.loadSessions();
+    }
+    let response = '';
+    let chart: ChatMessage['chart'];
+    for await (const event of aiChatStream(sessionId, question, replyId, controller.signal)) {
+      if (attempt !== generation) return;
+      if (event.type === 'accepted') operation.value = { ...pending, kind: 'receiving' };
+      else if (event.type === 'status') status.value = event.text;
+      else {
+        if (event.type === 'text_delta') response += event.text;
+        if (event.type === 'result') response = event.text;
+        if (event.type === 'chart') chart = event.chart;
+        if (event.type !== 'error') {
+          const message = {
+            id: `${replyId}:assistant`,
+            role: 'assistant' as const,
+            content: response,
+            chart,
+            provisional: true,
+          };
+          const index = messages.value.findIndex((item) => item.id === message.id);
+          if (index < 0) messages.value.push(message);
+          else messages.value[index] = message;
+          void scrollToBottom();
+        }
       }
     }
-
-    if (accumulated || chart) {
-      messages.value.push({ role: 'assistant', content: accumulated, chart });
-    }
-    // Refresh the sidebar and header with the title the reply produced.
-    const sessions = await sidebarRef.value?.loadSessions();
-    const updated = sessions?.find((session) => session.id === sessionId);
-    if (updated && activeSession.value?.id === sessionId) activeSession.value = updated;
+    await reconcile(pending, attempt);
+    if (attempt === generation) void sidebarRef.value?.loadSessions();
   } catch {
-    // A dropped connection says nothing about the server: it may have saved the reply.
-    if (!serverFailed && sessionId && (await keepSavedExchange(sessionId, questionIndex))) return;
-    // The question goes back to the composer; the server dropped it, so a retry can't double it.
-    messages.value.splice(questionIndex, 1);
-    input.value = messageText;
-    sendFailed.value = true;
+    if (attempt === generation) await reconcile(pending, attempt);
   } finally {
-    loading.value = false;
-    status.value = '';
-    await scrollToBottom();
-    focusComposer();
+    if (observation === controller) observation = null;
+    if (attempt === generation) {
+      status.value = '';
+      await scrollToBottom();
+      focusComposer();
+    }
   }
 }
-
-// True unless the server is known not to have the question, so sending it again is safe.
-async function keepSavedExchange(sessionId: string, questionIndex: number) {
-  try {
-    const { session } = await getChatSession(sessionId);
-    if (session.messages.length <= questionIndex) return false;
-    messages.value = session.messages.map((m: SessionMessage) => ({
-      role: m.role,
-      content: m.content,
-      chart: m.chart,
-    }));
-    replyUnknown.value = session.messages.length === questionIndex + 1;
-  } catch {
-    replyUnknown.value = true;
-  }
-  return true;
-}
-
-// Checks again without resending: the reply may still be on its way.
 async function checkForReply() {
-  const session = activeSession.value;
-  const question = messages.value[messages.value.length - 1]?.content;
-  if (!session || question === undefined || busy.value) return;
-  if (await keepSavedExchange(session.id, messages.value.length - 1)) return;
-  messages.value.pop();
-  input.value = question;
-  replyUnknown.value = false;
-  sendFailed.value = true;
+  const pending = operation.value;
+  if ('replyId' in pending && !busy.value) await reconcile(pending, generation);
 }
 
 function handleKeydown(e: KeyboardEvent) {

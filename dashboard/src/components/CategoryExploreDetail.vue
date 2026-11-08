@@ -1,7 +1,7 @@
 <script setup lang="ts">
 import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import {
@@ -34,6 +34,9 @@ function setMonth(event: Event) {
 const loading = ref(true);
 const error = ref('');
 let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 
 function monthRange(key: string, throughDay?: number) {
   const [year, number] = key.split('-').map(Number) as [number, number];
@@ -48,6 +51,10 @@ async function load() {
   const id = ++requestId;
   loading.value = true;
   error.value = '';
+  history.value = [];
+  transactions.value = [];
+  previousSpent.value = 0;
+  category.value = null;
   try {
     const selectedRange = monthRange(month.value);
     const elapsedDay = Number(selectedRange.endDate.slice(-2));
@@ -68,6 +75,7 @@ async function load() {
     ]);
     const rows: Transaction[] = [];
     let offset = 0;
+    const seen = new Set<number>();
     while (true) {
       const page = await getTransactions({
         category: categoryName.value,
@@ -77,7 +85,11 @@ async function load() {
         offset,
       });
       if (id !== requestId) return;
-      rows.push(...page.transactions);
+      const unseen = page.transactions.filter((row) => !seen.has(row.id));
+      if (page.pagination.hasMore && !unseen.length)
+        throw new Error('Transaction pages did not advance');
+      for (const row of unseen) seen.add(row.id);
+      rows.push(...unseen);
       if (!page.pagination.hasMore) break;
       offset += page.transactions.length;
     }
@@ -149,119 +161,121 @@ const merchantLink = (name: string) => ({
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </div>
-    <section
-      class="category-detail-hero"
-      :style="{ viewTransitionName: categoryMotionName(categoryName) }"
-    >
-      <span
-        class="category-detail-mark"
-        :style="{ background: category?.color ?? 'var(--accent)' }"
-      />
-      <div>
-        <span>{{ t('netCategorySpending') }}</span
-        ><strong><span v-if="loading">—</span><AnimatedAmount v-else :value="current" /></strong>
-        <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
-          delta === 0
-            ? t('sameAsLastMonth')
-            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
-        }}</small>
-      </div>
-      <RouterLink :to="activityLink"
-        >{{ t('viewTransactions') }} <ArrowRight :size="15"
-      /></RouterLink>
-    </section>
-    <div class="explore-grid">
-      <section class="explore-main">
-        <div class="ledger-section-heading">
-          <h2>{{ range === 12 ? t('year') : `${range} ${t('months')}` }} {{ t('history') }}</h2>
-          <div class="comparison-range" role="group" :aria-label="t('history')">
+    <template v-else>
+      <section
+        class="category-detail-hero"
+        :style="{ viewTransitionName: categoryMotionName(categoryName) }"
+      >
+        <span
+          class="category-detail-mark"
+          :style="{ background: category?.color ?? 'var(--accent)' }"
+        />
+        <div>
+          <span>{{ t('netCategorySpending') }}</span
+          ><strong><span v-if="loading">—</span><AnimatedAmount v-else :value="current" /></strong>
+          <small v-if="!loading" :class="delta > 0 ? 'is-warning' : 'is-positive'">{{
+            delta === 0
+              ? t('sameAsLastMonth')
+              : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
+          }}</small>
+        </div>
+        <RouterLink :to="activityLink"
+          >{{ t('viewTransactions') }} <ArrowRight :size="15"
+        /></RouterLink>
+      </section>
+      <div class="explore-grid">
+        <section class="explore-main">
+          <div class="ledger-section-heading">
+            <h2>{{ range === 12 ? t('year') : `${range} ${t('months')}` }} {{ t('history') }}</h2>
+            <div class="comparison-range" role="group" :aria-label="t('history')">
+              <button
+                v-for="count in [3, 6, 12] as const"
+                :key="count"
+                type="button"
+                :class="{ selected: range === count }"
+                :aria-pressed="range === count"
+                @click="range = count"
+              >
+                {{ count === 12 ? '1Y' : `${count}M` }}
+              </button>
+            </div>
+          </div>
+          <div
+            class="category-history"
+            :aria-label="`${t('categorySpending')} ${range} ${t('months')}`"
+          >
             <button
-              v-for="count in [3, 6, 12] as const"
-              :key="count"
+              v-for="item in months"
+              :key="item.key"
               type="button"
-              :class="{ selected: range === count }"
-              :aria-pressed="range === count"
-              @click="range = count"
+              :class="{ selected: item.key === month }"
+              @click="month = item.key"
             >
-              {{ count === 12 ? '1Y' : `${count}M` }}
+              <span class="category-history-value"
+                >{{ item.total < 0 ? '−' : '' }}{{ formatCurrency(item.total) }}</span
+              >
+              <span class="category-history-track"
+                ><span
+                  :style="{
+                    height: `${(Math.max(0, item.total) / maximum) * 100}%`,
+                    background: category?.color ?? 'var(--accent)',
+                  }"
+              /></span>
+              <span>{{
+                new Date(`${item.key}-01T12:00:00`).toLocaleDateString(
+                  language === 'he' ? 'he-IL' : 'en',
+                  { month: 'short' },
+                )
+              }}</span>
             </button>
           </div>
-        </div>
-        <div
-          class="category-history"
-          :aria-label="`${t('categorySpending')} ${range} ${t('months')}`"
-        >
-          <button
-            v-for="item in months"
-            :key="item.key"
-            type="button"
-            :class="{ selected: item.key === month }"
-            @click="month = item.key"
-          >
-            <span class="category-history-value"
-              >{{ item.total < 0 ? '−' : '' }}{{ formatCurrency(item.total) }}</span
+          <div class="ledger-section-heading explore-subheading">
+            <h2>{{ t('recentTransactions') }}</h2>
+            <RouterLink :to="activityLink"
+              >{{ t('all') }} {{ transactions.length }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <div class="ledger-list">
+            <RouterLink
+              v-for="item in transactions.slice(0, 8)"
+              :key="item.id"
+              :to="{
+                path: '/transactions',
+                query: { month, category: categoryName, transactionId: item.id },
+              }"
+              class="explore-row"
             >
-            <span class="category-history-track"
-              ><span
-                :style="{
-                  height: `${(Math.max(0, item.total) / maximum) * 100}%`,
-                  background: category?.color ?? 'var(--accent)',
-                }"
-            /></span>
-            <span>{{
-              new Date(`${item.key}-01T12:00:00`).toLocaleDateString(
-                language === 'he' ? 'he-IL' : 'en',
-                { month: 'short' },
-              )
-            }}</span>
-          </button>
-        </div>
-        <div class="ledger-section-heading explore-subheading">
-          <h2>{{ t('recentTransactions') }}</h2>
-          <RouterLink :to="activityLink"
-            >{{ t('all') }} {{ transactions.length }} <ArrowRight :size="15"
-          /></RouterLink>
-        </div>
-        <div class="ledger-list">
-          <RouterLink
-            v-for="item in transactions.slice(0, 8)"
-            :key="item.id"
-            :to="{
-              path: '/transactions',
-              query: { month, category: categoryName, transactionId: item.id },
-            }"
-            class="explore-row"
-          >
-            <span class="explore-row-title" dir="auto">{{ item.description }}</span>
-            <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
-              >{{ item.chargedAmount > 0 ? '+' : ''
-              }}{{ formatCurrency(item.chargedAmount) }}</strong
+              <span class="explore-row-title" dir="auto">{{ item.description }}</span>
+              <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
+                >{{ item.chargedAmount > 0 ? '+' : ''
+                }}{{ formatCurrency(item.chargedAmount) }}</strong
+              >
+              <ArrowRight :size="15" />
+            </RouterLink>
+            <p v-if="!loading && !transactions.length" class="ledger-empty">
+              {{ t('noCategorySpending') }}
+            </p>
+          </div>
+        </section>
+        <aside class="explore-rail">
+          <h2>{{ t('whereItWent') }}</h2>
+          <div class="ledger-list">
+            <RouterLink
+              v-for="item in merchants"
+              :key="item.name"
+              :to="merchantLink(item.name)"
+              class="category-merchant-row"
             >
-            <ArrowRight :size="15" />
-          </RouterLink>
-          <p v-if="!loading && !transactions.length" class="ledger-empty">
-            {{ t('noCategorySpending') }}
-          </p>
-        </div>
-      </section>
-      <aside class="explore-rail">
-        <h2>{{ t('whereItWent') }}</h2>
-        <div class="ledger-list">
-          <RouterLink
-            v-for="item in merchants"
-            :key="item.name"
-            :to="merchantLink(item.name)"
-            class="category-merchant-row"
-          >
-            <span dir="auto">{{ item.name }}</span
-            ><small>{{ item.count }} {{ t('charges') }}</small>
-            <strong>{{ item.total < 0 ? '−' : '' }}{{ formatCurrency(item.total) }}</strong>
-          </RouterLink>
-          <p v-if="!loading && !merchants.length" class="ledger-empty">
-            {{ t('merchantsAppear') }}
-          </p>
-        </div>
-      </aside>
-    </div>
+              <span dir="auto">{{ item.name }}</span
+              ><small>{{ item.count }} {{ t('charges') }}</small>
+              <strong>{{ item.total < 0 ? '−' : '' }}{{ formatCurrency(item.total) }}</strong>
+            </RouterLink>
+            <p v-if="!loading && !merchants.length" class="ledger-empty">
+              {{ t('merchantsAppear') }}
+            </p>
+          </div>
+        </aside>
+      </div>
+    </template>
   </div>
 </template>

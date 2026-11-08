@@ -1,9 +1,10 @@
+import { randomUUID } from 'node:crypto';
 import { afterAll, afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
 import * as XLSX from 'xlsx';
 import { eq } from 'drizzle-orm';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { insertAccount, insertMember, insertTransaction } from '../__tests__/helpers/fixtures.js';
-import { accounts, transactions } from '../db/schema.js';
+import { accounts, transactions, postImportJobs } from '../db/schema.js';
 import { createProductionMobileBootstrapPorts } from '../mobile/bootstrap-production-ports.js';
 
 let testDb: TestDb;
@@ -85,7 +86,10 @@ describe('One Zero import', () => {
         { row: 3, description: 'New', status: 'new' },
       ],
     });
-    expect(commitOneZeroImport(account.id, buffer)).toEqual({
+    const commandId = randomUUID();
+    const acceptedImport = commitOneZeroImport(account.id, buffer, commandId);
+    expect(commitOneZeroImport(account.id, buffer, commandId)).toEqual(acceptedImport);
+    expect(acceptedImport).toEqual({
       imported: 1,
       linked: 1,
       duplicates: 0,
@@ -129,5 +133,17 @@ describe('One Zero import', () => {
         { row: 3, status: 'duplicate' },
       ],
     });
+  });
+  it('does not admit enrichment for an import whose receipt transaction rolls back', async () => {
+    const account = insertAccount(testDb.db, { companyId: 'oneZero' });
+    testDb.sqlite.exec(
+      "CREATE TRIGGER reject_receipt BEFORE INSERT ON mutation_receipts BEGIN SELECT RAISE(ABORT, 'synthetic receipt failure'); END;",
+    );
+    expect(() => commitOneZeroImport(account.id, workbookBuffer(), randomUUID())).toThrow(
+      'receipt failure',
+    );
+    await Promise.resolve();
+    expect(testDb.db.select().from(transactions).all()).toHaveLength(0);
+    expect(testDb.db.select().from(postImportJobs).all()).toHaveLength(0);
   });
 });

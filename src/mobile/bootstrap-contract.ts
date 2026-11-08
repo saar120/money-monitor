@@ -173,6 +173,8 @@ export const bootstrapMetaSchema = z
     cacheability: z.object({
       status: bootstrapCacheabilityStatusSchema,
       maxAgeSeconds: z.number().int().nonnegative(),
+      staleAt: bootstrapInstantSchema.optional(),
+      deleteAfter: bootstrapInstantSchema.optional(),
     }),
     completeness: z.object({
       status: bootstrapCompletenessStatusSchema,

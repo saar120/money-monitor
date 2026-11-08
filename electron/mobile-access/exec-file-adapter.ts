@@ -95,18 +95,23 @@ export class NodeExecFileAdapter implements ExecFileAdapter {
 
       const readStdout = () => Buffer.concat(stdoutChunks).toString('utf8');
       const readStderr = () => Buffer.concat(stderrChunks).toString('utf8');
-      const fail = (options: { code?: string | number; cause?: unknown }) => {
+      type Outcome =
+        { kind: 'success' } | { kind: 'failure'; code?: string | number; cause?: unknown };
+      const settle = (outcome: Outcome) => {
         if (completed) return;
         completed = true;
         clearTimeout(timeout);
-        reject(
-          new ExecFileFailure({
-            ...options,
-            stdout: readStdout(),
-            stderr: readStderr(),
-          }),
-        );
+        child.stdout?.removeListener('data', onStdout);
+        child.stderr?.removeListener('data', onStderr);
+        // Drain pipes after rejection; a kill request does not prove observed exit.
+        child.stdout?.resume();
+        child.stderr?.resume();
+        if (outcome.kind === 'success') resolve({ stdout: readStdout(), stderr: readStderr() });
+        else
+          reject(new ExecFileFailure({ ...outcome, stdout: readStdout(), stderr: readStderr() }));
       };
+      const fail = (failure: { code?: string | number; cause?: unknown }) =>
+        settle({ kind: 'failure', ...failure });
 
       const timeout = setTimeout(() => {
         if (completed) return;
@@ -130,12 +135,14 @@ export class NodeExecFileAdapter implements ExecFileAdapter {
         return request.maxBufferBytes;
       };
 
-      child.stdout?.on('data', (chunk: unknown) => {
+      const onStdout = (chunk: unknown) => {
         stdoutBytes = appendOutput(stdoutChunks, stdoutBytes, chunk);
-      });
-      child.stderr?.on('data', (chunk: unknown) => {
+      };
+      const onStderr = (chunk: unknown) => {
         stderrBytes = appendOutput(stderrChunks, stderrBytes, chunk);
-      });
+      };
+      child.stdout?.on('data', onStdout);
+      child.stderr?.on('data', onStderr);
       child.once('error', (error: Error) => {
         fail({ code: (error as NodeJS.ErrnoException).code, cause: error });
       });
@@ -146,9 +153,7 @@ export class NodeExecFileAdapter implements ExecFileAdapter {
           return;
         }
 
-        completed = true;
-        clearTimeout(timeout);
-        resolve({ stdout: readStdout(), stderr: readStderr() });
+        settle({ kind: 'success' });
       });
     });
   }

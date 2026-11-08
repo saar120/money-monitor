@@ -72,6 +72,7 @@ try {
       if (!u.pathname.startsWith('/api/')) return req.continue();
       const row = {
         id: 1,
+        resourceVersion: 1,
         accountId: 1,
         description: 'Sample market',
         reportingDate: '2026-09-25',
@@ -85,9 +86,17 @@ try {
         reviewReason: 'Check category',
       };
       let data = {};
-      if (req.method() === 'PATCH' && u.pathname.startsWith('/api/transactions/')) {
-        const [id, action = 'category'] = u.pathname.split('/').slice(3);
-        patches.push(`${id}:${action}`);
+      if (
+        req.method() === 'POST' &&
+        u.pathname.endsWith('/commands') &&
+        u.pathname.startsWith('/api/transactions/')
+      ) {
+        const [id] = u.pathname.split('/').slice(3);
+        const command = JSON.parse(req.postData());
+        for (const field of Object.keys(command.patch))
+          patches.push(
+            `${id}:${field === 'effectiveDate' ? 'effective-date' : field === 'ignored' ? 'ignore' : field}`,
+          );
         if (patchFails) return req.respond({ status: 500, body: '{"error":"Synthetic failure"}' });
         const body = JSON.stringify({
           transaction: {
@@ -96,7 +105,8 @@ try {
             description: ['Sample market', 'Sample cafe', 'Sample bakery', 'Sample restaurant'][
               id - 1
             ],
-            ...JSON.parse(req.postData()),
+            ...command.patch,
+            resourceVersion: command.expectedVersion + 1,
           },
         });
         const respond = () => req.respond({ status: 200, contentType: 'application/json', body });
@@ -419,6 +429,8 @@ try {
       el.dispatchEvent(
         new PointerEvent('pointerdown', {
           pointerType: 'touch',
+          pointerId: 1,
+          isPrimary: true,
           clientX: 100,
           clientY: 180,
           bubbles: true,
@@ -427,6 +439,8 @@ try {
       el.dispatchEvent(
         new PointerEvent('pointerup', {
           pointerType: 'touch',
+          pointerId: 1,
+          isPrimary: true,
           clientX: 280,
           clientY: 180,
           bubbles: true,
@@ -443,6 +457,8 @@ try {
       el.dispatchEvent(
         new PointerEvent('pointerdown', {
           pointerType: 'touch',
+          pointerId: 1,
+          isPrimary: true,
           clientX: 100,
           clientY: 100,
           bubbles: true,
@@ -451,6 +467,8 @@ try {
       el.dispatchEvent(
         new PointerEvent('pointerup', {
           pointerType: 'touch',
+          pointerId: 1,
+          isPrimary: true,
           clientX: 110,
           clientY: 300,
           bubbles: true,

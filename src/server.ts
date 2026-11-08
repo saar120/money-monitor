@@ -1,3 +1,23 @@
+import {
+  pauseAlertEvaluations,
+  resumeAlertEvaluations,
+  drainAlertEvaluations,
+} from './telegram/alerts.js';
+import {
+  pauseTelegramDeliveries,
+  resumeTelegramDeliveries,
+  drainTelegramDeliveries,
+} from './telegram/delivery.js';
+import { clearReplyImages } from './ai/image-tools.js';
+import { advisorReplies } from './ai/advisor-replies.js';
+import { closeSseClients } from './api/sse.js';
+import {
+  pauseScrapeAdmission,
+  resumeScrapeAdmission,
+  drainScrapeSessions,
+  recoverInterruptedScrapes,
+} from './scraper/session-manager.js';
+import { drainPostImports, recoverPostImports } from './services/post-import.js';
 import Fastify, { type FastifyError } from 'fastify';
 import cors from '@fastify/cors';
 import fastifyStatic from '@fastify/static';
@@ -5,7 +25,7 @@ import { existsSync } from 'node:fs';
 import { join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { config } from './config.js';
-import { db, closeAll } from './db/connection.js';
+import { db, closeAll, isDemoMode } from './db/connection.js';
 import { scrapeRoutes } from './api/scrape.routes.js';
 import { accountsRoutes } from './api/accounts.routes.js';
 import { transactionsRoutes } from './api/transactions.routes.js';
@@ -174,7 +194,13 @@ export async function createServer() {
     });
   }
 
-  async function start(options?: { port?: number; host?: string }): Promise<number> {
+  let lifecycle: 'starting' | 'running' | 'recovering' | 'stopping' | 'stopped' | 'failed' =
+    'starting';
+  let startPromise: Promise<number> | null = null;
+  let stopPromise: Promise<void> | null = null;
+  let recoveryPromise: Promise<void> | null = null;
+
+  async function startRuntime(options?: { port?: number; host?: string }): Promise<number> {
     const port = options?.port ?? config.PORT;
     const host = options?.host ?? config.HOST;
     if (!config.API_TOKEN && !['127.0.0.1', '::1', 'localhost'].includes(host)) {
@@ -189,30 +215,86 @@ export async function createServer() {
     }
     app.log.info(`Server running on http://${host}:${boundPort}`);
     setServerPort(boundPort);
-    startScheduler();
-    startTelegramBot();
+    recoverInterruptedScrapes();
+    advisorReplies.recover();
+    if (stopPromise) return boundPort;
+    resumeScrapeAdmission();
+    advisorReplies.resume();
+    resumeAlertEvaluations();
+    resumeTelegramDeliveries();
+    await startTelegramBot();
+    if (stopPromise) return boundPort;
+    recoverPostImports();
+    if (!isDemoMode()) startScheduler();
+    lifecycle = 'running';
     return boundPort;
   }
 
-  async function shutdown() {
-    app.log.info('Shutting down...');
-    stopScheduler();
-    await stopTelegramBot();
-    await closeImageBrowser();
-    await app.close();
-    closeAll();
+  function start(options?: { port?: number; host?: string }): Promise<number> {
+    if (lifecycle === 'stopping' || lifecycle === 'stopped')
+      return Promise.reject(new Error('Server is stopping'));
+    if (!startPromise)
+      startPromise = startRuntime(options).catch(async (error) => {
+        lifecycle = 'failed';
+        stopScheduler();
+        await app.close().catch(() => {});
+        throw error;
+      });
+    return startPromise;
   }
-
-  /** Restart background services after system sleep/wake. */
-  async function onResume() {
-    checkAndRunMissedScrape();
+  function shutdown(): Promise<void> {
+    if (stopPromise) return stopPromise;
+    lifecycle = 'stopping';
+    pauseScrapeAdmission();
+    advisorReplies.pause();
+    pauseAlertEvaluations();
+    pauseTelegramDeliveries();
     stopScheduler();
-    startScheduler();
-    // Restart the Telegram bot to kill any stale polling connections from
-    // before sleep. bot.stop() is properly awaited so the cleanup getUpdates
-    // finishes before the new instance starts — preventing the 409 race
-    // condition that previously caused the first post-wake message to be lost.
-    await restartTelegramBot();
+    closeSseClients();
+    stopPromise = (async () => {
+      await startPromise?.catch(() => {});
+      await recoveryPromise?.catch(() => {});
+      // The process exit owner bounds shutdown; interrupted records remain durable.
+      stopScheduler();
+      const replies = advisorReplies.drain(true);
+      const telegram = Promise.resolve(stopTelegramBot());
+      void telegram.catch(() => {});
+      await drainScrapeSessions();
+      await drainPostImports();
+      await replies;
+      await drainAlertEvaluations();
+      await drainTelegramDeliveries();
+      await telegram;
+      clearReplyImages();
+      const cleanup = await Promise.allSettled([closeImageBrowser()]);
+      await app.close();
+      closeAll();
+      lifecycle = 'stopped';
+      const failures = cleanup.filter((result) => result.status === 'rejected');
+      if (failures.length)
+        throw new AggregateError(
+          failures.map((result) => result.reason),
+          'Shutdown cleanup failed',
+        );
+    })();
+    return stopPromise;
+  }
+  function onResume(): Promise<void> {
+    if (stopPromise || lifecycle === 'failed' || lifecycle === 'stopped') return Promise.resolve();
+    if (recoveryPromise) return recoveryPromise;
+    lifecycle = 'recovering';
+    recoveryPromise = (async () => {
+      if (!isDemoMode()) {
+        checkAndRunMissedScrape();
+        stopScheduler();
+        startScheduler();
+      }
+      if (!stopPromise) await restartTelegramBot();
+    })().finally(() => {
+      recoveryPromise = null;
+      if (!stopPromise) lifecycle = 'running';
+    });
+    return recoveryPromise;
   }
 
   return { app, start, shutdown, onResume };

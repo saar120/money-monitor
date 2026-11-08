@@ -1,7 +1,13 @@
+import { AppState } from 'react-native';
+import { savedViewIdentity, savedViewStore } from './security/saved-view-storage';
+import { savedViewState } from './saved-view-store';
+import { randomUUID } from 'expo-crypto';
+import { MobileRequestError } from './request-error';
 import { fixtureCategoryName, t } from './translations';
 import { currentLocale } from './locale-state';
 import {
   createContext,
+  Fragment,
   useCallback,
   useContext,
   useEffect,
@@ -29,21 +35,48 @@ import {
   type ExploreMonth,
   type TransactionUpdate,
 } from './mobile-api';
-import { readPairingCredential, type PairingCredential } from './security/pairing-credential-store';
+import { observeAuthenticationInvalidation, terminalAuthenticationError } from './request-error';
+import {
+  invalidatePairingCredential,
+  observePairingCredential,
+  readPairingCredential,
+  type PairingCredential,
+} from './security/pairing-credential-store';
 
 type MoneyDataStatus = 'loading' | 'unpaired' | 'ready' | 'error';
+type Availability =
+  | {
+      kind: 'booting' | 'unpaired' | 'connecting' | 'unavailable';
+      home: null;
+      error: string | null;
+    }
+  | { kind: 'fixture'; home: HomeData; error: null }
+  | {
+      kind: 'live' | 'refreshing-live';
+      home: HomeData;
+      credential: PairingCredential;
+      error: string | null;
+    }
+  | { kind: 'saved-view' | 'stale-saved-view'; home: HomeData; error: string | null };
+
 type ReviewOptions = { categories: string[]; owners: string[] };
 
 type MoneyDataContextValue = {
   source: 'fixture' | 'live';
   status: MoneyDataStatus;
+  availability: Availability['kind'];
+  canMutate: boolean;
   home: HomeData | null;
   credential: PairingCredential | null;
   error: string | null;
   revision: number;
   reload: () => Promise<void>;
   fixtureTransactions: Transaction[];
-  saveTransaction: (id: string, update: TransactionUpdate) => Promise<Transaction>;
+  saveTransaction: (
+    id: string,
+    update: TransactionUpdate,
+    expectedVersion?: number,
+  ) => Promise<Transaction>;
   loadReviewOptions: () => Promise<ReviewOptions>;
   loadOverviewMonth: (month: string) => Promise<HomeData>;
   loadCashflowHistory: (endingMonth?: string) => Promise<CashflowMonth[]>;
@@ -187,78 +220,221 @@ function fixtureExploreHistory(home: HomeData, count: number): ExploreMonth[] {
 
 export function MoneyDataProvider({ children }: { children: ReactNode }) {
   const fixture = isFixtureMode();
-  const [status, setStatus] = useState<MoneyDataStatus>(fixture ? 'ready' : 'loading');
-  const [home, setHome] = useState<HomeData | null>(fixture ? getFixtureScenario() : null);
-  const [credential, setCredential] = useState<PairingCredential | null>(null);
-  const [error, setError] = useState<string | null>(null);
+  const [availability, setAvailability] = useState<Availability>(
+    fixture
+      ? { kind: 'fixture', home: getFixtureScenario(), error: null }
+      : { kind: 'booting', home: null, error: null },
+  );
+  const home = availability.home;
+  const credential =
+    availability.kind === 'live' || availability.kind === 'refreshing-live'
+      ? availability.credential
+      : null;
+  const error = availability.error;
+  const status: MoneyDataStatus = home
+    ? 'ready'
+    : availability.kind === 'unpaired'
+      ? 'unpaired'
+      : availability.kind === 'unavailable'
+        ? 'error'
+        : 'loading';
+  const canMutate =
+    fixture || availability.kind === 'live' || availability.kind === 'refreshing-live';
   const [revision, setRevision] = useState(0);
   const [fixtureTransactions, setFixtureTransactions] = useState<Transaction[]>(
     () => getFixtureScenario().transactions,
   );
-  const hasHome = useRef(home !== null);
+  const generation = useRef(0);
+  const activeCredential = useRef<PairingCredential | null>(null);
+  const blockedCredential = useRef<string | null>(null);
+  const current = useRef(availability);
+  current.current = availability;
   const fixtureReloads = useRef(0);
   const reviewOptionsRequest = useRef<Promise<ReviewOptions> | null>(null);
   const overviewRequests = useRef(new Map<string, Promise<HomeData>>());
+  const pendingMutations = useRef(
+    new Map<string, { commandId: string; expectedVersion: number; patch: TransactionUpdate }>(),
+  );
 
   const reload = useCallback(async () => {
+    const attempt = ++generation.current;
     reviewOptionsRequest.current = null;
     overviewRequests.current.clear();
     if (fixture) {
-      const delay = fixtureReloads.current > 0 ? getFixtureRefreshDelay() : 0;
-      fixtureReloads.current += 1;
+      const delay = fixtureReloads.current++ > 0 ? getFixtureRefreshDelay() : 0;
       if (delay) await new Promise((resolve) => setTimeout(resolve, delay));
+      if (attempt !== generation.current) return;
       const scenario = getFixtureScenario();
-      setHome(scenario);
+      setAvailability({ kind: 'fixture', home: scenario, error: null });
       overviewRequests.current.set(scenario.monthKey, Promise.resolve(scenario));
       setFixtureTransactions(scenario.transactions);
-      setError(null);
-      setStatus('ready');
-      setRevision((value) => value + 1);
+      setRevision((v) => v + 1);
       return;
     }
-
-    const isRefresh = hasHome.current;
-    if (!isRefresh) setStatus('loading');
-    setError(null);
+    let stored: PairingCredential | null = null;
     try {
-      const stored = await readPairingCredential();
-      setCredential(stored);
-      if (!stored) {
-        hasHome.current = false;
-        setHome(null);
-        setStatus('unpaired');
+      stored = await readPairingCredential();
+      if (attempt !== generation.current) return;
+      if (stored?.token === blockedCredential.current) {
+        await invalidatePairingCredential(stored).catch(() => {});
+        await savedViewStore.purge().catch(() => {});
         return;
       }
+      const changed = activeCredential.current?.token !== stored?.token;
+      activeCredential.current = stored;
+      if (!stored) {
+        pendingMutations.current.clear();
+        setAvailability({ kind: 'unpaired', home: null, error: null });
+        await savedViewStore.purge();
+        return;
+      }
+      const identity = await savedViewIdentity(stored);
+      if (attempt !== generation.current) return;
+      const previous = !changed ? current.current.home : null;
+      const saved =
+        previous &&
+        savedViewState(previous, Date.now(), Date.parse(previous.snapshot?.calculatedAt ?? ''))
+          ? {
+              home: previous,
+              status: savedViewState(
+                previous,
+                Date.now(),
+                Date.parse(previous.snapshot!.calculatedAt),
+              )!,
+            }
+          : await savedViewStore.load(identity);
+      if (attempt !== generation.current) return;
+      if (previous && current.current.kind === 'live')
+        setAvailability({
+          kind: 'refreshing-live',
+          home: previous,
+          credential: stored,
+          error: null,
+        });
+      else if (saved) setAvailability({ kind: saved.status, home: saved.home, error: null });
+      else setAvailability({ kind: 'connecting', home: null, error: null });
       const lastVisit = await SecureStore.getItemAsync(LAST_VISIT_KEY);
       const nextHome = await fetchHomeData(stored, undefined, lastVisit);
+      if (attempt !== generation.current || stored.token === blockedCredential.current) return;
+      if (
+        saved?.home.snapshot &&
+        nextHome.snapshot &&
+        nextHome.snapshot.calculatedAt < saved.home.snapshot.calculatedAt
+      )
+        throw new Error('An older snapshot cannot replace Saved View');
       overviewRequests.current.set(nextHome.monthKey, Promise.resolve(nextHome));
-      hasHome.current = true;
-      setHome(nextHome);
-      await SecureStore.setItemAsync(LAST_VISIT_KEY, new Date().toISOString());
-      setStatus('ready');
-      setRevision((value) => value + 1);
+      setAvailability({ kind: 'live', home: nextHome, credential: stored, error: null });
+      setRevision((v) => v + 1);
+      void SecureStore.setItemAsync(LAST_VISIT_KEY, new Date().toISOString()).catch(() => {});
+      if (nextHome.snapshot?.complete && nextHome.snapshot.cacheable)
+        void savedViewStore.save(identity, nextHome).catch(() => {});
     } catch (caught) {
-      setError(caught instanceof Error ? caught.message : t('moneyMonitorCouldNotLoadYourData'));
-      if (!isRefresh) {
-        hasHome.current = false;
-        setHome(null);
-        setStatus('error');
+      if (attempt !== generation.current) return;
+      if (terminalAuthenticationError(caught)) {
+        if (stored) {
+          blockedCredential.current = stored.token;
+          void invalidatePairingCredential(stored).catch(() => {});
+        }
+        void savedViewStore.purge().catch(() => {});
+        setAvailability({ kind: 'unpaired', home: null, error: null });
+        return;
       }
+      const message =
+        caught instanceof Error ? caught.message : t('moneyMonitorCouldNotLoadYourData');
+      const saved = stored
+        ? await savedViewStore.load(await savedViewIdentity(stored)).catch(() => null)
+        : null;
+      if (attempt !== generation.current) return;
+      setAvailability(
+        saved
+          ? { kind: saved.status, home: saved.home, error: message }
+          : { kind: 'unavailable', home: null, error: message },
+      );
     }
   }, [fixture]);
 
   useEffect(() => {
+    const stopCredential = observePairingCredential(() => {
+      generation.current++;
+      activeCredential.current = null;
+      overviewRequests.current.clear();
+      reviewOptionsRequest.current = null;
+      pendingMutations.current.clear();
+      setAvailability({ kind: 'unpaired', home: null, error: null });
+      void reload();
+    });
+    const stopInvalidation = observeAuthenticationInvalidation((event) => {
+      const credential = activeCredential.current;
+      if (
+        !credential ||
+        event.authorization !== `Bearer ${credential.token}` ||
+        !event.url.startsWith(credential.baseURL + '/')
+      )
+        return;
+      generation.current++;
+      blockedCredential.current = credential.token;
+      activeCredential.current = null;
+      overviewRequests.current.clear();
+      reviewOptionsRequest.current = null;
+      pendingMutations.current.clear();
+      setAvailability({ kind: 'unpaired', home: null, error: null });
+      setRevision((v) => v + 1);
+      void invalidatePairingCredential(credential).catch(() => {});
+      void savedViewStore.purge().catch(() => {});
+    });
+    const foreground = AppState.addEventListener('change', (state) => {
+      if (state === 'active') void reload();
+    });
     void reload();
+    return () => {
+      generation.current++;
+      stopCredential();
+      stopInvalidation();
+      foreground.remove();
+    };
   }, [reload]);
 
+  useEffect(() => {
+    if (
+      !home?.snapshot ||
+      fixture ||
+      (availability.kind !== 'saved-view' && availability.kind !== 'stale-saved-view')
+    )
+      return;
+    let highestObserved = Date.now();
+    let timer: ReturnType<typeof setTimeout>;
+    const refresh = () => {
+      const now = Date.now();
+      const state = savedViewState(home, now, highestObserved);
+      highestObserved = Math.max(now, highestObserved);
+      if (!state) {
+        setAvailability({ kind: 'unavailable', home: null, error: null });
+        void savedViewStore.purge().catch(() => {});
+        return;
+      }
+      setAvailability((value) =>
+        value.home === home && (value.kind === 'saved-view' || value.kind === 'stale-saved-view')
+          ? { ...value, kind: state }
+          : value,
+      );
+      const boundary = Date.parse(
+        state === 'saved-view' ? home.snapshot!.staleAt : home.snapshot!.deleteAfter,
+      );
+      timer = setTimeout(refresh, Math.min(60_000, Math.max(1, boundary - now)));
+    };
+    refresh();
+    return () => clearTimeout(timer);
+  }, [fixture, home, availability.kind]);
+
   const saveTransaction = useCallback(
-    async (id: string, update: TransactionUpdate) => {
+    async (id: string, update: TransactionUpdate, expectedVersion?: number) => {
       if (fixture) {
         const current = fixtureTransactions.find((transaction) => transaction.id === id);
         if (!current) throw new Error(t('transactionIsNoLongerAvailable'));
         const next = {
           ...current,
           ...update,
+          resourceVersion: (current.resourceVersion ?? 1) + 1,
           needsReview: update.reviewed ? false : current.needsReview,
         };
         delete (next as Transaction & { reviewed?: true }).reviewed;
@@ -266,18 +442,81 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
           transactions.map((transaction) => (transaction.id === id ? next : transaction)),
         );
         if (update.reviewed && current.needsReview)
-          setHome((value) =>
-            value ? { ...value, reviewCount: Math.max(0, value.reviewCount - 1) } : value,
+          setAvailability((value) =>
+            value.home
+              ? {
+                  ...value,
+                  home: { ...value.home, reviewCount: Math.max(0, value.home.reviewCount - 1) },
+                }
+              : value,
           );
         setRevision((value) => value + 1);
         return next;
       }
-      if (!credential) throw new Error(t('pairWithYourMacToUpdateTransactions'));
-      const next = await updateTransaction(credential, id, update);
-      await reload();
+      if (!canMutate || !credential) throw new Error(t('pairWithYourMacToUpdateTransactions'));
+      const token = credential.token;
+      let command = pendingMutations.current.get(id);
+      if (command && JSON.stringify(command.patch) !== JSON.stringify(update)) {
+        let reconciled: Transaction;
+        try {
+          reconciled = await updateTransaction(credential, id, {
+            ...command.patch,
+            commandId: command.commandId,
+            expectedVersion: command.expectedVersion,
+          });
+        } catch (cause) {
+          if (
+            cause instanceof MobileRequestError &&
+            cause.kind === 'api' &&
+            (cause.status ?? 500) < 500
+          ) {
+            pendingMutations.current.delete(id);
+            if (cause.code === 'mutation_conflict') {
+              cause.current = await fetchTransactionDetail(credential, id).catch(() => undefined);
+              void reload();
+            }
+          }
+          throw cause;
+        }
+        if (activeCredential.current?.token !== token || blockedCredential.current === token)
+          throw new Error('Retired pairing');
+        pendingMutations.current.delete(id);
+        command = undefined;
+        expectedVersion = reconciled.resourceVersion;
+      }
+      if (!command) {
+        if (!expectedVersion) throw new Error(t('mobileErrorUpgradeRequired'));
+        command = { commandId: randomUUID(), expectedVersion, patch: update };
+        pendingMutations.current.set(id, command);
+      }
+      let next: Transaction;
+      try {
+        next = await updateTransaction(credential, id, {
+          ...command.patch,
+          commandId: command.commandId,
+          expectedVersion: command.expectedVersion,
+        });
+      } catch (cause) {
+        if (
+          cause instanceof MobileRequestError &&
+          cause.kind === 'api' &&
+          (cause.status ?? 500) < 500
+        ) {
+          pendingMutations.current.delete(id);
+          if (cause.code === 'mutation_conflict') {
+            cause.current = await fetchTransactionDetail(credential, id).catch(() => undefined);
+            void reload();
+          }
+        }
+        throw cause;
+      }
+      if (activeCredential.current?.token !== token || blockedCredential.current === token)
+        throw new Error('Retired pairing');
+      pendingMutations.current.delete(id);
+      void reload();
       return next;
     },
-    [credential, fixture, fixtureTransactions, reload],
+    [canMutate, credential, fixture, fixtureTransactions, reload],
   );
 
   const loadReviewOptions = useCallback(() => {
@@ -324,7 +563,11 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
           ? fetchHomeData(credential, undefined, null, month)
           : Promise.reject(new Error(t('pairWithYourMacToLoadAnotherMonth')));
       overviewRequests.current.set(month, request);
-      request.catch(() => overviewRequests.current.delete(month));
+      while (overviewRequests.current.size > 24)
+        overviewRequests.current.delete(overviewRequests.current.keys().next().value!);
+      request.catch(() => {
+        if (overviewRequests.current.get(month) === request) overviewRequests.current.delete(month);
+      });
       return request;
     },
     [credential, fixture, home],
@@ -388,6 +631,8 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     () => ({
       source: fixture ? ('fixture' as const) : ('live' as const),
       status,
+      availability: availability.kind,
+      canMutate,
       home,
       credential,
       error,
@@ -402,6 +647,8 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     }),
     [
       credential,
+      availability.kind,
+      canMutate,
       error,
       fixture,
       fixtureTransactions,
@@ -417,7 +664,17 @@ export function MoneyDataProvider({ children }: { children: ReactNode }) {
     ],
   );
 
-  return <MoneyDataContext.Provider value={value}>{children}</MoneyDataContext.Provider>;
+  return (
+    <MoneyDataContext.Provider value={value}>
+      <Fragment
+        key={
+          fixture ? 'fixture' : (credential?.token ?? activeCredential.current?.token ?? 'unpaired')
+        }
+      >
+        {children}
+      </Fragment>
+    </MoneyDataContext.Provider>
+  );
 }
 
 export function useOverviewMonth(initialMonth?: string) {
@@ -456,7 +713,7 @@ export function useOverviewMonth(initialMonth?: string) {
   }, [money.home, money.loadOverviewMonth, money.status, month]);
 
   return {
-    overview,
+    overview: overview?.monthKey === month ? overview : null,
     month,
     months: money.home?.availableMonths ?? [],
     selectMonth: setSelectedMonth,
@@ -473,33 +730,45 @@ export function useMoneyData(): MoneyDataContextValue {
 
 export function useExploreHistory(count = 12) {
   const { exploreHistory, status } = useMoneyData();
+  const [retryCount, setRetryCount] = useState(0);
   const [result, setResult] = useState(() => ({
     cache: exploreHistory,
     count,
     months: exploreHistory.peek(count),
+    error: null as string | null,
   }));
-  const months =
-    result.cache === exploreHistory && result.count === count
-      ? result.months
-      : exploreHistory.peek(count);
-
+  const owned = result.cache === exploreHistory && result.count === count;
+  const months = owned ? result.months : exploreHistory.peek(count);
   useEffect(() => {
     if (status !== 'ready') return;
     let current = true;
     void exploreHistory.load(count).then(
       (months) => {
-        if (current) setResult({ cache: exploreHistory, count, months });
+        if (current) setResult({ cache: exploreHistory, count, months, error: null });
       },
-      () => {
-        if (current) setResult({ cache: exploreHistory, count, months: [] });
+      (cause) => {
+        if (current)
+          setResult({
+            cache: exploreHistory,
+            count,
+            months: exploreHistory.peek(count),
+            error: cause instanceof Error ? cause.message : t('couldnTLoadYourFinances'),
+          });
       },
     );
     return () => {
       current = false;
     };
-  }, [count, exploreHistory, status]);
-
-  return { months: months ?? [], loading: months === undefined };
+  }, [count, exploreHistory, status, retryCount]);
+  return {
+    months: months ?? [],
+    loading: months === undefined && !(owned && result.error),
+    error: owned ? result.error : null,
+    retry: () => {
+      setResult({ cache: exploreHistory, count, months: exploreHistory.peek(count), error: null });
+      setRetryCount((value) => value + 1);
+    },
+  };
 }
 
 export function useActivityTransactions(
@@ -514,10 +783,17 @@ export function useActivityTransactions(
   const [loadingMore, setLoadingMore] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [nextCursor, setNextCursor] = useState<string | null>(null);
-  const requestKey = `${filter}\u0000${query.trim()}\u0000${JSON.stringify(criteria)}`;
+  const requestKey = JSON.stringify([
+    filter,
+    query.trim().normalize('NFKC'),
+    criteria,
+    money.revision,
+    money.credential?.serverId,
+  ]);
   const [resultKey, setResultKey] = useState('');
   const activeRequestKey = useRef(requestKey);
   const moreRequest = useRef<AbortController | null>(null);
+  const visitedCursors = useRef(new Set<string>());
   activeRequestKey.current = requestKey;
 
   const fixtureTransactions = useMemo(() => {
@@ -566,6 +842,7 @@ export function useActivityTransactions(
     moreRequest.current?.abort();
     moreRequest.current = null;
     setNextCursor(null);
+    visitedCursors.current.clear();
     setLoadingMore(false);
     const load = () => {
       setLoading(true);
@@ -585,6 +862,7 @@ export function useActivityTransactions(
           );
       void request
         .then((page) => {
+          if (controller.signal.aborted || activeRequestKey.current !== requestKey) return;
           setResultKey(requestKey);
           setTransactions(filterActivityPage(page.transactions, criteria));
           setNextCursor(page.nextCursor);
@@ -629,6 +907,12 @@ export function useActivityTransactions(
     )
       return;
     const key = requestKey;
+    if (visitedCursors.current.has(nextCursor)) {
+      setError(t('moreTransactionsCouldNotLoad'));
+      setNextCursor(null);
+      return;
+    }
+    visitedCursors.current.add(nextCursor);
     const controller = new AbortController();
     moreRequest.current = controller;
     setError(null);
@@ -640,13 +924,17 @@ export function useActivityTransactions(
       controller.signal,
     )
       .then((page) => {
-        if (activeRequestKey.current !== key) return;
-        setTransactions((current) => [...current, ...page.transactions]);
+        if (controller.signal.aborted || activeRequestKey.current !== key) return;
+        setTransactions((current) => [
+          ...new Map([...current, ...page.transactions].map((row) => [row.id, row])).values(),
+        ]);
         setNextCursor(page.nextCursor);
       })
       .catch(() => {
-        if (!controller.signal.aborted && activeRequestKey.current === key)
+        if (!controller.signal.aborted && activeRequestKey.current === key) {
+          visitedCursors.current.delete(nextCursor);
           setError(t('moreTransactionsCouldNotLoad'));
+        }
       })
       .finally(() => {
         if (moreRequest.current === controller) moreRequest.current = null;
@@ -681,9 +969,12 @@ export function useActivityTransactions(
         : resultKey === requestKey
           ? transactions
           : [],
-    loading: requestState === 'loading',
+    loading: Boolean(money.credential) && requestState === 'loading',
     loadingMore: money.source === 'live' && loadingMore,
-    error,
+    error:
+      money.source === 'live' && !money.credential && money.home
+        ? t('savedViewUnavailable')
+        : error,
     hasMore: money.source === 'live' && nextCursor !== null,
     loadMore,
   };
@@ -730,8 +1021,15 @@ async function fetchVisibleTransactionPage(
   signal: AbortSignal,
 ) {
   let cursor = query.cursor;
+  const visited = new Set<string>();
   while (true) {
+    if (cursor) {
+      if (visited.has(cursor)) throw new Error('Repeated transaction cursor');
+      visited.add(cursor);
+    }
     const page = await fetchTransactionPage(credential, { ...query, cursor }, signal);
+    if (page.nextCursor && visited.has(page.nextCursor))
+      throw new Error('Repeated transaction cursor');
     const transactions = filterActivityPage(page.transactions, criteria);
     if (transactions.length || !page.nextCursor) return { ...page, transactions };
     cursor = page.nextCursor;
@@ -753,7 +1051,9 @@ export function useTransaction(id: string | undefined) {
     setLoading(true);
     setError(null);
     void fetchTransactionDetail(money.credential, id, controller.signal)
-      .then(setTransaction)
+      .then((value) => {
+        if (!controller.signal.aborted) setTransaction(value);
+      })
       .catch(() => {
         if (!controller.signal.aborted) {
           setError(t('transactionCouldNotBeLoaded'));
@@ -766,8 +1066,13 @@ export function useTransaction(id: string | undefined) {
   }, [id, money.credential, money.revision, money.source, money.status]);
 
   return {
-    transaction: money.source === 'fixture' ? fixtureTransaction : transaction,
+    transaction:
+      money.source === 'fixture'
+        ? fixtureTransaction
+        : money.credential && transaction?.id === id
+          ? transaction
+          : null,
     loading: money.source === 'live' && loading,
-    error,
+    error: money.source === 'live' && !money.credential ? t('savedViewUnavailable') : error,
   };
 }

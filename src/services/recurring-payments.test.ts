@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  saveRecurringPaymentDecision,
   discoverRecurringPayments,
   readRecurringPaymentDetail,
   type RecurringTransaction,
@@ -273,4 +274,43 @@ describe('recurring payment discovery', () => {
     ].map(([date, amount]) => ({ ...base, date: String(date), amount: -Number(amount) }));
     expect(discoverRecurringPayments(tiedDates, today).suggestions[0].usualAmount).toBe(50);
   });
+});
+
+it('recurring command receipts survive auto and reject stale decisions atomically', () => {
+  const testDb = createTestDb();
+  try {
+    const account = insertAccount(testDb.db);
+    const command = {
+      accountId: account.id,
+      currencyCode: 'ILS',
+      merchantKey: 'a'.repeat(64),
+      decision: 'include' as const,
+      expectedVersion: 0,
+      commandId: '00000000-0000-4000-8000-000000000001',
+    };
+    const accepted = saveRecurringPaymentDecision(testDb.db, command, 'device-a');
+    expect(accepted.resourceVersion).toBe(1);
+    expect(saveRecurringPaymentDecision(testDb.db, command, 'device-a')).toEqual(accepted);
+    const auto = {
+      ...command,
+      commandId: '00000000-0000-4000-8000-000000000002',
+      expectedVersion: 1,
+      decision: 'auto' as const,
+    };
+    expect(saveRecurringPaymentDecision(testDb.db, auto, 'device-a').resourceVersion).toBe(2);
+    expect(() =>
+      saveRecurringPaymentDecision(
+        testDb.db,
+        { ...command, decision: 'exclude', commandId: '00000000-0000-4000-8000-000000000003' },
+        'device-b',
+      ),
+    ).toThrow('mutation_conflict');
+    expect(
+      testDb.sqlite
+        .prepare('SELECT decision, resource_version FROM recurring_payment_decisions')
+        .get(),
+    ).toEqual({ decision: 'auto', resource_version: 2 });
+  } finally {
+    testDb.close();
+  }
 });

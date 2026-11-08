@@ -56,7 +56,7 @@ export function CategoryPickerSheet({
   const opening = useRef({
     content: 0,
     selectedY: null as number | null,
-    settled: false,
+    mode: 'awaiting-layout' as 'awaiting-layout' | 'revealing' | 'user-controlled',
     viewport: 0,
   });
   const searching = query.trim().length > 0;
@@ -72,15 +72,17 @@ export function CategoryPickerSheet({
   useEffect(() => {
     if (visible) return;
     setQuery('');
-    opening.current = { content: 0, selectedY: null, settled: false, viewport: 0 };
+    opening.current = { content: 0, selectedY: null, mode: 'awaiting-layout', viewport: 0 };
   }, [visible]);
 
   // Open with the current choice in view. The sheet's size settles after the first layout, so
   // this reruns on each measurement, clamped to the list's end, until the person scrolls.
   function revealSelection() {
-    const { content, selectedY, settled, viewport } = opening.current;
-    if (settled || searching || selectedY === null || !content || !viewport) return;
+    const { content, selectedY, mode, viewport } = opening.current;
+    if (mode === 'user-controlled' || searching || selectedY === null || !content || !viewport)
+      return;
     const offset = Math.min(selectedY - 160, content - viewport);
+    opening.current.mode = 'revealing';
     list.current?.scrollTo({ y: Math.max(0, offset), animated: false });
   }
 
@@ -159,7 +161,7 @@ export function CategoryPickerSheet({
             revealSelection();
           }}
           onScrollBeginDrag={() => {
-            opening.current.settled = true;
+            opening.current.mode = 'user-controlled';
           }}
           ref={list}
         >

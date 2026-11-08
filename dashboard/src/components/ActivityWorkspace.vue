@@ -1,15 +1,7 @@
 <script setup lang="ts">
+import { createActivityAutosave } from './activity-autosave';
 import SelectField from '@/components/ui/select/SelectField.vue';
-import {
-  computed,
-  nextTick,
-  onBeforeUnmount,
-  onMounted,
-  onUnmounted,
-  ref,
-  shallowRef,
-  watch,
-} from 'vue';
+import { computed, nextTick, onBeforeUnmount, onMounted, onUnmounted, ref, watch } from 'vue';
 import { onClickOutside } from '@vueuse/core';
 import { Button } from '@/components/ui/button';
 import { useReviewCount } from '@/composables/useReviewCount';
@@ -31,12 +23,10 @@ import {
   getCategories,
   getMembers,
   getTransaction,
+  saveTransactionCommand,
+  ApiError,
+  type TransactionPatch,
   getTransactions,
-  resolveTransaction,
-  updateTransactionEffectiveDate,
-  ignoreTransaction,
-  updateTransactionCategory,
-  updateTransactionOwner,
   type Account,
   type Category,
   type Member,
@@ -138,9 +128,22 @@ const draftOwner = ref('unassigned');
 const draftIncluded = ref(true);
 const draftMemo = ref('');
 const saved = ref(false);
-const pendingSaves = ref(0);
-const saving = computed(() => pendingSaves.value > 0);
-const saveFailures = shallowRef<SaveFailure[]>([]);
+const saveRevision = ref(0);
+const saving = computed(() => {
+  void saveRevision.value;
+  return autosave.entries().some((entry) => entry.work !== null);
+});
+const saveFailures = computed<SaveFailure[]>(() => {
+  void saveRevision.value;
+  return autosave
+    .entries()
+    .filter((entry) => entry.failure !== null)
+    .map((entry) => ({
+      row: entry.accepted,
+      merchant: normalizeMerchant(entry.accepted.description),
+      patch: displayPatch(autosave.draft(entry.accepted.id)),
+    }));
+});
 const selectedFailure = computed(() => failureFor(selectedId.value));
 // What the user last asked for on the selected row. New edits compare against this,
 // not the saved row, so changing back during a slow save still counts as a change.
@@ -299,7 +302,7 @@ function selectRow(row: Transaction) {
   saveDate();
   selectedId.value = row.id;
   // A queued or failed edit stays on screen so Retry and later edits agree with it.
-  const failed = { ...queuedPatches.get(row.id), ...failureFor(row.id)?.patch };
+  const failed = displayPatch(autosave.draft(row.id));
   intended.category = draftCategory.value = failed.category ?? row.category ?? '';
   intended.owner = draftOwner.value = failed.owner ?? ownerValue(row);
   intended.included = draftIncluded.value = failed.included ?? !row.ignored;
@@ -315,6 +318,7 @@ function closeDetails() {
     void nextTick(() => document.getElementById(`proto-row-${id}`)?.focus({ preventScroll: true }));
 }
 async function load(append = false) {
+  if (append && loading.value) return;
   const id = ++requestId;
   loading.value = true;
   error.value = '';
@@ -355,9 +359,15 @@ async function load(append = false) {
     const next = result.transactions.map((row) =>
       isPreview.value ? { ...row, ...localEdits.get(row.id) } : row,
     );
-    rows.value = append ? [...rows.value, ...next] : next;
+    const seen = new Set(append ? rows.value.map((row) => row.id) : []);
+    const unique = next.filter((row) => {
+      if (seen.has(row.id)) return false;
+      seen.add(row.id);
+      return true;
+    });
+    rows.value = append ? [...rows.value, ...unique] : unique;
     total.value = result.pagination.total;
-    hasMore.value = result.pagination.hasMore;
+    hasMore.value = result.pagination.hasMore && (!append || unique.length > 0);
     if (!append && !rows.value.some((row) => row.id === selectedId.value)) {
       selectedId.value = null;
       const requested =
@@ -393,131 +403,89 @@ type SavePatch = {
   resolve?: string;
 };
 type SaveFailure = { row: Transaction; merchant: string; patch: SavePatch };
-// Each edit queues only the field it changed and saves run in order, so a slow save
-// cannot swallow a later edit or replay a value the server has since changed.
-let saveQueue: Promise<unknown> = Promise.resolve();
-const queuedPatches = new Map<number, SavePatch>();
-const queuedResults = new Map<number, Transaction>();
+function commandPatch(patch: SavePatch): TransactionPatch {
+  const fields: TransactionPatch = {};
+  if (patch.category !== undefined) fields.category = patch.category || null;
+  if (patch.owner !== undefined) {
+    const owner = ownerFields(patch.owner);
+    fields.owner = { type: owner.expenseOwnerType, memberId: owner.expenseOwnerMemberId };
+  }
+  if (patch.included !== undefined) fields.ignored = !patch.included;
+  if (patch.effectiveDate !== undefined) fields.effectiveDate = patch.effectiveDate || null;
+  if (patch.resolve !== undefined) {
+    fields.category = patch.resolve;
+    fields.reviewed = true;
+  }
+  return fields;
+}
+function displayPatch(patch: TransactionPatch): SavePatch {
+  return {
+    ...(patch.category !== undefined ? { category: patch.category ?? '' } : {}),
+    ...(patch.owner
+      ? {
+          owner:
+            patch.owner.type === 'member' ? `member:${patch.owner.memberId}` : patch.owner.type,
+        }
+      : {}),
+    ...(patch.ignored !== undefined ? { included: !patch.ignored } : {}),
+    ...(patch.effectiveDate !== undefined ? { effectiveDate: patch.effectiveDate ?? '' } : {}),
+    ...(patch.reviewed && patch.category ? { resolve: patch.category } : {}),
+  };
+}
+const autosave = createActivityAutosave({
+  submit: saveTransactionCommand,
+  newId: () => crypto.randomUUID(),
+  classify: (cause) =>
+    cause instanceof ApiError && cause.status < 500
+      ? {
+          kind: cause.code === 'mutation_conflict' ? 'conflict' : 'rejected',
+          current: cause.current,
+        }
+      : { kind: 'unknown' },
+  changed: () => {
+    saveRevision.value++;
+  },
+  accepted: (previous, updated, patch) => {
+    rows.value = rows.value.map((row) => (row.id === updated.id ? updated : row));
+    if (linkedTransaction.value?.id === updated.id) linkedTransaction.value = updated;
+    const pending = autosave.draft(updated.id);
+    if (selectedId.value === updated.id) {
+      if (pending.category === undefined && draftCategory.value === intended.category)
+        intended.category = draftCategory.value = updated.category ?? '';
+      if (!pending.owner && draftOwner.value === intended.owner)
+        intended.owner = draftOwner.value = ownerValue(updated);
+      if (pending.ignored === undefined && draftIncluded.value === intended.included)
+        intended.included = draftIncluded.value = !updated.ignored;
+      showSaved();
+    }
+    if (updated.needsReview !== previous.needsReview) void refreshReviewCount();
+    if (patch.reviewed || updated.reportingDate !== previous.reportingDate) void load();
+  },
+});
 function queueSave(row: Transaction, patch: SavePatch) {
-  pendingSaves.value++;
-  queuedPatches.set(row.id, { ...queuedPatches.get(row.id), ...patch });
-  const run = saveQueue
-    .then(() => persistPatch(row, patch))
-    .finally(() => {
-      pendingSaves.value--;
-      if (pendingSaves.value) return;
-      queuedPatches.clear();
-      queuedResults.clear();
-    });
-  saveQueue = run;
-  return run;
+  if (isPreview.value) {
+    const edit: Partial<Transaction> = {};
+    if (patch.category !== undefined) edit.category = patch.category || null;
+    if (patch.owner !== undefined) Object.assign(edit, ownerFields(patch.owner));
+    if (patch.included !== undefined) edit.ignored = !patch.included;
+    if (patch.memo !== undefined) edit.memo = patch.memo || null;
+    if (patch.effectiveDate !== undefined) edit.effectiveDate = patch.effectiveDate || null;
+    localEdits.set(row.id, { ...localEdits.get(row.id), ...edit });
+    rows.value = rows.value.map((item) => (item.id === row.id ? { ...item, ...edit } : item));
+    showSaved();
+    return Promise.resolve();
+  }
+  return autosave.edit(row, commandPatch(patch));
 }
 function failureFor(rowId: number | null) {
   return saveFailures.value.find((failure) => failure.row.id === rowId);
 }
-function addSaveFailure(row: Transaction, patch: SavePatch) {
-  saveFailures.value = [
-    ...saveFailures.value.filter((failure) => failure.row.id !== row.id),
-    {
-      row,
-      merchant: normalizeMerchant(row.description),
-      patch: { ...failureFor(row.id)?.patch, ...patch },
-    },
-  ];
-}
-function clearSavedFields(rowId: number, patch: SavePatch) {
-  saveFailures.value = saveFailures.value.flatMap((failure) => {
-    if (failure.row.id !== rowId) return [failure];
-    const left = Object.fromEntries(
-      Object.entries(failure.patch).filter(([field]) => !(field in patch)),
-    );
-    return Object.keys(left).length ? [{ ...failure, patch: left }] : [];
-  });
-}
 function retrySave(failure: SaveFailure) {
-  void queueSave(failure.row, failure.patch);
+  void autosave.retry(failure.row.id);
 }
 function saveDate() {
   if (selected.value && dateChanged.value)
     void queueSave(selected.value, { effectiveDate: draftEffectiveDate.value });
-}
-function isExcludedByHand(row: Transaction) {
-  const category = categories.value.find((item) => item.name === row.category);
-  return row.ignored && !category?.ignoredFromStats;
-}
-async function persistPatch(row: Transaction, patch: SavePatch) {
-  // Queued saves may outlive the row in the list, so the last result is kept for them.
-  const latest =
-    rows.value.find((item) => item.id === row.id) ??
-    (linkedTransaction.value?.id === row.id ? linkedTransaction.value : null) ??
-    queuedResults.get(row.id) ??
-    row;
-  try {
-    if (isPreview.value) {
-      const edit: Partial<Transaction> = {};
-      if (patch.category !== undefined) edit.category = patch.category || null;
-      if (patch.owner !== undefined) Object.assign(edit, ownerFields(patch.owner));
-      if (patch.included !== undefined) edit.ignored = !patch.included;
-      if (patch.memo !== undefined) edit.memo = patch.memo || null;
-      if (patch.effectiveDate !== undefined) edit.effectiveDate = patch.effectiveDate || null;
-      localEdits.set(row.id, { ...localEdits.get(row.id), ...edit });
-      rows.value = rows.value.map((item) => (item.id === row.id ? { ...item, ...edit } : item));
-      clearSavedFields(row.id, patch);
-    } else {
-      let updated = latest;
-      if (patch.category !== undefined && patch.category !== (latest.category ?? '')) {
-        updated = (await updateTransactionCategory(row.id, patch.category || null)).transaction;
-        // A category sets inclusion on the server; an exclusion chosen by hand stays.
-        if (isExcludedByHand(latest) && !updated.ignored)
-          updated = (await ignoreTransaction(row.id, true)).transaction;
-      }
-      if (patch.owner !== undefined && patch.owner !== ownerValue(updated)) {
-        const { expenseOwnerType, expenseOwnerMemberId } = ownerFields(patch.owner);
-        updated = (
-          await updateTransactionOwner(row.id, {
-            ownerType: expenseOwnerType,
-            ownerMemberId: expenseOwnerMemberId,
-          })
-        ).transaction;
-      }
-      if (patch.included !== undefined && patch.included === updated.ignored) {
-        updated = (await ignoreTransaction(row.id, !patch.included)).transaction;
-      }
-      if (
-        patch.effectiveDate !== undefined &&
-        patch.effectiveDate !== (updated.effectiveDate ?? '')
-      ) {
-        updated = (await updateTransactionEffectiveDate(row.id, patch.effectiveDate || null))
-          .transaction;
-      }
-      if (patch.resolve !== undefined) {
-        const excludedByHand = isExcludedByHand(updated);
-        updated = (await resolveTransaction(row.id, patch.resolve)).transaction;
-        if (excludedByHand && !updated.ignored)
-          updated = (await ignoreTransaction(row.id, true)).transaction;
-      }
-      queuedResults.set(row.id, updated);
-      rows.value = rows.value.map((item) => (item.id === row.id ? updated : item));
-      if (linkedTransaction.value?.id === row.id) linkedTransaction.value = updated;
-      clearSavedFields(row.id, patch);
-      // The last save shows what the server decided, unless a newer edit is waiting.
-      if (selectedId.value === row.id && pendingSaves.value === 1) {
-        const failed = failureFor(row.id)?.patch;
-        if (failed?.category === undefined && draftCategory.value === intended.category)
-          intended.category = draftCategory.value = updated.category ?? '';
-        if (failed?.owner === undefined && draftOwner.value === intended.owner)
-          intended.owner = draftOwner.value = ownerValue(updated);
-        if (failed?.included === undefined && draftIncluded.value === intended.included)
-          intended.included = draftIncluded.value = !updated.ignored;
-      }
-      if (updated.needsReview !== latest.needsReview) void refreshReviewCount();
-      if (patch.resolve !== undefined || updated.reportingDate !== latest.reportingDate)
-        await load();
-    }
-    if (selectedId.value === row.id) showSaved();
-  } catch {
-    addSaveFailure(row, patch);
-  }
 }
 function showSaved() {
   saved.value = true;
@@ -597,6 +565,7 @@ onMounted(async () => {
 });
 onBeforeUnmount(saveDate);
 onUnmounted(() => {
+  requestId++;
   window.removeEventListener('keydown', onKeys);
   clearTimeout(searchTimer);
   clearTimeout(savedTimer);

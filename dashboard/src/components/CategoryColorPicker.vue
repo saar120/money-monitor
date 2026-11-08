@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { ref, watch, onMounted } from 'vue';
+import { ref, watch, computed } from 'vue';
 import { Check } from 'lucide-vue-next';
 import { language, t } from '@/lib/language';
 
@@ -23,14 +23,15 @@ const palette = [
   '#8a786c',
 ];
 const draft = ref(props.modelValue);
+const editing = ref(false);
+const draftValid = computed(() => /^#[\da-f]{6}$/i.test(draft.value.trim()));
+watch(draftValid, (value) => emit('update:valid', value), { immediate: true });
 watch(
   () => props.modelValue,
   (value) => {
-    draft.value = value;
-    emit('update:valid', true);
+    if (!editing.value) draft.value = value;
   },
 );
-onMounted(() => emit('update:valid', true));
 function choose(value: string) {
   draft.value = value;
   emit('update:valid', true);
@@ -74,11 +75,13 @@ function edit(event: Event) {
           autocomplete="off"
           placeholder="#285f9b"
           maxlength="7"
-          :aria-invalid="!valid"
+          :aria-invalid="!draftValid"
+          @focus="editing = true"
+          @blur="editing = false"
           @input="edit"
         />
       </span>
-      <small v-if="!valid" role="status">{{
+      <small v-if="!draftValid" role="status">{{
         language === 'he'
           ? 'יש להזין # ושש ספרות הקסדצימליות.'
           : 'Use # followed by six hex digits.'

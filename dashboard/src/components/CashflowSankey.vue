@@ -79,13 +79,15 @@ const dateRange = computed(() => {
 // ── Data fetching ──
 
 const categoriesData = useApi(() => getCategories());
-const cashflowData = useApi(() =>
-  getCashflowDetail({
-    startDate: dateRange.value.startDate,
-    endDate: dateRange.value.endDate,
-    ownerType: props.ownerType,
-    ownerMemberId: props.ownerMemberId,
-  }),
+const cashflowData = useApi(
+  () =>
+    getCashflowDetail({
+      startDate: dateRange.value.startDate,
+      endDate: dateRange.value.endDate,
+      ownerType: props.ownerType,
+      ownerMemberId: props.ownerMemberId,
+    }),
+  () => JSON.stringify([dateRange.value, props.ownerType, props.ownerMemberId]),
 );
 
 function refresh() {
@@ -340,14 +342,14 @@ function onDialogWheel(e: WheelEvent) {
 }
 
 // Click-and-hold to pan
-let isPanning = false;
+let panPointer: number | null = null;
 let panStartX = 0;
 let panStartY = 0;
 let panOriginX = 0;
 let panOriginY = 0;
 
 function onPanStart(e: PointerEvent) {
-  if (e.button !== 0) return;
+  if (!e.isPrimary || e.button !== 0 || panPointer !== null) return;
   // Don't pan if clicking on a node — check via target element
   const target = e.target as HTMLElement;
   if (target.tagName === 'CANVAS') {
@@ -359,25 +361,28 @@ function onPanStart(e: PointerEvent) {
       if (hovered?.draggable) return;
     }
   }
-  isPanning = true;
+  panPointer = e.pointerId;
   panStartX = e.clientX;
   panStartY = e.clientY;
   panOriginX = panX.value;
   panOriginY = panY.value;
   document.addEventListener('pointermove', onPanMove);
   document.addEventListener('pointerup', onPanEnd);
+  document.addEventListener('pointercancel', onPanEnd);
 }
 
 function onPanMove(e: PointerEvent) {
-  if (!isPanning) return;
+  if (panPointer !== e.pointerId) return;
   panX.value = panOriginX + (e.clientX - panStartX);
   panY.value = panOriginY + (e.clientY - panStartY);
 }
 
-function onPanEnd() {
-  isPanning = false;
+function onPanEnd(event?: PointerEvent) {
+  if (event && panPointer !== event.pointerId) return;
+  panPointer = null;
   document.removeEventListener('pointermove', onPanMove);
   document.removeEventListener('pointerup', onPanEnd);
+  document.removeEventListener('pointercancel', onPanEnd);
 }
 
 function resetView() {
@@ -387,13 +392,13 @@ function resetView() {
 }
 
 watch(dialogOpen, (open) => {
-  if (!open) resetView();
+  if (!open) {
+    onPanEnd();
+    resetView();
+  }
 });
 
-onBeforeUnmount(() => {
-  document.removeEventListener('pointermove', onPanMove);
-  document.removeEventListener('pointerup', onPanEnd);
-});
+onBeforeUnmount(() => onPanEnd());
 </script>
 
 <template>

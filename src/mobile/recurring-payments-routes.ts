@@ -1,3 +1,4 @@
+import { FinancialCommandError } from '../services/financial-command.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
 import {
@@ -20,6 +21,7 @@ const money = z.number().finite().nonnegative();
 const publicAccountId = z.string().regex(/^account_[A-Za-z0-9_-]{22}$/);
 const recurringPaymentSchema = z
   .object({
+    resourceVersion: z.number().int().nonnegative().optional(),
     name: z.string().min(1).max(160),
     accountId: publicAccountId,
     merchantKey: z.string().min(1).max(160),
@@ -64,6 +66,7 @@ const resultSchema = z
       .max(20),
     asOfDate: bootstrapFinancialDateSchema,
     classificationPending: z.boolean().default(false),
+    classificationStatus: z.enum(['pending', 'complete', 'unavailable']).optional(),
   })
   .strict();
 
@@ -102,8 +105,11 @@ export interface MobileRecurringPaymentsDependencies {
       currencyCode: string;
       merchantKey: string;
       decision: 'include' | 'exclude' | 'auto';
+      commandId: string;
+      expectedVersion: number;
     },
     asOfDate: string,
+    clientId: string,
   ) => unknown | Promise<unknown>;
 }
 
@@ -169,8 +175,13 @@ export function registerMobileRecurringPaymentsRoute(
         bodyLimit: 4096,
       },
       async (request) => {
+        const body = request.body as Record<string, unknown> | null;
+        if (!body?.commandId || body.expectedVersion === undefined)
+          throw new MobileApiError('upgrade_required');
         const input = z
           .object({
+            commandId: z.string().uuid(),
+            expectedVersion: z.number().int().nonnegative(),
             accountId: publicAccountId,
             currencyCode: bootstrapCurrencyCodeSchema,
             merchantKey: z.string().min(1).max(160),
@@ -181,10 +192,28 @@ export function registerMobileRecurringPaymentsRoute(
         if (!input.success) throw new MobileApiError('validation_error');
         const now = clock();
         const asOfDate = mobileFinancialDateFor(now);
-        const parsed = resultSchema.safeParse(await dependencies.decide!(input.data, asOfDate));
-        if (!parsed.success) throw new MobileApiError('internal_server_error');
+        let outcome: { receipt: unknown; result: unknown };
+        try {
+          outcome = (await dependencies.decide!(
+            input.data,
+            asOfDate,
+            request.mobileDevice!.id,
+          )) as typeof outcome;
+        } catch (cause) {
+          if (cause instanceof FinancialCommandError)
+            throw new MobileApiError(
+              cause.code === 'update_required'
+                ? 'upgrade_required'
+                : cause.code === 'not_found'
+                  ? 'route_not_found'
+                  : cause.code,
+            );
+          throw cause;
+        }
+        const parsed = outcome.result === null ? null : resultSchema.safeParse(outcome.result);
+        if (parsed && !parsed.success) throw new MobileApiError('internal_server_error');
         return {
-          data: parsed.data,
+          data: { receipt: outcome.receipt, result: parsed?.data ?? null },
           meta: {
             apiVersion: MOBILE_API_VERSION,
             generatedAt: now.toISOString(),

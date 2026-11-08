@@ -1,3 +1,5 @@
+import { randomUUID } from 'expo-crypto';
+import { MobileRequestError } from '@/request-error';
 import { useEffect, useRef, useState } from 'react';
 import { router } from 'expo-router';
 import { ActivityIndicator, Pressable, ScrollView, StyleSheet, View } from 'react-native';
@@ -40,6 +42,13 @@ export default function RecurringPaymentsScreen() {
   const [saving, setSaving] = useState(false);
   const [attempt, setAttempt] = useState(0);
   const requestVersion = useRef(0);
+  const decisionInFlight = useRef(false);
+  const pendingDecision = useRef<{
+    key: string;
+    decision: string;
+    commandId: string;
+    payment: RecurringPayment;
+  } | null>(null);
   const refreshTimer = useRef<ReturnType<typeof setTimeout> | undefined>(undefined);
 
   useEffect(() => {
@@ -60,17 +69,29 @@ export default function RecurringPaymentsScreen() {
     if (!credential) return;
     let current = true;
     const version = ++requestVersion.current;
+    let failures = 0;
     const scheduleRefresh = (value: RecurringPayments) => {
       if (!value.classificationPending) return;
-      refreshTimer.current = setTimeout(() => {
-        void fetchRecurringPayments(credential)
-          .then((refreshed) => {
-            if (!current || version !== requestVersion.current) return;
-            setResult(refreshed);
-            scheduleRefresh(refreshed);
-          })
-          .catch(() => {});
-      }, 5_000);
+      refreshTimer.current = setTimeout(
+        () => {
+          void fetchRecurringPayments(credential)
+            .then((refreshed) => {
+              if (!current || version !== requestVersion.current) return;
+              failures = 0;
+              setError(false);
+              setResult(refreshed);
+              scheduleRefresh(refreshed);
+            })
+            .catch(() => {
+              if (current && version === requestVersion.current) {
+                failures++;
+                setError(true);
+                scheduleRefresh(value);
+              }
+            });
+        },
+        Math.min(30000, 5000 * 2 ** Math.min(failures, 3)),
+      );
     };
     setLoading(true);
     setError(false);
@@ -93,21 +114,50 @@ export default function RecurringPaymentsScreen() {
     };
   }, [attempt, credential, home, revision, source, status]);
 
-  if (status !== 'ready' || !home) return <ConnectionState />;
+  if (status !== 'ready' || !home || (source !== 'fixture' && !credential))
+    return <ConnectionState />;
 
   async function decide(payment: RecurringPayment, decision: 'include' | 'exclude' | 'auto') {
-    if (!credential) return;
-    requestVersion.current++;
+    if (!credential || decisionInFlight.current) return;
+    const key = `${payment.accountId}:${payment.currencyCode}:${payment.merchantKey}`;
+    if (
+      pendingDecision.current &&
+      (pendingDecision.current.key !== key || pendingDecision.current.decision !== decision)
+    ) {
+      setSaveError(true);
+      return;
+    }
+    pendingDecision.current ??= { key, decision, commandId: randomUUID(), payment: { ...payment } };
+    decisionInFlight.current = true;
+    const version = ++requestVersion.current;
     clearTimeout(refreshTimer.current);
     setSaving(true);
     setSaveError(false);
     try {
-      const saved = await saveRecurringPaymentDecision(credential, payment, decision);
-      setResult(saved);
-      if (saved.classificationPending) setAttempt((value) => value + 1);
-    } catch {
-      setSaveError(true);
+      const saved = await saveRecurringPaymentDecision(
+        credential,
+        pendingDecision.current.payment,
+        decision,
+        pendingDecision.current.commandId,
+      );
+      if (version !== requestVersion.current) return;
+      pendingDecision.current = null;
+      if (saved.result) setResult(saved.result);
+      setAttempt((value) => value + 1);
+    } catch (cause) {
+      if (
+        cause instanceof MobileRequestError &&
+        cause.kind === 'api' &&
+        (cause.status ?? 500) < 500
+      )
+        pendingDecision.current = null;
+      if (version === requestVersion.current) {
+        setSaveError(true);
+        if (cause instanceof MobileRequestError && cause.code === 'mutation_conflict')
+          setAttempt((value) => value + 1);
+      }
     } finally {
+      decisionInFlight.current = false;
       setSaving(false);
       setLoading(false);
     }
@@ -202,6 +252,13 @@ export default function RecurringPaymentsScreen() {
       testID="recurring-payments-screen"
     >
       <Text style={[styles.intro, { color: colors.secondary }]}>{t('recurringIntro')}</Text>
+      {result?.classificationStatus === 'unavailable' ? (
+        <Pressable accessibilityRole="button" onPress={() => setAttempt((value) => value + 1)}>
+          <Text style={{ color: colors.warning }}>
+            {t('recurringClassificationUnavailable')} · {t('tryAgain')}
+          </Text>
+        </Pressable>
+      ) : null}
       {saveError && (
         <Text accessibilityRole="alert" style={[styles.feedbackText, { color: colors.text }]}>
           {t('recurringSaveError')}

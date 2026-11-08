@@ -373,7 +373,14 @@ export function createMobileBootstrapAdapter(options: CreateMobileBootstrapAdapt
         },
         cacheability: partial
           ? { status: 'not_cacheable' as const, maxAgeSeconds: 0 }
-          : { status: 'cacheable' as const, maxAgeSeconds: completeMaxAge },
+          : {
+              status: 'cacheable' as const,
+              maxAgeSeconds: completeMaxAge,
+              staleAt: new Date(Date.parse(calculatedAt) + 24 * 60 * 60 * 1000).toISOString(),
+              deleteAfter: new Date(
+                Date.parse(calculatedAt) + 7 * 24 * 60 * 60 * 1000,
+              ).toISOString(),
+            },
         completeness: {
           status: partial ? ('partial' as const) : ('complete' as const),
           sectionErrors,

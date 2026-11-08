@@ -1,114 +1,152 @@
-import { ref } from 'vue';
-import { submitOtp, confirmManualLogin } from '../api/client';
-
+import { computed, ref, onScopeDispose } from 'vue';
+import { submitOtp, confirmManualLogin, getScrapeSessions } from '../api/client';
 export interface OtpFlowOptions {
   onError?: (message: string) => void;
   onOtpComplete?: () => void;
   onManualLoginComplete?: () => void;
 }
-
+type Challenge = {
+  kind: 'input' | 'submitting';
+  accountId: number;
+  label: string;
+  challengeId: string;
+  sessionId?: number;
+};
 export function useOtpFlow(options: OtpFlowOptions = {}) {
-  const { onError = (msg) => alert(msg), onOtpComplete, onManualLoginComplete } = options;
-
-  // OTP state
-  const otpAccountId = ref<number | null>(null);
-  const otpLabel = ref('');
+  const otp = ref<Challenge | null>(null);
+  const manual = ref<Challenge | null>(null);
   const otpCode = ref('');
-  const otpSubmitting = ref(false);
-  const otpDialogOpen = ref(false);
-
-  // Manual login state
-  const manualLoginAccountId = ref<number | null>(null);
-  const manualLoginLabel = ref('');
-  const manualLoginSubmitting = ref(false);
-  const manualLoginDialogOpen = ref(false);
-
-  // --- OTP handlers ---
-
-  function showOtpDialog(accountId: number, label: string) {
-    otpAccountId.value = accountId;
-    otpLabel.value = label;
-    otpCode.value = '';
-    otpDialogOpen.value = true;
-  }
-
+  let generation = 0;
+  let disposed = false;
+  onScopeDispose(() => {
+    disposed = true;
+    generation++;
+  });
   function dismissOtpDialog() {
-    otpDialogOpen.value = false;
-    otpAccountId.value = null;
+    generation++;
+    otp.value = null;
     otpCode.value = '';
   }
-
-  async function handleOtpSubmit() {
-    if (!otpAccountId.value || !otpCode.value.trim()) return;
-    otpSubmitting.value = true;
-    try {
-      await submitOtp(otpAccountId.value, otpCode.value.trim());
-      dismissOtpDialog();
-      onOtpComplete?.();
-    } catch (err) {
-      onError(`OTP submit failed: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      otpSubmitting.value = false;
-    }
-  }
-
-  // --- Manual login handlers ---
-
-  function showManualLoginDialog(accountId: number, label: string) {
-    manualLoginAccountId.value = accountId;
-    manualLoginLabel.value = label;
-    manualLoginDialogOpen.value = true;
-  }
-
   function dismissManualLoginDialog() {
-    manualLoginDialogOpen.value = false;
-    manualLoginAccountId.value = null;
+    generation++;
+    manual.value = null;
   }
-
-  async function handleManualLoginConfirm() {
-    if (!manualLoginAccountId.value) return;
-    manualLoginSubmitting.value = true;
+  function showOtpDialog(
+    accountId: number,
+    label: string,
+    challengeId?: string,
+    sessionId?: number,
+  ) {
+    if (!challengeId || otp.value?.challengeId === challengeId) return;
+    generation++;
+    otp.value = { kind: 'input', accountId, label, challengeId, sessionId };
+    otpCode.value = '';
+  }
+  function showManualLoginDialog(
+    accountId: number,
+    label: string,
+    challengeId?: string,
+    sessionId?: number,
+  ) {
+    if (!challengeId || manual.value?.challengeId === challengeId) return;
+    generation++;
+    manual.value = { kind: 'input', accountId, label, challengeId, sessionId };
+  }
+  async function handleOtpSubmit() {
+    const challenge = otp.value;
+    if (!challenge || challenge.kind === 'submitting' || !otpCode.value.trim()) return;
+    challenge.kind = 'submitting';
     try {
-      await confirmManualLogin(manualLoginAccountId.value);
-      dismissManualLoginDialog();
-      onManualLoginComplete?.();
-    } catch (err) {
-      onError(`Confirm failed: ${err instanceof Error ? err.message : err}`);
-    } finally {
-      manualLoginSubmitting.value = false;
+      await submitOtp(challenge.accountId, otpCode.value.trim(), challenge.challengeId);
+      if (otp.value?.challengeId !== challenge.challengeId) return;
+      dismissOtpDialog();
+      options.onOtpComplete?.();
+    } catch (cause) {
+      if (otp.value?.challengeId === challenge.challengeId) {
+        challenge.kind = 'input';
+        options.onError?.(cause instanceof Error ? cause.message : 'OTP failed');
+      }
     }
   }
-
-  /**
-   * Dismiss any dialog associated with a given accountId.
-   * Useful when an SSE event signals scrape-done/error for that account.
-   */
-  function dismissByAccountId(accountId: number) {
-    if (otpAccountId.value === accountId) dismissOtpDialog();
-    if (manualLoginAccountId.value === accountId) dismissManualLoginDialog();
+  async function handleManualLoginConfirm() {
+    const challenge = manual.value;
+    if (!challenge || challenge.kind === 'submitting') return;
+    challenge.kind = 'submitting';
+    try {
+      await confirmManualLogin(challenge.accountId, challenge.challengeId);
+      if (manual.value?.challengeId !== challenge.challengeId) return;
+      dismissManualLoginDialog();
+      options.onManualLoginComplete?.();
+    } catch (cause) {
+      if (manual.value?.challengeId === challenge.challengeId) {
+        challenge.kind = 'input';
+        options.onError?.(cause instanceof Error ? cause.message : 'Confirmation failed');
+      }
+    }
   }
-
+  const dismissByAccountId = (id: number) => {
+    if (otp.value?.accountId === id) dismissOtpDialog();
+    if (manual.value?.accountId === id) dismissManualLoginDialog();
+  };
+  async function rehydrate(label: (id: number) => string = String) {
+    const version = generation;
+    try {
+      const { challenges } = await getScrapeSessions({ limit: 1 });
+      if (disposed || version !== generation || !challenges) return;
+      if (
+        otp.value &&
+        !challenges.otp.some((value) => value.challengeId === otp.value?.challengeId)
+      )
+        dismissOtpDialog();
+      if (
+        manual.value &&
+        !challenges.manual.some((value) => value.challengeId === manual.value?.challengeId)
+      )
+        dismissManualLoginDialog();
+      for (const value of challenges.otp)
+        showOtpDialog(value.accountId, label(value.accountId), value.challengeId, value.sessionId);
+      for (const value of challenges.manual)
+        showManualLoginDialog(
+          value.accountId,
+          label(value.accountId),
+          value.challengeId,
+          value.sessionId,
+        );
+    } catch {
+      /* Keep the current draft until an authoritative challenge snapshot arrives. */
+    }
+  }
   return {
-    // OTP
-    otpAccountId,
-    otpLabel,
+    rehydrate,
     otpCode,
-    otpSubmitting,
-    otpDialogOpen,
+    otpAccountId: computed(() => otp.value?.accountId ?? null),
+    otpLabel: computed(() => otp.value?.label ?? ''),
+    otpSubmitting: computed(() => otp.value?.kind === 'submitting'),
+    otpDialogOpen: computed({
+      get: () => otp.value !== null,
+      set: (value) => {
+        if (!value) dismissOtpDialog();
+      },
+    }),
+    manualLoginAccountId: computed(() => manual.value?.accountId ?? null),
+    manualLoginLabel: computed(() => manual.value?.label ?? ''),
+    manualLoginSubmitting: computed(() => manual.value?.kind === 'submitting'),
+    manualLoginDialogOpen: computed({
+      get: () => manual.value !== null,
+      set: (value) => {
+        if (!value) dismissManualLoginDialog();
+      },
+    }),
     showOtpDialog,
-    dismissOtpDialog,
-    handleOtpSubmit,
-
-    // Manual login
-    manualLoginAccountId,
-    manualLoginLabel,
-    manualLoginSubmitting,
-    manualLoginDialogOpen,
     showManualLoginDialog,
+    dismissOtpDialog,
     dismissManualLoginDialog,
+    handleOtpSubmit,
     handleManualLoginConfirm,
-
-    // Utility
     dismissByAccountId,
+    dismissAll: () => {
+      dismissOtpDialog();
+      dismissManualLoginDialog();
+    },
   };
 }

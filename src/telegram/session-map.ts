@@ -1,9 +1,10 @@
-import { mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { mkdirSync, readFileSync, writeFileSync, renameSync, rmSync } from 'node:fs';
 import { join } from 'node:path';
-import { fileURLToPath } from 'node:url';
+import { randomUUID } from 'node:crypto';
+import { chatDir } from '../paths.js';
+import { createSession, getSession } from '../ai/sessions.js';
 
-const __dirname = fileURLToPath(new URL('.', import.meta.url));
-const MAP_DIR = join(__dirname, '..', '..', 'data', 'chat');
+const MAP_DIR = chatDir;
 const MAP_PATH = join(MAP_DIR, 'telegram-sessions.json');
 
 type SessionMap = Record<string, string>; // chatId → sessionId
@@ -28,9 +29,16 @@ function load(): SessionMap {
   return cache;
 }
 
-function save() {
+function save(next: SessionMap) {
   ensureDir();
-  writeFileSync(MAP_PATH, JSON.stringify(cache, null, 2) + '\n');
+  const temporary = `${MAP_PATH}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify(next, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    renameSync(temporary, MAP_PATH);
+    cache = next;
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 export function getSessionId(chatId: number): string | undefined {
@@ -38,19 +46,27 @@ export function getSessionId(chatId: number): string | undefined {
 }
 
 export function setSessionId(chatId: number, sessionId: string): void {
-  const map = load();
-  map[String(chatId)] = sessionId;
-  save();
+  save({ ...load(), [String(chatId)]: sessionId });
 }
 
 export function clearSessionId(chatId: number): void {
-  const map = load();
+  const map = { ...load() };
   delete map[String(chatId)];
-  save();
+  save(map);
 }
 
 /** Return all known Telegram chat IDs (for broadcasting alerts). */
 export function getAllChatIds(): number[] {
   const map = load();
-  return Object.keys(map).map(Number).filter(n => !isNaN(n));
+  return Object.keys(map)
+    .map(Number)
+    .filter((n) => !isNaN(n));
+}
+
+export function resolveSession(chatId: number): string {
+  const existing = getSessionId(chatId);
+  if (existing && getSession(existing)) return existing;
+  const session = createSession();
+  setSessionId(chatId, session.id);
+  return session.id;
 }

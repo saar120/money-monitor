@@ -160,4 +160,20 @@ describe('checkAndRunMissedScrape', () => {
 
     expect(runScrapeSession).not.toHaveBeenCalled();
   });
+  it('does not consume a cron occurrence while another scrape owns admission', async () => {
+    vi.setSystemTime(new Date('2026-03-15T03:00:00.000Z'));
+    const cron = (await import('node-cron')).default;
+    const scheduler = await import('./scheduler.js');
+    scheduler.startScheduler();
+    vi.mocked(hasActiveSessions).mockReturnValue(true);
+    vi.setSystemTime(new Date('2026-03-15T04:00:01.000Z'));
+    const callback = vi.mocked(cron.schedule).mock.calls.at(-2)![1] as () => void;
+    callback();
+    expect(runScrapeSession).not.toHaveBeenCalled();
+    vi.mocked(hasActiveSessions).mockReturnValue(false);
+    scheduler.checkAndRunMissedScrape();
+    scheduler.checkAndRunMissedScrape();
+    expect(runScrapeSession).toHaveBeenCalledTimes(1);
+    scheduler.stopScheduler();
+  });
 });

@@ -2,7 +2,7 @@
 import { useMonthSwipe } from '@/composables/useMonthSwipe';
 import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
-import { computed, onMounted, ref, watch } from 'vue';
+import { computed, onMounted, ref, watch, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowRight } from 'lucide-vue-next';
 import {
@@ -31,6 +31,9 @@ const monthly = ref<SummaryItem[]>([]);
 const categories = ref<Category[]>([]);
 const cashflow = ref<CashflowItem | null>(null);
 let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 function monthRange(key: string, throughDay?: number) {
   const [year, number] = key.split('-').map(Number) as [number, number];
   return {
@@ -60,7 +63,7 @@ async function load() {
         getSummary({
           groupBy: 'spending-category',
           ...monthRange(previousMonth, elapsedDays),
-        }).catch(() => ({ summary: [] })),
+        }),
       ]);
     if (id !== requestId) return;
     current.value = thisMonth.summary;
@@ -84,7 +87,14 @@ async function load() {
   }
 }
 onMounted(load);
-watch(month, load);
+watch(month, () => {
+  current.value = [];
+  previousCategories.value = [];
+  previousFlow.value = null;
+  cashflow.value = null;
+  monthly.value = [];
+  void load();
+});
 watch(
   () => route.query.month,
   (value) => {
@@ -148,137 +158,141 @@ const largestChange = computed(() => {
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </div>
-    <section class="explore-summary">
-      <div>
-        <h2>{{ t('whereItWent') }}</h2>
-        <strong v-if="loading || error">—</strong>
-        <strong v-else><AnimatedAmount :value="total" /></strong>
-        <small v-if="!loading && !error">{{
-          delta === 0
-            ? t('sameAsLastMonth')
-            : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
-        }}</small>
-      </div>
-      <RouterLink
-        v-if="!loading && largestChange"
-        class="explore-change"
-        :to="{
-          path: `/explore/category/${encodeURIComponent(largestChange.category)}`,
-          query: { month },
-        }"
-      >
-        <span>{{ t('largestCategoryChange') }}</span>
-        <strong>{{
-          categoryMap.get(largestChange.category)?.label ??
-          (largestChange.category === 'uncategorized' ? t('uncategorized') : largestChange.category)
-        }}</strong>
-        <span
-          >{{ formatCurrency(Math.abs(largestChange.delta)) }}
-          {{ largestChange.delta > 0 ? t('more') : t('less') }}
-          {{ month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth') }}
-          <ArrowRight :size="16"
-        /></span>
-      </RouterLink>
-    </section>
-    <div v-if="!loading && mix.length" class="explore-mix-summary">
-      <div class="explore-mix" :aria-label="t('categories')">
-        <span
-          v-for="item in mix"
-          :key="item.name"
-          :title="`${item.name}: ${Math.round(item.share * 100)}%`"
-          :style="{ flexGrow: Math.max(item.share * 100, 1), background: item.color }"
-        />
-      </div>
-      <div class="explore-mix-legend">
-        <span v-for="item in mix" :key="item.name"
-          ><i :style="{ background: item.color }" />{{ item.name }}</span
+    <template v-else>
+      <section class="explore-summary">
+        <div>
+          <h2>{{ t('whereItWent') }}</h2>
+          <strong v-if="loading || error">—</strong>
+          <strong v-else><AnimatedAmount :value="total" /></strong>
+          <small v-if="!loading && !error">{{
+            delta === 0
+              ? t('sameAsLastMonth')
+              : `${formatCurrency(Math.abs(delta))} ${delta > 0 ? t('more') : t('less')} ${month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
+          }}</small>
+        </div>
+        <RouterLink
+          v-if="!loading && largestChange"
+          class="explore-change"
+          :to="{
+            path: `/explore/category/${encodeURIComponent(largestChange.category)}`,
+            query: { month },
+          }"
         >
-      </div>
-    </div>
-    <nav class="explore-switcher" :aria-label="t('explore')">
-      <RouterLink to="/explore" aria-current="page">{{ t('categories') }}</RouterLink>
-      <RouterLink :to="{ path: '/explore/monthly-comparison', query: { month } }">{{
-        t('monthlySpending')
-      }}</RouterLink>
-      <RouterLink :to="{ path: '/cash-flow', query: { month } }">{{ t('cashFlow') }}</RouterLink>
-    </nav>
-    <div class="explore-grid">
-      <section class="explore-main">
-        <div class="ledger-section-heading explore-manage-link">
-          <RouterLink to="/categories"
-            >{{ t('manageCategories') }} <ArrowRight :size="15"
-          /></RouterLink>
-        </div>
-        <div class="ledger-list">
-          <RouterLink
-            v-for="item in sortedCategories"
-            :key="item.category"
-            :to="{
-              path: `/explore/category/${encodeURIComponent(item.category ?? 'uncategorized')}`,
-              query: { month },
-            }"
-            class="explore-row"
-            :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
-          >
-            <span
-              class="category-dot"
-              :style="{
-                background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
-              }"
-            />
-            <span class="explore-row-title"
-              >{{
-                categoryMap.get(item.category ?? '')?.label ??
-                (item.category === 'uncategorized' ? t('uncategorized') : item.category)
-              }}<span v-if="item.totalAmount < 0" class="explore-category-track"
-                ><span
-                  :style="{
-                    width: `${Math.min(100, (Math.abs(item.totalAmount) / Math.max(total, 1)) * 100)}%`,
-                    background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
-                  }" /></span
-            ></span>
-            <small v-if="item.totalAmount > 0" class="is-positive">{{ t('netReceived') }}</small>
-            <strong :class="item.totalAmount > 0 ? 'is-positive' : ''"
-              >{{ item.totalAmount > 0 ? '+' : '' }}{{ formatCurrency(item.totalAmount) }}</strong
-            ><ArrowRight :size="15" />
-          </RouterLink>
-          <p v-if="!loading && !error && !sortedCategories.length" class="ledger-empty">
-            {{ t('noSpendingInMonth') }}
-          </p>
-        </div>
-        <div class="ledger-section-heading explore-subheading">
-          <h2>{{ t('monthlySpending') }}</h2>
-          <RouterLink :to="{ path: '/explore/monthly-comparison', query: { month } }"
-            >{{ t('compareMonths') }} <ArrowRight :size="15"
-          /></RouterLink>
-        </div>
-        <div class="ledger-list">
-          <RouterLink
-            v-for="item in recentMonths"
-            :key="item.month"
-            :to="{ path: '/explore/monthly-comparison', query: { month: item.month } }"
-            class="monthly-row"
-          >
-            <span>{{
-              new Date(`${item.month}-01T12:00:00`).toLocaleDateString(
-                language === 'he' ? 'he-IL' : 'en',
-                {
-                  month: 'long',
-                  year: 'numeric',
-                },
-              )
-            }}</span>
-            <span class="monthly-track"
-              ><span :style="{ width: `${(Math.abs(item.totalAmount) / biggestMonth) * 100}%` }"
-            /></span>
-            <strong>{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
-            ><ArrowRight :size="15" />
-          </RouterLink>
-          <p v-if="!loading && !error && !recentMonths.length" class="ledger-empty">
-            {{ t('monthlyHistoryEmpty') }}
-          </p>
-        </div>
+          <span>{{ t('largestCategoryChange') }}</span>
+          <strong>{{
+            categoryMap.get(largestChange.category)?.label ??
+            (largestChange.category === 'uncategorized'
+              ? t('uncategorized')
+              : largestChange.category)
+          }}</strong>
+          <span
+            >{{ formatCurrency(Math.abs(largestChange.delta)) }}
+            {{ largestChange.delta > 0 ? t('more') : t('less') }}
+            {{ month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth') }}
+            <ArrowRight :size="16"
+          /></span>
+        </RouterLink>
       </section>
-    </div>
+      <div v-if="!loading && mix.length" class="explore-mix-summary">
+        <div class="explore-mix" :aria-label="t('categories')">
+          <span
+            v-for="item in mix"
+            :key="item.name"
+            :title="`${item.name}: ${Math.round(item.share * 100)}%`"
+            :style="{ flexGrow: Math.max(item.share * 100, 1), background: item.color }"
+          />
+        </div>
+        <div class="explore-mix-legend">
+          <span v-for="item in mix" :key="item.name"
+            ><i :style="{ background: item.color }" />{{ item.name }}</span
+          >
+        </div>
+      </div>
+      <nav class="explore-switcher" :aria-label="t('explore')">
+        <RouterLink to="/explore" aria-current="page">{{ t('categories') }}</RouterLink>
+        <RouterLink :to="{ path: '/explore/monthly-comparison', query: { month } }">{{
+          t('monthlySpending')
+        }}</RouterLink>
+        <RouterLink :to="{ path: '/cash-flow', query: { month } }">{{ t('cashFlow') }}</RouterLink>
+      </nav>
+      <div class="explore-grid">
+        <section class="explore-main">
+          <div class="ledger-section-heading explore-manage-link">
+            <RouterLink to="/categories"
+              >{{ t('manageCategories') }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <div class="ledger-list">
+            <RouterLink
+              v-for="item in sortedCategories"
+              :key="item.category"
+              :to="{
+                path: `/explore/category/${encodeURIComponent(item.category ?? 'uncategorized')}`,
+                query: { month },
+              }"
+              class="explore-row"
+              :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
+            >
+              <span
+                class="category-dot"
+                :style="{
+                  background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
+                }"
+              />
+              <span class="explore-row-title"
+                >{{
+                  categoryMap.get(item.category ?? '')?.label ??
+                  (item.category === 'uncategorized' ? t('uncategorized') : item.category)
+                }}<span v-if="item.totalAmount < 0" class="explore-category-track"
+                  ><span
+                    :style="{
+                      width: `${Math.min(100, (Math.abs(item.totalAmount) / Math.max(total, 1)) * 100)}%`,
+                      background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
+                    }" /></span
+              ></span>
+              <small v-if="item.totalAmount > 0" class="is-positive">{{ t('netReceived') }}</small>
+              <strong :class="item.totalAmount > 0 ? 'is-positive' : ''"
+                >{{ item.totalAmount > 0 ? '+' : '' }}{{ formatCurrency(item.totalAmount) }}</strong
+              ><ArrowRight :size="15" />
+            </RouterLink>
+            <p v-if="!loading && !error && !sortedCategories.length" class="ledger-empty">
+              {{ t('noSpendingInMonth') }}
+            </p>
+          </div>
+          <div class="ledger-section-heading explore-subheading">
+            <h2>{{ t('monthlySpending') }}</h2>
+            <RouterLink :to="{ path: '/explore/monthly-comparison', query: { month } }"
+              >{{ t('compareMonths') }} <ArrowRight :size="15"
+            /></RouterLink>
+          </div>
+          <div class="ledger-list">
+            <RouterLink
+              v-for="item in recentMonths"
+              :key="item.month"
+              :to="{ path: '/explore/monthly-comparison', query: { month: item.month } }"
+              class="monthly-row"
+            >
+              <span>{{
+                new Date(`${item.month}-01T12:00:00`).toLocaleDateString(
+                  language === 'he' ? 'he-IL' : 'en',
+                  {
+                    month: 'long',
+                    year: 'numeric',
+                  },
+                )
+              }}</span>
+              <span class="monthly-track"
+                ><span :style="{ width: `${(Math.abs(item.totalAmount) / biggestMonth) * 100}%` }"
+              /></span>
+              <strong>{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
+              ><ArrowRight :size="15" />
+            </RouterLink>
+            <p v-if="!loading && !error && !recentMonths.length" class="ledger-empty">
+              {{ t('monthlyHistoryEmpty') }}
+            </p>
+          </div>
+        </section>
+      </div>
+    </template>
   </div>
 </template>

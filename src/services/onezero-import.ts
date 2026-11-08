@@ -1,8 +1,9 @@
+import { createHash, randomUUID } from 'node:crypto';
+import { acceptFinancialCommand } from './financial-command.js';
+import { enqueuePostImport, runPostImport } from './post-import.js';
 import { eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, transactions } from '../db/schema.js';
-import { applyOwnership } from './ownership.js';
-import { batchCategorize } from '../ai/agent.js';
 import {
   computeCollisionTransactionHash,
   computeLegacyTransactionHash,
@@ -196,7 +197,41 @@ export function createOneZeroImportPreview(
   };
 }
 
-export function commitOneZeroImport(accountId: number, buffer: Buffer): OneZeroImportCommitResult {
+export function commitOneZeroImport(
+  accountId: number,
+  buffer: Buffer,
+  commandId: string = randomUUID(),
+): OneZeroImportCommitResult {
+  let jobId: number | undefined;
+  const accepted = acceptFinancialCommand(
+    db,
+    'desktop',
+    commandId,
+    {
+      kind: 'onezero-import',
+      accountId,
+      digest: createHash('sha256').update(buffer).digest('hex'),
+    },
+    () =>
+      applyOneZeroImport(accountId, buffer, (id) => {
+        jobId = id;
+      }),
+  );
+  // Admission happens after the financial effect, enrichment job and receipt commit.
+  if (jobId !== undefined) {
+    try {
+      void runPostImport(jobId).catch(() => {});
+    } catch {
+      /* The committed job remains recoverable on restart. */
+    }
+  }
+  return accepted;
+}
+function applyOneZeroImport(
+  accountId: number,
+  buffer: Buffer,
+  enqueued: (id: number) => void,
+): OneZeroImportCommitResult {
   const parsed = parseOneZeroWorkbook(buffer);
   const analysis = analyzeImport(accountId, parsed);
   if (parsed.invalidRows.length > 0) throw new Error('Import contains invalid rows');
@@ -272,15 +307,8 @@ export function commitOneZeroImport(accountId: number, buffer: Buffer): OneZeroI
   });
 
   if (insertedIds.length > 0) {
-    applyOwnership({ ids: insertedIds });
-    void batchCategorize(insertedIds.length, insertedIds)
-      .then(() => applyOwnership({ ids: insertedIds }))
-      .catch((error) => {
-        console.error(
-          '[OneZero import] Background categorization failed:',
-          error instanceof Error ? error.message : error,
-        );
-      });
+    const jobId = enqueuePostImport(`onezero:${accountId}`, insertedIds);
+    enqueued(jobId);
   }
 
   return { imported, linked, duplicates };

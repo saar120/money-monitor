@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
@@ -364,16 +365,17 @@ describe('summary routes', () => {
       currencyCode: 'ILS',
       merchantKey: first.json().payments[0].merchantKey,
     };
+    let expectedVersion = 0;
     const request = (decision: string) =>
       server.inject({
         method: 'PUT',
         url: '/api/recurring-payments/decision',
         headers: authHeaders(),
-        payload: { ...body, decision },
+        payload: { ...body, decision, commandId: randomUUID(), expectedVersion: expectedVersion++ },
       });
     const excluded = await request('exclude');
     expect(excluded.statusCode).toBe(200);
-    expect(excluded.json()).toMatchObject({
+    expect(excluded.json().result).toMatchObject({
       payments: [],
       excluded: [{ name: 'Netflix' }],
       totals: [],
@@ -385,7 +387,7 @@ describe('summary routes', () => {
     });
     expect(persisted.json().excluded).toHaveLength(1);
     const restored = await request('auto');
-    expect(restored.json()).toMatchObject({ payments: [{ name: 'Netflix' }], excluded: [] });
+    expect(restored.json().result).toMatchObject({ payments: [{ name: 'Netflix' }], excluded: [] });
     expect((await request('invalid')).statusCode).toBe(400);
   });
 

@@ -4,6 +4,7 @@ export type SseEventType =
   | 'connected'
   | 'otp-required'
   | 'manual-action-required'
+  | 'session-updated'
   | 'session-started'
   | 'session-completed'
   | 'account-scrape-started'
@@ -13,6 +14,8 @@ export type SseEventType =
 export interface SseEvent {
   type: SseEventType;
   sessionId?: number;
+  challengeId?: string;
+  revision?: number;
   accountId?: number;
   accountIds?: number[];
   trigger?: string;
@@ -38,6 +41,16 @@ export function removeSseClient(res: ServerResponse): void {
 export function broadcastSseEvent(event: SseEvent): void {
   const data = JSON.stringify(event);
   for (const client of clients) {
-    client.write(`data: ${data}\n\n`);
+    try {
+      if (client.destroyed) clients.delete(client);
+      else client.write(`data: ${data}\n\n`);
+    } catch {
+      clients.delete(client);
+    }
   }
+}
+
+export function closeSseClients() {
+  for (const client of clients) client.end();
+  clients.clear();
 }

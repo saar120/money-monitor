@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted } from 'vue';
 import {
@@ -30,6 +31,7 @@ import { TrendingUp, TrendingDown, Loader2, Plus, Home } from 'lucide-vue-next';
 
 const { chartPrimary } = useChartTheme();
 
+const mutationError = ref('');
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
   language.value === 'he'
@@ -66,11 +68,18 @@ const copy = computed(() =>
 );
 
 // ─── Data fetching ───
-const assetApi = useApi<Asset>(() => getAsset(props.assetId));
-const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 }),
+const assetApi = useApi<Asset>(
+  () => getAsset(props.assetId),
+  () => String(props.assetId),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
+const movementsApi = useApi<{ movements: Movement[]; total: number }>(
+  () => getMovements(props.assetId, { limit: 50 }),
+  () => String(props.assetId),
+);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(
+  () => getAssetSnapshots(props.assetId),
+  () => String(props.assetId),
+);
 
 const asset = computed(() => assetApi.data.value ?? props.initialAsset);
 const movements = computed(() => movementsApi.data.value?.movements ?? []);
@@ -115,51 +124,65 @@ function formatMovementDate(iso: string) {
 // ─── Update Value Dialog ───
 const showUpdateDialog = ref(false);
 const updateForm = ref({ currentValue: 0 });
-const updatingSaving = ref(false);
+const updatingSavingOperation = useFormOperation();
+const updatingSaving = updatingSavingOperation.pending;
 
 function openUpdateDialog() {
+  if (updatingSaving.value || rentSaving.value) return;
   updateForm.value.currentValue = isMultiCurrency.value ? nativeValue.value : currentValue.value;
   showUpdateDialog.value = true;
 }
 
 async function saveUpdate() {
-  updatingSaving.value = true;
-  try {
-    await updateAssetValue(props.assetId, { currentValue: updateForm.value.currentValue });
+  if (updatingSaving.value || rentSaving.value) return;
+  const assetId = props.assetId;
+
+  mutationError.value = '';
+  const outcome = await updatingSavingOperation.run(
+    assetId,
+    { ...updateForm.value },
+    async (draft) => {
+      await updateAssetValue(assetId, { currentValue: draft.currentValue });
+    },
+  );
+  if (outcome.status === 'accepted') {
     showUpdateDialog.value = false;
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    updatingSaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ─── Record Rent Dialog ───
 const showRentDialog = ref(false);
 const rentForm = ref({ amount: 0, date: new Date().toISOString().slice(0, 10), notes: '' });
-const rentSaving = ref(false);
+const rentSavingOperation = useFormOperation();
+const rentSaving = rentSavingOperation.pending;
 
 function openRentDialog() {
+  if (updatingSaving.value || rentSaving.value) return;
   rentForm.value = { amount: 0, date: new Date().toISOString().slice(0, 10), notes: '' };
   showRentDialog.value = true;
 }
 
 async function saveRent() {
-  rentSaving.value = true;
-  try {
-    await recordRentIncome(props.assetId, {
-      amount: rentForm.value.amount,
-      date: rentForm.value.date,
-      notes: rentForm.value.notes || undefined,
+  if (updatingSaving.value || rentSaving.value) return;
+  const assetId = props.assetId;
+
+  mutationError.value = '';
+  const outcome = await rentSavingOperation.run(assetId, { ...rentForm.value }, async (draft) => {
+    await recordRentIncome(assetId, {
+      amount: draft.amount,
+      date: draft.date,
+      notes: draft.notes || undefined,
     });
+  });
+  if (outcome.status === 'accepted') {
     showRentDialog.value = false;
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    rentSaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ─── Chart ───
@@ -185,6 +208,17 @@ const chartDatasets = computed(() =>
 
 <template>
   <div class="asset-view min-w-0 animate-fade-in-up">
+    <p v-if="mutationError" role="alert" class="text-destructive text-[14px]">
+      {{ mutationError }}
+    </p>
+    <div
+      v-if="assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value"
+      role="alert"
+      class="text-destructive text-[14px]"
+    >
+      {{ assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value }}
+      <Button variant="secondary" size="sm" @click="refreshAll">{{ t('retry') }}</Button>
+    </div>
     <!-- Loading skeleton -->
     <div v-if="assetApi.loading.value && !asset">
       <Skeleton class="h-8 w-64 mb-2" />
@@ -192,7 +226,7 @@ const chartDatasets = computed(() =>
     </div>
 
     <!-- Error state -->
-    <div v-else-if="assetApi.error.value" class="text-center py-12">
+    <div v-else-if="assetApi.error.value && !asset" class="text-center py-12">
       <p class="text-destructive text-[14px]">{{ assetApi.error.value }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
         t('retry')

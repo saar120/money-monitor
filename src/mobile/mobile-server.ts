@@ -102,6 +102,9 @@ export function createMobileServer(options: CreateMobileServerOptions = {}) {
   // transport boundary without relying on each handler to remember it.
   app.addHook('onSend', async (_request, reply, payload) => {
     reply.header('Cache-Control', 'no-store');
+    const serverId =
+      options.transactions?.server.id ?? options.overview?.server.id ?? options.advisor?.server.id;
+    if (serverId) reply.header('X-Money-Monitor-Server-Id', serverId);
     return payload;
   });
 

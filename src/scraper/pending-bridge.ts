@@ -1,48 +1,86 @@
+import { randomUUID } from 'node:crypto';
 interface PendingEntry<T> {
+  challengeId: string;
+  sessionId?: number;
   resolve: (value: T) => void;
   reject: (reason: Error) => void;
-  timer: ReturnType<typeof setTimeout>;
+  cleanup: () => void;
 }
-
-export interface PendingBridge<T> {
-  waitFor(accountId: number, onRequested: () => void): Promise<T>;
-  confirm(accountId: number, value: T): boolean;
-  cancel(accountId: number): void;
+export interface Challenge {
+  challengeId: string;
+  sessionId?: number;
+  accountId: number;
 }
-
-export function createPendingBridge<T>(timeoutMs: number, label: string): PendingBridge<T> {
+export function createPendingBridge<T>(timeoutMs: number, label: string) {
   const pending = new Map<number, PendingEntry<T>>();
-
-  function cancel(accountId: number): void {
+  function settle(
+    accountId: number,
+    challengeId: string,
+    outcome: { value: T } | { error: Error },
+  ) {
     const entry = pending.get(accountId);
-    if (!entry) return;
-    clearTimeout(entry.timer);
+    if (!entry || entry.challengeId !== challengeId) return false;
     pending.delete(accountId);
-    entry.reject(new Error(`${label} cancelled`));
-  }
-
-  function waitFor(accountId: number, onRequested: () => void): Promise<T> {
-    cancel(accountId);
-
-    return new Promise<T>((resolve, reject) => {
-      const timer = setTimeout(() => {
-        pending.delete(accountId);
-        reject(new Error(`${label} timeout: no response within ${timeoutMs / 1000}s`));
-      }, timeoutMs);
-
-      pending.set(accountId, { resolve, reject, timer });
-      onRequested();
-    });
-  }
-
-  function confirm(accountId: number, value: T): boolean {
-    const entry = pending.get(accountId);
-    if (!entry) return false;
-    clearTimeout(entry.timer);
-    pending.delete(accountId);
-    entry.resolve(value);
+    entry.cleanup();
+    if ('error' in outcome) entry.reject(outcome.error);
+    else entry.resolve(outcome.value);
     return true;
   }
-
-  return { waitFor, confirm, cancel };
+  function cancel(accountId: number) {
+    const entry = pending.get(accountId);
+    if (entry) settle(accountId, entry.challengeId, { error: new Error(`${label} cancelled`) });
+  }
+  function waitFor(
+    accountId: number,
+    onRequested: (challenge: Challenge) => void,
+    options: { sessionId?: number; signal?: AbortSignal } = {},
+  ): Promise<T> {
+    cancel(accountId);
+    return new Promise<T>((resolve, reject) => {
+      if (options.signal?.aborted) {
+        reject(new Error(`${label} cancelled`));
+        return;
+      }
+      const challengeId = randomUUID();
+      const abort = () =>
+        settle(accountId, challengeId, { error: new Error(`${label} cancelled`) });
+      const timer = setTimeout(
+        () =>
+          settle(accountId, challengeId, {
+            error: new Error(`${label} timeout: no response within ${timeoutMs / 1000}s`),
+          }),
+        timeoutMs,
+      );
+      pending.set(accountId, {
+        challengeId,
+        sessionId: options.sessionId,
+        resolve,
+        reject,
+        cleanup: () => {
+          clearTimeout(timer);
+          options.signal?.removeEventListener('abort', abort);
+        },
+      });
+      options.signal?.addEventListener('abort', abort, { once: true });
+      try {
+        onRequested({ accountId, challengeId, sessionId: options.sessionId });
+      } catch (cause) {
+        settle(accountId, challengeId, {
+          error: cause instanceof Error ? cause : new Error(label + ' failed'),
+        });
+      }
+    });
+  }
+  return {
+    waitFor,
+    cancel,
+    confirm: (accountId: number, value: T, challengeId?: string) =>
+      challengeId ? settle(accountId, challengeId, { value }) : false,
+    challenges: () =>
+      Array.from(pending, ([accountId, entry]) => ({
+        accountId,
+        challengeId: entry.challengeId,
+        sessionId: entry.sessionId,
+      })),
+  };
 }

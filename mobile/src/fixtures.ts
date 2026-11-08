@@ -13,6 +13,7 @@ export type FixtureScenarioName =
 
 export type Transaction = {
   id: string;
+  resourceVersion?: number;
   occurredAt: string;
   merchant: string;
   description?: string;
@@ -62,6 +63,14 @@ type Freshness = {
 };
 
 export type HomeData = {
+  snapshot?: {
+    id: string;
+    calculatedAt: string;
+    staleAt: string;
+    deleteAfter: string;
+    complete: boolean;
+    cacheable: boolean;
+  };
   currentDate: string;
   monthKey: string;
   month: string;

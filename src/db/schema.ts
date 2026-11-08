@@ -56,6 +56,10 @@ export const transactions = sqliteTable(
     ownerReviewReason: text('owner_review_reason'),
     meta: text('meta'),
     ignored: integer('ignored', { mode: 'boolean' }).notNull().default(false),
+    inclusionSource: text('inclusion_source', { enum: ['category', 'manual', 'legacy'] })
+      .notNull()
+      .default('category'),
+    resourceVersion: integer('resource_version').notNull().default(1),
     needsReview: integer('needs_review', { mode: 'boolean' }).notNull().default(false),
     reviewReason: text('review_reason'),
     confidence: real('confidence'),
@@ -92,7 +96,8 @@ export const recurringPaymentDecisions = sqliteTable(
       .references(() => accounts.id, { onDelete: 'cascade' }),
     currencyCode: text('currency_code').notNull(),
     merchantKey: text('merchant_key').notNull(),
-    decision: text('decision', { enum: ['include', 'exclude'] }).notNull(),
+    decision: text('decision', { enum: ['include', 'exclude', 'auto'] }).notNull(),
+    resourceVersion: integer('resource_version').notNull().default(1),
   },
   (table) => [
     uniqueIndex('idx_recurring_payment_decisions_key').on(
@@ -212,6 +217,7 @@ export const holdings = sqliteTable(
     assetId: integer('asset_id')
       .notNull()
       .references(() => assets.id, { onDelete: 'cascade' }),
+    resourceVersion: integer('resource_version').notNull().default(1),
     name: text('name').notNull(),
     type: text('type').notNull(),
     currency: text('currency').notNull(),
@@ -339,3 +345,51 @@ export const mobileDevices = sqliteTable(
     index('idx_mobile_devices_revoked_at').on(table.revokedAt),
   ],
 );
+
+export const mutationReceipts = sqliteTable(
+  'mutation_receipts',
+  {
+    clientId: text('client_id').notNull(),
+    commandId: text('command_id').notNull(),
+    payloadDigest: text('payload_digest').notNull(),
+    outcome: text('outcome').notNull(),
+    createdAt: text('created_at')
+      .notNull()
+      .default(sql`(datetime('now'))`),
+  },
+  (table) => [uniqueIndex('idx_mutation_receipts_command').on(table.clientId, table.commandId)],
+);
+
+export const postImportJobs = sqliteTable('post_import_jobs', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  source: text('source').notNull(),
+  transactionIds: text('transaction_ids').notNull(),
+  results: text('results').notNull().default('[]'),
+  phase: text('phase', {
+    enum: [
+      'committed',
+      'classifying',
+      'ownership',
+      'alerts',
+      'finished',
+      'attention-needed',
+      'delivery-unknown',
+    ],
+  })
+    .notNull()
+    .default('committed'),
+  updatedAt: text('updated_at')
+    .notNull()
+    .default(sql`(datetime('now'))`),
+});
+
+export const telegramDeliveries = sqliteTable('telegram_deliveries', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  key: text('key').notNull().unique(),
+  payload: text('payload').notNull(),
+});
+export const alertEvaluations = sqliteTable('alert_evaluations', {
+  id: integer('id').primaryKey({ autoIncrement: true }),
+  key: text('key').notNull().unique(),
+  payload: text('payload').notNull(),
+});

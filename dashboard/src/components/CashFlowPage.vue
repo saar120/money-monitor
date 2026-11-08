@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, ref, onScopeDispose, watch } from 'vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft } from 'lucide-vue-next';
 import { getCashflowSummary, type CashflowItem } from '@/api/client';
@@ -10,16 +10,16 @@ import CashflowSankey from './CashflowSankey.vue';
 
 const route = useRoute();
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
-const initial = isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7);
+const initial = ref(isValidMonth(route.query.month) ? route.query.month : today.slice(0, 7));
 const range = ref<3 | 6 | 12>(6);
-const selectedMonth = ref(initial);
+const selectedMonth = ref(initial.value);
 const rows = ref<CashflowItem[]>([]);
 const samePointPrevious = ref<CashflowItem | null>(null);
 const loading = ref(true);
 const error = ref('');
 
 function monthKey(back: number) {
-  const [year, month] = initial.split('-').map(Number) as [number, number];
+  const [year, month] = initial.value.split('-').map(Number) as [number, number];
   return new Date(Date.UTC(year, month - 1 - back, 1)).toISOString().slice(0, 7);
 }
 function monthLabel(key: string) {
@@ -31,35 +31,54 @@ function monthLabel(key: string) {
     },
   );
 }
+let requestId = 0;
+onScopeDispose(() => {
+  requestId++;
+});
 async function load() {
+  const request = ++requestId;
   loading.value = true;
   error.value = '';
   try {
-    const [year, month] = initial.split('-').map(Number) as [number, number];
+    const [year, month] = initial.value.split('-').map(Number) as [number, number];
     const lastDay = new Date(Date.UTC(year, month, 0)).getUTCDate();
     const priorMonth = monthKey(1);
     const priorLastDay = new Date(Date.UTC(year, month - 1, 0)).getUTCDate();
     const [data, prior] = await Promise.all([
       getCashflowSummary({
         startDate: `${monthKey(11)}-01`,
-        endDate: initial === today.slice(0, 7) ? today : `${initial}-${lastDay}`,
+        endDate: initial.value === today.slice(0, 7) ? today : `${initial.value}-${lastDay}`,
       }),
-      initial === today.slice(0, 7)
+      initial.value === today.slice(0, 7)
         ? getCashflowSummary({
             startDate: `${priorMonth}-01`,
             endDate: `${priorMonth}-${String(Math.min(priorLastDay, Number(today.slice(-2)))).padStart(2, '0')}`,
           })
         : Promise.resolve({ summary: [] }),
     ]);
+    if (request !== requestId) return;
     rows.value = data.summary;
     samePointPrevious.value = prior.summary[0] ?? null;
   } catch (cause) {
+    if (request !== requestId) return;
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
-    loading.value = false;
+    if (request === requestId) loading.value = false;
   }
 }
 onMounted(load);
+watch(
+  () => route.query.month,
+  (value) => {
+    if (isValidMonth(value) && value !== initial.value) {
+      initial.value = value;
+      selectedMonth.value = value;
+      rows.value = [];
+      samePointPrevious.value = null;
+      void load();
+    }
+  },
+);
 const byMonth = computed(() => new Map(rows.value.map((row) => [row.month, row])));
 const months = computed(() =>
   Array.from({ length: 12 }, (_, index) => {
@@ -102,7 +121,7 @@ const totals = computed(() => {
 });
 function chooseRange(count: 3 | 6 | 12) {
   range.value = count;
-  selectedMonth.value = initial;
+  selectedMonth.value = initial.value;
 }
 </script>
 
@@ -128,83 +147,87 @@ function chooseRange(count: 3 | 6 | 12) {
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
     </div>
-    <section class="cashflow-trend" :aria-label="t('incomeAndSpendingByMonth')">
-      <div class="cashflow-trend-summary">
-        <span>{{ monthLabel(selected.month) }}</span>
-        <strong :class="net >= 0 ? 'is-positive' : 'is-warning'"
-          >{{ net < 0 ? '−' : '+' }}{{ formatCurrency(net) }}</strong
-        >
-        <small v-if="delta !== null"
-          >{{ formatCurrency(delta) }} {{ delta >= 0 ? t('better') : t('worse') }}
-          {{
-            selected.month === today.slice(0, 7) ? t('samePointLastMonth') : t('thanPreviousMonth')
-          }}</small
-        >
-        <small v-else>{{ t('postedIncomeMinusSpending') }}</small>
-      </div>
-      <p v-if="loading" class="cashflow-loading">{{ t('loadingCashFlow') }}</p>
-      <div v-else class="cashflow-pairs">
-        <button
-          v-for="row in series"
-          :key="row.month"
-          type="button"
-          class="cashflow-pair-group"
-          :class="{ selected: selected.month === row.month }"
-          :aria-pressed="selected.month === row.month"
-          :aria-label="`${monthLabel(row.month)}: ${t('income')} ${formatCurrency(row.income)}, ${t('spending')} ${formatCurrency(row.expense)}`"
-          @click="selectedMonth = row.month"
-        >
-          <span class="cashflow-pair">
-            <span
-              class="cashflow-income"
-              :style="{ height: `${Math.max(3, (row.income / max) * 100)}%` }" /><span
-              class="cashflow-expense"
-              :style="{ height: `${Math.max(3, (row.expense / max) * 100)}%` }"
-          /></span>
-          <span class="cashflow-month-label">{{ monthLabel(row.month).split(' ')[0] }}</span>
-        </button>
-      </div>
-      <div class="cashflow-legend">
-        <span><i class="cashflow-income" /> {{ t('postedIncome') }}</span
-        ><span><i class="cashflow-expense" /> {{ t('postedSpending') }}</span>
-      </div>
-      <div class="cashflow-selected">
+    <template v-else>
+      <section class="cashflow-trend" :aria-label="t('incomeAndSpendingByMonth')">
+        <div class="cashflow-trend-summary">
+          <span>{{ monthLabel(selected.month) }}</span>
+          <strong :class="net >= 0 ? 'is-positive' : 'is-warning'"
+            >{{ net < 0 ? '−' : '+' }}{{ formatCurrency(net) }}</strong
+          >
+          <small v-if="delta !== null"
+            >{{ formatCurrency(delta) }} {{ delta >= 0 ? t('better') : t('worse') }}
+            {{
+              selected.month === today.slice(0, 7)
+                ? t('samePointLastMonth')
+                : t('thanPreviousMonth')
+            }}</small
+          >
+          <small v-else>{{ t('postedIncomeMinusSpending') }}</small>
+        </div>
+        <p v-if="loading" class="cashflow-loading">{{ t('loadingCashFlow') }}</p>
+        <div v-else class="cashflow-pairs">
+          <button
+            v-for="row in series"
+            :key="row.month"
+            type="button"
+            class="cashflow-pair-group"
+            :class="{ selected: selected.month === row.month }"
+            :aria-pressed="selected.month === row.month"
+            :aria-label="`${monthLabel(row.month)}: ${t('income')} ${formatCurrency(row.income)}, ${t('spending')} ${formatCurrency(row.expense)}`"
+            @click="selectedMonth = row.month"
+          >
+            <span class="cashflow-pair">
+              <span
+                class="cashflow-income"
+                :style="{ height: `${Math.max(3, (row.income / max) * 100)}%` }" /><span
+                class="cashflow-expense"
+                :style="{ height: `${Math.max(3, (row.expense / max) * 100)}%` }"
+            /></span>
+            <span class="cashflow-month-label">{{ monthLabel(row.month).split(' ')[0] }}</span>
+          </button>
+        </div>
+        <div class="cashflow-legend">
+          <span><i class="cashflow-income" /> {{ t('postedIncome') }}</span
+          ><span><i class="cashflow-expense" /> {{ t('postedSpending') }}</span>
+        </div>
+        <div class="cashflow-selected">
+          <div>
+            <span>{{ t('income') }}</span
+            ><strong>{{ formatCurrency(selected.income) }}</strong>
+          </div>
+          <div>
+            <span>{{ t('spending') }}</span
+            ><strong>{{ formatCurrency(selected.expense) }}</strong>
+          </div>
+        </div>
+      </section>
+      <section class="cashflow-range-summary">
+        <h2>{{ range === 12 ? t('year') : `${range} ${t('months')}` }} {{ t('atAGlance') }}</h2>
         <div>
-          <span>{{ t('income') }}</span
-          ><strong>{{ formatCurrency(selected.income) }}</strong>
+          <span>{{ t('netCashFlow') }}</span
+          ><strong :class="totals.net >= 0 ? 'is-positive' : 'is-warning'"
+            >{{ totals.net < 0 ? '−' : '+' }}{{ formatCurrency(totals.net) }}</strong
+          >
         </div>
         <div>
-          <span>{{ t('spending') }}</span
-          ><strong>{{ formatCurrency(selected.expense) }}</strong>
+          <span>{{ t('monthlyAverage') }}</span
+          ><strong :class="totals.average >= 0 ? 'is-positive' : 'is-warning'"
+            >{{ totals.average < 0 ? '−' : '+' }}{{ formatCurrency(totals.average) }}</strong
+          >
         </div>
-      </div>
-    </section>
-    <section class="cashflow-range-summary">
-      <h2>{{ range === 12 ? t('year') : `${range} ${t('months')}` }} {{ t('atAGlance') }}</h2>
-      <div>
-        <span>{{ t('netCashFlow') }}</span
-        ><strong :class="totals.net >= 0 ? 'is-positive' : 'is-warning'"
-          >{{ totals.net < 0 ? '−' : '+' }}{{ formatCurrency(totals.net) }}</strong
-        >
-      </div>
-      <div>
-        <span>{{ t('monthlyAverage') }}</span
-        ><strong :class="totals.average >= 0 ? 'is-positive' : 'is-warning'"
-          >{{ totals.average < 0 ? '−' : '+' }}{{ formatCurrency(totals.average) }}</strong
-        >
-      </div>
-      <div>
-        <span>{{ t('totalIncome') }}</span
-        ><strong>{{ formatCurrency(totals.income) }}</strong>
-      </div>
-      <div>
-        <span>{{ t('totalSpending') }}</span
-        ><strong>{{ formatCurrency(totals.expense) }}</strong>
-      </div>
-    </section>
-    <section class="cashflow-detail-section">
-      <h2>{{ t('followFlow') }}</h2>
-      <CashflowSankey :month="selectedMonth" />
-    </section>
+        <div>
+          <span>{{ t('totalIncome') }}</span
+          ><strong>{{ formatCurrency(totals.income) }}</strong>
+        </div>
+        <div>
+          <span>{{ t('totalSpending') }}</span
+          ><strong>{{ formatCurrency(totals.expense) }}</strong>
+        </div>
+      </section>
+      <section class="cashflow-detail-section">
+        <h2>{{ t('followFlow') }}</h2>
+        <CashflowSankey :month="selectedMonth" />
+      </section>
+    </template>
   </div>
 </template>

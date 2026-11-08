@@ -1,4 +1,5 @@
-import { readFileSync, writeFileSync, mkdirSync } from 'node:fs';
+import { readFileSync, writeFileSync, mkdirSync, renameSync, rmSync } from 'node:fs';
+import { randomUUID } from 'node:crypto';
 import { join } from 'node:path';
 import { dataDir } from '../paths.js';
 
@@ -7,6 +8,7 @@ const SETTINGS_PATH = join(SETTINGS_DIR, 'alert-settings.json');
 
 /** Internal tracking state (not exposed to clients). */
 export interface AlertInternalState {
+  _lastAlertEvaluationId?: number;
   _lastNetWorthTotal?: number;
   _knownRecurring?: string[];
 }
@@ -63,9 +65,15 @@ export function loadAlertSettings(): AlertSettings {
 }
 
 export function saveAlertSettings(settings: AlertSettings): void {
-  cache = settings;
   ensureDir();
-  writeFileSync(SETTINGS_PATH, JSON.stringify(settings, null, 2) + '\n');
+  const temporary = `${SETTINGS_PATH}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, JSON.stringify(settings, null, 2) + '\n', { mode: 0o600, flag: 'wx' });
+    renameSync(temporary, SETTINGS_PATH);
+    cache = settings;
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
 export function updateAlertSettings(partial: Partial<AlertSettings>): AlertSettings {
@@ -84,6 +92,7 @@ export function getPublicSettings(): AlertPublicSettings {
   const copy = { ...loadAlertSettings() };
   delete copy._lastNetWorthTotal;
   delete copy._knownRecurring;
+  delete copy._lastAlertEvaluationId;
   return copy;
 }
 

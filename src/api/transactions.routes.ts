@@ -1,27 +1,36 @@
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
+import { transactionQuerySchema } from './validation.js';
+import { parseIntParam, validateBody, validateQuery } from './helpers.js';
 import {
-  transactionQuerySchema,
-  ignoreTransactionSchema,
-  updateTransactionSchema,
-  updateTransactionEffectiveDateSchema,
-  updateTransactionOwnerSchema,
-  resolveReviewSchema,
-} from './validation.js';
-import { parseIntParam, validateBody, validateQuery, sendServiceError } from './helpers.js';
-import {
+  commandTransaction,
+  transactionCommandSchema,
   listTransactions,
   getTransactionById,
   getActivitySince,
   getNeedsReviewCount,
-  resolveReview,
-  setTransactionIgnored,
-  updateTransactionCategory,
-  updateTransactionEffectiveDate,
 } from '../services/transactions.js';
-import { setTransactionOwner } from '../services/ownership.js';
+import { FinancialCommandError } from '../services/financial-command.js';
 
 export async function transactionsRoutes(app: FastifyInstance) {
+  app.get('/api/transactions/capabilities', async () => ({
+    commands: ['transaction.v1', 'recurring-decision.v1', 'holding-prices.v1'],
+  }));
+  app.post<{ Params: { id: string } }>('/api/transactions/:id/commands', async (request, reply) => {
+    const id = parseIntParam(request.params.id, 'transaction id', reply);
+    if (id === null) return;
+    const command = validateBody(transactionCommandSchema, request.body, reply);
+    if (!command) return;
+    try {
+      return commandTransaction(id, command, 'desktop');
+    } catch (error) {
+      if (error instanceof FinancialCommandError)
+        return reply
+          .status(error.status)
+          .send({ error: error.code, code: error.code, current: error.current });
+      throw error;
+    }
+  });
   app.get('/api/transactions', async (request, reply) => {
     const data = validateQuery(transactionQuerySchema, request.query, reply);
     if (!data) return;
@@ -83,59 +92,12 @@ export async function transactionsRoutes(app: FastifyInstance) {
     return reply.send({ transaction });
   });
 
-  app.patch<{ Params: { id: string } }>('/api/transactions/:id/resolve', async (request, reply) => {
-    const id = parseIntParam(request.params.id, 'transaction id', reply);
-    if (id === null) return;
-    const data = validateBody(resolveReviewSchema, request.body, reply);
-    if (!data) return;
-    const updated = resolveReview(id, data.category);
-    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
-    return reply.send({ transaction: updated });
-  });
-
-  app.patch<{ Params: { id: string } }>('/api/transactions/:id/ignore', async (request, reply) => {
-    const id = parseIntParam(request.params.id, 'transaction id', reply);
-    if (id === null) return;
-    const data = validateBody(ignoreTransactionSchema, request.body, reply);
-    if (!data) return;
-    const updated = setTransactionIgnored(id, data.ignored);
-    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
-    return reply.send({ transaction: updated });
-  });
-
-  app.patch<{ Params: { id: string } }>('/api/transactions/:id', async (request, reply) => {
-    const id = parseIntParam(request.params.id, 'transaction id', reply);
-    if (id === null) return;
-    const data = validateBody(updateTransactionSchema, request.body, reply);
-    if (!data) return;
-    const updated = updateTransactionCategory(id, data.category);
-    if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
-    return reply.send({ transaction: updated });
-  });
-
-  app.patch<{ Params: { id: string } }>(
-    '/api/transactions/:id/effective-date',
-    async (request, reply) => {
-      const id = parseIntParam(request.params.id, 'transaction id', reply);
-      if (id === null) return;
-      const data = validateBody(updateTransactionEffectiveDateSchema, request.body, reply);
-      if (!data) return;
-      const updated = updateTransactionEffectiveDate(id, data.effectiveDate);
-      if (!updated) return reply.status(404).send({ error: 'Transaction not found' });
-      return reply.send({ transaction: updated });
-    },
-  );
-
-  app.patch<{ Params: { id: string } }>('/api/transactions/:id/owner', async (request, reply) => {
-    const id = parseIntParam(request.params.id, 'transaction id', reply);
-    if (id === null) return;
-    const data = validateBody(updateTransactionOwnerSchema, request.body, reply);
-    if (!data) return;
-    const result = setTransactionOwner(id, {
-      type: data.ownerType,
-      memberId: data.ownerMemberId,
-    });
-    if (!result.ok) return sendServiceError(reply, result);
-    return reply.send({ transaction: result.transaction });
-  });
+  // Mixed-version reads stay available; legacy unversioned writes fail closed.
+  for (const path of ['', '/resolve', '/ignore', '/effective-date', '/owner']) {
+    app.patch(`/api/transactions/:id${path}`, async (_request, reply) =>
+      reply
+        .status(426)
+        .send({ error: 'Update Money Monitor to save changes.', code: 'update_required' }),
+    );
+  }
 }

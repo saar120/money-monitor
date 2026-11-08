@@ -8,6 +8,7 @@ export interface ServeOwnershipRecord {
   mountPath: string;
   lastKnownTarget: string | null;
   pendingTarget: string | null;
+  removalRequested?: true;
 }
 
 export interface ServeOwnershipStore {
@@ -22,6 +23,7 @@ function isValidRecord(value: unknown): value is ServeOwnershipRecord {
 
   return (
     record.schemaVersion === 1 &&
+    (record.removalRequested === undefined || record.removalRequested === true) &&
     Number.isInteger(record.httpsPort) &&
     (record.httpsPort as number) > 0 &&
     (record.httpsPort as number) <= 65_535 &&
@@ -84,4 +86,19 @@ export class FileServeOwnershipStore implements ServeOwnershipStore {
 
 function isNodeError(error: unknown): error is NodeJS.ErrnoException {
   return error instanceof Error && 'code' in error;
+}
+
+export type ServeOwnershipPhase =
+  | { kind: 'absent' }
+  | { kind: 'prepared' | 'verified' | 'removal-requested'; record: ServeOwnershipRecord };
+export function serveOwnershipPhase(record: ServeOwnershipRecord | null): ServeOwnershipPhase {
+  if (!record) return { kind: 'absent' };
+  return {
+    kind: record.removalRequested
+      ? 'removal-requested'
+      : record.pendingTarget
+        ? 'prepared'
+        : 'verified',
+    record,
+  };
 }

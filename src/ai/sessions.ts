@@ -1,3 +1,4 @@
+import type { ReplyOperation } from './advisor-replies.js';
 import { randomUUID } from 'node:crypto';
 import {
   mkdirSync,
@@ -6,6 +7,8 @@ import {
   writeFileSync,
   unlinkSync,
   readdirSync,
+  renameSync,
+  rmSync,
 } from 'node:fs';
 import { join } from 'node:path';
 import { z } from 'zod';
@@ -14,19 +17,6 @@ import type { AdvisorChart } from './advisor-chart.js';
 
 const SESSIONS_DIR = sessionsDir;
 const DEFAULT_TITLE = 'New chat';
-const activeReplies = new Set<string>();
-
-/** Keep desktop and mobile replies to one chat in order within the Mac process. */
-export function beginSessionReply(id: string): boolean {
-  if (activeReplies.has(id) || activeReplies.size >= 2) return false;
-  activeReplies.add(id);
-  return true;
-}
-
-export function endSessionReply(id: string): void {
-  activeReplies.delete(id);
-}
-
 export interface SessionMeta {
   type: 'meta';
   id: string;
@@ -41,11 +31,13 @@ export interface SessionMessage {
   content: string;
   timestamp: string;
   chart?: AdvisorChart;
+  id?: string;
 }
 
 export interface Session {
   meta: SessionMeta;
   messages: SessionMessage[];
+  replies?: ReplyOperation[];
 }
 
 export interface SessionSummary {
@@ -75,12 +67,19 @@ function readLines(filePath: string): string[] {
 /** Rewrite the meta line (first line) in-place. Uses pre-read lines to avoid a second file read. */
 function writeMeta(filePath: string, meta: SessionMeta, lines: string[]) {
   lines[0] = JSON.stringify(meta);
-  writeFileSync(filePath, lines.join('\n') + '\n');
+  const temporary = `${filePath}.${randomUUID()}.tmp`;
+  try {
+    writeFileSync(temporary, lines.join('\n') + '\n', { mode: 0o600, flag: 'wx' });
+    renameSync(temporary, filePath);
+  } finally {
+    rmSync(temporary, { force: true });
+  }
 }
 
-export function createSession(): SessionMeta {
+export function createSession(id: string = randomUUID()): SessionMeta {
   ensureDir();
-  const id = randomUUID();
+  const existing = getSession(id);
+  if (existing) return existing.meta;
   const now = new Date().toISOString();
   const meta: SessionMeta = {
     type: 'meta',
@@ -103,8 +102,10 @@ export function getSession(id: string): Session | null {
   if (lines.length === 0) return null;
 
   const meta = JSON.parse(lines[0]) as SessionMeta;
-  const messages = lines.slice(1).map((l) => JSON.parse(l) as SessionMessage);
-  return { meta, messages };
+  const records = lines.slice(1).map((line) => JSON.parse(line) as SessionMessage | ReplyOperation);
+  const messages = records.filter((record): record is SessionMessage => record.type === 'message');
+  const replies = records.filter((record): record is ReplyOperation => record.type === 'reply');
+  return { meta, messages, ...(replies.length ? { replies } : {}) };
 }
 
 export function listSessions(): SessionSummary[] {
@@ -167,8 +168,8 @@ export function appendMessage(
 
   let lines: string[];
   try {
-    appendLine(path, msg);
     lines = readLines(path);
+    lines.push(JSON.stringify(msg));
   } catch {
     return null;
   }
@@ -184,28 +185,23 @@ export function appendMessage(
   return msg;
 }
 
-/** Drop a question whose reply failed, so sending it again doesn't save it twice. */
-export function removeLastUserMessage(id: string): void {
-  if (!z.uuid().safeParse(id).success) return;
-  const path = sessionPath(id);
-  try {
-    const lines = readLines(path);
-    const last = JSON.parse(lines.at(-1) ?? '{}') as Partial<SessionMessage>;
-    if (lines.length < 2 || last.type !== 'message' || last.role !== 'user') return;
-    const kept = lines.slice(0, -1);
-    const meta = JSON.parse(kept[0]) as SessionMeta;
-    // The title came from this question if it was the first.
-    if (kept.length === 1) meta.title = DEFAULT_TITLE;
-    writeMeta(path, meta, kept);
-  } catch {
-    // Keeping the question is harmless; the reply stream must still end.
-  }
-}
-
 export function getSessionMessages(
   id: string,
 ): Array<{ role: 'user' | 'assistant'; content: string }> | null {
   const session = getSession(id);
   if (!session) return null;
   return session.messages.map((m) => ({ role: m.role, content: m.content }));
+}
+
+export function updateSession(id: string, change: (session: Session) => Session): Session | null {
+  const current = getSession(id);
+  if (!current) return null;
+  const next = change(current);
+  const lines = [
+    JSON.stringify(next.meta),
+    ...next.messages.map((message) => JSON.stringify(message)),
+    ...(next.replies ?? []).map((operation) => JSON.stringify(operation)),
+  ];
+  writeMeta(sessionPath(id), next.meta, lines);
+  return next;
 }

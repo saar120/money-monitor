@@ -1,3 +1,4 @@
+import { FinancialCommandError } from '../services/financial-command.js';
 import type { FastifyInstance } from 'fastify';
 import { mobileFinancialDateFor } from './bootstrap-contract.js';
 import {
@@ -24,6 +25,7 @@ import {
 export const MOBILE_TRANSACTIONS_ROUTE = '/api/mobile/v1/transactions' as const;
 
 export interface MobileTransactionReadContext {
+  clientId?: string;
   generatedAt: string;
   financialDate: string;
 }
@@ -87,6 +89,10 @@ export function registerMobileTransactionRoutes(
 ): void {
   const authorize = createMobileAuthenticationHook(dependencies.authenticator, 'mobile.read');
 
+  app.get('/api/mobile/v1/capabilities', { onRequest: authorize }, async () => ({
+    commands: ['transaction.v1', 'recurring-decision.v1'],
+  }));
+
   app.get(MOBILE_TRANSACTIONS_ROUTE, { onRequest: authorize }, async (request) => {
     const device = request.mobileDevice;
     if (!device) throw new MobileApiError('internal_server_error');
@@ -145,7 +151,27 @@ export function registerMobileTransactionRoutes(
         const parsed = mobileTransactionUpdateSchema.safeParse(request.body);
         if (!parsed.success) throw new MobileApiError('validation_error');
         const now = clock();
-        const transaction = await update(request.params.id, parsed.data, readContext(now), device);
+        if (!parsed.data.commandId || parsed.data.expectedVersion === undefined)
+          throw new MobileApiError('upgrade_required');
+        let transaction: unknown;
+        try {
+          transaction = await update(
+            request.params.id,
+            parsed.data,
+            { ...readContext(now), clientId: device.id },
+            device,
+          );
+        } catch (error) {
+          if (error instanceof FinancialCommandError)
+            throw new MobileApiError(
+              error.code === 'update_required'
+                ? 'upgrade_required'
+                : error.code === 'not_found'
+                  ? 'transaction_not_found'
+                  : error.code,
+            );
+          throw error;
+        }
         if (transaction === null) throw new MobileApiError('transaction_not_found');
         const validated = validateMobileTransactionDetailEnvelope(
           successEnvelope({ transaction }, dependencies, now),

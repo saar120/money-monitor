@@ -1,5 +1,6 @@
 <script setup lang="ts">
-import { computed, ref, onMounted } from 'vue';
+import { useFormOperation } from '@/composables/useFormOperation';
+import { computed, ref, onMounted, onScopeDispose } from 'vue';
 import {
   getAlertSettings,
   updateAlertSettings,
@@ -60,10 +61,28 @@ const copy = computed(() =>
 );
 
 const loading = ref(true);
-const saving = ref(false);
+const operation = useFormOperation();
+const saving = operation.pending;
 const error = ref('');
 const success = ref('');
-const testSending = ref(false);
+const testSending = computed(
+  () =>
+    operation.state.value.phase === 'submitting' &&
+    operation.state.value.operation.target === 'test',
+);
+let successTimer: ReturnType<typeof setTimeout> | undefined;
+let alive = true;
+onScopeDispose(() => {
+  alive = false;
+  clearTimeout(successTimer);
+});
+function showSuccess(value: string) {
+  clearTimeout(successTimer);
+  success.value = value;
+  successTimer = setTimeout(() => {
+    success.value = '';
+  }, 3000);
+}
 
 const settings = ref<AlertSettings>({
   enabled: true,
@@ -76,6 +95,7 @@ const settings = ref<AlertSettings>({
 onMounted(async () => {
   try {
     const data = await getAlertSettings();
+    if (!alive) return;
     settings.value = data;
   } catch (e: unknown) {
     error.value = (e instanceof Error ? e.message : '') || 'Failed to load alert settings';
@@ -85,54 +105,53 @@ onMounted(async () => {
 });
 
 async function save() {
-  saving.value = true;
+  if (saving.value) return;
+  clearTimeout(successTimer);
   error.value = '';
   success.value = '';
-  try {
-    const data = await updateAlertSettings(settings.value);
-    settings.value = data;
-    success.value = copy.value.saved;
-    setTimeout(() => {
-      success.value = '';
-    }, 3000);
-  } catch (e: unknown) {
-    error.value = (e instanceof Error ? e.message : '') || 'Failed to save';
-  } finally {
-    saving.value = false;
-  }
+  const outcome = await operation.run(
+    'save',
+    JSON.parse(JSON.stringify(settings.value)) as AlertSettings,
+    (draft) => updateAlertSettings(draft),
+  );
+  if (outcome.status === 'accepted') {
+    settings.value = outcome.result;
+    showSuccess(copy.value.saved);
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Request failed';
 }
 
 async function reset() {
-  saving.value = true;
+  if (saving.value) return;
+  clearTimeout(successTimer);
   error.value = '';
-  try {
-    const data = await resetAlertSettings();
-    settings.value = data;
-    success.value = copy.value.resetDone;
-    setTimeout(() => {
-      success.value = '';
-    }, 3000);
-  } catch (e: unknown) {
-    error.value = (e instanceof Error ? e.message : '') || 'Failed to reset';
-  } finally {
-    saving.value = false;
-  }
+  success.value = '';
+  const outcome = await operation.run(
+    'reset',
+    JSON.parse(JSON.stringify(settings.value)) as AlertSettings,
+    () => resetAlertSettings(),
+  );
+  if (outcome.status === 'accepted') {
+    settings.value = outcome.result;
+    showSuccess(copy.value.resetDone);
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Request failed';
 }
 
 async function testAlert() {
-  testSending.value = true;
+  if (saving.value) return;
+  clearTimeout(successTimer);
   error.value = '';
-  try {
-    await sendTestAlert();
-    success.value = copy.value.sent;
-    setTimeout(() => {
-      success.value = '';
-    }, 3000);
-  } catch (e: unknown) {
-    error.value = (e instanceof Error ? e.message : '') || 'Failed to send test alert';
-  } finally {
-    testSending.value = false;
-  }
+  success.value = '';
+  const outcome = await operation.run(
+    'test',
+    JSON.parse(JSON.stringify(settings.value)) as AlertSettings,
+    () => sendTestAlert(),
+  );
+  if (outcome.status === 'accepted') {
+    showSuccess(copy.value.sent);
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Request failed';
 }
 </script>
 

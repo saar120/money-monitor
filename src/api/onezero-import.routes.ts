@@ -1,3 +1,5 @@
+import { z } from 'zod';
+import { FinancialCommandError } from '../services/financial-command.js';
 import type { FastifyInstance } from 'fastify';
 import { commitOneZeroImport, createOneZeroImportPreview } from '../services/onezero-import.js';
 import { ONE_ZERO_IMPORT_MAX_BYTES } from '../services/onezero-parser.js';
@@ -41,13 +43,20 @@ export async function oneZeroImportRoutes(app: FastifyInstance) {
       return reply.status(400).send({ error: 'An Excel file is required' });
     }
 
+    const commandId = request.headers['x-money-monitor-command-id'];
+    if (request.query.commit === 'true' && !z.string().uuid().safeParse(commandId).success)
+      return reply
+        .status(426)
+        .send({ code: 'update_required', error: 'Update Money Monitor to import statements.' });
     try {
       return reply.send(
         request.query.commit === 'true'
-          ? commitOneZeroImport(accountId, request.body)
+          ? commitOneZeroImport(accountId, request.body, commandId as string)
           : createOneZeroImportPreview(accountId, request.body),
       );
     } catch (error) {
+      if (error instanceof FinancialCommandError)
+        return reply.status(error.status).send({ code: error.code, error: error.code });
       return reply.status(400).send({
         error: error instanceof Error ? error.message : 'The Excel workbook could not be imported',
       });

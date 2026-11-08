@@ -1,6 +1,10 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { insertAccount } from '../__tests__/helpers/fixtures.js';
+
+vi.mock('./session-map.js', () => ({
+  resolveSession: () => '00000000-0000-4000-8000-000000000001',
+}));
 
 // ── Mock alert-agent ──
 const mockRunAlertAgent = vi.fn();
@@ -22,6 +26,7 @@ const mockSettings = {
   unusualSpendingPercent: 30,
   monthlySummary: { enabled: true, dayOfMonth: 1 },
   reportScrapeErrors: true,
+  _lastAlertEvaluationId: undefined as number | undefined,
   _lastNetWorthTotal: undefined as number | undefined,
   _knownRecurring: undefined as string[] | undefined,
 };
@@ -32,6 +37,7 @@ function resetMockSettings() {
   mockSettings.unusualSpendingPercent = 30;
   mockSettings.monthlySummary = { enabled: true, dayOfMonth: 1 };
   mockSettings.reportScrapeErrors = true;
+  mockSettings._lastAlertEvaluationId = undefined;
   mockSettings._lastNetWorthTotal = undefined;
   mockSettings._knownRecurring = undefined;
 }
@@ -127,7 +133,7 @@ describe('alerts', () => {
     mockGetNetWorth.mockResolvedValue({ total: 500000 });
   });
 
-  afterAll(() => {
+  afterEach(() => {
     testDb?.close();
   });
 
@@ -243,17 +249,17 @@ describe('alerts', () => {
       expect(mockSettings._lastNetWorthTotal).toBe(600000);
     });
 
-    it('handles agent failure gracefully (no message sent)', async () => {
-      mockRunAlertAgent.mockRejectedValue(new Error('API key expired'));
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 5,
-          transactionsNew: 1,
-          durationMs: 1000,
-        },
-      ]);
+    it('retains the baseline and surfaces an analysis failure without pretending delivery succeeded', async () => {
+      mockSettings._lastNetWorthTotal = 42;
+      mockRunAlertAgent.mockRejectedValue(new Error('synthetic provider failure'));
+      await expect(runPostScrapeAlerts([], 'failed-analysis')).rejects.toMatchObject({
+        kind: 'analysis',
+      });
+      await expect(runPostScrapeAlerts([], 'failed-analysis')).rejects.toMatchObject({
+        kind: 'analysis',
+      });
+      expect(mockRunAlertAgent).toHaveBeenCalledOnce();
+      expect(mockSettings._lastNetWorthTotal).toBe(42);
       expect(mockSendMessage).not.toHaveBeenCalled();
     });
 
@@ -387,5 +393,97 @@ describe('alerts', () => {
       await sendMonthlySummary();
       expect(mockRunAlertAgent).not.toHaveBeenCalled();
     });
+  });
+});
+
+describe('alert evaluation and delivery recovery', () => {
+  beforeEach(() => {
+    testDb = createTestDb();
+    resetMockSettings();
+    sentMessages = [];
+    alertsSent = [];
+    mockRunAlertAgent.mockReset().mockResolvedValue('synthetic alert');
+    mockGetChatIds.mockReturnValue([111, 222]);
+    mockSendMessage.mockReset().mockImplementation(async (chatId, html) => {
+      sentMessages.push({ chatId, html });
+    });
+    mockOnAlertSent.mockReset().mockImplementation((chatId, markdown) => {
+      alertsSent.push({ chatId, markdown });
+    });
+  });
+  afterEach(() => testDb.close());
+  it('coalesces repeated job and monthly triggers and saves confirmed context per recipient', async () => {
+    await Promise.all([
+      runPostScrapeAlerts([], 'post-import:1'),
+      runPostScrapeAlerts([], 'post-import:1'),
+    ]);
+    await runPostScrapeAlerts([], 'post-import:1');
+    expect(mockRunAlertAgent).toHaveBeenCalledOnce();
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    expect(alertsSent.map((value) => value.chatId)).toEqual([111, 222]);
+    await Promise.all([sendMonthlySummary(), sendMonthlySummary()]);
+    await sendMonthlySummary();
+    expect(mockRunAlertAgent).toHaveBeenCalledTimes(2);
+    expect(mockSendMessage).toHaveBeenCalledTimes(4);
+  });
+  it('preserves a failed recipient for explicit retry without re-analysis or duplicate successful sends', async () => {
+    const { TelegramRejected, getTelegramDelivery, telegramDeliveryState } =
+      await import('./delivery.js');
+    const { retryAlertDelivery } = await import('./alerts.js');
+    mockSendMessage.mockImplementation(async (chatId, html) => {
+      if (chatId === 222) throw new TelegramRejected('synthetic recipient failure');
+      sentMessages.push({ chatId, html });
+    });
+    await expect(runPostScrapeAlerts([], 'post-import:2')).rejects.toMatchObject({
+      kind: 'failed',
+    });
+    expect(alertsSent.map((value) => value.chatId)).toEqual([111]);
+    expect(mockSettings._lastAlertEvaluationId).toBeDefined();
+    await expect(runPostScrapeAlerts([], 'post-import:2')).rejects.toMatchObject({
+      kind: 'failed',
+    });
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    expect(mockRunAlertAgent).toHaveBeenCalledOnce();
+    mockSendMessage.mockResolvedValue(undefined);
+    expect(
+      telegramDeliveryState(await retryAlertDelivery(getTelegramDelivery('post-import:2', 222)!)),
+    ).toBe('sent');
+    await runPostScrapeAlerts([], 'post-import:2');
+    expect(mockSendMessage).toHaveBeenCalledTimes(3);
+    expect(alertsSent.map((value) => value.chatId)).toEqual([111, 222]);
+  });
+  it('records response loss as unknown and never automatically retries that recipient', async () => {
+    mockSendMessage.mockImplementation(async (chatId) => {
+      if (chatId === 111) throw new Error('synthetic lost response');
+    });
+    await expect(runPostScrapeAlerts([], 'post-import:3')).rejects.toMatchObject({
+      kind: 'unknown',
+    });
+    await expect(runPostScrapeAlerts([], 'post-import:3')).rejects.toMatchObject({
+      kind: 'unknown',
+    });
+    expect(mockSendMessage).toHaveBeenCalledTimes(2);
+    expect(mockRunAlertAgent).toHaveBeenCalledOnce();
+    expect(alertsSent.map((value) => value.chatId)).toEqual([222]);
+  });
+  it('merges baseline updates with settings edited during analysis and does not rewind newer baselines', async () => {
+    let finish!: (message: null) => void;
+    mockRunAlertAgent.mockImplementationOnce(
+      () =>
+        new Promise<null>((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const old = runPostScrapeAlerts([], 'old-job');
+    await vi.waitFor(() => expect(finish).toBeTypeOf('function'));
+    mockSettings.largeChargeThreshold = 999;
+    mockGetNetWorth.mockResolvedValue({ total: 10 });
+    finish(null);
+    await old;
+    expect(mockSettings.largeChargeThreshold).toBe(999);
+    mockGetNetWorth.mockResolvedValue({ total: 20 });
+    await runPostScrapeAlerts([], 'new-job');
+    await runPostScrapeAlerts([], 'old-job');
+    expect(mockSettings._lastNetWorthTotal).toBe(20);
   });
 });

@@ -1,10 +1,11 @@
 import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { db } from '../db/connection.js';
-import { accounts, categories, members, ownershipRules, transactions } from '../db/schema.js';
+import { accounts, members, ownershipRules, transactions } from '../db/schema.js';
 import type { OwnerTarget, OwnerType } from '../shared/types.js';
 
-export type OwnershipSource = 'manual' | 'rule' | 'category' | 'account' | 'unassigned';
+export type { OwnershipSource } from './ownership-resolution.js';
+import { resolveOwnership, loadCategoryTargets } from './ownership-resolution.js';
 
 export interface OwnerFilter {
   ownerType?: OwnerType | 'all';
@@ -23,21 +24,6 @@ export interface OwnershipRuleInput {
   maxAmount?: number | null;
   targetOwnerType: OwnerType;
   targetOwnerMemberId?: number | null;
-}
-
-interface TransactionForOwnership {
-  id: number;
-  accountId: number;
-  accountMemberId: number | null;
-  category: string | null;
-  description: string;
-  chargedAmount: number;
-  ownerSource: string;
-}
-
-interface OwnershipResolutionContext {
-  rules: (typeof ownershipRules.$inferSelect)[];
-  categoryTargets: Map<string, OwnerTarget>;
 }
 
 const OWNER_TYPES = new Set<OwnerType>(['member', 'shared', 'unassigned']);
@@ -157,86 +143,6 @@ export function deleteOwnershipRule(id: number) {
   return { ok: true as const };
 }
 
-function matchesRule(
-  rule: typeof ownershipRules.$inferSelect,
-  tx: TransactionForOwnership,
-): boolean {
-  if (!rule.enabled) return false;
-  if (rule.accountId != null && rule.accountId !== tx.accountId) return false;
-  if (rule.accountMemberId != null && rule.accountMemberId !== tx.accountMemberId) return false;
-  if (rule.categoryName != null && rule.categoryName !== tx.category) return false;
-  if (
-    rule.descriptionContains &&
-    !tx.description.toLocaleLowerCase().includes(rule.descriptionContains.toLocaleLowerCase())
-  ) {
-    return false;
-  }
-  if (rule.minAmount != null && tx.chargedAmount < rule.minAmount) return false;
-  if (rule.maxAmount != null && tx.chargedAmount > rule.maxAmount) return false;
-  return true;
-}
-
-function targetFromRule(rule: typeof ownershipRules.$inferSelect): OwnerTarget {
-  return {
-    type: rule.targetOwnerType as OwnerType,
-    memberId: rule.targetOwnerMemberId,
-  };
-}
-
-function loadCategoryTargets(): Map<string, OwnerTarget> {
-  const rows = db
-    .select({
-      name: categories.name,
-      type: categories.defaultOwnerType,
-      memberId: categories.defaultOwnerMemberId,
-    })
-    .from(categories)
-    .where(
-      or(
-        eq(categories.defaultOwnerType, 'shared'),
-        and(
-          eq(categories.defaultOwnerType, 'member'),
-          sql`${categories.defaultOwnerMemberId} IS NOT NULL`,
-        ),
-      ),
-    )
-    .all();
-
-  return new Map(
-    rows
-      .filter((category) => category.type !== 'member' || category.memberId != null)
-      .map((category) => [
-        category.name,
-        { type: category.type as OwnerType, memberId: category.memberId },
-      ]),
-  );
-}
-
-function resolveOwnership(
-  tx: TransactionForOwnership,
-  context: OwnershipResolutionContext,
-): {
-  target: OwnerTarget;
-  source: OwnershipSource;
-  confidence: number | null;
-} {
-  const rule = context.rules.find((candidate) => matchesRule(candidate, tx));
-  if (rule) return { target: targetFromRule(rule), source: 'rule', confidence: 1 };
-
-  const categoryTarget = tx.category ? context.categoryTargets.get(tx.category) : null;
-  if (categoryTarget) return { target: categoryTarget, source: 'category', confidence: 1 };
-
-  if (tx.accountMemberId != null) {
-    return {
-      target: { type: 'member', memberId: tx.accountMemberId },
-      source: 'account',
-      confidence: 1,
-    };
-  }
-
-  return { target: { type: 'unassigned', memberId: null }, source: 'unassigned', confidence: null };
-}
-
 export function setTransactionOwner(id: number, target: OwnerTarget) {
   const valid = validateOwnerTarget(target);
   if (!valid.ok) return valid;
@@ -305,9 +211,9 @@ export function applyOwnership(
     input.accountId,
     input.categoryName,
   );
-  const context: OwnershipResolutionContext = {
+  const context = {
     rules: listOwnershipRules(),
-    categoryTargets: loadCategoryTargets(),
+    categoryTargets: loadCategoryTargets(db),
   };
   let updated = 0;
   for (const row of rows) {

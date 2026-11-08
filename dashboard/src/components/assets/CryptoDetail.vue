@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { ref, computed, onMounted, watch } from 'vue';
 import EChartsLineChart from '@/components/EChartsLineChart.vue';
@@ -7,7 +8,9 @@ import {
   getMovements,
   getAssetSnapshots,
   createHolding,
-  updateHolding,
+  saveHoldingPrices,
+  ApiError,
+  type HoldingPricesCommand,
   deleteHolding,
   createMovement,
   deleteMovement,
@@ -69,6 +72,7 @@ import {
 
 const { chartPrimary } = useChartTheme();
 
+const mutationError = ref('');
 const props = defineProps<{ assetId: number; initialAsset: Asset }>();
 const copy = computed(() =>
   language.value === 'he'
@@ -105,11 +109,18 @@ const copy = computed(() =>
 );
 
 // ── Data fetching ──
-const assetApi = useApi<Asset>(() => getAsset(props.assetId));
-const movementsApi = useApi<{ movements: Movement[]; total: number }>(() =>
-  getMovements(props.assetId, { limit: 50 }),
+const assetApi = useApi<Asset>(
+  () => getAsset(props.assetId),
+  () => String(props.assetId),
 );
-const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(() => getAssetSnapshots(props.assetId));
+const movementsApi = useApi<{ movements: Movement[]; total: number }>(
+  () => getMovements(props.assetId, { limit: 50 }),
+  () => String(props.assetId),
+);
+const snapshotsApi = useApi<{ snapshots: AssetSnapshot[] }>(
+  () => getAssetSnapshots(props.assetId),
+  () => String(props.assetId),
+);
 
 onMounted(() => {
   movementsApi.execute();
@@ -157,8 +168,12 @@ function formatMovementDate(iso: string) {
 const quickUpdateMode = ref(false);
 const editedHoldings = ref(new Map<number, { quantity: number; lastPrice: number | null }>());
 const savingQuick = ref(false);
+const quickError = ref('');
+let quickCommand: HoldingPricesCommand | null = null;
 
 function startQuickUpdate() {
+  quickCommand = null;
+  quickError.value = '';
   quickUpdateMode.value = true;
   editedHoldings.value.clear();
   for (const h of holdings.value) {
@@ -167,28 +182,43 @@ function startQuickUpdate() {
 }
 
 function cancelQuickUpdate() {
+  if (savingQuick.value || quickCommand) return;
   quickUpdateMode.value = false;
   editedHoldings.value.clear();
 }
 
 async function saveQuickUpdate() {
+  if (savingQuick.value) return;
   savingQuick.value = true;
+  quickError.value = '';
   try {
-    const promises: Promise<void>[] = [];
-    for (const h of holdings.value) {
-      const edited = editedHoldings.value.get(h.id);
-      if (!edited) continue;
-      const dirty = edited.quantity !== h.quantity || edited.lastPrice !== h.lastPrice;
-      if (!dirty) continue;
-      const data: { quantity?: number; lastPrice?: number | null } = {};
-      if (edited.quantity !== h.quantity) data.quantity = edited.quantity;
-      if (edited.lastPrice !== h.lastPrice) data.lastPrice = edited.lastPrice;
-      promises.push(updateHolding(h.id, data).then(() => {}));
+    if (!quickCommand) {
+      const updates: HoldingPricesCommand['updates'] = [];
+      for (const h of holdings.value) {
+        const edited = editedHoldings.value.get(h.id);
+        if (!edited || (edited.quantity === h.quantity && edited.lastPrice === h.lastPrice))
+          continue;
+        if (!h.resourceVersion) throw new Error('Update Money Monitor before saving holdings.');
+        updates.push({ id: h.id, expectedVersion: h.resourceVersion, ...edited });
+      }
+      if (!updates.length) {
+        quickUpdateMode.value = false;
+        return;
+      }
+      quickCommand = { commandId: crypto.randomUUID(), updates };
     }
-    await Promise.all(promises);
+    const accepted = await saveHoldingPrices(props.assetId, quickCommand);
+    assetApi.accept(accepted.asset);
+    quickCommand = null;
     quickUpdateMode.value = false;
     editedHoldings.value.clear();
-    await refreshAll();
+    void refreshAll();
+  } catch (cause) {
+    quickError.value = cause instanceof Error ? cause.message : 'Could not save holdings.';
+    if (cause instanceof ApiError && cause.status < 500) {
+      quickCommand = null;
+      void refreshAll();
+    }
   } finally {
     savingQuick.value = false;
   }
@@ -203,50 +233,74 @@ const holdingForm = ref({
   costBasis: 0,
   lastPrice: null as number | null,
 });
-const holdingSaving = ref(false);
+const holdingSavingOperation = useFormOperation();
+const holdingSaving = holdingSavingOperation.pending;
 
 function openAddHolding() {
+  if (
+    holdingSaving.value ||
+    movementSaving.value ||
+    deletingHolding.value ||
+    deletingMovement.value ||
+    savingQuick.value
+  )
+    return;
   holdingForm.value = { name: '', currency: 'BTC', quantity: 0, costBasis: 0, lastPrice: null };
   showHoldingDialog.value = true;
 }
 
 async function saveHolding() {
-  holdingSaving.value = true;
-  try {
-    await createHolding(props.assetId, {
-      name: holdingForm.value.name,
-      type: 'crypto',
-      currency: holdingForm.value.currency,
-      quantity: holdingForm.value.quantity,
-      costBasis: holdingForm.value.costBasis,
-      lastPrice: holdingForm.value.lastPrice ?? undefined,
-    });
+  if (
+    holdingSaving.value ||
+    movementSaving.value ||
+    deletingHolding.value ||
+    deletingMovement.value ||
+    savingQuick.value
+  )
+    return;
+  const assetId = props.assetId;
+
+  mutationError.value = '';
+  const outcome = await holdingSavingOperation.run(
+    assetId,
+    { ...holdingForm.value },
+    async (draft) => {
+      await createHolding(assetId, {
+        name: draft.name,
+        type: 'crypto',
+        currency: draft.currency,
+        quantity: draft.quantity,
+        costBasis: draft.costBasis,
+        lastPrice: draft.lastPrice ?? undefined,
+      });
+    },
+  );
+  if (outcome.status === 'accepted') {
     showHoldingDialog.value = false;
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    holdingSaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ── Delete Holding ──
 const holdingToDelete = ref<Holding | null>(null);
-const deletingHolding = ref(false);
+const deletingHoldingOperation = useFormOperation();
+const deletingHolding = deletingHoldingOperation.pending;
 
 async function confirmDeleteHolding() {
   const target = holdingToDelete.value;
-  if (!target) return;
-  holdingToDelete.value = null;
-  deletingHolding.value = true;
-  try {
-    await deleteHolding(target.id);
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    deletingHolding.value = false;
-  }
+  if (!target || deletingHolding.value) return;
+  mutationError.value = '';
+  const outcome = await deletingHoldingOperation.run(target.id, target, () =>
+    deleteHolding(target.id),
+  );
+  if (outcome.status === 'accepted') {
+    if (holdingToDelete.value?.id === target.id) holdingToDelete.value = null;
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ── Movement Dialog ──
@@ -260,10 +314,19 @@ const movementForm = ref({
   pricePerUnit: null as number | null,
   notes: '',
 });
-const movementSaving = ref(false);
+const movementSavingOperation = useFormOperation();
+const movementSaving = movementSavingOperation.pending;
 const movementError = ref<string | null>(null);
 
 function openAddMovement() {
+  if (
+    holdingSaving.value ||
+    movementSaving.value ||
+    deletingHolding.value ||
+    deletingMovement.value ||
+    savingQuick.value
+  )
+    return;
   movementForm.value = {
     date: new Date().toISOString().slice(0, 10),
     type: 'buy',
@@ -288,50 +351,61 @@ watch(
 );
 
 async function saveMovement() {
-  movementSaving.value = true;
-  movementError.value = null;
-  try {
-    const isSell = movementForm.value.type === 'sell';
-    const quantity = isSell
-      ? -Math.abs(movementForm.value.quantity)
-      : Math.abs(movementForm.value.quantity);
+  if (
+    holdingSaving.value ||
+    movementSaving.value ||
+    deletingHolding.value ||
+    deletingMovement.value ||
+    savingQuick.value
+  )
+    return;
+  const assetId = props.assetId;
 
-    await createMovement(props.assetId, {
-      holdingId:
-        movementForm.value.holdingId !== 'none' ? Number(movementForm.value.holdingId) : undefined,
-      date: movementForm.value.date,
-      type: movementForm.value.type,
-      quantity,
-      currency: movementForm.value.currency,
-      pricePerUnit: movementForm.value.pricePerUnit ?? undefined,
-      notes: movementForm.value.notes || undefined,
-    });
+  mutationError.value = '';
+  const outcome = await movementSavingOperation.run(
+    assetId,
+    { ...movementForm.value },
+    async (draft) => {
+      const isSell = draft.type === 'sell';
+      const quantity = isSell ? -Math.abs(draft.quantity) : Math.abs(draft.quantity);
+
+      await createMovement(assetId, {
+        holdingId: draft.holdingId !== 'none' ? Number(draft.holdingId) : undefined,
+        date: draft.date,
+        type: draft.type,
+        quantity,
+        currency: draft.currency,
+        pricePerUnit: draft.pricePerUnit ?? undefined,
+        notes: draft.notes || undefined,
+      });
+    },
+  );
+  if (outcome.status === 'accepted') {
     showMovementDialog.value = false;
-    await refreshAll();
-  } catch (err) {
-    movementError.value = err instanceof Error ? err.message : 'Failed to save';
-  } finally {
-    movementSaving.value = false;
-  }
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ── Delete Movement ──
 const movementToDelete = ref<Movement | null>(null);
-const deletingMovement = ref(false);
+const deletingMovementOperation = useFormOperation();
+const deletingMovement = deletingMovementOperation.pending;
 
 async function confirmDeleteMovement() {
   const target = movementToDelete.value;
-  if (!target) return;
-  movementToDelete.value = null;
-  deletingMovement.value = true;
-  try {
-    await deleteMovement(target.id);
-    await refreshAll();
-  } catch {
-    /* noop */
-  } finally {
-    deletingMovement.value = false;
-  }
+  if (!target || deletingMovement.value) return;
+  mutationError.value = '';
+  const outcome = await deletingMovementOperation.run(target.id, target, () =>
+    deleteMovement(target.id),
+  );
+  if (outcome.status === 'accepted') {
+    if (movementToDelete.value?.id === target.id) movementToDelete.value = null;
+    void refreshAll();
+  } else if (outcome.status === 'failed')
+    mutationError.value =
+      outcome.error instanceof Error ? outcome.error.message : t('couldNotLoad');
 }
 
 // ── Chart ──
@@ -357,6 +431,17 @@ const chartDatasets = computed(() =>
 
 <template>
   <div class="asset-view min-w-0 animate-fade-in-up">
+    <p v-if="mutationError" role="alert" class="text-destructive text-[14px]">
+      {{ mutationError }}
+    </p>
+    <div
+      v-if="assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value"
+      role="alert"
+      class="text-destructive text-[14px]"
+    >
+      {{ assetApi.error.value || movementsApi.error.value || snapshotsApi.error.value }}
+      <Button variant="secondary" size="sm" @click="refreshAll">{{ t('retry') }}</Button>
+    </div>
     <!-- Loading skeleton -->
     <div v-if="assetApi.loading.value && !asset">
       <Skeleton class="h-8 w-64 mb-2" />
@@ -364,7 +449,7 @@ const chartDatasets = computed(() =>
     </div>
 
     <!-- Error state -->
-    <div v-else-if="assetApi.error.value" class="text-center py-12">
+    <div v-else-if="assetApi.error.value && !asset" class="text-center py-12">
       <p class="text-destructive text-[14px]">{{ assetApi.error.value }}</p>
       <Button variant="secondary" size="sm" class="mt-4" @click="assetApi.execute()">{{
         t('retry')
@@ -454,6 +539,9 @@ const chartDatasets = computed(() =>
           <div class="flex flex-wrap items-center justify-between gap-3">
             <h2 class="text-[20px]">{{ copy.holdings }}</h2>
             <div class="flex flex-wrap items-center gap-2">
+              <p v-if="quickError" role="alert" class="text-sm text-destructive">
+                {{ quickError }}
+              </p>
               <template v-if="quickUpdateMode">
                 <Button variant="secondary" size="sm" @click="cancelQuickUpdate">{{
                   copy.cancel

@@ -1,16 +1,21 @@
+import { FinancialCommandError } from '../services/financial-command.js';
 import type { FastifyInstance } from 'fastify';
 import { parseIntParam, validateBody, validateQuery, sendServiceError } from './helpers.js';
 import {
-  createAssetSchema, updateAssetSchema,
-  createHoldingSchema, updateHoldingSchema,
-  assetsQuerySchema, snapshotsQuerySchema,
-  createMovementSchema, movementQuerySchema,
-  updateAssetValueSchema, recordRentSchema,
+  createAssetSchema,
+  updateAssetSchema,
+  createHoldingSchema,
+  updateHoldingSchema,
+  assetsQuerySchema,
+  snapshotsQuerySchema,
+  createMovementSchema,
+  movementQuerySchema,
+  updateAssetValueSchema,
+  recordRentSchema,
 } from './validation.js';
 import * as assetService from '../services/assets.js';
 
 export async function assetsRoutes(app: FastifyInstance) {
-
   // GET /api/assets
   app.get<{ Querystring: Record<string, string> }>('/api/assets', async (request, reply) => {
     const query = validateQuery(assetsQuerySchema, request.query, reply);
@@ -89,6 +94,23 @@ export async function assetsRoutes(app: FastifyInstance) {
     return reply.status(204).send();
   });
 
+  app.post<{ Params: { id: string } }>(
+    '/api/assets/:id/holding-commands',
+    async (request, reply) => {
+      const id = parseIntParam(request.params.id, 'asset ID', reply);
+      if (id === null) return;
+      const command = validateBody(assetService.holdingPricesCommandSchema, request.body, reply);
+      if (!command) return;
+      try {
+        return await assetService.commandHoldingPrices(id, command);
+      } catch (cause) {
+        if (cause instanceof FinancialCommandError)
+          return reply.status(cause.status).send({ code: cause.code, error: cause.code });
+        throw cause;
+      }
+    },
+  );
+
   // POST /api/assets/:id/holdings
   app.post<{ Params: { id: string } }>('/api/assets/:id/holdings', async (request, reply) => {
     const assetId = parseIntParam(request.params.id, 'asset ID', reply);
@@ -126,34 +148,42 @@ export async function assetsRoutes(app: FastifyInstance) {
   });
 
   // GET /api/assets/:id/snapshots
-  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/assets/:id/snapshots', async (request, reply) => {
-    const id = parseIntParam(request.params.id, 'asset ID', reply);
-    if (id === null) return;
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    '/api/assets/:id/snapshots',
+    async (request, reply) => {
+      const id = parseIntParam(request.params.id, 'asset ID', reply);
+      if (id === null) return;
 
-    if (!assetService.assetExists(id)) return reply.status(404).send({ error: 'Asset not found' });
+      if (!assetService.assetExists(id))
+        return reply.status(404).send({ error: 'Asset not found' });
 
-    const query = validateQuery(snapshotsQuerySchema, request.query, reply);
-    if (!query) return;
+      const query = validateQuery(snapshotsQuerySchema, request.query, reply);
+      if (!query) return;
 
-    const rows = assetService.getSnapshots(id, query.startDate, query.endDate);
-    return reply.send({ snapshots: rows });
-  });
+      const rows = assetService.getSnapshots(id, query.startDate, query.endDate);
+      return reply.send({ snapshots: rows });
+    },
+  );
 
   // ─── Movements ───
 
   // GET /api/assets/:id/movements
-  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>('/api/assets/:id/movements', async (request, reply) => {
-    const assetId = parseIntParam(request.params.id, 'asset ID', reply);
-    if (assetId === null) return;
+  app.get<{ Params: { id: string }; Querystring: Record<string, string> }>(
+    '/api/assets/:id/movements',
+    async (request, reply) => {
+      const assetId = parseIntParam(request.params.id, 'asset ID', reply);
+      if (assetId === null) return;
 
-    if (!assetService.assetExists(assetId)) return reply.status(404).send({ error: 'Asset not found' });
+      if (!assetService.assetExists(assetId))
+        return reply.status(404).send({ error: 'Asset not found' });
 
-    const query = validateQuery(movementQuerySchema, request.query, reply);
-    if (!query) return;
+      const query = validateQuery(movementQuerySchema, request.query, reply);
+      if (!query) return;
 
-    const result = assetService.listMovements(assetId, query);
-    return reply.send(result);
-  });
+      const result = assetService.listMovements(assetId, query);
+      return reply.send(result);
+    },
+  );
 
   // POST /api/assets/:id/movements
   app.post<{ Params: { id: string } }>('/api/assets/:id/movements', async (request, reply) => {

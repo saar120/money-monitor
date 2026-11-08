@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import { Plus, Trash2, X, Pencil } from 'lucide-vue-next';
@@ -59,7 +60,8 @@ async function recategorize() {
 const categories = ref<Category[]>([]);
 const members = ref<Member[]>([]);
 const loading = ref(true);
-const saving = ref(false);
+const formOperation = useFormOperation();
+const saving = formOperation.pending;
 const error = ref('');
 const selectedId = ref<number | 'new' | null>(null);
 const selected = computed(
@@ -140,6 +142,7 @@ function ownerLabel(value: string) {
   return t('unassigned');
 }
 function select(item: Category) {
+  if (saving.value) return;
   selectedId.value = item.id;
   label.value = item.label;
   slug.value = item.name;
@@ -150,6 +153,7 @@ function select(item: Category) {
   error.value = '';
 }
 function create() {
+  if (saving.value) return;
   selectedId.value = 'new';
   label.value = '';
   slug.value = '';
@@ -175,66 +179,59 @@ async function load() {
   }
 }
 async function save() {
+  const target = selectedId.value;
   if (
+    target === null ||
+    saving.value ||
     !colorValid.value ||
     !label.value.trim() ||
-    (selectedId.value === 'new' && !slug.value.trim())
+    (target === 'new' && !slug.value.trim())
   )
     return;
-  saving.value = true;
+  const ownerType: OwnerType = owner.value.startsWith('member:')
+    ? 'member'
+    : (owner.value as OwnerType);
+  const draft = {
+    label: label.value.trim(),
+    color: color.value,
+    rules: rules.value.trim() || null,
+    defaultOwnerType: ownerType,
+    defaultOwnerMemberId: ownerType === 'member' ? Number(owner.value.slice(7)) : null,
+    ignoredFromStats: !included.value,
+  };
   error.value = '';
-  try {
-    const ownerType: OwnerType = owner.value.startsWith('member:')
-      ? 'member'
-      : (owner.value as OwnerType);
-    const defaultOwnerMemberId = ownerType === 'member' ? Number(owner.value.slice(7)) : null;
-    if (selectedId.value === 'new') {
-      const result = await createCategory({
-        name: slug.value.trim().toLowerCase().replace(/\s+/g, '-'),
-        label: label.value.trim(),
-        color: color.value,
-        rules: rules.value.trim() || undefined,
-        defaultOwnerType: ownerType,
-        defaultOwnerMemberId,
-      });
-      categories.value.push(result.category);
-      select(result.category);
-    } else if (selected.value) {
-      const result = await updateCategory(selected.value.id, {
-        label: label.value.trim(),
-        color: color.value,
-        rules: rules.value.trim() || null,
-        defaultOwnerType: ownerType,
-        defaultOwnerMemberId,
-        ignoredFromStats: !included.value,
-      });
-      const index = categories.value.findIndex((item) => item.id === result.category.id);
-      categories.value[index] = result.category;
-      select(result.category);
-    }
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.saveError;
-  } finally {
-    saving.value = false;
-  }
+  const outcome = await formOperation.run(target, draft, (value) =>
+    target === 'new'
+      ? createCategory({
+          ...value,
+          rules: value.rules ?? undefined,
+          name: slug.value.trim().toLowerCase().replace(/\s+/g, '-'),
+        })
+      : updateCategory(target, value),
+  );
+  if (outcome.status === 'accepted') {
+    const item = outcome.result.category;
+    const index = categories.value.findIndex((value) => value.id === item.id);
+    if (index < 0) categories.value.push(item);
+    else categories.value[index] = item;
+    select(item);
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : copy.value.saveError;
 }
 async function remove() {
   const item = selected.value;
   if (!item || saving.value) return;
-  saving.value = true;
   error.value = '';
-  try {
-    await deleteCategory(item.id);
+  const outcome = await formOperation.run(item.id, null, () => deleteCategory(item.id));
+  if (outcome.status === 'accepted') {
     deleteOpen.value = false;
-    categories.value = categories.value.filter((category) => category.id !== item.id);
+    categories.value = categories.value.filter((value) => value.id !== item.id);
     selectedId.value = null;
     if (window.innerWidth > 1120 && categories.value[0]) select(categories.value[0]);
-  } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : copy.value.deleteError;
-  } finally {
-    saving.value = false;
-  }
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : copy.value.deleteError;
 }
+
 onMounted(load);
 </script>
 

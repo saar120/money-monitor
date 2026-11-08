@@ -1,4 +1,4 @@
-import { eq } from 'drizzle-orm';
+import { and, eq } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { categories, members, transactions } from '../db/schema.js';
 import type { OwnerType } from '../shared/types.js';
@@ -179,7 +179,9 @@ export function updateCategory(
   if (data.ignoredFromStats !== undefined) {
     db.update(transactions)
       .set({ ignored: data.ignoredFromStats })
-      .where(eq(transactions.category, existing.name))
+      .where(
+        and(eq(transactions.category, existing.name), eq(transactions.inclusionSource, 'category')),
+      )
       .run();
   }
 

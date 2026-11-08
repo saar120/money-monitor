@@ -1,5 +1,5 @@
 <script setup lang="ts">
-import { computed, ref, watch, onMounted } from 'vue';
+import { computed, ref, watch, onMounted, onScopeDispose } from 'vue';
 import { createAccount, updateAccount, getMembers, type Account, type Member } from '@/api/client';
 import { PROVIDERS } from '@/lib/providers';
 import { language, t } from '@/lib/language';
@@ -25,9 +25,20 @@ import {
 } from '@/components/ui/dialog';
 import { Loader2, Plus } from 'lucide-vue-next';
 const emit = defineEmits<{ changed: [accountId?: number] }>();
+let alive = true;
+onScopeDispose(() => {
+  alive = false;
+});
 const members = ref<Member[]>([]);
 const activeMembers = computed(() => members.value.filter((member) => member.isActive));
-const showAddDialog = ref(false);
+type AccountDialog = { kind: 'closed' | 'add' } | { kind: 'credentials'; account: Account };
+const dialog = ref<AccountDialog>({ kind: 'closed' });
+const showAddDialog = computed({
+  get: () => dialog.value.kind === 'add',
+  set: (open) => {
+    dialog.value = open ? { kind: 'add' } : { kind: 'closed' };
+  },
+});
 const newCompanyId = ref('');
 const newDisplayName = ref('');
 const newMemberId = ref('');
@@ -43,8 +54,15 @@ const canAddAccount = computed(
       ? selectedProvider.value.fields.every((field) => !!credentialValues.value[field.key]?.trim())
       : credentialFields.value.some((field) => field.key.trim() && field.value.trim())),
 );
-const updateCredsAccount = ref<Account | null>(null);
-const showUpdateCredsDialog = ref(false);
+const updateCredsAccount = computed(() =>
+  dialog.value.kind === 'credentials' ? dialog.value.account : null,
+);
+const showUpdateCredsDialog = computed({
+  get: () => dialog.value.kind === 'credentials',
+  set: (open) => {
+    if (!open) dialog.value = { kind: 'closed' };
+  },
+});
 const updateCredsValues = ref<Record<string, string>>({});
 const updateCredsFields = ref<Array<{ key: string; value: string }>>([{ key: '', value: '' }]);
 const updateCredsSaving = ref(false);
@@ -67,12 +85,14 @@ watch(newCompanyId, (value, previous) => {
   credentialFields.value = [{ key: '', value: '' }];
 });
 function openAdd() {
+  if (adding.value || updateCredsSaving.value) return;
   error.value = '';
   showAddDialog.value = true;
 }
 function openUpdateCreds(account: Account) {
+  if (adding.value || updateCredsSaving.value) return;
   error.value = '';
-  updateCredsAccount.value = account;
+  dialog.value = { kind: 'credentials', account };
   updateCredsValues.value = {};
   updateCredsFields.value = [{ key: '', value: '' }];
   showUpdateCredsDialog.value = true;
@@ -99,11 +119,13 @@ async function handleAdd() {
       memberId: Number(newMemberId.value),
       credentials,
     });
+    if (!alive) return;
     showAddDialog.value = false;
     newCompanyId.value = '';
     newDisplayName.value = '';
     emit('changed', account.id);
   } catch (cause) {
+    if (!alive) return;
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
     adding.value = false;
@@ -121,9 +143,11 @@ async function handleUpdateCreds() {
   error.value = '';
   try {
     await updateAccount(updateCredsAccount.value.id, { credentials });
+    if (!alive) return;
     showUpdateCredsDialog.value = false;
     emit('changed');
   } catch (cause) {
+    if (!alive) return;
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   } finally {
     updateCredsSaving.value = false;
@@ -135,6 +159,8 @@ const {
   otpSubmitting,
   otpDialogOpen: otpOpen,
   showOtpDialog,
+  dismissAll,
+  rehydrate,
   dismissOtpDialog: handleOtpCancel,
   handleOtpSubmit,
   showManualLoginDialog,
@@ -147,19 +173,33 @@ const {
 } = useOtpFlow();
 
 const { connect } = useSseConnection({
+  connected: () => {
+    void rehydrate((id) => `${t('account')} ${id}`);
+  },
+  'session-completed': dismissAll,
   'otp-required': (data) => {
     if (data.accountId != null)
-      showOtpDialog(data.accountId as number, (data.message as string) ?? '');
+      showOtpDialog(
+        data.accountId as number,
+        (data.message as string) ?? '',
+        data.challengeId as string,
+        data.sessionId as number,
+      );
   },
   'manual-action-required': (data) => {
     if (data.accountId != null)
-      showManualLoginDialog(data.accountId as number, (data.message as string) ?? '');
+      showManualLoginDialog(
+        data.accountId as number,
+        (data.message as string) ?? '',
+        data.challengeId as string,
+        data.sessionId as number,
+      );
   },
-  'scrape-done': (data) => {
+  'account-scrape-done': (data) => {
     if (data.accountId != null) dismissByAccountId(data.accountId as number);
     emit('changed');
   },
-  'scrape-error': (data) => {
+  'account-scrape-error': (data) => {
     if (data.accountId != null) dismissByAccountId(data.accountId as number);
     emit('changed');
   },
@@ -167,9 +207,12 @@ const { connect } = useSseConnection({
 onMounted(async () => {
   connect();
   try {
-    members.value = (await getMembers()).members;
+    const result = await getMembers();
+    if (!alive) return;
+    members.value = result.members;
     newMemberId.value = String(activeMembers.value[0]?.id ?? '');
   } catch (cause) {
+    if (!alive) return;
     error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
   }
 });

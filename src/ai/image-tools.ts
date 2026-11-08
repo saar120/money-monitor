@@ -19,13 +19,93 @@ import {
 } from '../services/summary.js';
 import { getNetWorth } from '../services/net-worth.js';
 
-// ── Image queue ──────────────────────────────────────────────────────────────────
-
-const pendingImages: { buffer: Buffer; caption: string }[] = [];
-
-/** Drain and return all pending images (called by bot.ts after chat()). */
-export function drainPendingImages(): { buffer: Buffer; caption: string }[] {
-  return pendingImages.splice(0);
+// Buffers are ephemeral; delivery metadata survives restart in the outbox.
+import { db } from '../db/connection.js';
+import {
+  getTelegramDelivery,
+  addTelegramImage,
+  expireTelegramImages,
+  TelegramImageExpired,
+} from '../telegram/delivery.js';
+export type ImageOwner = { replyId: string; recipientId: number; sessionId: string };
+const images = new Map<
+  string,
+  {
+    owner: ImageOwner;
+    database: typeof db;
+    expires: number;
+    items: Map<string, { buffer: Buffer; caption: string }>;
+  }
+>();
+const ownerKey = (owner: ImageOwner) => `${owner.replyId}:${owner.recipientId}:${owner.sessionId}`;
+const TTL = 10 * 60_000;
+let expiry: ReturnType<typeof setTimeout> | undefined;
+function scheduleExpiry() {
+  clearTimeout(expiry);
+  if (!images.size) return;
+  expiry = setTimeout(
+    () => {
+      for (const value of images.values())
+        if (value.expires <= Date.now()) discardReplyImages(value.owner);
+      scheduleExpiry();
+    },
+    Math.max(1, Math.min(...[...images.values()].map((value) => value.expires)) - Date.now()),
+  );
+  expiry.unref();
+}
+export function discardReplyImages(owner: ImageOwner) {
+  const key = ownerKey(owner);
+  const value = images.get(key);
+  if (!value) return;
+  images.delete(key);
+  if (value.database === db)
+    expireTelegramImages(owner.replyId, owner.recipientId, [...value.items.keys()]);
+  scheduleExpiry();
+}
+export function clearReplyImages() {
+  for (const value of [...images.values()]) discardReplyImages(value.owner);
+}
+export function queueReplyImage(owner: ImageOwner, id: string, buffer: Buffer, caption: string) {
+  if (buffer.length > 10 * 1024 * 1024) throw new Error('Generated image exceeds 10 MB');
+  const delivery = getTelegramDelivery(owner.replyId, owner.recipientId);
+  if (!delivery || delivery.sessionId !== owner.sessionId || delivery.textReady)
+    throw new Error('Reply image owner is closed');
+  if (
+    delivery.chunks.filter((chunk) => chunk.kind === 'image').length >= 10 &&
+    !delivery.chunks.some((chunk) => chunk.id === id)
+  )
+    throw new Error('Reply image limit reached');
+  const key = ownerKey(owner);
+  let value = images.get(key);
+  if (value?.items.has(id)) return;
+  if (value && value.items.size >= 10) throw new Error('Reply image limit reached');
+  const bytes = () =>
+    [...images.values()].reduce(
+      (sum, entry) =>
+        sum + [...entry.items.values()].reduce((n, image) => n + image.buffer.length, 0),
+      0,
+    );
+  while ((images.size >= 20 && !value) || bytes() + buffer.length > 64 * 1024 * 1024) {
+    const oldest = images.values().next().value;
+    if (!oldest) break;
+    discardReplyImages(oldest.owner);
+    value = images.get(key);
+  }
+  addTelegramImage(owner.replyId, owner.recipientId, id, caption);
+  if (!value) {
+    value = { owner, database: db, expires: Date.now() + TTL, items: new Map() };
+    images.set(key, value);
+  }
+  value.items.set(id, { buffer, caption });
+  scheduleExpiry();
+}
+export function getReplyImage(owner: ImageOwner, id: string) {
+  const value = images.get(ownerKey(owner));
+  if (!value || value.database !== db || value.expires <= Date.now() || !value.items.has(id)) {
+    if (value && (value.database !== db || value.expires <= Date.now())) discardReplyImages(owner);
+    throw new TelegramImageExpired('Reply image expired. Request a new image.');
+  }
+  return value.items.get(id)!;
 }
 
 // ── Dashboard chart screenshots ──────────────────────────────────────────────────
@@ -209,7 +289,7 @@ const ALL_VIEWS = [
   'net_worth',
 ] as const;
 
-export function buildGenerateTableImageTool() {
+export function buildGenerateTableImageTool(owner: ImageOwner) {
   return createAgentTool({
     name: 'generate_table_image',
     description:
@@ -248,7 +328,7 @@ export function buildGenerateTableImageTool() {
         }),
       ),
     }),
-    execute: async (args) => {
+    execute: async (args, { toolCallId }) => {
       const view = args.view as string;
 
       const dateOpts = { startDate: args.start_date, endDate: args.end_date };
@@ -260,7 +340,7 @@ export function buildGenerateTableImageTool() {
         for (const key of chartKeys) {
           const chartDef = CHART_VIEWS[key];
           const buffer = await screenshotDashboard(chartDef.route, chartDef.selector, dateOpts);
-          pendingImages.push({ buffer, caption: chartDef.caption });
+          queueReplyImage(owner, `image:${toolCallId}:${key}`, buffer, chartDef.caption);
           captions.push(chartDef.caption);
         }
         return `${captions.length} images generated: ${captions.join(', ')}`;
@@ -270,7 +350,7 @@ export function buildGenerateTableImageTool() {
       if (view in CHART_VIEWS) {
         const chartDef = CHART_VIEWS[view as ChartViewType];
         const buffer = await screenshotDashboard(chartDef.route, chartDef.selector, dateOpts);
-        pendingImages.push({ buffer, caption: chartDef.caption });
+        queueReplyImage(owner, `image:${toolCallId}:${view}`, buffer, chartDef.caption);
         return `Image generated and queued for delivery: ${chartDef.caption}`;
       }
 
@@ -279,7 +359,7 @@ export function buildGenerateTableImageTool() {
         args as Parameters<typeof generateTableView>[0],
       );
       const buffer = await renderHtmlToImage(html);
-      pendingImages.push({ buffer, caption });
+      queueReplyImage(owner, `image:${toolCallId}:${view}`, buffer, caption);
       return `Image generated and queued for delivery: ${caption}`;
     },
   });

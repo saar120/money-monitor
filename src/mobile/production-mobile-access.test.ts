@@ -207,10 +207,12 @@ describe('production mobile access composition', () => {
         currencyCode: candidate.currencyCode,
         merchantKey: candidate.merchantKey,
         decision: 'include',
+        commandId: '11111111-1111-4111-8111-111111111112',
+        expectedVersion: candidate.resourceVersion ?? 0,
       },
     });
     expect(saved.statusCode).toBe(200);
-    expect(saved.json().data).toMatchObject({
+    expect(saved.json().data.result).toMatchObject({
       payments: [{ name: 'Holmes Place' }],
       suggestions: [],
     });

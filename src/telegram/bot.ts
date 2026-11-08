@@ -1,16 +1,44 @@
 import { Bot, InputFile, type Context } from 'grammy';
 import type { ImageContent } from '@earendil-works/pi-ai';
 import { config } from '../config.js';
-import { drainPendingImages } from '../ai/image-tools.js';
+import { discardReplyImages, getReplyImage } from '../ai/image-tools.js';
+import { createHash } from 'node:crypto';
+import { advisorReplies, ReplyAdmissionError } from '../ai/advisor-replies.js';
+import {
+  prepareTelegramDelivery,
+  getTelegramDelivery,
+  setTelegramText,
+  deliverTelegram,
+  latestRetryableTelegramDelivery,
+  telegramDeliveryState,
+  TelegramRejected,
+  sendTelegramHtml,
+  type TelegramDelivery,
+} from './delivery.js';
 import { chat } from '../ai/agent.js';
-import type { ChatMessage } from '../ai/agent.js';
 import { readMemory } from '../ai/memory.js';
-import { createSession, listSessions, appendMessage, getSessionMessages } from '../ai/sessions.js';
-import { getSessionId, setSessionId, clearSessionId, getAllChatIds } from './session-map.js';
+import { listSessions, updateSession } from '../ai/sessions.js';
+import {
+  getSessionId,
+  setSessionId,
+  clearSessionId,
+  getAllChatIds,
+  resolveSession,
+} from './session-map.js';
 import { markdownToTelegramHtml, splitMessage } from './format.js';
-import { registerSendMessage, registerGetChatIds, registerOnAlertSent } from './alerts.js';
+import {
+  registerSendMessage,
+  registerGetChatIds,
+  registerOnAlertSent,
+  retryAlertDelivery,
+} from './alerts.js';
 
 let bot: Bot | null = null;
+let polling: Promise<void> | null = null;
+let transition: Promise<void> = Promise.resolve();
+let desiredRunning = false;
+let generation = 0;
+const typingStops = new Set<() => void>();
 
 function parseAllowedUsers(): Set<number> {
   if (!config.TELEGRAM_ALLOWED_USERS) return new Set();
@@ -22,29 +50,30 @@ function parseAllowedUsers(): Set<number> {
   );
 }
 
-/** Send an HTML-formatted message, falling back to plain text on parse errors. */
 async function replyHtml(ctx: Context, html: string): Promise<void> {
-  try {
-    await ctx.reply(html, { parse_mode: 'HTML' });
-  } catch {
-    await ctx.reply(html.replace(/<[^>]+>/g, ''));
-  }
+  await sendTelegramHtml(
+    (text, htmlMode) => ctx.reply(text, htmlMode ? { parse_mode: 'HTML' } : {}),
+    html,
+  );
 }
-
-/** Resolve or create a session for a Telegram chat. */
-function resolveSession(chatId: number): string {
-  const existing = getSessionId(chatId);
-  if (existing) return existing;
-  const meta = createSession();
-  setSessionId(chatId, meta.id);
-  return meta.id;
+function assertRecipient(chatId: number) {
+  if (chatId <= 0 || !parseAllowedUsers().has(chatId))
+    throw new TelegramRejected('Recipient is no longer authorized');
+}
+function assertOwner(instance: Bot, epoch: number) {
+  if (!desiredRunning || generation !== epoch || bot !== instance)
+    throw new TelegramRejected('Telegram owner retired');
 }
 
 const IMAGE_MIME_TYPES = new Set(['image/jpeg', 'image/png', 'image/webp', 'image/gif']);
 
 /** Download a file from Telegram's API and return it as a base64-encoded ImageContent. */
-async function downloadTelegramFile(fileId: string, mimeType: string): Promise<ImageContent> {
-  const file = await bot!.api.getFile(fileId);
+async function downloadTelegramFile(
+  instance: Bot,
+  fileId: string,
+  mimeType: string,
+): Promise<ImageContent> {
+  const file = await instance.api.getFile(fileId);
   const url = `https://api.telegram.org/file/bot${config.TELEGRAM_BOT_TOKEN}/${file.file_path}`;
   const res = await fetch(url);
   if (!res.ok) {
@@ -55,108 +84,168 @@ async function downloadTelegramFile(fileId: string, mimeType: string): Promise<I
   return { type: 'image', data: buffer.toString('base64'), mimeType };
 }
 
-/** Shared handler: send user text (+ optional images) to the AI agent and reply. */
+async function sendReply(value: TelegramDelivery, instance: Bot, epoch: number, retry = false) {
+  return deliverTelegram(
+    value.operationId,
+    value.chatId,
+    async (chunk) => {
+      assertOwner(instance, epoch);
+      assertRecipient(value.chatId);
+      if (chunk.kind === 'text') {
+        await sendTelegramHtml(
+          (text, htmlMode) =>
+            instance.api.sendMessage(value.chatId, text, htmlMode ? { parse_mode: 'HTML' } : {}),
+          chunk.text,
+        );
+      } else {
+        const image = getReplyImage(
+          { replyId: value.operationId, recipientId: value.chatId, sessionId: value.sessionId },
+          chunk.id,
+        );
+        await instance.api.sendPhoto(value.chatId, new InputFile(image.buffer, 'table.png'), {
+          caption: image.caption,
+        });
+      }
+    },
+    undefined,
+    retry,
+  );
+}
+
 async function handleUserMessage(
   ctx: Context,
+  instance: Bot,
+  epoch: number,
   text: string,
-  images?: ImageContent[],
-  historyText?: string,
+  loadImages?: () => Promise<ImageContent[]>,
+  historyText = text,
 ): Promise<void> {
+  assertOwner(instance, epoch);
   const chatId = ctx.chat!.id;
-  const sessionId = resolveSession(chatId);
-
-  const history = getSessionMessages(sessionId) ?? [];
-  appendMessage(sessionId, 'user', historyText ?? text);
-
-  const conversationHistory: ChatMessage[] = [...history, { role: 'user', content: text }];
-
-  const stopTyping = startTypingLoop(chatId, bot!.api);
-  let result = '';
-
+  const digest = createHash('sha256').update(JSON.stringify(ctx.update)).digest('hex');
+  const hex = createHash('sha256')
+    .update(`telegram:${chatId}:${ctx.update.update_id}`)
+    .digest('hex');
+  const operationId = `${hex.slice(0, 8)}-${hex.slice(8, 12)}-5${hex.slice(13, 16)}-a${hex.slice(17, 20)}-${hex.slice(20, 32)}`;
+  const prior = getTelegramDelivery(operationId, chatId);
+  const value = prepareTelegramDelivery(
+    operationId,
+    chatId,
+    prior?.sessionId ?? resolveSession(chatId),
+    digest,
+  );
+  const owner = { replyId: operationId, recipientId: chatId, sessionId: value.sessionId };
+  const stopTyping = startTypingLoop(
+    chatId,
+    instance.api,
+    () => desiredRunning && generation === epoch && bot === instance,
+  );
   try {
-    for await (const event of chat(conversationHistory, images)) {
-      if (event.type === 'result') {
-        result = event.text;
-      } else if (event.type === 'error') {
-        throw new Error(event.text);
+    if (!value.textReady) {
+      let response: string;
+      try {
+        const handle = advisorReplies.start(
+          value.sessionId,
+          { id: operationId, clientId: `telegram:${chatId}`, message: historyText },
+          async function* (history, context) {
+            const images = await loadImages?.();
+            context.signal.throwIfAborted();
+            yield* chat(history, images, {
+              ...context,
+              telegram: { chatId, sessionId: value.sessionId },
+            });
+          },
+        );
+        const outcome = await handle.completion;
+        response =
+          outcome.state === 'completed'
+            ? outcome.text || 'No response generated. Send a new message to try again.'
+            : 'The advisor could not finish this reply. Send a new message to try again.';
+        if (outcome.state !== 'completed') discardReplyImages(owner);
+      } catch (error) {
+        if (!(error instanceof ReplyAdmissionError) || error.code !== 'reply_in_progress')
+          throw error;
+        response = 'The advisor is busy. Send your message again after the current reply finishes.';
       }
+      setTelegramText(operationId, chatId, markdownToTelegramHtml(response));
     }
-
-    if (result) {
-      appendMessage(sessionId, 'assistant', result);
-      const html = markdownToTelegramHtml(result);
-      for (const chunk of splitMessage(html)) {
-        await replyHtml(ctx, chunk);
-      }
-    } else {
-      await ctx.reply('No response generated. Please try again.');
-    }
-
-    // Send any images generated by the generate_table_image tool
-    for (const img of drainPendingImages()) {
-      await ctx.replyWithPhoto(new InputFile(img.buffer, 'table.png'), {
-        caption: img.caption,
-      });
-    }
-  } catch (err) {
-    const message = err instanceof Error ? err.message : 'An error occurred';
-    await ctx.reply(`Error: ${message}`);
+    assertOwner(instance, epoch);
+    await sendReply(getTelegramDelivery(operationId, chatId)!, instance, epoch);
   } finally {
     stopTyping();
   }
 }
 
-/** Send a typing indicator at regular intervals until cancelled. */
-function startTypingLoop(chatId: number, api: Bot['api']): () => void {
-  let timer: ReturnType<typeof setTimeout> | null = null;
-  const tick = () => {
-    api.sendChatAction(chatId, 'typing').catch(() => {});
-    timer = setTimeout(tick, 4000);
+export function startTypingLoop(chatId: number, api: Bot['api'], owns: () => boolean): () => void {
+  let timer: ReturnType<typeof setTimeout> | undefined;
+  let stopped = false;
+  const stop = () => {
+    stopped = true;
+    clearTimeout(timer);
+    typingStops.delete(stop);
   };
-  tick();
-  return () => {
-    if (timer !== null) clearTimeout(timer);
+  const tick = async () => {
+    if (stopped || !owns()) return;
+    try {
+      await api.sendChatAction(chatId, 'typing');
+    } catch {
+      /* Typing is advisory. */
+    }
+    if (!stopped && owns())
+      timer = setTimeout(() => {
+        void tick();
+      }, 4000);
   };
+  typingStops.add(stop);
+  void tick();
+  return stop;
 }
 
-export function startTelegramBot(): void {
-  if (!config.TELEGRAM_BOT_TOKEN) return;
-
-  bot = new Bot(config.TELEGRAM_BOT_TOKEN);
+function launchTelegramBot(epoch: number): void {
+  if (!config.TELEGRAM_BOT_TOKEN || !desiredRunning || epoch !== generation || bot) return;
+  const instance = new Bot(config.TELEGRAM_BOT_TOKEN);
+  bot = instance;
   const allowedUsers = parseAllowedUsers();
-
-  // Register alert infrastructure so alerts.ts can send messages
-  const botRef = bot;
-  registerSendMessage(async (chatId: number, html: string) => {
-    if (chatId <= 0 || !parseAllowedUsers().has(chatId)) return;
-    try {
-      await botRef.api.sendMessage(chatId, html, { parse_mode: 'HTML' });
-    } catch {
-      await botRef.api.sendMessage(chatId, html.replace(/<[^>]+>/g, ''));
-    }
+  registerSendMessage(async (chatId, html) => {
+    assertOwner(instance, epoch);
+    assertRecipient(chatId);
+    await sendTelegramHtml(
+      (text, htmlMode) =>
+        instance.api.sendMessage(chatId, text, htmlMode ? { parse_mode: 'HTML' } : {}),
+      html,
+    );
   });
-  // Persist alert markdown into the user's active chat session so the
-  // financial advisor has context if the user replies about the alert.
-  // A synthetic user message is inserted when needed to maintain the
-  // alternating user/assistant pattern that LLM APIs require.
-  registerOnAlertSent((chatId: number, markdown: string, context?: string) => {
-    if (chatId <= 0 || !parseAllowedUsers().has(chatId)) return;
-    const sessionId = resolveSession(chatId);
-    const messages = getSessionMessages(sessionId);
-    const lastRole = messages?.[messages.length - 1]?.role;
-    if (!messages || messages.length === 0 || lastRole === 'assistant') {
-      appendMessage(sessionId, 'user', context ?? '[Automated financial alert]');
-    }
-    appendMessage(sessionId, 'assistant', markdown);
+  registerOnAlertSent(async (chatId, markdown, context, identity) => {
+    assertRecipient(chatId);
+    if (!identity) throw new Error('Alert delivery identity missing');
+    await advisorReplies.whenIdle(identity.sessionId);
+    const saved = updateSession(identity.sessionId, (session) => {
+      const id = `alert:${identity.operationId}:assistant`;
+      if (session.messages.some((message) => message.id === id)) return session;
+      const now = new Date().toISOString();
+      const messages = [...session.messages];
+      if (!messages.length || messages.at(-1)?.role === 'assistant')
+        messages.push({
+          type: 'message',
+          id: `alert:${identity.operationId}:context`,
+          role: 'user',
+          content: context ?? '[Automated financial alert]',
+          timestamp: now,
+        });
+      messages.push({ type: 'message', id, role: 'assistant', content: markdown, timestamp: now });
+      return { ...session, meta: { ...session.meta, updatedAt: now }, messages };
+    });
+    if (!saved) throw new Error('Alert conversation no longer exists');
   });
   registerGetChatIds(() => getAllChatIds().filter((id) => id > 0 && parseAllowedUsers().has(id)));
 
   // ── Access control middleware ──
   if (allowedUsers.size === 0) {
     console.warn('TELEGRAM_ALLOWED_USERS is not set — Telegram bot will ignore all messages.');
-    bot.use(() => {});
+    instance.use(() => {});
   } else {
-    bot.use(async (ctx, next) => {
+    instance.use(async (ctx, next) => {
+      if (!desiredRunning || epoch !== generation || bot !== instance) return;
       const userId = ctx.from?.id;
       if (
         !userId ||
@@ -172,12 +261,12 @@ export function startTelegramBot(): void {
 
   // ── Commands ──
 
-  bot.command('new', async (ctx) => {
+  instance.command('new', async (ctx) => {
     clearSessionId(ctx.chat.id);
     await ctx.reply('Session cleared. Your next message will start a new conversation.');
   });
 
-  bot.command('memory', async (ctx) => {
+  instance.command('memory', async (ctx) => {
     const memory = readMemory();
     if (!memory) {
       await ctx.reply('Memory is empty.');
@@ -188,7 +277,7 @@ export function startTelegramBot(): void {
     }
   });
 
-  bot.command('sessions', async (ctx) => {
+  instance.command('sessions', async (ctx) => {
     const sessions = listSessions();
     if (sessions.length === 0) {
       await ctx.reply('No sessions found.');
@@ -203,7 +292,7 @@ export function startTelegramBot(): void {
     await ctx.reply(lines.join('\n'));
   });
 
-  bot.command('switch', async (ctx) => {
+  instance.command('switch', async (ctx) => {
     const partialId = ctx.match?.trim();
     if (!partialId) {
       await ctx.reply('Usage: /switch <session-id-prefix>');
@@ -219,7 +308,7 @@ export function startTelegramBot(): void {
     await ctx.reply(`Switched to session: ${match.title}`);
   });
 
-  bot.command('alerts', async (ctx) => {
+  instance.command('alerts', async (ctx) => {
     const { loadAlertSettings } = await import('./alert-settings.js');
     const s = loadAlertSettings();
     const on = (v: boolean) => (v ? '✅' : '❌');
@@ -234,81 +323,118 @@ export function startTelegramBot(): void {
     await replyHtml(ctx, html);
   });
 
+  instance.command('retry', async (ctx) => {
+    const value = latestRetryableTelegramDelivery(ctx.chat.id);
+    if (!value) {
+      await ctx.reply(
+        'No safely retryable delivery found. Uncertain deliveries are not sent again.',
+      );
+      return;
+    }
+    const result = value.context
+      ? await retryAlertDelivery(value)
+      : await sendReply(value, instance, epoch, true);
+    if (telegramDeliveryState(result) === 'sent') {
+      const { reconcilePostImportAlert } = await import('../services/post-import.js');
+      reconcilePostImportAlert(result.operationId);
+    }
+    if (telegramDeliveryState(result) !== 'sent')
+      await ctx.reply('Delivery is still incomplete. Uncertain sends will not be repeated.');
+  });
+
   // ── Message handlers ──
 
-  bot.on('message:text', async (ctx) => {
+  instance.on('message:text', async (ctx) => {
     const text = ctx.message.text;
     if (text.startsWith('/')) return;
-    await handleUserMessage(ctx, text);
+    await handleUserMessage(ctx, instance, epoch, text);
   });
 
-  bot.on('message:photo', async (ctx) => {
-    const photos = ctx.message.photo;
-    const largest = photos[photos.length - 1];
+  instance.on('message:photo', async (ctx) => {
+    const photo = ctx.message.photo.at(-1)!;
     const caption = ctx.message.caption || "What's in this image?";
-
-    try {
-      const image = await downloadTelegramFile(largest.file_id, 'image/jpeg');
-      await handleUserMessage(ctx, caption, [image], `[Image] ${caption}`);
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to process image';
-      await ctx.reply(`Error: ${message}`);
-    }
+    await handleUserMessage(
+      ctx,
+      instance,
+      epoch,
+      caption,
+      async () => [await downloadTelegramFile(instance, photo.file_id, 'image/jpeg')],
+      `[Image] ${caption}`,
+    );
   });
-
-  bot.on('message:document', async (ctx) => {
+  instance.on('message:document', async (ctx) => {
     const doc = ctx.message.document;
     const mime = doc.mime_type ?? '';
     if (!IMAGE_MIME_TYPES.has(mime)) {
       await ctx.reply('Unsupported file type. I can only process images (JPEG, PNG, WebP, GIF).');
       return;
     }
-
     const caption = ctx.message.caption || "What's in this document?";
-    try {
-      const image = await downloadTelegramFile(doc.file_id, mime);
-      await handleUserMessage(
-        ctx,
-        caption,
-        [image],
-        `[Document: ${doc.file_name ?? 'image'}] ${caption}`,
-      );
-    } catch (err) {
-      const message = err instanceof Error ? err.message : 'Failed to process document';
-      await ctx.reply(`Error: ${message}`);
-    }
+    await handleUserMessage(
+      ctx,
+      instance,
+      epoch,
+      caption,
+      async () => [await downloadTelegramFile(instance, doc.file_id, mime)],
+      `[Document: ${doc.file_name ?? 'image'}] ${caption}`,
+    );
   });
 
   // ── Register command menu in Telegram UI ──
-  bot.api
+  instance.api
     .setMyCommands([
       { command: 'new', description: 'Start a new conversation' },
       { command: 'memory', description: 'View shared memory' },
       { command: 'sessions', description: 'List recent sessions' },
       { command: 'switch', description: 'Switch to a session by ID prefix' },
       { command: 'alerts', description: 'View alert settings' },
+      { command: 'retry', description: 'Retry a known incomplete delivery' },
     ])
     .catch(() => {});
 
   // ── Catch unhandled errors so the polling loop keeps running ──
-  bot.catch((err) => {
+  instance.catch((err) => {
     console.error('[Telegram] Unhandled error in bot handler:', err.message ?? err);
   });
 
   // ── Start long polling ──
-  bot.start({
-    onStart: () => console.log('[Telegram] Bot started (long polling)'),
+  polling = Promise.resolve(
+    instance.start({ onStart: () => console.log('[Telegram] Bot started (long polling)') }),
+  ).catch(() => {
+    console.error('[Telegram] Polling stopped unexpectedly');
+    if (bot === instance && generation === epoch) desiredRunning = false;
   });
 }
 
-export async function stopTelegramBot(): Promise<void> {
-  if (bot) {
-    await bot.stop();
+async function haltTelegramBot() {
+  const current = bot;
+  if (!current) return;
+  await current.stop();
+  await polling;
+  if (bot === current) {
     bot = null;
+    polling = null;
   }
 }
-
-export async function restartTelegramBot(): Promise<void> {
-  await stopTelegramBot();
-  startTelegramBot();
+function requestLifecycle(mode: 'start' | 'stop' | 'restart'): Promise<void> {
+  if (mode === 'start' && desiredRunning) return transition;
+  desiredRunning = mode !== 'stop';
+  const epoch = ++generation;
+  for (const stop of [...typingStops]) stop();
+  transition = transition
+    .catch(() => {})
+    .then(async () => {
+      await haltTelegramBot();
+      if (mode !== 'stop' && desiredRunning && epoch === generation) launchTelegramBot(epoch);
+    });
+  return transition;
+}
+export function startTelegramBot(): Promise<void> {
+  return requestLifecycle('start');
+}
+export function stopTelegramBot(): Promise<void> {
+  return requestLifecycle('stop');
+}
+export function restartTelegramBot(): Promise<void> {
+  return requestLifecycle('restart');
 }

@@ -1,4 +1,5 @@
 <script setup lang="ts">
+import { useFormOperation } from '@/composables/useFormOperation';
 import { computed, onMounted, ref } from 'vue';
 import {
   applyOwnershipRules,
@@ -90,7 +91,8 @@ const accounts = ref<Account[]>([]);
 const categories = ref<Category[]>([]);
 const rules = ref<OwnershipRule[]>([]);
 const loading = ref(false);
-const saving = ref(false);
+const operation = useFormOperation();
+const saving = operation.pending;
 const applying = ref(false);
 const message = ref('');
 const error = ref('');
@@ -150,53 +152,63 @@ async function load() {
 }
 
 async function addMember() {
-  if (!newMemberName.value.trim()) return;
-  saving.value = true;
+  if (saving.value || !newMemberName.value.trim()) return;
   try {
-    const { member } = await createMember({ name: newMemberName.value.trim() });
+    const outcome = await operation.run(
+      'new-member',
+      { name: newMemberName.value.trim() },
+      createMember,
+    );
+    if (outcome.status === 'retired') return;
+    if (outcome.status === 'failed') throw outcome.error;
+    const { member } = outcome.result;
     members.value.push(member);
     newMemberName.value = '';
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to add member';
-  } finally {
-    saving.value = false;
   }
 }
 
 function startEdit(member: Member) {
+  if (saving.value) return;
   editingMemberId.value = member.id;
   editingMemberName.value = member.name;
 }
 
 function cancelEdit() {
+  if (saving.value) return;
   editingMemberId.value = null;
   editingMemberName.value = '';
 }
 
 async function saveMember(member: Member) {
   const name = editingMemberName.value.trim();
-  if (!name) return;
-  const res = await updateMember(member.id, { name });
-  const idx = members.value.findIndex((m) => m.id === member.id);
-  if (idx !== -1) members.value[idx] = res.member;
-  cancelEdit();
-}
-
-async function deactivateMember(member: Member) {
-  try {
-    const res = await deleteMember(member.id);
+  if (!name || saving.value) return;
+  const outcome = await operation.run('member:' + member.id, { name }, (draft) =>
+    updateMember(member.id, draft),
+  );
+  if (outcome.status === 'accepted') {
     const idx = members.value.findIndex((m) => m.id === member.id);
-    if (idx !== -1) members.value[idx] = res.member;
-  } catch (e) {
-    error.value = e instanceof Error ? e.message : 'Failed to deactivate member';
-  }
+    if (idx !== -1) members.value[idx] = outcome.result.member;
+    if (editingMemberId.value === member.id) cancelEdit();
+  } else if (outcome.status === 'failed')
+    error.value =
+      outcome.error instanceof Error ? outcome.error.message : 'Failed to update member';
+}
+async function deactivateMember(member: Member) {
+  const outcome = await operation.run('member:' + member.id, member, () => deleteMember(member.id));
+  if (outcome.status === 'accepted') {
+    const idx = members.value.findIndex((m) => m.id === member.id);
+    if (idx !== -1) members.value[idx] = outcome.result.member;
+  } else if (outcome.status === 'failed')
+    error.value =
+      outcome.error instanceof Error ? outcome.error.message : 'Failed to deactivate member';
 }
 
 async function addRule() {
-  if (!newRule.value.name.trim()) return;
-  saving.value = true;
+  if (saving.value || !newRule.value.name.trim()) return;
   try {
-    const { rule } = await createOwnershipRule({
+    const draft = {
       name: newRule.value.name.trim(),
       priority: rules.value.length + 1,
       enabled: true,
@@ -209,7 +221,11 @@ async function addRule() {
       maxAmount: null,
       targetOwnerType: ownerTypeFromValue(newRule.value.target),
       targetOwnerMemberId: ownerMemberIdFromValue(newRule.value.target),
-    });
+    };
+    const outcome = await operation.run('new-rule', draft, createOwnershipRule);
+    if (outcome.status === 'retired') return;
+    if (outcome.status === 'failed') throw outcome.error;
+    const { rule } = outcome.result;
     rules.value.push(rule);
     newRule.value = {
       name: '',
@@ -221,23 +237,28 @@ async function addRule() {
     };
   } catch (e) {
     error.value = e instanceof Error ? e.message : 'Failed to add rule';
-  } finally {
-    saving.value = false;
   }
 }
 
 async function toggleRule(rule: OwnershipRule) {
-  const { rule: updated } = await updateOwnershipRule(rule.id, { enabled: !rule.enabled });
-  const idx = rules.value.findIndex((r) => r.id === rule.id);
-  if (idx !== -1) rules.value[idx] = updated;
+  const outcome = await operation.run('rule:' + rule.id, { enabled: !rule.enabled }, (draft) =>
+    updateOwnershipRule(rule.id, draft),
+  );
+  if (outcome.status === 'accepted') {
+    const idx = rules.value.findIndex((r) => r.id === rule.id);
+    if (idx !== -1) rules.value[idx] = outcome.result.rule;
+  } else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Failed to update rule';
 }
-
 async function removeRule(rule: OwnershipRule) {
-  await deleteOwnershipRule(rule.id);
-  rules.value = rules.value.filter((r) => r.id !== rule.id);
+  const outcome = await operation.run('rule:' + rule.id, rule, () => deleteOwnershipRule(rule.id));
+  if (outcome.status === 'accepted') rules.value = rules.value.filter((r) => r.id !== rule.id);
+  else if (outcome.status === 'failed')
+    error.value = outcome.error instanceof Error ? outcome.error.message : 'Failed to delete rule';
 }
 
 async function applyRules() {
+  if (applying.value) return;
   applying.value = true;
   message.value = '';
   error.value = '';

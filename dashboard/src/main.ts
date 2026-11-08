@@ -60,12 +60,15 @@ if (import.meta.env.DEV) {
 }
 
 // Resume unfinished onboarding; config.json also exists before setup is completed.
-let setupChecked = false;
+let setupCheck:
+  | { kind: 'unchecked' | 'failed' | 'checked' }
+  | { kind: 'checking'; promise: ReturnType<typeof getSettings> } = { kind: 'unchecked' };
 router.beforeEach(async (to) => {
-  if (setupChecked || to.name === 'setup') return;
-  setupChecked = true;
+  if (setupCheck.kind === 'checked' || to.name === 'setup') return;
   try {
-    const { needsSetup, isElectron, settings } = await getSettings();
+    if (setupCheck.kind !== 'checking') setupCheck = { kind: 'checking', promise: getSettings() };
+    const { needsSetup, isElectron, settings } = await setupCheck.promise;
+    setupCheck = { kind: 'checked' };
     // Desktop ports change between launches, so localStorage alone cannot retain preferences.
     if (isElectron) {
       if (
@@ -87,6 +90,7 @@ router.beforeEach(async (to) => {
     }
     if (needsSetup) return '/setup';
   } catch (err) {
+    setupCheck = { kind: 'failed' };
     console.warn('[Router] Settings check failed, continuing without setup redirect:', err);
   }
 });

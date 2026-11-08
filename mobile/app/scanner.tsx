@@ -18,7 +18,10 @@ import { useMoneyData } from '@/MoneyData';
 import { completePairing, type PairingProgress } from '@/mobile-api';
 import { checkMobileHealth, type MobileHealthResult } from '@/pairing/check-mobile-health';
 import { parsePairingQr, type PairingQrPayload } from '@/pairing/parse-pairing-qr';
-import { storePairingCredential } from '@/security/pairing-credential-store';
+import {
+  storePairingCredential,
+  type PairingCredential,
+} from '@/security/pairing-credential-store';
 import { useAppColors } from '@/theme';
 
 type ScanState =
@@ -39,8 +42,20 @@ export default function ScannerScreen() {
   const [state, setState] = useState<ScanState>({ kind: 'scanning' });
   const pairingController = useRef<AbortController | null>(null);
   const { reload } = useMoneyData();
+  const generation = useRef(0);
+  const issued = useRef<{
+    pairing: PairingQrPayload;
+    credential: PairingCredential;
+    health: MobileHealthResult;
+  } | null>(null);
 
-  useEffect(() => () => pairingController.current?.abort(), []);
+  useEffect(
+    () => () => {
+      generation.current++;
+      pairingController.current?.abort();
+    },
+    [],
+  );
 
   useEffect(() => {
     if (state.kind !== 'result') return;
@@ -49,35 +64,86 @@ export default function ScannerScreen() {
   }, [state]);
 
   async function onScanned(result: BarcodeScanningResult) {
-    if (state.kind !== 'scanning') return;
+    if (state.kind !== 'scanning' || pairingController.current) return;
+    const controller = new AbortController();
+    pairingController.current = controller;
+    const attempt = ++generation.current;
+    const current = () => attempt === generation.current && !controller.signal.aborted;
     try {
       const pairing = parsePairingQr(result.data);
       setState({ kind: 'working', pairing, progress: 'checking' });
-      const health = await checkMobileHealth(pairing);
+      const health = await checkMobileHealth(pairing, 8000, controller.signal);
+      if (!current()) return;
       if (!health.reachable) {
         setState({ kind: 'result', pairing, health });
         return;
       }
-      const controller = new AbortController();
-      pairingController.current = controller;
       const credential = await completePairing(
         pairing,
         Device.deviceName ?? Device.modelName ?? 'iPhone',
-        (progress) => setState({ kind: 'working', pairing, progress }),
+        (progress) => {
+          if (current()) setState({ kind: 'working', pairing, progress });
+        },
         controller.signal,
       );
-      await storePairingCredential(credential);
+      if (!current()) return;
+      issued.current = { pairing, credential, health };
+      await storePairingCredential(credential, controller.signal);
+      if (!current()) return;
+      issued.current = null;
       await reload();
-      setState({ kind: 'result', pairing, health, connected: true });
+      if (current()) setState({ kind: 'result', pairing, health, connected: true });
     } catch (error) {
-      if (pairingController.current?.signal.aborted) return;
-      setState({
-        kind: 'result',
-        error: error instanceof Error ? error.message : t('theQRCodeCouldNotBeRead'),
-      });
+      if (current())
+        setState({
+          kind: 'result',
+          error: error instanceof Error ? error.message : t('theQRCodeCouldNotBeRead'),
+        });
     } finally {
-      pairingController.current = null;
+      if (pairingController.current === controller) pairingController.current = null;
     }
+  }
+  async function retry() {
+    const pending = issued.current;
+    if (!pending) {
+      setState({ kind: 'scanning' });
+      return;
+    }
+    if (Date.parse(pending.pairing.expiresAt) <= Date.now()) {
+      issued.current = null;
+      setState({ kind: 'scanning' });
+      return;
+    }
+    const controller = new AbortController();
+    pairingController.current = controller;
+    const attempt = ++generation.current;
+    setState({ kind: 'working', pairing: pending.pairing, progress: 'exchanging' });
+    try {
+      await storePairingCredential(pending.credential, controller.signal);
+      if (controller.signal.aborted || attempt !== generation.current) return;
+      issued.current = null;
+      await reload();
+      if (!controller.signal.aborted && attempt === generation.current)
+        setState({
+          kind: 'result',
+          pairing: pending.pairing,
+          health: pending.health,
+          connected: true,
+        });
+    } catch (error) {
+      if (!controller.signal.aborted && attempt === generation.current)
+        setState({
+          kind: 'result',
+          error: error instanceof Error ? error.message : t('couldNotConnectToMac'),
+        });
+    } finally {
+      if (pairingController.current === controller) pairingController.current = null;
+    }
+  }
+  function close() {
+    generation.current++;
+    pairingController.current?.abort();
+    router.back();
   }
 
   if (!permission) {
@@ -119,11 +185,7 @@ export default function ScannerScreen() {
             {permission.canAskAgain ? t('allowCamera') : t('openSettings')}
           </Text>
         </Pressable>
-        <Pressable
-          accessibilityRole="button"
-          onPress={() => router.back()}
-          style={styles.cancelButton}
-        >
+        <Pressable accessibilityRole="button" onPress={close} style={styles.cancelButton}>
           <Text style={[styles.cancelLabel, { color: colors.accent }]}>{t('cancel')}</Text>
         </Pressable>
       </View>
@@ -142,7 +204,7 @@ export default function ScannerScreen() {
         <Pressable
           accessibilityRole="button"
           accessibilityLabel={t('closeScanner')}
-          onPress={() => router.back()}
+          onPress={close}
           style={styles.closeButton}
         >
           <SymbolView name="xmark" size={17} tintColor="#FFFFFF" weight="semibold" />
@@ -161,7 +223,7 @@ export default function ScannerScreen() {
         <ScanResult
           state={state}
           bottomInset={insets.bottom}
-          onAgain={() => setState({ kind: 'scanning' })}
+          onAgain={() => void retry()}
           onDone={() => router.replace('/(tabs)/home')}
         />
       )}

@@ -1,14 +1,14 @@
 <script setup lang="ts">
 import SelectField from '@/components/ui/select/SelectField.vue';
-import { computed, onMounted, ref } from 'vue';
+import { computed, onMounted, onUnmounted, ref } from 'vue';
 import { Check, X } from 'lucide-vue-next';
 import {
   getCategories,
   getMembers,
   getTransactions,
-  ignoreTransaction,
-  resolveTransaction,
-  updateTransactionOwner,
+  saveTransactionCommand,
+  ApiError,
+  type TransactionCommand,
   type Category,
   type Member,
   type OwnerType,
@@ -24,7 +24,11 @@ const members = ref<Member[]>([]);
 const total = ref(0);
 const offset = ref(0);
 const loading = ref(true);
-const saving = ref(false);
+type ReviewWrite =
+  { phase: 'idle' } | { phase: 'saving' | 'uncertain'; id: number; command: TransactionCommand };
+const write = ref<ReviewWrite>({ phase: 'idle' });
+const saving = computed(() => write.value.phase === 'saving');
+const locked = computed(() => write.value.phase !== 'idle');
 const error = ref('');
 const selectedId = ref<number | null>(null);
 const draftCategory = ref('');
@@ -62,7 +66,8 @@ const copy = computed(() =>
         of: 'of',
       },
 );
-function select(item: Transaction) {
+function select(item: Transaction, accepted = false) {
+  if (!accepted && locked.value) return;
   selectedId.value = item.id;
   draftCategory.value = item.category ?? '';
   draftOwner.value =
@@ -80,7 +85,17 @@ function date(item: Transaction) {
   );
 }
 // `nextIndex` keeps the queue moving at every window width after a confirm.
+let generation = 0;
+let disposed = false;
+onUnmounted(() => {
+  disposed = true;
+  generation++;
+});
+function closeDetails() {
+  if (!locked.value) selectedId.value = null;
+}
 async function load(nextIndex?: number) {
+  const request = ++generation;
   loading.value = true;
   error.value = '';
   try {
@@ -91,6 +106,7 @@ async function load(nextIndex?: number) {
       sortBy: 'date',
       sortOrder: 'desc',
     });
+    if (request !== generation) return;
     if (offset.value > 0 && offset.value >= result.pagination.total) {
       offset.value = Math.floor(Math.max(0, result.pagination.total - 1) / 50) * 50;
       await load(nextIndex);
@@ -107,44 +123,75 @@ async function load(nextIndex?: number) {
           : window.innerWidth > 1120
             ? items.value[0]
             : undefined;
-      if (next) select(next);
+      if (next) select(next, true);
     }
   } catch {
-    error.value = t('couldNotLoad');
+    if (request === generation) error.value = t('couldNotLoad');
   } finally {
-    loading.value = false;
+    if (request === generation) loading.value = false;
   }
 }
 async function confirm() {
   const item = selected.value;
-  if (!item || !draftCategory.value) return;
+  if (!item || !draftCategory.value || saving.value) return;
   const position = items.value.indexOf(item);
-  saving.value = true;
   error.value = '';
+  if (!item.resourceVersion) {
+    error.value = 'Update Money Monitor before reviewing transactions.';
+    return;
+  }
+  const ownerType: OwnerType = draftOwner.value.startsWith('member:')
+    ? 'member'
+    : (draftOwner.value as OwnerType);
+  const command =
+    write.value.phase === 'uncertain' && write.value.id === item.id
+      ? write.value.command
+      : {
+          commandId: crypto.randomUUID(),
+          expectedVersion: item.resourceVersion,
+          patch: {
+            category: draftCategory.value,
+            owner: {
+              type: ownerType,
+              memberId: ownerType === 'member' ? Number(draftOwner.value.slice(7)) : null,
+            },
+            ignored: !draftIncluded.value,
+            reviewed: true as const,
+          },
+        };
+  write.value = { phase: 'saving', id: item.id, command };
   try {
-    const ownerType: OwnerType = draftOwner.value.startsWith('member:')
-      ? 'member'
-      : (draftOwner.value as OwnerType);
-    const ownerMemberId = ownerType === 'member' ? Number(draftOwner.value.slice(7)) : null;
-    let updated = (await resolveTransaction(item.id, draftCategory.value)).transaction;
-    if (ownerType !== updated.expenseOwnerType || ownerMemberId !== updated.expenseOwnerMemberId) {
-      updated = (await updateTransactionOwner(item.id, { ownerType, ownerMemberId })).transaction;
-    }
-    // Resolving lets the category decide inclusion, unless the user chose otherwise.
-    const category = categories.value.find((entry) => entry.name === item.category);
-    const excludedByHand = item.ignored && !category?.ignoredFromStats;
-    const changedHere = draftIncluded.value === item.ignored;
-    const ignored = changedHere ? !draftIncluded.value : excludedByHand || updated.ignored;
-    if (ignored !== updated.ignored) await ignoreTransaction(item.id, ignored);
+    await saveTransactionCommand(item.id, command);
+    if (disposed) return;
+    write.value = { phase: 'idle' };
+    items.value = items.value.filter((row) => row.id !== item.id);
+    total.value = Math.max(0, total.value - 1);
+    reviewCount.value = total.value;
     selectedId.value = null;
     await load(position);
   } catch (cause) {
-    error.value = cause instanceof Error ? cause.message : t('couldNotLoad');
-  } finally {
-    saving.value = false;
+    if (disposed) return;
+    if (cause instanceof ApiError && cause.status < 500) {
+      write.value = { phase: 'idle' };
+      if (cause.current)
+        items.value = items.value.map((row) => (row.id === item.id ? cause.current! : row));
+    } else write.value = { phase: 'uncertain', id: item.id, command };
+    error.value =
+      cause instanceof ApiError && cause.code === 'mutation_conflict'
+        ? language.value === 'he'
+          ? 'התנועה השתנתה במכשיר אחר. בדקו את הטיוטה ואשרו שוב.'
+          : 'Another device changed this transaction. Check your draft and confirm again.'
+        : t('couldNotLoad');
   }
 }
+
+function retry() {
+  if (saving.value) return;
+  if (write.value.phase === 'uncertain') void confirm();
+  else void load();
+}
 async function page(delta: number) {
+  if (locked.value) return;
   offset.value = Math.max(0, offset.value + delta * 50);
   selectedId.value = null;
   await load();
@@ -166,7 +213,7 @@ onMounted(async () => {
       </p>
     </div>
     <p v-if="error" class="ledger-notice" role="alert">
-      {{ error }} <button @click="load()">{{ t('retry') }}</button>
+      {{ error }} <button :disabled="saving" @click="retry">{{ t('retry') }}</button>
     </p>
     <div class="review-workspace">
       <div class="review-list">
@@ -236,14 +283,19 @@ onMounted(async () => {
           type="button"
           class="review-backdrop"
           :aria-label="t('cancel')"
-          @click="selectedId = null"
+          @click="closeDetails"
         />
       </Transition>
       <Transition name="detail-panel">
-        <aside v-if="selected" class="review-inspector" :aria-label="t('details')">
+        <aside
+          v-if="selected"
+          class="review-inspector"
+          :data-transaction-id="selected.id"
+          :aria-label="t('details')"
+        >
           <div class="review-inspector-head">
             <h3>{{ t('details') }}</h3>
-            <button type="button" :aria-label="t('cancel')" @click="selectedId = null">
+            <button type="button" :aria-label="t('cancel')" @click="closeDetails">
               <X :size="18" />
             </button>
           </div>
@@ -272,6 +324,7 @@ onMounted(async () => {
               ><span>{{ copy.category }}</span
               ><SelectField
                 v-model="draftCategory"
+                :disabled="locked"
                 :options="[
                   { value: '', label: t('uncategorized') },
                   ...categories.map((category) => ({
@@ -284,6 +337,7 @@ onMounted(async () => {
               ><span>{{ copy.owner }}</span
               ><SelectField
                 v-model="draftOwner"
+                :disabled="locked"
                 :options="[
                   { value: 'shared', label: t('together') },
                   { value: 'unassigned', label: t('unassigned') },
@@ -294,7 +348,9 @@ onMounted(async () => {
                 ]"
             /></label>
             <label class="review-check"
-              ><input v-model="draftIncluded" type="checkbox" />{{ copy.include }}</label
+              ><input v-model="draftIncluded" :disabled="locked" type="checkbox" />{{
+                copy.include
+              }}</label
             >
           </div>
           <div class="review-inspector-footer">

@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { rmSync, mkdirSync, writeFileSync, existsSync } from 'node:fs';
 import Fastify from 'fastify';
 import { afterAll, expect, it, vi } from 'vitest';
@@ -39,7 +40,7 @@ it('streams and saves a valid desktop Advisor chart', async () => {
     const response = await app.inject({
       method: 'POST',
       url: '/api/ai/chat',
-      payload: { sessionId: id, message: 'Show my spending' },
+      payload: { submissionId: randomUUID(), sessionId: id, message: 'Show my spending' },
     });
     expect(response.statusCode).toBe(200);
     expect(response.body).toContain('event: chart');
@@ -54,7 +55,7 @@ it('streams and saves a valid desktop Advisor chart', async () => {
     const chartOnly = await app.inject({
       method: 'POST',
       url: '/api/ai/chat',
-      payload: { sessionId: id, message: 'Show a chart only' },
+      payload: { submissionId: randomUUID(), sessionId: id, message: 'Show a chart only' },
     });
     expect(chartOnly.body).toContain('event: chart');
     expect(getSession(id)?.messages.at(-1)).toMatchObject({
@@ -67,38 +68,31 @@ it('streams and saves a valid desktop Advisor chart', async () => {
   }
 });
 
-it('drops a question whose reply failed, so a retry does not save it twice', async () => {
+it('keeps an accepted failed question and replays its terminal reply without sending again', async () => {
   const app = Fastify({ logger: false });
   await app.register(aiRoutes);
   try {
-    const created = await app.inject({ method: 'POST', url: '/api/ai/sessions' });
-    const id = created.json().session.id as string;
+    const id = (await app.inject({ method: 'POST', url: '/api/ai/sessions' })).json().session.id;
+    const submissionId = randomUUID();
+    chat.mockClear();
+    chat.mockImplementation(async function* () {
+      yield { type: 'error', text: 'Provider unavailable' };
+    });
     const send = () =>
       app.inject({
         method: 'POST',
         url: '/api/ai/chat',
-        payload: { sessionId: id, message: 'Show my spending' },
+        payload: { sessionId: id, submissionId, message: 'Show my spending' },
       });
-    chat.mockImplementation(async function* () {
-      yield { type: 'error', text: 'Provider unavailable' };
-    });
     expect((await send()).body).toContain('event: error');
-    expect(getSession(id)?.messages).toEqual([]);
-    expect(getSession(id)?.meta.title).toBe('New chat');
-    chat.mockImplementation(async function* () {
-      yield { type: 'status', text: 'Working' };
-      throw new Error('Connection lost');
+    expect((await send()).body).toContain('event: error');
+    expect(chat).toHaveBeenCalledTimes(1);
+    expect(getSession(id)?.messages).toMatchObject([{ role: 'user', content: 'Show my spending' }]);
+    const outcome = await app.inject({
+      method: 'GET',
+      url: `/api/ai/sessions/${id}/replies/${submissionId}`,
     });
-    expect((await send()).body).toContain('Connection lost');
-    expect(getSession(id)?.messages).toEqual([]);
-    chat.mockImplementation(async function* () {
-      yield { type: 'result', text: 'Here it is.' };
-    });
-    await send();
-    expect(getSession(id)?.messages).toMatchObject([
-      { role: 'user', content: 'Show my spending' },
-      { role: 'assistant', content: 'Here it is.' },
-    ]);
+    expect(outcome.json().reply.state).toBe('failed');
   } finally {
     await app.close();
   }

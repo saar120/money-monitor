@@ -99,158 +99,125 @@ const STOPPED_STATE: MobileAccessRuntimeState = {
  * Process-local lifecycle owner for the loopback mobile server and persistent
  * Tailscale Serve coordinator. Public methods never reject.
  */
+type RuntimeOwnership = {
+  kind: 'idle' | 'enabled' | 'disabled' | 'stopped';
+  server: RunningMobileAccessServer | null;
+  snapshot: MobileAccessRuntimeState;
+};
 export class MobileAccessRuntime {
   private readonly serverFactory: MobileAccessServerFactory;
   private readonly serveCoordinator: MobileAccessServeCoordinator;
   private readonly logger?: MobileAccessRuntimeLogger;
   private operationQueue: Promise<void> = Promise.resolve();
-  private server: RunningMobileAccessServer | null = null;
-  private startAttempted = false;
-  private resumeEligible = false;
-  private lastState: MobileAccessRuntimeState = NOT_STARTED_STATE;
-  private successfulDisableState: MobileAccessRuntimeState | null = null;
-
+  private startup: { enabled: boolean; promise: Promise<MobileAccessRuntimeState> } | null = null;
+  private owner: RuntimeOwnership = { kind: 'idle', server: null, snapshot: NOT_STARTED_STATE };
   constructor(options: MobileAccessRuntimeOptions) {
     this.serverFactory = options.serverFactory;
     this.serveCoordinator = options.serveCoordinator;
     this.logger = options.logger;
   }
-
-  /**
-   * Starts Mobile Access during app startup. A disabled startup still asks the
-   * coordinator to remove any route that this app durably owns. That closes the
-   * crash window between persisting the disabled setting and route teardown.
-   */
-  start(enabled: boolean): Promise<MobileAccessRuntimeState> {
-    return this.serialize(() => this.performStart(enabled));
+  start(enabled: boolean) {
+    if (this.startup?.enabled === enabled) return this.startup.promise;
+    const promise = this.serialize(() =>
+      enabled
+        ? this.owner.kind === 'enabled' && this.owner.snapshot.status === 'running'
+          ? Promise.resolve(this.owner.snapshot)
+          : this.enable()
+        : this.disableOwned('startupCompleted'),
+    );
+    const startup = { enabled, promise };
+    this.startup = startup;
+    void promise
+      .finally(() => {
+        if (this.startup === startup) this.startup = null;
+      })
+      .catch(() => {});
+    return promise;
   }
-
-  /** Re-verifies the persistent mapping after wake only after a running start. */
-  resume(): Promise<MobileAccessRuntimeState> {
-    return this.serialize(() => this.performResume());
-  }
-
-  /** Closes process-local resources without removing the persistent Serve route. */
-  shutdown(): Promise<MobileAccessRuntimeState> {
-    return this.serialize(() => this.performShutdown());
-  }
-
-  /** Explicit user action: remove the owned Serve route, then close the server. */
-  disable(): Promise<MobileAccessRuntimeState> {
-    return this.serialize(() => this.performDisable());
-  }
-
-  private async performStart(enabled: boolean): Promise<MobileAccessRuntimeState> {
-    if (!enabled) {
-      if (this.startAttempted) {
-        this.safeLog('startupSkipped', this.lastState);
-        return this.lastState;
+  resume() {
+    return this.serialize(async () => {
+      if (this.owner.kind !== 'enabled') {
+        this.safeLog('resumeSkipped', this.owner.snapshot);
+        return this.owner.snapshot;
       }
-
-      if (this.successfulDisableState) {
-        this.safeLog('startupCompleted', this.successfulDisableState);
-        return this.successfulDisableState;
-      }
-
-      const result = await this.safeReconcile({ enabled: false });
-      this.lastState = result;
-      if (result.status === 'disabled') this.successfulDisableState = result;
-      this.safeLog('startupCompleted', result);
-      return result;
-    }
-
-    if (this.startAttempted) {
-      this.safeLog('startupCompleted', this.lastState);
-      return this.lastState;
-    }
-
-    this.startAttempted = true;
-    this.successfulDisableState = null;
-
-    if (!this.server) {
+      return this.enable('resumeCompleted');
+    });
+  }
+  shutdown() {
+    this.startup = null;
+    return this.serialize(async () => {
+      const server = this.owner.server;
+      const closed = await this.closeServer(server);
+      this.owner = {
+        kind: 'stopped',
+        server: closed ? null : server,
+        snapshot: closed ? STOPPED_STATE : runtimeFailure('mobileServerCloseFailed'),
+      };
+      this.safeLog('shutdownCompleted', this.owner.snapshot);
+      return this.owner.snapshot;
+    });
+  }
+  disable() {
+    this.startup = null;
+    return this.serialize(() => this.disableOwned('disableCompleted'));
+  }
+  private async enable(event: 'startupCompleted' | 'resumeCompleted' = 'startupCompleted') {
+    this.owner = { ...this.owner, kind: 'enabled' };
+    let server = this.owner.server;
+    if (!server) {
       try {
-        const server = await this.serverFactory.start({ host: '127.0.0.1' });
+        server = await this.serverFactory.start({ host: '127.0.0.1' });
         if (!isValidPort(server.port)) {
-          await closeWithoutThrow(server);
-          this.lastState = runtimeFailure('mobileServerStartFailed');
-          this.safeLog('startupCompleted', this.lastState);
-          return this.lastState;
+          const closed = await this.closeServer(server);
+          this.owner = {
+            kind: 'enabled',
+            server: closed ? null : server,
+            snapshot: runtimeFailure('mobileServerStartFailed'),
+          };
+          this.safeLog(event, this.owner.snapshot);
+          return this.owner.snapshot;
         }
-        this.server = server;
       } catch {
-        this.lastState = runtimeFailure('mobileServerStartFailed');
-        this.safeLog('startupCompleted', this.lastState);
-        return this.lastState;
+        this.owner.snapshot = runtimeFailure('mobileServerStartFailed');
+        this.safeLog(event, this.owner.snapshot);
+        return this.owner.snapshot;
       }
     }
-
-    const result = await this.safeReconcile({ enabled: true, mobilePort: this.server.port });
-    this.lastState = result;
-    // The loopback server is the prerequisite for reconciliation. Keep wake
-    // recovery eligible even if Tailscale was logged out or unavailable at
-    // startup so a later resume can heal the private route without restarting
-    // Money Monitor.
-    this.resumeEligible = true;
-    this.safeLog('startupCompleted', result);
-    return result;
+    const snapshot = await this.safeReconcile({ enabled: true, mobilePort: server.port });
+    this.owner = { kind: 'enabled', server, snapshot };
+    this.safeLog(event, snapshot);
+    return snapshot;
   }
-
-  private async performResume(): Promise<MobileAccessRuntimeState> {
-    if (!this.resumeEligible || !this.server) {
-      const result = this.startAttempted ? this.lastState : NOT_STARTED_STATE;
-      this.safeLog('resumeSkipped', result);
-      return result;
-    }
-
-    const result = await this.safeReconcile({ enabled: true, mobilePort: this.server.port });
-    this.lastState = result;
-    this.safeLog('resumeCompleted', result);
-    return result;
+  private async disableOwned(event: 'startupCompleted' | 'disableCompleted') {
+    if (
+      this.owner.kind === 'disabled' &&
+      !this.owner.server &&
+      this.owner.snapshot.status === 'disabled'
+    )
+      return this.owner.snapshot;
+    const snapshot = await this.safeReconcile({ enabled: false });
+    const server = this.owner.server;
+    const closed = await this.closeServer(server);
+    this.owner = {
+      kind: 'disabled',
+      server: closed ? null : server,
+      snapshot:
+        !closed && snapshot.status === 'disabled'
+          ? runtimeFailure('mobileServerCloseFailed')
+          : snapshot,
+    };
+    this.safeLog(event, this.owner.snapshot);
+    return this.owner.snapshot;
   }
-
-  private async performShutdown(): Promise<MobileAccessRuntimeState> {
-    if (!(await this.closeServer())) {
-      const result = runtimeFailure('mobileServerCloseFailed');
-      this.lastState = result;
-      this.safeLog('shutdownCompleted', result);
-      return result;
+  private async closeServer(server: RunningMobileAccessServer | null) {
+    if (!server) return true;
+    try {
+      await server.close();
+      return true;
+    } catch {
+      return false;
     }
-
-    this.resetStartLifecycle();
-    this.lastState = STOPPED_STATE;
-    this.safeLog('shutdownCompleted', STOPPED_STATE);
-    return STOPPED_STATE;
   }
-
-  private async performDisable(): Promise<MobileAccessRuntimeState> {
-    if (this.successfulDisableState) {
-      this.safeLog('disableCompleted', this.successfulDisableState);
-      return this.successfulDisableState;
-    }
-
-    const coordinatorState = await this.safeReconcile({ enabled: false });
-    const serverClosed = await this.closeServer();
-    this.resumeEligible = false;
-
-    const result = serverClosed
-      ? coordinatorState
-      : coordinatorState.status === 'disabled'
-        ? runtimeFailure('mobileServerCloseFailed')
-        : coordinatorState;
-
-    if (serverClosed) {
-      this.resetStartLifecycle();
-    }
-    this.lastState = result;
-
-    if (coordinatorState.status === 'disabled' && serverClosed) {
-      this.successfulDisableState = result;
-    }
-
-    this.safeLog('disableCompleted', result);
-    return result;
-  }
-
   private async safeReconcile(
     request: TailscaleServeReconcileRequest,
   ): Promise<MobileAccessRuntimeState> {
@@ -260,40 +227,18 @@ export class MobileAccessRuntime {
       return runtimeFailure('coordinatorUnavailable');
     }
   }
-
-  private async closeServer(): Promise<boolean> {
-    if (!this.server) return true;
+  private safeLog(event: MobileAccessRuntimeEvent, state: MobileAccessRuntimeState) {
     try {
-      await this.server.close();
-      this.server = null;
-      return true;
+      this.logger?.log({ event, status: state.status, diagnostic: state.diagnostic });
     } catch {
-      return false;
+      /* Optional diagnostic. */
     }
   }
-
-  private resetStartLifecycle(): void {
-    this.startAttempted = false;
-    this.resumeEligible = false;
-  }
-
-  private safeLog(event: MobileAccessRuntimeEvent, state: MobileAccessRuntimeState): void {
-    try {
-      this.logger?.log({
-        event,
-        status: state.status,
-        diagnostic: state.diagnostic,
-      });
-    } catch {
-      // Diagnostics must never affect the desktop app lifecycle.
-    }
-  }
-
   private serialize<T>(operation: () => Promise<T>): Promise<T> {
     const result = this.operationQueue.then(operation, operation);
     this.operationQueue = result.then(
-      () => undefined,
-      () => undefined,
+      () => {},
+      () => {},
     );
     return result;
   }
@@ -320,14 +265,6 @@ function sanitizeHttpsUrl(value: string | undefined): string | undefined {
     return url.toString().replace(/\/$/, '');
   } catch {
     return undefined;
-  }
-}
-
-async function closeWithoutThrow(server: RunningMobileAccessServer): Promise<void> {
-  try {
-    await server.close();
-  } catch {
-    // The startup result remains a fixed failure state.
   }
 }
 

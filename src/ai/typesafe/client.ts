@@ -1,3 +1,4 @@
+import { setTimeout as delay } from 'node:timers/promises';
 import { z } from 'zod';
 import { config } from '../../config.js';
 
@@ -46,6 +47,7 @@ export async function evaluateTypeSafe(input: {
   state: JsonValue;
   questions: Record<string, TypeSafeQuestion>;
   model?: string;
+  signal?: AbortSignal;
 }): Promise<TypeSafeResponse> {
   const apiKey = config.TYPESAFE_API_KEY;
   if (!apiKey) throw new Error('TypeSafe API key is missing. Configure it in Settings.');
@@ -61,9 +63,12 @@ export async function evaluateTypeSafe(input: {
           questions: input.questions,
           model: input.model ?? 'jev-latest',
         }),
-        signal: AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
+        signal: input.signal
+          ? AbortSignal.any([input.signal, AbortSignal.timeout(DEFAULT_TIMEOUT_MS)])
+          : AbortSignal.timeout(DEFAULT_TIMEOUT_MS),
       });
     } catch (error) {
+      input.signal?.throwIfAborted();
       if (error instanceof Error && error.name === 'TimeoutError') {
         throw new Error(`TypeSafe request timed out after ${DEFAULT_TIMEOUT_MS}ms`, {
           cause: error,
@@ -88,9 +93,10 @@ export async function evaluateTypeSafe(input: {
       const retryAfterHeader = response.headers.get('retry-after');
       const retryAfter = retryAfterHeader === null ? Number.NaN : Number(retryAfterHeader);
       const delayMs = Number.isFinite(retryAfter)
-        ? Math.min(retryAfter * 1_000, 4_000)
+        ? Math.max(0, Math.min(retryAfter * 1_000, 4_000))
         : 250 * 2 ** attempt;
-      await new Promise((resolve) => setTimeout(resolve, delayMs));
+      await response.body?.cancel();
+      await delay(delayMs, undefined, { signal: input.signal });
       continue;
     }
 

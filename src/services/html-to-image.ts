@@ -3,22 +3,44 @@ import { ensureChromium } from '../scraper/chromium.js';
 import { config } from '../config.js';
 
 let browser: Browser | null = null;
+let launching: Promise<Browser> | null = null;
+let generation = 0;
+let closed = false;
 let serverPort: number | null = null;
 
 /** Set the actual bound server port (called from server.ts after listen). */
 export function setServerPort(port: number): void {
   serverPort = port;
+  closed = false;
 }
 
 async function getBrowser(): Promise<Browser> {
-  if (browser && browser.connected) return browser;
-  const executablePath = await ensureChromium();
-  browser = await puppeteer.launch({
-    executablePath,
-    headless: true,
-    args: ['--disable-gpu', '--disable-dev-shm-usage'],
-  });
-  return browser;
+  if (closed) throw new Error('Image renderer is stopping');
+  if (browser?.connected) return browser;
+  if (launching) return launching;
+  const attempt = generation;
+  const work = (async () => {
+    const executablePath = await ensureChromium();
+    if (closed || generation !== attempt) throw new Error('Image renderer retired');
+    const created = await puppeteer.launch({
+      executablePath,
+      headless: true,
+      args: ['--disable-gpu', '--disable-dev-shm-usage'],
+    });
+    if (closed || generation !== attempt) {
+      await created.close();
+      throw new Error('Image renderer retired');
+    }
+    browser = created;
+    return created;
+  })();
+  launching = work;
+  void work
+    .finally(() => {
+      if (launching === work) launching = null;
+    })
+    .catch(() => {});
+  return work;
 }
 
 /**
@@ -108,8 +130,12 @@ export async function screenshotDashboard(
 
 /** Close the image-renderer browser (call during server shutdown). */
 export async function closeImageBrowser(): Promise<void> {
-  if (browser) {
-    await browser.close().catch(() => {});
-    browser = null;
-  }
+  closed = true;
+  generation++;
+  const owned = browser;
+  browser = null;
+  const pending = launching;
+  launching = null;
+  await owned?.close().catch(() => {});
+  await pending?.catch(() => {});
 }

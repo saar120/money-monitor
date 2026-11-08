@@ -241,7 +241,12 @@ describe('protected mobile transaction routes', () => {
       method: 'PATCH',
       url: `/api/mobile/v1/transactions/${project('transaction', 1)}`,
       headers: { authorization: `Bearer ${TOKEN}` },
-      payload: { category: 'Dining', reviewed: true },
+      payload: {
+        category: 'Dining',
+        reviewed: true,
+        commandId: '11111111-1111-4111-8111-111111111112',
+        expectedVersion: 1,
+      },
     });
 
     expect(optionsResponse.statusCode).toBe(200);
@@ -258,8 +263,13 @@ describe('protected mobile transaction routes', () => {
     );
     expect(update).toHaveBeenCalledWith(
       project('transaction', 1),
-      { category: 'Dining', reviewed: true },
-      { generatedAt: NOW.toISOString(), financialDate: '2026-07-16' },
+      {
+        category: 'Dining',
+        reviewed: true,
+        commandId: '11111111-1111-4111-8111-111111111112',
+        expectedVersion: 1,
+      },
+      { generatedAt: NOW.toISOString(), financialDate: '2026-07-16', clientId: DEVICE.id },
       DEVICE,
     );
   });

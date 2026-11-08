@@ -194,4 +194,15 @@ describe('NodeExecFileAdapter', () => {
     await rejection;
     expect(harness.killProcess).toHaveBeenCalledWith(-4242, 'SIGKILL');
   });
+  it('cleans output observers and ignores a late error after successful close', async () => {
+    const harness = createHarness();
+    const result = harness.adapter.run(request());
+    harness.child.emit('close', 0);
+    await expect(result).resolves.toEqual({ stdout: '', stderr: '' });
+    expect(harness.stdout.listenerCount('data')).toBe(0);
+    expect(harness.stderr.listenerCount('data')).toBe(0);
+    harness.child.emit('error', new Error('late'));
+    await vi.advanceTimersByTimeAsync(100);
+    expect(harness.killProcess).not.toHaveBeenCalled();
+  });
 });

@@ -73,3 +73,37 @@ test('the actual history hook renders cached data before any mount effect runs',
   assert.equal(firstFrame.months, data);
   assert.equal(firstFrame.loading, false);
 });
+
+test('retired cache callbacks cannot erase replacements or install stale values', async () => {
+  const pending: Array<{ resolve: (v: number[]) => void; reject: (e: Error) => void }> = [];
+  const cache = createHistoryCache<number>(
+    () => new Promise((resolve, reject) => pending.push({ resolve, reject })),
+    2,
+  );
+  const old = cache.load();
+  const failure = assert.rejects(old, /retired/);
+  await Promise.resolve();
+  cache.invalidate();
+  const replacement = cache.load();
+  await Promise.resolve();
+  pending[0].reject(new Error('retired'));
+  await failure;
+  assert.equal(cache.load(), replacement);
+  pending[1].resolve([]);
+  await replacement;
+  assert.deepEqual(cache.peek(), []);
+  const retired = cache.load(6);
+  await Promise.resolve();
+  cache.invalidate();
+  pending[2].resolve([99]);
+  await retired;
+  assert.equal(cache.peek(6), undefined);
+  await Promise.all(
+    [cache.load(1), cache.load(2), cache.load(3)].map(async (p) => {
+      await Promise.resolve();
+      pending.slice(3).forEach((v) => v.resolve([]));
+      await p;
+    }),
+  );
+  assert.equal(cache.peek(1), undefined);
+});

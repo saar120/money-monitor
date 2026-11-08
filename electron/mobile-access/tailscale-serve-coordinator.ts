@@ -219,6 +219,9 @@ export class TailscaleServeCoordinator {
       return state('conflict', 'routeOwnershipConflict');
     }
 
+    if (!(await this.saveOwnership({ ...ownership.record, removalRequested: true })))
+      return state('failed', 'ownershipStoreUnavailable');
+
     const mutation = await this.run([
       'serve',
       '--yes',

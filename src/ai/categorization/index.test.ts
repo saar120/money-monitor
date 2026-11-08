@@ -80,4 +80,34 @@ describe('categorization provider seam', () => {
     expect(rows.find(({ id }) => id === second.id)?.category).toBeNull();
     expect(applyOwnershipMock).not.toHaveBeenCalled();
   });
+  it('drops a delayed prediction after a human edit advances the resource version', async () => {
+    const account = insertAccount(testDb.db);
+    const row = insertTransaction(testDb.db, account.id);
+    let finish!: (value: Array<{ id: number; category: string; confidence: number }>) => void;
+    llmMock.mockImplementation(
+      () =>
+        new Promise((resolve) => {
+          finish = resolve;
+        }),
+    );
+    const classification = batchCategorize();
+    await Promise.resolve();
+    testDb.db
+      .update(transactions)
+      .set({ category: 'human', ignored: true, inclusionSource: 'manual' })
+      .where(eq(transactions.id, row.id))
+      .run();
+    finish([{ id: row.id, category: 'food', confidence: 0.5 }]);
+    await expect(classification).resolves.toEqual({ categorized: 0 });
+    expect(
+      testDb.db.select().from(transactions).where(eq(transactions.id, row.id)).get(),
+    ).toMatchObject({
+      category: 'human',
+      ignored: true,
+      inclusionSource: 'manual',
+      needsReview: false,
+      resourceVersion: 2,
+    });
+    expect(applyOwnershipMock).not.toHaveBeenCalled();
+  });
 });
