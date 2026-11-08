@@ -7,11 +7,12 @@ import { useMoneyData } from './MoneyData';
 import { useAppColors } from './theme';
 
 export function ConnectionState({
-  error,
+  error: overrideError,
   onRetry,
 }: { error?: string | null; onRetry?: () => void } = {}) {
   const colors = useAppColors();
-  const { status, reload, availability } = useMoneyData();
+  const { status, reload, availability, error: loadError } = useMoneyData();
+  const error = overrideError ?? loadError;
   const loading = status === 'loading';
   const unpaired = status === 'unpaired';
   const saved = availability === 'saved-view' || availability === 'stale-saved-view';

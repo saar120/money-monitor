@@ -48,6 +48,8 @@ Electron and standalone Node use different native ABIs. `npm run electron:rebuil
 
 ### Native iPhone builds
 
+Keep native cancellation checks in `mobile/src/abort.ts`: React Native lacks `AbortSignal.throwIfAborted()`. A successful HTTP response must not fail because a browser-only method is missing. `mobile/src/mobile-api.test.ts` covers both successful responses and cancellation without that method.
+
 Follow `mobile/README.md` for Expo, Xcode, CocoaPods, localization, and fixtures. Generated `mobile/ios/` is ignored; keep lasting configuration in `mobile/app.json` or `mobile/app.config.js` and regenerate with `npm --prefix mobile run prebuild:ios`.
 
 `MM_DEMO_BUILD=1` selects a separate demo identity in `mobile/app.config.js`. For a normal device update, regenerate without that variable and verify the generated bundle ID and signing identity against the installed app. Use the available Xcode signing team as a build setting; a generated demo project can otherwise survive into the next build.

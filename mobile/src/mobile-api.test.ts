@@ -2,6 +2,7 @@ import assert from 'node:assert/strict';
 import { readFileSync } from 'node:fs';
 import test from 'node:test';
 import {
+  listAdvisorSessions,
   completePairing,
   fetchExploreMonth,
   fetchRecurringPaymentDetail,
@@ -516,4 +517,61 @@ test('Hebrew Mac errors identify the failed action instead of claiming data coul
     globalThis.fetch = originalFetch;
     setActiveLanguage('en');
   }
+});
+
+test('native requests work when AbortSignal has no throwIfAborted method', async () => {
+  const descriptor = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'throwIfAborted');
+  const previousFetch = globalThis.fetch;
+  const credential = {
+    serverId: '00000000-0000-4000-8000-000000000001',
+    baseURL: 'https://example.invalid',
+    token: 'synthetic',
+  };
+  Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', {
+    configurable: true,
+    value: undefined,
+  });
+  globalThis.fetch = async () =>
+    Response.json({ data: { sessions: [] }, meta: { server: { id: credential.serverId } } });
+  try {
+    assert.deepEqual(await listAdvisorSessions(credential), []);
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (descriptor) Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', descriptor);
+    else delete (AbortSignal.prototype as { throwIfAborted?: unknown }).throwIfAborted;
+  }
+});
+
+test('a cancelled native request cannot accept a successful response', async () => {
+  const { fetchHomeData } = await import('./mobile-api.ts');
+  const { MobileRequestError } = await import('./request-error.ts');
+  const descriptor = Object.getOwnPropertyDescriptor(AbortSignal.prototype, 'throwIfAborted');
+  const previousFetch = globalThis.fetch;
+  const controller = new AbortController();
+  Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', {
+    configurable: true,
+    value: undefined,
+  });
+  globalThis.fetch = async () => {
+    controller.abort();
+    return Response.json({});
+  };
+  try {
+    await assert.rejects(
+      fetchHomeData(
+        { serverId: 'synthetic', baseURL: 'https://example.invalid', token: 'synthetic' },
+        controller.signal,
+      ),
+      (error) => error instanceof MobileRequestError && error.kind === 'cancelled',
+    );
+  } finally {
+    globalThis.fetch = previousFetch;
+    if (descriptor) Object.defineProperty(AbortSignal.prototype, 'throwIfAborted', descriptor);
+    else delete (AbortSignal.prototype as { throwIfAborted?: unknown }).throwIfAborted;
+  }
+});
+
+test('native cancellation without a reason throws a recognizable AbortError', async () => {
+  const { throwIfAborted } = await import('./abort.ts');
+  assert.throws(() => throwIfAborted({ aborted: true } as AbortSignal), { name: 'AbortError' });
 });

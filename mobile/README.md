@@ -94,3 +94,5 @@ npm run typecheck
 npm test
 npx expo-doctor
 ```
+
+Use `src/abort.ts` for cancellation checks. The iPhone runtime does not implement `AbortSignal.throwIfAborted()`; the request regression suite removes that method from Node to reproduce native behavior. Connection screens use the current load error unless a feature supplies a more specific error.

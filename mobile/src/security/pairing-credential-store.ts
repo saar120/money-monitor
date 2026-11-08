@@ -1,3 +1,4 @@
+import { throwIfAborted } from '../abort.ts';
 import { t } from '../translations.ts';
 import * as SecureStore from 'expo-secure-store';
 
@@ -62,19 +63,19 @@ export function storePairingCredential(
   if (!isValidCredential(credential))
     return Promise.reject(new Error(t('thePairingCredentialIsInvalid')));
   return serialize(async () => {
-    signal?.throwIfAborted();
+    throwIfAborted(signal);
     retiredToken = credential.token;
     await SecureStore.setItemAsync(KEY, JSON.stringify(credential), OPTIONS);
     if (signal?.aborted) {
       await SecureStore.setItemAsync(INVALIDATED_KEY, '1', OPTIONS);
       await SecureStore.deleteItemAsync(KEY, OPTIONS);
-      signal.throwIfAborted();
+      throwIfAborted(signal);
     }
     await SecureStore.deleteItemAsync(INVALIDATED_KEY, OPTIONS);
     if (signal?.aborted) {
       await SecureStore.setItemAsync(INVALIDATED_KEY, '1', OPTIONS);
       await SecureStore.deleteItemAsync(KEY, OPTIONS);
-      signal.throwIfAborted();
+      throwIfAborted(signal);
     }
     locallyDeleted = false;
     retiredToken = null;

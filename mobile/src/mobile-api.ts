@@ -1,3 +1,4 @@
+import { throwIfAborted } from './abort.ts';
 import { createSseParser } from '../../src/shared/sse-parser.ts';
 import {
   MobileRequestError,
@@ -431,7 +432,7 @@ async function requestJson(
   try {
     const response = await fetch(url, { ...init, signal: controller.signal });
     const body: unknown = await response.json().catch(() => null);
-    controller.signal.throwIfAborted();
+    throwIfAborted(controller.signal);
     if (!response.ok) {
       const error = apiError(body, response.status);
       const expectedServer = new Headers(init.headers).get('X-Money-Monitor-Server-Id');
