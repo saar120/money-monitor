@@ -1,7 +1,6 @@
 <script setup lang="ts">
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { useMonthSwipe } from '@/composables/useMonthSwipe';
-import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, onUnmounted, ref, watch, onScopeDispose } from 'vue';
 import { useRoute } from 'vue-router';
@@ -21,6 +20,8 @@ import {
   getNeedsReviewCount,
   getNetWorth,
   getSummary,
+  getTransactions,
+  type Transaction,
   type Account,
   type BudgetProgress,
   type CashflowItem,
@@ -29,13 +30,15 @@ import {
   type OwnerType,
   type SummaryItem,
 } from '../api/client';
-import { formatCompactCurrency, formatCurrency } from '@/lib/format';
+import { formatAmount, formatCompactCurrency, formatCurrency } from '@/lib/format';
 import { useSseConnection } from '@/composables/useSseConnection';
 import { useChartTheme } from '@/composables/useChartTheme';
 import { isValidMonth } from '@/lib/month';
 import { language, t } from '@/lib/language';
 import { Button } from '@/components/ui/button';
 import MonthControl from './MonthControl.vue';
+import MerchantMark from './MerchantMark.vue';
+import { normalizeMerchant } from '@/lib/merchant';
 
 use([CanvasRenderer, LineChart, GridComponent, TooltipComponent]);
 const route = useRoute();
@@ -58,6 +61,27 @@ const previousSpending = ref<SummaryItem[]>([]);
 const dailySpending = ref<SummaryItem[]>([]);
 const cashflow = ref<CashflowItem | null>(null);
 const monthlyBudgets = ref<BudgetProgress[]>([]);
+const recentTransactions = ref<Transaction[]>([]);
+const recentFailed = ref(false);
+const copy = computed(() =>
+  language.value === 'he'
+    ? {
+        spendingPace: 'קצב ההוצאות',
+        recent: 'תנועות אחרונות',
+        householdNetWorth: 'שווי נקי של משק הבית',
+        review: 'בדיקת תנועות',
+        categories: 'הוצאות לפי קטגוריה',
+        original: 'כל ההוצאות',
+      }
+    : {
+        spendingPace: 'Spending pace',
+        recent: 'Recent activity',
+        householdNetWorth: 'Household net worth',
+        review: 'Review transactions',
+        categories: 'Spending by category',
+        original: 'All spending',
+      },
+);
 // Unavailable sources render as unknown, never as zero or "all clear".
 const spendingFailed = ref(false);
 const budgetsFailed = ref(false);
@@ -129,6 +153,13 @@ async function refresh() {
     getBudgetProgress(true, `${selectedMonth.value}-01`),
     getNeedsReviewCount(),
     getNetWorth(),
+    getTransactions({
+      ...range.value,
+      ...ownerFilter.value,
+      limit: 7,
+      sortBy: 'date',
+      sortOrder: 'desc',
+    }),
   ] as const);
   if (currentRequest !== requestId) return;
   categorySpending.value = value(results[0])?.summary ?? [];
@@ -144,6 +175,8 @@ async function refresh() {
     value(results[7])?.progress.filter((item) => item.budget.period === 'monthly') ?? [];
   reviewCount.value = value(results[8])?.count ?? 0;
   netWorth.value = value(results[9])?.total ?? null;
+  recentTransactions.value = value(results[10])?.transactions.slice(0, 7) ?? [];
+  recentFailed.value = results[10].status === 'rejected';
   const failed = (...indexes: number[]) => indexes.some((i) => results[i]!.status === 'rejected');
   spendingFailed.value = failed(0, 1, 2, 3);
   budgetsFailed.value = failed(7);
@@ -311,7 +344,7 @@ const scrubAmount = computed(() =>
 );
 const scrubDate = computed(() =>
   scrubIndex.value == null
-    ? t('spendingOverTime')
+    ? copy.value.spendingPace
     : `${displayedMonth.value}-${String(scrubIndex.value + 1).padStart(2, '0')}`,
 );
 function pointAt(event: unknown) {
@@ -346,17 +379,27 @@ function scrubWithKeyboard(event: KeyboardEvent) {
           );
   chart.value?.dispatchAction({ type: 'showTip', seriesIndex: 0, dataIndex: scrubIndex.value });
 }
-function activityLink(category?: string) {
+function activityLink(
+  category?: string,
+  reportedOnly = true,
+  transactionId?: number,
+  direction?: string,
+) {
   return {
     path: '/transactions',
-    query: { month: selectedMonth.value, ...(category ? { category } : {}) },
+    query: {
+      month: selectedMonth.value,
+      ...range.value,
+      owner: selectedOwner.value,
+      ...(category ? { category } : {}),
+      ...(transactionId ? { transactionId } : {}),
+      ...(reportedOnly ? { status: 'completed', inclusion: 'included' } : {}),
+      ...(direction ? { direction } : {}),
+    },
   };
 }
 function categoryLink(category: string) {
-  return {
-    path: `/explore/category/${encodeURIComponent(category)}`,
-    query: { month: selectedMonth.value },
-  };
+  return activityLink(category);
 }
 </script>
 
@@ -412,24 +455,22 @@ function categoryLink(category: string) {
         }}</RouterLink></Button
       >
     </section>
-    <div v-if="!noAccounts" class="home-grid">
-      <section class="home-main">
-        <div class="home-hero">
+    <template v-if="!noAccounts">
+      <section class="home-summary">
+        <div class="home-summary-item">
           <div class="home-hero-top">
             <h2>{{ t('totalSpending') }}</h2>
-            <RouterLink :to="activityLink()"
-              >{{ t('viewActivity') }} <ArrowRight :size="15"
-            /></RouterLink>
           </div>
-          <p
-            v-if="loading"
-            class="home-total home-amount-loading skeleton-shimmer"
-            aria-hidden="true"
-          />
-          <p v-else-if="spendingFailed" class="home-total">—</p>
-          <p v-else class="home-total" dir="ltr" aria-live="polite">
-            <AnimatedAmount :value="totalSpent" />
-          </p>
+          <RouterLink
+            :to="activityLink(undefined, true, undefined, 'expense')"
+            class="home-summary-value"
+            ><span
+              v-if="loading"
+              class="home-total home-amount-loading skeleton-shimmer"
+              aria-hidden="true" /><span v-else-if="spendingFailed" class="home-total">—</span
+            ><span v-else class="home-total" dir="ltr"
+              ><AnimatedAmount :value="totalSpent" :animate="false" /></span
+          ></RouterLink>
           <p v-if="!loading && !spendingFailed" class="home-comparison">
             {{
               spendingDelta === 0
@@ -437,6 +478,35 @@ function categoryLink(category: string) {
                 : `${formatCurrency(Math.abs(spendingDelta))} ${spendingDelta > 0 ? t('more') : t('less')} ${selectedMonth === today.slice(0, 7) ? t('samePointLastMonth') : t('thanLastMonth')}`
             }}
           </p>
+        </div>
+        <div class="home-summary-item">
+          <h2>{{ t('postedIncome') }}</h2>
+          <RouterLink
+            :to="activityLink(undefined, true, undefined, 'income')"
+            class="home-summary-value"
+            ><strong dir="ltr">{{
+              loading || spendingFailed ? '—' : formatCurrency(income)
+            }}</strong></RouterLink
+          ><span v-if="!loading && !spendingFailed" class="home-cashflow"
+            >{{ t('netCashFlow') }}
+            <bdi dir="ltr"
+              >{{ netCashflow < 0 ? '−' : '' }}{{ formatCurrency(netCashflow) }}</bdi
+            ></span
+          >
+        </div>
+        <div class="home-summary-item">
+          <h2>{{ copy.householdNetWorth }}</h2>
+          <RouterLink to="/net-worth" class="home-summary-value"
+            ><strong dir="ltr">{{
+              loading || netWorth == null
+                ? '—'
+                : `${netWorth < 0 ? '−' : ''}${formatCurrency(netWorth)}`
+            }}</strong></RouterLink
+          >
+        </div>
+      </section>
+      <div class="home-top-grid">
+        <section class="workspace-surface home-chart-panel">
           <div class="home-chart-heading">
             <h2 class="home-chart-title">{{ scrubDate }}</h2>
             <div class="home-chart-readout">
@@ -488,30 +558,69 @@ function categoryLink(category: string) {
             />
           </div>
           <p id="home-chart-hint" class="sr-only">{{ t('chartKeyboardHint') }}</p>
-        </div>
-        <div class="home-stats">
-          <div>
-            <span>{{ t('postedIncome') }}</span
-            ><strong>{{ loading || spendingFailed ? '—' : formatCurrency(income) }}</strong>
-          </div>
-          <div>
-            <span>{{ t('netCashFlow') }}</span
-            ><strong
-              :class="{
-                'is-positive': !loading && !spendingFailed && netCashflow > 0,
-                'is-danger': !loading && !spendingFailed && netCashflow < 0,
-              }"
+        </section>
+        <section class="workspace-surface home-attention">
+          <h2>{{ reviewCount ? `${reviewCount} ${t('toReview')}` : t('needsAttention') }}</h2>
+          <div class="attention-list">
+            <RouterLink
+              v-for="item in recentTransactions.filter((row) => row.needsReview).slice(0, 2)"
+              :key="item.id"
+              :to="{ path: '/insights', query: { transactionId: item.id } }"
+              class="attention-row"
+              ><MerchantMark :description="item.description" /><span
+                ><strong
+                  ><bdi dir="auto">{{ normalizeMerchant(item.description) }}</bdi></strong
+                ><small>{{
+                  item.reviewReason ?? item.ownerReviewReason ?? t('needsReview')
+                }}</small></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink v-if="sinceLastVisit?.transactions" to="/transactions" class="attention-row"
+              ><RefreshCw :size="17" /><span
+                ><strong>{{ t('sinceLastVisit') }}</strong
+                ><small
+                  >{{ sinceLastVisit.transactions }} {{ t('newTransactions') }} ·
+                  {{ formatCurrency(sinceLastVisit.spent) }} {{ t('spent') }}</small
+                ></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink
+              v-if="budgetsNeedingAttention.length"
+              :to="{ path: '/budgets', query: { month: selectedMonth } }"
+              class="attention-row"
+              ><AlertCircle :size="17" /><span
+                ><strong>{{ t('budgetNeedsAttention') }}</strong
+                ><small>{{
+                  budgetsNeedingAttention.map((item) => item.budget.name).join(', ')
+                }}</small></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <RouterLink v-if="staleAccounts.length" to="/accounts" class="attention-row"
+              ><AlertCircle :size="17" /><span
+                ><strong>{{ staleAccounts.length }} {{ t('accountsNeedAttention') }}</strong></span
+              ><ArrowRight :size="15"
+            /></RouterLink>
+            <div
+              v-if="!loading && !attentionFailed && !budgetsFailed && !hasAttentionItems"
+              class="attention-row all-clear"
             >
-              <template v-if="loading || spendingFailed">—</template>
-              <AnimatedAmount v-else :value="netCashflow" />
-            </strong>
+              <CheckCircle2 :size="22" /><strong>{{ t('everythingCurrent') }}</strong>
+            </div>
+            <p v-if="!loading && attentionFailed" class="home-unavailable">
+              {{ t('couldNotLoad') }}
+            </p>
           </div>
-        </div>
-        <section class="home-section">
+          <Button v-if="reviewCount" variant="filled" as-child class="home-review-action"
+            ><RouterLink to="/insights">{{ copy.review }}<ArrowRight :size="16" /></RouterLink
+          ></Button>
+        </section>
+      </div>
+      <div class="home-bottom-grid">
+        <section class="workspace-surface home-categories">
           <div class="ledger-section-heading">
-            <h2>{{ t('whereItWent') }}</h2>
-            <RouterLink :to="{ path: '/explore', query: { month: selectedMonth } }"
-              >{{ t('explore') }} <ArrowRight :size="15"
+            <h2>{{ copy.categories }}</h2>
+            <RouterLink :to="activityLink()"
+              >{{ t('viewActivity') }}<ArrowRight :size="15"
             /></RouterLink>
           </div>
           <div class="ledger-list">
@@ -519,14 +628,8 @@ function categoryLink(category: string) {
               v-for="item in topCategories"
               :key="item.category"
               :to="categoryLink(item.category ?? 'uncategorized')"
-              :style="{ viewTransitionName: categoryMotionName(item.category ?? 'uncategorized') }"
               class="category-ledger-row"
-            >
-              <span
-                class="category-dot"
-                :style="{ background: categoryMap.get(item.category ?? '')?.color ?? '#B8C2CC' }"
-              />
-              <span class="category-row-content"
+              ><span class="category-row-content"
                 ><span>{{
                   categoryMap.get(item.category ?? '')?.label ??
                   (item.category === 'uncategorized' ? t('uncategorized') : item.category)
@@ -535,134 +638,446 @@ function categoryLink(category: string) {
                   ><span
                     :style="{
                       width: `${Math.min(100, (Math.abs(item.totalAmount) / Math.max(totalSpent, 1)) * 100)}%`,
-                      background: categoryMap.get(item.category ?? '')?.color ?? 'var(--accent)',
-                    }" /></span
-              ></span>
-              <strong dir="ltr">{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
-              ><ArrowRight :size="15" class="row-chevron" />
-            </RouterLink>
+                    }" /></span></span
+              ><strong dir="ltr">{{ formatCurrency(Math.abs(item.totalAmount)) }}</strong
+              ><ArrowRight :size="14" class="row-chevron"
+            /></RouterLink>
             <p v-if="!loading && !spendingFailed && !topCategories.length" class="ledger-empty">
               {{ t('noSpendingThisMonth') }}
             </p>
+            <p v-if="!loading && spendingFailed" class="ledger-empty">—</p>
           </div>
+          <RouterLink
+            v-if="!loading && !spendingFailed"
+            :to="activityLink(undefined, true, undefined, 'expense')"
+            class="home-category-total"
+            ><span>{{ copy.original }}</span
+            ><strong dir="ltr">{{ formatCurrency(totalSpent) }}</strong></RouterLink
+          >
         </section>
-      </section>
-      <aside class="home-rail">
-        <section
-          v-if="hasAttentionItems || !(attentionFailed || budgetsFailed)"
-          class="rail-section home-attention"
-        >
-          <h2>{{ t('needsAttention') }}</h2>
-          <div class="ledger-list attention-list">
-            <RouterLink v-if="sinceLastVisit?.transactions" to="/transactions" class="attention-row"
-              ><RefreshCw :size="18" /><span
-                ><strong>{{ t('sinceLastVisit') }}</strong
-                ><small
-                  >{{ sinceLastVisit.transactions }} {{ t('newTransactions') }} ·
-                  {{ formatCurrency(sinceLastVisit.spent) }} {{ t('spent') }}</small
-                ></span
-              ><ArrowRight :size="15"
-            /></RouterLink>
-            <RouterLink v-if="reviewCount" to="/insights" class="attention-row"
-              ><AlertCircle :size="18" /><span
-                ><strong>{{ reviewCount }} {{ t('toReview') }}</strong></span
-              ><ArrowRight :size="15"
-            /></RouterLink>
-            <RouterLink
-              v-if="budgetsNeedingAttention.length"
-              :to="{ path: '/budgets', query: { month: selectedMonth } }"
-              class="attention-row"
-              ><AlertCircle :size="18" /><span
-                ><strong>{{ t('budgetNeedsAttention') }}</strong
-                ><small>{{
-                  budgetsNeedingAttention.map((item) => item.budget.name).join(', ')
-                }}</small></span
-              ><ArrowRight :size="15"
-            /></RouterLink>
-            <RouterLink v-if="staleAccounts.length" to="/accounts" class="attention-row"
-              ><AlertCircle :size="18" /><span
-                ><strong>{{ staleAccounts.length }} {{ t('accountsNeedAttention') }}</strong></span
-              ><ArrowRight :size="15"
-            /></RouterLink>
-            <div
-              v-if="!loading && !attentionFailed && !budgetsFailed && !hasAttentionItems"
-              class="attention-row all-clear"
-            >
-              <CheckCircle2 :size="18" /><span
-                ><strong>{{ t('everythingCurrent') }}</strong></span
-              >
-            </div>
-          </div>
-        </section>
-        <section class="rail-section">
+        <section class="workspace-surface home-recent">
           <div class="ledger-section-heading">
-            <h2>{{ t('budgetPace') }}</h2>
-            <RouterLink :to="{ path: '/budgets', query: { month: selectedMonth } }"
-              >{{ t('budgets') }} <ArrowRight :size="15"
+            <h2>{{ copy.recent }}</h2>
+            <RouterLink :to="activityLink(undefined, false)"
+              >{{ t('viewActivity') }}<ArrowRight :size="15"
             /></RouterLink>
           </div>
-          <div v-if="budgetTotals" class="budget-readout">
-            <strong>{{ budgetTotals.percentage }}%</strong
-            ><span
-              >{{ t('ofPlanned') }} {{ formatCurrency(budgetTotals.planned) }}
-              {{ t('planned') }}</span
-            >
-            <div class="budget-track">
-              <span :style="{ width: `${Math.min(100, budgetTotals.percentage)}%` }" />
-            </div>
-            <p>
-              {{ formatCurrency(Math.max(0, budgetTotals.planned - budgetTotals.spent)) }}
-              {{ t('remaining') }}
+          <div class="recent-activity-list">
+            <RouterLink
+              v-for="item in recentTransactions"
+              :key="item.id"
+              :to="activityLink(undefined, false, item.id)"
+              class="recent-activity-row"
+              ><MerchantMark :description="item.description" /><bdi
+                dir="auto"
+                class="recent-merchant"
+                >{{ normalizeMerchant(item.description) }}</bdi
+              ><span class="recent-date"
+                ><bdi dir="ltr">{{
+                  new Date(`${item.reportingDate.slice(0, 10)}T12:00:00`).toLocaleDateString(
+                    language === 'he' ? 'he-IL' : 'en-US',
+                    { month: 'short', day: 'numeric' },
+                  )
+                }}</bdi></span
+              ><span class="recent-amount" :class="{ positive: item.chargedAmount > 0 }"
+                ><bdi dir="ltr"
+                  >{{ item.chargedAmount < 0 ? '−' : item.chargedAmount > 0 ? '+' : ''
+                  }}{{ formatAmount(item.chargedAmount, item.chargedCurrency) }}</bdi
+                ></span
+              ><ArrowRight :size="14"
+            /></RouterLink>
+            <p v-if="loading" class="ledger-empty">{{ t('loadingTransactions') }}</p>
+            <p v-else-if="recentFailed" class="ledger-empty">{{ t('couldNotLoad') }}</p>
+            <p v-else-if="!recentTransactions.length" class="ledger-empty">
+              {{ t('noTransactionsFound') }}
             </p>
           </div>
-          <p v-else-if="budgetsFailed" class="networth-readout">—</p>
-          <RouterLink
-            v-else-if="!loading"
-            :to="{ path: '/budgets', query: { month: selectedMonth } }"
-            class="rail-empty-link"
-            >{{ t('setBudgetForPace') }} <ArrowRight :size="15"
+        </section>
+      </div>
+      <section v-if="budgetTotals || budgetsFailed" class="workspace-surface home-budget-section">
+        <div class="ledger-section-heading">
+          <h2>{{ t('budgetPace') }}</h2>
+          <RouterLink :to="{ path: '/budgets', query: { month: selectedMonth } }"
+            >{{ t('budgets') }}<ArrowRight :size="15"
           /></RouterLink>
-        </section>
-        <section class="rail-section">
-          <div class="ledger-section-heading">
-            <h2>{{ t('netWorth') }}</h2>
-            <RouterLink to="/net-worth">{{ t('details') }} <ArrowRight :size="15" /></RouterLink>
+        </div>
+        <div v-if="budgetTotals" class="home-budget-content">
+          <strong>{{ budgetTotals.percentage }}%</strong
+          ><span>{{ formatCurrency(budgetTotals.planned) }} {{ t('planned') }}</span>
+          <div class="budget-track">
+            <span :style="{ width: `${Math.min(100, budgetTotals.percentage)}%` }" />
           </div>
-          <p class="networth-readout">
-            <bdi dir="ltr">{{
-              netWorth == null ? '—' : `${netWorth < 0 ? '−' : ''}${formatCurrency(netWorth)}`
-            }}</bdi>
-          </p>
-        </section>
-      </aside>
-    </div>
+          <span
+            >{{ formatCurrency(Math.max(0, budgetTotals.planned - budgetTotals.spent)) }}
+            {{ t('remaining') }}</span
+          >
+        </div>
+        <p v-else class="ledger-empty">—</p>
+      </section>
+    </template>
   </div>
 </template>
 
 <style scoped>
-.home-hero-top h2 {
-  font-size: 14px;
-  font-weight: 500;
+.home-summary {
+  display: grid;
+  grid-template-columns: repeat(3, minmax(0, 1fr));
+  gap: 24px;
+  padding: 6px 0 28px;
+}
+.home-summary-item {
+  min-width: 0;
+}
+.home-summary-item h2 {
+  margin: 0 0 8px;
+  font-size: 13px;
+  font-weight: 400;
   color: var(--text-secondary);
 }
-.home-section {
-  margin-block-start: 32px;
+.home-summary-value {
+  display: inline-block;
+  color: var(--text-primary);
+  text-decoration: none;
+  border-radius: 4px;
 }
-.home-section .ledger-section-heading,
-.rail-section .ledger-section-heading {
-  margin-block-end: 16px;
+.home-summary-value:hover {
+  color: var(--accent);
 }
-.home-section h2,
-.rail-section h2 {
-  font-size: var(--type-section);
-  font-weight: 600;
+.home-total,
+.home-summary-value > strong {
+  font-size: 30px;
   line-height: 1.3;
+  font-weight: 600;
+  letter-spacing: -0.025em;
+  margin: 0;
+  font-variant-numeric: tabular-nums;
+  white-space: nowrap;
 }
-.category-ledger-row,
-.attention-row {
-  padding: 16px;
+.home-amount-loading {
+  display: block;
+  height: 39px;
+  width: 200px;
 }
-.rail-section {
-  padding-block: 20px 0;
+.home-comparison,
+.home-cashflow {
+  display: block;
+  margin: 8px 0 0;
+  font-size: 12px;
+  line-height: 1.5;
+  color: var(--text-secondary);
+}
+.home-top-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) 344px;
+  gap: 20px;
+  margin-bottom: 22px;
+  align-items: stretch;
+}
+.home-chart-panel {
+  padding: 18px 20px 14px;
+  min-width: 0;
+}
+.home-chart-heading {
+  margin: 0 0 12px;
+  gap: 12px;
+}
+.home-chart-title {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.home-chart {
+  height: 240px;
+  margin: 0;
+}
+.home-chart-legend {
+  font-size: 11px;
+  gap: 14px;
+}
+.home-chart-heading strong {
+  font-size: 13px;
+}
+.home-attention {
+  padding: 20px !important;
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+  background: var(--surface);
+  border-radius: 10px;
+}
+.home-attention h2 {
+  margin: 0;
+  font-size: 20px;
+  font-weight: 600;
+}
+.attention-list {
+  display: grid;
+  gap: 8px;
+}
+.home-attention .attention-row {
+  padding: 6px 0;
+  border: 0;
+  gap: 9px;
+  min-width: 0;
+}
+.home-attention .attention-row strong {
+  font-size: 13px;
+  font-weight: 500;
+}
+.home-attention .attention-row small {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.home-attention .attention-row > span {
+  min-width: 0;
+}
+.home-review-action {
+  margin-top: auto;
+  width: 100%;
+}
+.home-unavailable {
+  font-size: 12px;
+  color: var(--text-secondary);
+}
+.home-bottom-grid {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) minmax(0, 1.2fr);
+  gap: 20px;
+  align-items: start;
+}
+.home-categories,
+.home-recent {
+  min-width: 0;
+}
+.ledger-section-heading {
+  padding: 18px 20px 14px;
+  margin: 0;
+  gap: 12px;
+}
+.ledger-section-heading h2 {
+  font-size: 16px;
+  font-weight: 600;
+  letter-spacing: -0.015em;
+}
+.ledger-section-heading > a {
+  font-size: 12px;
+  white-space: nowrap;
+}
+.ledger-list {
+  padding: 0 20px;
+}
+.category-ledger-row {
+  padding: 16px 0;
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
+  gap: 12px;
+}
+.category-row-content {
+  display: grid;
+  grid-template-columns: 84px minmax(24px, 1fr);
+  align-items: center;
+  gap: 12px;
+  min-width: 0;
+  flex: 1;
+}
+.category-row-content > span:first-child {
+  font-size: 13px;
+  overflow-wrap: anywhere;
+}
+.category-track {
+  height: 6px;
+  margin: 0;
+  background: var(--bg-tertiary);
+  border-radius: 4px;
+}
+.category-track > span {
+  height: 100%;
+  border-radius: 4px;
+  background: var(--accent);
+}
+.category-ledger-row > strong {
+  font-size: 13px;
+  font-weight: 450;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.category-ledger-row .row-chevron {
+  display: none;
+}
+.home-category-total {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 12px;
+  padding: 17px 20px;
+  color: var(--text-primary);
+  font-size: 12px;
+}
+.home-category-total strong {
+  font-size: 16px;
+  font-variant-numeric: tabular-nums;
+}
+.recent-activity-list {
+  padding: 0 12px 10px;
+}
+.recent-activity-row {
+  display: flex;
+  align-items: center;
+  gap: 9px;
+  padding: 8px;
+  color: var(--text-primary);
+  border-bottom: 1px solid color-mix(in srgb, var(--separator) 55%, transparent);
+  text-decoration: none;
+  font-size: 13px;
+}
+.recent-activity-row:last-child {
+  border: 0;
+}
+.recent-activity-row:hover {
+  background: var(--row-hover);
+  border-radius: 5px;
+}
+.recent-merchant {
+  min-width: 0;
+  flex: 1;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+.recent-date {
+  color: var(--text-secondary);
+  font-size: 12px;
+  white-space: nowrap;
+}
+.recent-amount {
+  min-width: 102px;
+  text-align: end;
+  white-space: nowrap;
+  font-variant-numeric: tabular-nums;
+}
+.recent-amount.positive {
+  color: var(--success);
+}
+.recent-activity-row > svg {
+  color: var(--text-secondary);
+}
+.home-budget-section {
+  margin-top: 22px;
+}
+.home-budget-content {
+  display: flex;
+  align-items: center;
+  flex-wrap: wrap;
+  gap: 14px;
+  padding: 0 20px 20px;
+  font-size: 13px;
+  color: var(--text-secondary);
+}
+.home-budget-content > strong {
+  font-size: 22px;
+  font-variant-numeric: tabular-nums;
+  color: var(--text-primary);
+}
+.home-budget-content .budget-track {
+  flex: 1;
+  min-width: 100px;
+  margin: 0;
+}
+.home-budget-content .budget-track > span {
+  display: block;
+  height: 100%;
+  background: var(--accent);
+}
+@media (max-width: 1200px) {
+  .home-summary-value > strong,
+  .home-total {
+    font-size: 27px;
+  }
+  .home-bottom-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-chart-panel {
+    padding-inline: 16px;
+  }
+  .home-top-grid {
+    grid-template-columns: minmax(0, 1fr) 300px;
+  }
+  .home-chart-legend {
+    gap: 8px;
+  }
+}
+@media (max-width: 1050px) {
+  .home-top-grid {
+    grid-template-columns: 1fr;
+  }
+  .home-summary {
+    gap: 18px;
+  }
+  .home-summary-value > strong,
+  .home-total {
+    font-size: 25px;
+  }
+  .home-attention {
+    min-height: 200px;
+  }
+  .home-chart {
+    height: 240px;
+  }
+}
+@media (max-width: 640px) {
+  .home-summary {
+    grid-template-columns: 1fr 1fr;
+    gap: 22px 16px;
+  }
+  .home-summary-item:last-child {
+    grid-column: 1/-1;
+  }
+  .home-summary-value > strong,
+  .home-total {
+    font-size: 24px;
+  }
+  .home-chart-heading {
+    grid-template-columns: 1fr;
+  }
+  .home-chart-readout {
+    justify-items: start;
+  }
+  .home-chart {
+    height: 220px;
+  }
+  .home-chart-panel {
+    padding: 16px 14px;
+  }
+  .home-top-grid,
+  .home-bottom-grid {
+    gap: 16px;
+  }
+  .ledger-section-heading {
+    padding-inline: 16px;
+    flex-wrap: wrap;
+  }
+  .ledger-list {
+    padding-inline: 16px;
+  }
+  .recent-date {
+    display: none;
+  }
+  .recent-amount {
+    min-width: 88px;
+    font-size: 12px;
+  }
+  .category-row-content {
+    grid-template-columns: 70px minmax(24px, 1fr);
+    gap: 8px;
+  }
+}
+
+.home-categories .ledger-list {
+  background: var(--surface);
+}
+.category-row-content > span:first-child {
+  font-weight: 400;
+}
+.home-comparison {
+  font-weight: 400;
 }
 </style>

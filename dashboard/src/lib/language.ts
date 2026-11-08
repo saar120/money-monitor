@@ -151,7 +151,7 @@ const english = {
   installment: 'Installment',
   type: 'Type',
   transactionNeedsReview: 'This transaction needs review.',
-  includeInStatistics: 'Include in statistics',
+  includeInStatistics: 'Include in reports',
   excludeFromStatistics: 'Exclude from statistics',
   confirmCategory: 'Confirm category',
   setEffectiveDate: 'Set effective date',

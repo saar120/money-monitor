@@ -183,7 +183,7 @@ export function commitOneZeroImport(accountId: number, file: File, commandId: st
 export interface Transaction {
   id: number;
   resourceVersion?: number;
-  inclusionSource?: string;
+  inclusionSource?: 'category' | 'manual' | 'legacy';
   accountId: number;
   identifier: number | null;
   date: string;
@@ -221,6 +221,12 @@ export interface Pagination {
   hasMore: boolean;
 }
 
+export interface LedgerTotal {
+  currency: string;
+  income: number;
+  expense: number;
+}
+
 export interface TransactionFilters {
   accountId?: number;
   accountType?: 'bank' | 'credit_card';
@@ -246,7 +252,7 @@ export function getTransactions(filters: TransactionFilters = {}) {
   Object.entries(filters).forEach(([key, value]) => {
     if (value !== undefined && value !== '') params.set(key, String(value));
   });
-  return request<{ transactions: Transaction[]; pagination: Pagination }>(
+  return request<{ transactions: Transaction[]; pagination: Pagination; totals: LedgerTotal[] }>(
     `/transactions?${params}`,
   );
 }
@@ -532,6 +538,33 @@ export interface Category {
   defaultOwnerMemberId: number | null;
   ignoredFromStats: boolean;
   createdAt: string;
+}
+
+export type ReviewDecisionCommand = {
+  commandId: string;
+  expectedVersion: number;
+  expected: import('@shared/transaction-review').TransactionReviewState;
+  category: string;
+  ownerType: OwnerType;
+  ownerMemberId: number | null;
+  included?: boolean;
+  effectiveDate?: string | null;
+};
+export type ReviewUndoCommand = import('@shared/transaction-review').ReviewUndo & {
+  commandId: string;
+  expectedVersion: number;
+};
+export function reviewTransaction(id: number, command: ReviewDecisionCommand) {
+  return request<{
+    transaction: Transaction;
+    undo: import('@shared/transaction-review').ReviewUndo;
+  }>(`/transactions/${id}/review`, { method: 'PATCH', body: JSON.stringify(command) });
+}
+export function undoTransactionReview(id: number, command: ReviewUndoCommand) {
+  return request<{ transaction: Transaction }>(`/transactions/${id}/review/undo`, {
+    method: 'PATCH',
+    body: JSON.stringify(command),
+  });
 }
 
 export function getCategories() {

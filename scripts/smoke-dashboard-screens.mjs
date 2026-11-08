@@ -1,5 +1,6 @@
 // Run with npm run dashboard:dev. Uses a disposable database and simulated desktop services.
 import assert from 'node:assert/strict';
+import { randomUUID } from 'node:crypto';
 
 // A modal dialog intentionally disables the body; it must stay usable itself.
 const menuClosed = () =>
@@ -86,9 +87,11 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
     memberId: 1,
     credentials: { email: 'sample@example.invalid', password: 'synthetic-only' },
   });
+  const excluded = await create('/categories', { name: 'qa_excluded', label: 'QA excluded' });
+  await create(`/categories/${excluded.category.id}`, { ignoredFromStats: true }, 'PATCH');
   connection.sqlite
     .prepare(
-      'UPDATE transactions SET needs_review = 1, review_reason = ? WHERE id IN (SELECT id FROM transactions ORDER BY date DESC LIMIT 3)',
+      "UPDATE transactions SET needs_review = 1, review_reason = ?, ignored = 0, inclusion_source = 'legacy' WHERE id IN (SELECT id FROM transactions ORDER BY date DESC LIMIT 3)",
     )
     .run('Synthetic review regression');
   await app.listen({ host: '127.0.0.1', port: 0 });
@@ -232,14 +235,14 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         const url = new URL(request.url());
         if (!url.pathname.startsWith('/api/')) return request.continue();
         if (
-          request.method() === 'POST' &&
-          /\/api\/transactions\/\d+\/commands$/.test(url.pathname)
+          ['POST', 'PATCH'].includes(request.method()) &&
+          /\/api\/transactions\/\d+\/(commands|review)$/.test(url.pathname)
         ) {
           reviewCommands.push({ path: url.pathname, command: JSON.parse(request.postData()) });
           if (failReview) {
             failReview = false;
             const accepted = await fetch(api + url.pathname, {
-              method: 'POST',
+              method: request.method(),
               headers: { 'Content-Type': 'application/json' },
               body: request.postData(),
             });
@@ -539,7 +542,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         if (route === '/') {
           await page.waitForSelector('.home-chart canvas');
           const geometry = () =>
-            ['.home-chart', '.home-stats', '.home-section'].map((selector) => {
+            ['.home-chart', '.home-summary', '.home-bottom-grid'].map((selector) => {
               const rect = document.querySelector(selector).getBoundingClientRect();
               return [rect.top, rect.height];
             });
@@ -684,22 +687,20 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         .transaction;
       assert(baseline, 'The selected review card has a canonical transaction');
       const categories = await (await fetch(api + '/api/categories')).json();
-      const category = categories.categories.find((row) => !row.ignoredFromStats).name;
-      await selectOption(
-        page,
-        '.review-inspector-body > label:first-of-type [role="combobox"]',
-        category,
+      const category = categories.categories.find((row) => row.name === 'qa_excluded').name;
+      await selectOption(page, '#review-category', category);
+      await selectOption(page, '.review-two-fields [role=combobox]', 'shared');
+      assert.equal(
+        await page.$eval(
+          '.review-check [role=switch]',
+          (el) => el.getAttribute('aria-checked') === 'true',
+        ),
+        !baseline.ignored,
+        'Legacy inclusion preview remains protected when selecting an excluded category',
       );
-      await selectOption(
-        page,
-        '.review-inspector-body > label:nth-of-type(2) [role="combobox"]',
-        'shared',
-      );
-      if (await page.$eval('.review-check input', (el) => el.checked))
-        await page.click('.review-check input');
       reviewCommands.length = 0;
       failReview = true;
-      await page.click('.review-inspector-footer button');
+      await page.click('.review-confirm');
       await page.waitForSelector('.ledger-notice');
       assert.equal(
         await page.$eval('.review-inspector h4', (el) => el.textContent.trim()),
@@ -713,7 +714,7 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       );
       const acceptedResponse = page.waitForResponse(
         (response) =>
-          response.url().endsWith(`/transactions/${baseline.id}/commands`) &&
+          response.url().endsWith(`/transactions/${baseline.id}/review`) &&
           response.status() === 200,
       );
       await page.$eval('.ledger-notice button', (button) => {
@@ -737,7 +738,11 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       assert.equal(reviewed.resourceVersion, baseline.resourceVersion + 1);
       assert.equal(reviewed.category, category);
       assert.equal(reviewed.expenseOwnerType, 'shared');
-      assert.equal(reviewed.ignored, true);
+      assert.equal(
+        reviewed.ignored,
+        baseline.ignored,
+        'Saved inclusion matches the untouched preview',
+      );
       assert.equal(reviewed.needsReview, false);
       assert.equal(reviewed.date, baseline.date);
 
@@ -899,6 +904,257 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
       assert(
         await page.$eval('.proto-filter-button', (el) => el === document.activeElement),
         'Closing filters returns focus to its trigger',
+      );
+
+      // Exercise the approved review workflow against the real disposable API.
+      const pending = await (
+        await fetch(api + '/api/transactions?needsReview=true&limit=1')
+      ).json();
+      let reviewTarget = pending.transactions[0];
+      assert(reviewTarget, 'Fixture provides a pending review');
+      const initialCount = (
+        await (await fetch(api + '/api/transactions/needs-review/count')).json()
+      ).count;
+      await visit(`/insights?transactionId=${reviewTarget.id}`);
+      await page.waitForSelector('.review-inspector');
+      assert(
+        (await page.$eval('.review-inspector h4', (el) => el.textContent)).includes(
+          reviewTarget.description,
+        ),
+        'Home/deep links open the requested review',
+      );
+      await selectOption(page, '#review-category', 'groceries');
+      const concurrentDate = `${lastMonth}-${language === 'he' ? '04' : '03'}`;
+      const concurrentEdit = await fetch(api + `/api/transactions/${reviewTarget.id}/commands`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          commandId: randomUUID(),
+          expectedVersion: reviewTarget.resourceVersion,
+          patch: { effectiveDate: concurrentDate },
+        }),
+      });
+      assert.equal(concurrentEdit.status, 200);
+      reviewTarget = (await concurrentEdit.json()).transaction;
+      const conflictResponse = page.waitForResponse((response) =>
+        response.url().endsWith(`/transactions/${reviewTarget.id}/review`),
+      );
+      await page.click('.review-confirm');
+      assert.equal((await conflictResponse).status(), 409, 'Stale review is rejected');
+      const stillConflict = page.waitForResponse((response) =>
+        response.url().endsWith(`/transactions/${reviewTarget.id}/review`),
+      );
+      await page.click('.review-confirm');
+      assert.equal(
+        (await stillConflict).status(),
+        409,
+        'Confirm without reconciliation still rejects the stale draft',
+      );
+      assert.equal(
+        (await (await fetch(api + `/api/transactions/${reviewTarget.id}`)).json()).transaction
+          .effectiveDate,
+        concurrentDate,
+        'A repeated confirmation cannot overwrite the concurrent date',
+      );
+      await page.waitForSelector('.ledger-notice[role=alert] button:not([disabled])');
+      const reloadedQueue = page.waitForResponse((response) => {
+        const url = new URL(response.url());
+        return (
+          url.pathname === '/api/transactions' && url.searchParams.get('needsReview') === 'true'
+        );
+      });
+      await page.click('.ledger-notice[role=alert] button');
+      await reloadedQueue;
+      await page.waitForFunction(
+        () => document.querySelector('.review-page').getAttribute('aria-busy') === 'false',
+      );
+      assert.equal(
+        await page.$eval('.review-two-fields input[type=date]', (el) => el.value),
+        concurrentDate,
+        'Conflict recovery loads the newer Effective Date instead of rebasing stale drafts',
+      );
+      await selectOption(page, '#review-category', 'groceries');
+      await selectOption(page, '.review-two-fields [role=combobox]', 'shared');
+      const inclusionBefore = await page.$eval(
+        '.review-check [role=switch]',
+        (el) => el.getAttribute('aria-checked') === 'true',
+      );
+      await page.click('.review-check [role=switch]');
+      const committedResponse = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/transactions/${reviewTarget.id}/review`) &&
+          response.request().method() === 'PATCH',
+      );
+      await page.click('.review-confirm');
+      assert.equal((await committedResponse).status(), 200, 'Complete review commits successfully');
+      await page.waitForFunction(
+        () => document.querySelector('.review-page').getAttribute('aria-busy') === 'false',
+      );
+      const committed = (await (await fetch(api + `/api/transactions/${reviewTarget.id}`)).json())
+        .transaction;
+      assert.equal(committed.needsReview, false);
+      assert.equal(committed.category, 'groceries');
+      assert.equal(committed.expenseOwnerType, 'shared');
+      assert.equal(committed.ignored, inclusionBefore);
+      assert.equal(
+        committed.effectiveDate,
+        concurrentDate,
+        'Confirmation preserves the newer date',
+      );
+      assert.equal(committed.date, reviewTarget.date, 'Review never changes Bank Date');
+      assert.equal(
+        (await (await fetch(api + '/api/transactions/needs-review/count')).json()).count,
+        initialCount - 1,
+      );
+      const undoResponse = page.waitForResponse((response) =>
+        response.url().endsWith(`/transactions/${reviewTarget.id}/review/undo`),
+      );
+      await page.click('.workspace-feedback button');
+      assert.equal((await undoResponse).status(), 200, 'Undo restores the committed review');
+      await page.waitForFunction(
+        () => document.querySelector('.review-page').getAttribute('aria-busy') === 'false',
+      );
+      const restored = (await (await fetch(api + `/api/transactions/${reviewTarget.id}`)).json())
+        .transaction;
+      for (const field of [
+        'category',
+        'effectiveDate',
+        'needsReview',
+        'reviewReason',
+        'ignored',
+        'expenseOwnerType',
+        'expenseOwnerMemberId',
+        'ownerSource',
+      ])
+        assert.equal(restored[field], reviewTarget[field], `Undo restores ${field}`);
+      assert.equal(
+        (await (await fetch(api + '/api/transactions/needs-review/count')).json()).count,
+        initialCount,
+      );
+      await page.click('.review-inspector-footer .ui-button:not(.review-confirm)');
+      assert.equal(
+        await page.$$eval(`#review-row-${reviewTarget.id}`, (els) => els.length),
+        0,
+        'Skip removes the item only from this session queue',
+      );
+      assert.equal(
+        (await (await fetch(api + `/api/transactions/${reviewTarget.id}`)).json()).transaction
+          .needsReview,
+        true,
+        'Skip never resolves a transaction',
+      );
+      assert.equal(
+        (await (await fetch(api + '/api/transactions/needs-review/count')).json()).count,
+        initialCount,
+      );
+
+      const scopedSample = (
+        await (
+          await fetch(
+            api +
+              `/api/transactions?startDate=${lastMonth}-01&endDate=${lastMonth}-31&ignored=false&status=completed&maxAmount=-0.01&limit=1`,
+          )
+        ).json()
+      ).transactions[0];
+      assert(scopedSample, 'Fixture provides reported spending for an owner');
+      const ownerForDrill =
+        scopedSample.expenseOwnerType === 'member'
+          ? `member:${scopedSample.expenseOwnerMemberId}`
+          : scopedSample.expenseOwnerType;
+      await visit(`/?month=${lastMonth}`);
+      await page.waitForSelector('.category-ledger-row');
+      await selectOption(page, '.toolbar-controls .ledger-select', ownerForDrill);
+      await page.waitForFunction(
+        () => document.querySelector('.home-page').getAttribute('aria-busy') === 'false',
+      );
+      await page.click('.category-ledger-row');
+      await page.waitForSelector('.proto-table');
+      const drill = new URL(page.url());
+      assert.equal(drill.pathname, '/transactions');
+      assert.equal(drill.searchParams.get('month'), lastMonth);
+      assert.equal(drill.searchParams.get('owner'), ownerForDrill);
+      assert.equal(drill.searchParams.get('inclusion'), 'included');
+      assert.equal(
+        drill.searchParams.get('startDate'),
+        `${lastMonth}-01`,
+        'Summary drill-down retains its financial date range',
+      );
+      await page.waitForSelector('.proto-category [role=combobox]');
+      const inline = await page.$('.proto-category [role=combobox]');
+      assert(inline, 'Ledger categories are directly editable');
+      const rowId = await inline.evaluate((el) => el.closest('tr').id.replace('proto-row-', ''));
+      const allCategories = (await (await fetch(api + '/api/categories')).json()).categories;
+      const nextCategory = allCategories.find(
+        (category) =>
+          category.name !== drill.searchParams.get('category') && category.name !== 'uncategorized',
+      ).name;
+      const inlineResponse = page.waitForResponse(
+        (response) =>
+          response.url().endsWith(`/api/transactions/${rowId}/commands`) &&
+          response.request().method() === 'POST',
+      );
+      await selectOption(
+        page,
+        `.proto-table #proto-row-${rowId} .proto-category [role=combobox]`,
+        nextCategory,
+      );
+      assert.equal(
+        (await inlineResponse).status(),
+        200,
+        'Inline category changes use the real mutation API',
+      );
+      await page.waitForFunction((id) => !document.getElementById(`proto-row-${id}`), {}, rowId);
+      assert.equal(
+        (await (await fetch(api + `/api/transactions/${rowId}`)).json()).transaction.category,
+        nextCategory,
+      );
+      const inclusionTarget = (
+        await (
+          await fetch(
+            api +
+              `/api/transactions?startDate=${lastMonth}-01&endDate=${lastMonth}-31&ignored=false&maxAmount=-0.01&limit=1`,
+          )
+        ).json()
+      ).transactions[0];
+      await visit(`/transactions?month=${lastMonth}&transactionId=${inclusionTarget.id}`);
+      await page.waitForSelector('.proto-include [role=switch]');
+      await page.waitForFunction(() =>
+        [...document.querySelectorAll('.activity-total-currency strong')].every(
+          (el) => el.textContent.trim() !== '—',
+        ),
+      );
+      const totalsBefore = await page.$$eval('.activity-total-currency strong', (els) =>
+        els.map((el) => el.textContent.trim()).join('|'),
+      );
+      assert.equal(
+        await page.$eval('.proto-include [role=switch]', (el) => el.getAttribute('aria-checked')),
+        'true',
+      );
+      const totalsReload = page.waitForResponse(
+        (response) =>
+          new URL(response.url()).pathname === '/api/transactions' &&
+          response.request().method() === 'GET',
+      );
+      await page.click('.proto-include [role=switch]');
+      await totalsReload;
+      await page.waitForFunction(
+        (previous) => {
+          const values = [...document.querySelectorAll('.activity-total-currency strong')].map(
+            (el) => el.textContent.trim(),
+          );
+          return values.every((value) => value !== '—') && values.join('|') !== previous;
+        },
+        {},
+        totalsBefore,
+      );
+      assert.equal(
+        (await (await fetch(api + `/api/transactions/${inclusionTarget.id}`)).json()).transaction
+          .ignored,
+        true,
+        'Accepted inclusion refreshes the displayed totals',
+      );
+      console.log(
+        `PASS ${theme}/${language}: scoped Home drill-down, inline edit, atomic Review, Undo and session Skip`,
       );
 
       await visit(`/explore/category/groceries?month=${month}`);

@@ -1,6 +1,11 @@
+import { saveReviewDecision, undoReviewDecision } from '../services/transaction-review.js';
 import type { FastifyInstance } from 'fastify';
 import { z } from 'zod';
-import { transactionQuerySchema } from './validation.js';
+import {
+  transactionQuerySchema,
+  reviewDecisionSchema,
+  undoReviewDecisionSchema,
+} from './validation.js';
 import { parseIntParam, validateBody, validateQuery } from './helpers.js';
 import {
   commandTransaction,
@@ -31,6 +36,35 @@ export async function transactionsRoutes(app: FastifyInstance) {
       throw error;
     }
   });
+  for (const undo of [false, true]) {
+    app.patch<{ Params: { id: string } }>(
+      `/api/transactions/:id/review${undo ? '/undo' : ''}`,
+      async (request, reply) => {
+        const id = parseIntParam(request.params.id, 'transaction id', reply);
+        if (id === null) return;
+        if (!request.body || typeof request.body !== 'object' || !('commandId' in request.body))
+          return reply
+            .status(426)
+            .send({ code: 'update_required', error: 'Update Money Monitor to save changes.' });
+        try {
+          if (undo) {
+            const data = validateBody(undoReviewDecisionSchema, request.body, reply);
+            if (!data) return;
+            return undoReviewDecision(id, data);
+          }
+          const data = validateBody(reviewDecisionSchema, request.body, reply);
+          if (!data) return;
+          return saveReviewDecision(id, data);
+        } catch (error) {
+          if (error instanceof FinancialCommandError)
+            return reply
+              .status(error.status)
+              .send({ error: error.code, code: error.code, current: error.current });
+          throw error;
+        }
+      },
+    );
+  }
   app.get('/api/transactions', async (request, reply) => {
     const data = validateQuery(transactionQuerySchema, request.query, reply);
     if (!data) return;

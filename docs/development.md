@@ -1,5 +1,7 @@
 # Development
 
+For the approved app-wide visual and interaction direction, see [the design language](design-language.md) and its [finance UI references](research/finance-ui-references.md).
+
 ## Find the implementation
 
 | Change                                     | Entry points                                                                                                                  |
@@ -14,6 +16,8 @@
 | Scraping and schedules                     | `src/scraper/`, `src/api/scrape.routes.ts`, `patches/`                                                                        |
 | AI providers and categorization            | `src/ai/agent.ts`, `src/ai/auth.ts`, `src/ai/categorization/`                                                                 |
 | Paths and encrypted configuration          | `src/paths.ts`, `src/config.ts`, `src/safe-storage.ts`, `electron/main.ts`                                                    |
+
+Desktop review decisions and their conditional Undo are implemented in `src/services/transaction-review.ts`; their shared field snapshot is `src/shared/transaction-review.ts`.
 
 The Mac owns financial calculations, credentials, scraping, and administration. Trace a shared feature through its service and both API/client paths; the mobile API is separate from the desktop API.
 
@@ -150,7 +154,7 @@ may require a one-time manual installation. No quarantine-removal workaround rem
 
 ## Versioned edits and recovery
 
-Transaction commands, recurring decisions, and bulk holding prices persist a mutation receipt in the same transaction as their financial effects. Clients keep the command ID after transport uncertainty and require the accepted resource version. Existing transaction inclusion choices migrate as legacy provenance; subsequent manual choices remain protected from category defaults and delayed categorization. Compatible reads remain available when protected writes require an update.
+Transaction commands, recurring decisions, and bulk holding prices persist a mutation receipt in the same transaction as their financial effects. Clients keep the command ID after transport uncertainty and require the accepted resource version. Desktop Review and Undo use the same receipt boundary; a conflicted draft must reconcile before re-confirming, and Undo reads the accepted resource version after the database trigger runs. Existing transaction inclusion choices migrate as legacy provenance; subsequent manual choices remain protected from category defaults and delayed categorization. Compatible reads remain available when protected writes require an update.
 
 Advisor question acceptance and the final assistant exchange are atomic session-file replacements. Desktop, mobile, and Telegram share reply admission and terminal outcomes. Desktop/mobile reconcile by reply ID; Telegram derives its reply ID from the chat and update and preserves the original session. Scrape authentication challenges carry challenge/session IDs; cancellation keeps admission occupied until resource cleanup. Post-import enrichment phases survive restart, and interrupted Telegram sends remain unknown instead of being automatically replayed. Alert evaluations are keyed by import job or monthly period; durable recipient/chunk delivery intent precedes the analysis baseline. Confirmed alert context is appended idempotently to the captured conversation after an active reply settles. `/retry` sends only known incomplete chunks and never repeats an unknown send. Telegram image buffers belong to one reply/recipient/session and expire after 10 minutes, with limits of 10 images per reply, 10 MB per image, 20 retained replies and 64 MB total. Desktop and mobile do not expose the Telegram image tool.
 

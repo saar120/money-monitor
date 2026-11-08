@@ -1,3 +1,4 @@
+import { financialCommandIdentitySchema } from '../services/financial-command.js';
 import { z } from 'zod';
 import {
   COMPANY_IDS,
@@ -240,6 +241,38 @@ export const updateOwnershipRuleSchema = createOwnershipRuleSchema.partial();
 
 export const resolveReviewSchema = z.object({
   category: z.string().min(1).max(50),
+});
+
+const transactionReviewStateSchema = z.object({
+  category: z.string().max(50).nullable(),
+  effectiveDate: z.iso.date().nullable(),
+  expenseOwnerType: ownerTypeEnum,
+  expenseOwnerMemberId: z.number().int().positive().nullable(),
+  ownerSource: z.enum(['manual', 'rule', 'category', 'account', 'unassigned']),
+  ownerConfidence: z.number().min(0).max(1).nullable(),
+  ownerReviewReason: z.string().nullable(),
+  ignored: z.boolean(),
+  inclusionSource: z.enum(['category', 'manual', 'legacy']),
+  needsReview: z.boolean(),
+  reviewReason: z.string().nullable(),
+  confidence: z.number().min(0).max(1).nullable(),
+});
+export const reviewDecisionSchema = updateTransactionOwnerSchema.extend({
+  ...financialCommandIdentitySchema.shape,
+  expected: transactionReviewStateSchema,
+  category: z
+    .string()
+    .min(1)
+    .max(50)
+    .refine((value) => value !== 'uncategorized', 'Choose a category'),
+  included: z.boolean().optional(),
+  effectiveDate: z.iso.date().nullable().optional(),
+});
+export const undoReviewDecisionSchema = z.object({
+  ...financialCommandIdentitySchema.shape,
+  afterVersion: z.number().int().positive(),
+  before: transactionReviewStateSchema,
+  after: transactionReviewStateSchema,
 });
 
 // ─── Assets ───

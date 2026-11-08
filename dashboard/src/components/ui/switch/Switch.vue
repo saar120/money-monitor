@@ -34,7 +34,7 @@ const settingsField = useSettingsField();
     <SwitchThumb
       :class="
         cn(
-          'pointer-events-none block h-[18px] w-[18px] rounded-full bg-white shadow-sm ring-0 transition-transform data-[state=checked]:translate-x-[14px] data-[state=unchecked]:translate-x-0',
+          'pointer-events-none block h-[18px] w-[18px] rounded-full bg-white ring-0 data-[state=checked]:bg-primary-foreground transition-transform data-[state=checked]:translate-x-[14px] rtl:data-[state=checked]:-translate-x-[14px] data-[state=unchecked]:translate-x-0',
         )
       "
     />
