@@ -563,7 +563,7 @@ function categoryLink(category: string) {
           <h2>{{ reviewCount ? `${reviewCount} ${t('toReview')}` : t('needsAttention') }}</h2>
           <div class="attention-list">
             <RouterLink
-              v-for="item in recentTransactions.filter((row) => row.needsReview).slice(0, 2)"
+              v-for="item in recentTransactions.filter((row) => row.needsReview).slice(0, 3)"
               :key="item.id"
               :to="{ path: '/insights', query: { transactionId: item.id } }"
               class="attention-row"
@@ -807,7 +807,7 @@ function categoryLink(category: string) {
 }
 .home-attention h2 {
   margin: 0;
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
 }
 .attention-list {

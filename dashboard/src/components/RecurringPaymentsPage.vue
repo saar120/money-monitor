@@ -160,7 +160,7 @@ onUnmounted(() => {
 
 <template>
   <section
-    class="subscriptions-page min-w-0 w-full max-w-5xl mx-auto space-y-8"
+    class="subscriptions-page min-w-0 w-full space-y-8"
     :aria-label="t('subscriptionsAndServices')"
   >
     <div v-if="loading" class="space-y-3" :aria-label="t('loadingTransactions')">
@@ -260,7 +260,7 @@ onUnmounted(() => {
               <td class="px-4 py-4">
                 <Button
                   size="sm"
-                  variant="ghost"
+                  variant="secondary"
                   :disabled="!!saving"
                   @click="decide(payment, 'exclude')"
                   >{{ t('exclude') }}</Button

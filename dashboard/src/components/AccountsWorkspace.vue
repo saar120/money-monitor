@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Switch } from '@/components/ui/switch';
 import { useFormOperation } from '@/composables/useFormOperation';
+import { useDrawerFocus } from '@/composables/useDrawerFocus';
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import {
@@ -47,6 +49,7 @@ const stalenessDays = ref('');
 const accounts = ref<Account[]>([]);
 const members = ref<Member[]>([]);
 const selectedId = ref<number | null>(null);
+const drawerOpen = useDrawerFocus(selectedId);
 const selected = computed(
   () => accounts.value.find((account) => account.id === selectedId.value) ?? null,
 );
@@ -299,10 +302,19 @@ onMounted(async () => {
         v-if="selected"
         type="button"
         class="category-inspector-backdrop"
+        tabindex="-1"
+        aria-hidden="true"
         :aria-label="t('cancel')"
         @click="selectedId = null"
       />
-      <aside v-if="selected" class="category-inspector" :aria-label="t('details')">
+      <aside
+        v-if="selected"
+        ref="inspector"
+        class="category-inspector"
+        :role="drawerOpen ? 'dialog' : undefined"
+        :aria-modal="drawerOpen ? 'true' : undefined"
+        :aria-label="t('details')"
+      >
         <div class="category-inspector-head">
           <h3 dir="auto">{{ selected.displayName }}</h3>
           <button type="button" :aria-label="t('cancel')" @click="selectedId = null">
@@ -355,16 +367,19 @@ onMounted(async () => {
             >
           </button>
           <label class="category-check"
-            ><input v-model="active" type="checkbox" /><span>{{ copy.active }}</span></label
-          >
+            ><span>{{ copy.active }}</span
+            ><Switch v-model="active" :aria-label="copy.active"
+          /></label>
           <label class="category-check"
-            ><input v-model="manualOnly" type="checkbox" /><span>{{ copy.manual }}</span></label
-          >
+            ><span>{{ copy.manual }}</span
+            ><Switch v-model="manualOnly" :aria-label="copy.manual"
+          /></label>
           <label v-if="['isracard', 'amex'].includes(selected.companyId)" class="category-check"
-            ><input v-model="manualLogin" type="checkbox" />{{
-              language === 'he' ? 'כניסה ידנית לבנק' : 'Sign in manually'
-            }}</label
-          >
+            ><span>{{ language === 'he' ? 'כניסה ידנית לבנק' : 'Sign in manually' }}</span
+            ><Switch
+              v-model="manualLogin"
+              :aria-label="language === 'he' ? 'כניסה ידנית לבנק' : 'Sign in manually'"
+          /></label>
           <label v-if="manualOnly"
             ><span>{{
               language === 'he'
@@ -379,10 +394,9 @@ onMounted(async () => {
             }}</Button
           >
           <label class="category-check"
-            ><input v-model="showBrowser" :disabled="manualLogin" type="checkbox" /><span>{{
-              copy.browser
-            }}</span></label
-          >
+            ><span>{{ copy.browser }}</span
+            ><Switch v-model="showBrowser" :disabled="manualLogin" :aria-label="copy.browser"
+          /></label>
           <p v-if="message" class="account-inspector-message" role="status">{{ message }}</p>
         </div>
         <div class="category-inspector-actions">

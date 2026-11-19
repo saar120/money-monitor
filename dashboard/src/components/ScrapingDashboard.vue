@@ -659,7 +659,7 @@ const latestSession = computed(() => sessions.value[0]);
   line-height: 1.5;
 }
 .sync-section-heading h2 {
-  font-size: 20px;
+  font-size: 16px;
 }
 .sync-account-icon {
   background: transparent;

@@ -1226,16 +1226,18 @@ watch(search, () => {
   padding: 24px 24px 0;
   flex-shrink: 0;
 }
+/* Matches the shared MonthControl used by Home, Explore and Budgets. */
 .proto-month {
   display: flex;
   align-items: center;
   gap: 8px;
   min-height: 36px;
-  padding-inline: 4px;
-  border: 1px solid var(--separator);
-  border-radius: 8px;
-  background: var(--surface-muted);
+  padding: 0;
+  border: 0;
+  border-radius: var(--control-radius);
+  background: var(--bg-secondary);
   font-size: 13px;
+  font-weight: 600;
   white-space: nowrap;
 }
 .proto-month button,

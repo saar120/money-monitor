@@ -336,7 +336,7 @@ function progressColor(percentage: number, neutral = false): string {
       </Button>
     </div>
 
-    <div v-else-if="!loadFailed" class="flex-1 min-h-0 overflow-y-auto space-y-8">
+    <div v-else-if="!loadFailed" class="flex-1 min-h-0 overflow-y-auto space-y-4">
       <!-- Summary -->
       <div class="budget-summary grid grid-cols-1 sm:grid-cols-3 gap-6">
         <div class="budget-metric">
@@ -469,9 +469,21 @@ function progressColor(percentage: number, neutral = false): string {
               >
             </div>
             <div class="flex flex-wrap items-center justify-between gap-2 min-w-0">
-              <p class="text-[12px] text-text-tertiary truncate">
-                {{ budgetCategories(p) }}
-              </p>
+              <div class="flex items-center gap-3 min-w-0">
+                <p v-if="budgetCategories(p)" class="text-[12px] text-text-tertiary truncate">
+                  {{ budgetCategories(p) }}
+                </p>
+                <button
+                  type="button"
+                  class="budget-expand"
+                  :aria-expanded="expandedBudgetId === p.budget.id"
+                  @click="expandedBudgetId = expandedBudgetId === p.budget.id ? null : p.budget.id"
+                >
+                  {{
+                    expandedBudgetId === p.budget.id ? t('hideTransactions') : t('showTransactions')
+                  }}
+                </button>
+              </div>
               <span
                 class="text-[12px] text-text-secondary tabular-nums flex-shrink-0 whitespace-nowrap"
               >
@@ -483,14 +495,6 @@ function progressColor(percentage: number, neutral = false): string {
                 </template>
               </span>
             </div>
-            <button
-              type="button"
-              class="budget-expand"
-              :aria-expanded="expandedBudgetId === p.budget.id"
-              @click="expandedBudgetId = expandedBudgetId === p.budget.id ? null : p.budget.id"
-            >
-              {{ expandedBudgetId === p.budget.id ? t('hideTransactions') : t('showTransactions') }}
-            </button>
             <BudgetTransactions
               v-if="expandedBudgetId === p.budget.id"
               :categories="p.budget.categoryNames"
@@ -691,7 +695,7 @@ function progressColor(percentage: number, neutral = false): string {
 
 <style scoped>
 .budget-summary {
-  padding: 0 16px 24px;
+  padding: 0 0 24px;
   border-bottom: 1px solid var(--separator);
 }
 .budget-summary > .budget-metric {
@@ -704,11 +708,6 @@ function progressColor(percentage: number, neutral = false): string {
   border-bottom: 1px solid var(--separator);
 }
 .budget-ledger-row {
-  padding: 24px 16px;
-}
-@media (max-width: 640px) {
-  .budget-summary {
-    padding-inline: 16px;
-  }
+  padding: 20px 0;
 }
 </style>

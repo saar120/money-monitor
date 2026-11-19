@@ -99,11 +99,11 @@ The existing `npm run backup` and `npm run restore` scripts are for standalone r
 ## Security maintenance
 
 Run `npm run security:audit` after installing both dependency trees. It fails on unknown
-advisories or an unavailable audit service. The only exception is deepmerge
-GHSA-gcqx-w48m-w2h4 in Expo's configuration tooling: upstream has no fixed release,
-so `mobile/patches/deepmerge+4.3.1.patch` rejects prototype keys from both inputs.
-The gate verifies that mitigation before accepting the exception. Remove the patch
-and exception when upstream ships a compatible fix. The query-string patch adapts
+advisories or an unavailable audit service; it has no exceptions. Both trees override
+minimatch 7–10 to `^11.0.1` (GHSA-g3hv-75wg-m249) because electron-builder and
+`@expo/fingerprint` still pin vulnerable majors; the override leaves minimatch 3/5,
+which have a different export shape, untouched. Drop it once those packages accept
+minimatch 11. The query-string patch adapts
 its CommonJS import to the patched ESM decoder; keep its regression test when upgrading.
 The Expo CLI uses the patched Zod 4 override; validate an iOS export after upgrades.
 
