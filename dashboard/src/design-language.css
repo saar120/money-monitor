@@ -61,6 +61,21 @@
   --content-gutter: 24px;
   --content-column-width: 1280px;
 }
+/* Reports and settings share one reading column; the page header aligns with it. */
+.app-shell
+  .app-content:has(
+    .explore-page,
+    .category-detail-page,
+    .merchant-detail-page,
+    .monthly-comparison-page,
+    .cashflow-page,
+    .subscriptions-page,
+    .sync-page,
+    .settings-page,
+    .alerts-page
+  ) {
+  --content-column-width: 960px;
+}
 .content-toolbar {
   min-height: 64px;
   padding-block: 10px;
@@ -115,7 +130,10 @@
   display: block;
   min-width: 0;
 }
+/* The chevron follows the label instead of floating at the far edge of the column. */
 .inline-category .ui-select-trigger {
+  width: 100%;
+  justify-content: flex-start;
   height: 36px;
   min-height: 36px;
   padding-inline: 6px;
@@ -126,6 +144,10 @@
   gap: 6px;
   color: var(--text-secondary);
   box-shadow: none;
+}
+.inline-category .ui-select-trigger:focus-visible {
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
 }
 .inline-category .ui-select-trigger:hover {
   color: var(--text-primary);
@@ -249,4 +271,55 @@
 
 .nav-link.active span {
   font-weight: 550;
+}
+
+/* Mixed-script names keep their own direction but align with the row they sit in. */
+:dir(ltr) > bdi[dir='auto'] {
+  text-align: left;
+}
+:dir(rtl) > bdi[dir='auto'] {
+  text-align: right;
+}
+
+/* Disclosures use a quiet chevron instead of the platform triangle. */
+details > summary {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  min-height: 24px;
+  list-style: none;
+  cursor: pointer;
+}
+details > summary::-webkit-details-marker {
+  display: none;
+}
+details > summary::before {
+  content: '';
+  flex: 0 0 auto;
+  width: 6px;
+  height: 6px;
+  margin-inline: 1px 2px;
+  border-right: 1.5px solid currentColor;
+  border-bottom: 1.5px solid currentColor;
+  rotate: -45deg;
+  transition: rotate 150ms ease;
+}
+details > summary:dir(rtl)::before {
+  rotate: 135deg;
+}
+details[open] > summary::before {
+  rotate: 45deg;
+}
+@media (prefers-reduced-motion: reduce) {
+  details > summary::before {
+    transition: none;
+  }
+}
+
+/* Icon-only row deletes stay quiet until the pointer or keyboard reaches them. */
+.row-delete:not(:disabled) {
+  color: var(--text-secondary);
+}
+.row-delete:is(:hover, :focus-visible):not(:disabled) {
+  color: var(--destructive);
 }

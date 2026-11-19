@@ -487,11 +487,11 @@ async function save() {
     <div v-if="loading" class="text-text-secondary">{{ sectionCopy.loading }}</div>
 
     <template v-else>
-      <nav class="settings-index flex flex-wrap gap-2" :aria-label="t('settings')">
-        <Button
+      <nav class="settings-index" :aria-label="t('settings')">
+        <button
           v-for="tab in ['general', 'connections', 'advanced'] as const"
           :key="tab"
-          :variant="activeTab === tab ? 'default' : 'ghost'"
+          type="button"
           :aria-pressed="activeTab === tab"
           :data-settings-tab="tab"
           @click="activeTab = tab"
@@ -507,7 +507,7 @@ async function save() {
                   ? 'מתקדם'
                   : 'Advanced'
           }}
-        </Button>
+        </button>
       </nav>
       <SettingsGroup v-show="activeTab === 'general'" id="settings-general">
         <SettingsRow :label="t('appLanguage')">
@@ -564,7 +564,7 @@ async function save() {
               <AlertCircle class="h-3.5 w-3.5" />
               {{ error }}
             </div>
-            <Button size="sm" :disabled="saving" @click="save">
+            <Button variant="filled" size="sm" :disabled="saving" @click="save">
               {{ saving ? sectionCopy.saving : sectionCopy.save }}
             </Button>
           </div>
@@ -1324,6 +1324,10 @@ async function save() {
 }
 .settings-index {
   margin-bottom: 32px;
+}
+/* The sticky tab bar already draws the rule above the untitled first group. */
+.settings-page :deep(#settings-general > div) {
+  border-top-width: 0;
 }
 .settings-page :deep(input),
 .settings-page :deep(select),

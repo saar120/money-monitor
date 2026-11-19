@@ -255,7 +255,12 @@ onUnmounted(() => endScrub());
       </div>
       <div class="ledger-section-heading explore-subheading">
         <h2>{{ t('categoryBreakdown') }}</h2>
-        <span>{{ selected.key }}</span>
+        <span>{{
+          new Date(`${selected.key}-01T12:00:00`).toLocaleDateString(
+            language === 'he' ? 'he-IL' : 'en',
+            { month: 'long', year: 'numeric' },
+          )
+        }}</span>
       </div>
       <TransitionGroup tag="div" name="ledger-reflow" class="ledger-list">
         <RouterLink

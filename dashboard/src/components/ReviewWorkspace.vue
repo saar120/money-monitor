@@ -192,7 +192,13 @@ function amount(item: Transaction) {
 function date(value: string, compact = false) {
   return new Date(`${value.slice(0, 10)}T12:00:00`).toLocaleDateString(
     language.value === 'he' ? 'he-IL' : 'en-US',
-    { day: 'numeric', month: 'short', year: compact ? '2-digit' : 'numeric' },
+    {
+      day: 'numeric',
+      month: 'short',
+      // The queue matches Activity: the year appears only when it differs from today's.
+      year:
+        compact && value.slice(0, 4) === String(new Date().getFullYear()) ? undefined : 'numeric',
+    },
   );
 }
 async function load(nextIndex?: number, discardDrafts = false) {
@@ -768,6 +774,7 @@ onUnmounted(() => {
   font-size: 13px;
   color: var(--text-secondary);
 }
+.review-list tr:last-child,
 .review-list tr:last-child td {
   border: 0;
 }

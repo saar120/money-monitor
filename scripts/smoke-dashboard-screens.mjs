@@ -1222,6 +1222,47 @@ if (process.env.MM_DESKTOP_SMOKE_SERVER === '1') {
         await page.$('.account-inspector-balance'),
         'Cancel deletion preserves the selected account',
       );
+      // Narrow windows turn the inspector into a modal drawer with contained focus.
+      await page.setViewport({ width: 1024, height: 800 });
+      await visit('/accounts');
+      await page.evaluate(() => document.querySelector('.category-inspector-head button')?.click());
+      await page.focus('.account-list-row');
+      await page.keyboard.press('Enter');
+      await page.waitForSelector('.category-inspector[aria-modal="true"]');
+      assert(
+        await page.$eval('.app-sidebar', (el) => el.inert),
+        'Drawer removes the background from focus and the accessibility tree',
+      );
+      for (let i = 0; i < 6; i++) {
+        await page.keyboard.down('Shift');
+        await page.keyboard.press('Tab');
+        await page.keyboard.up('Shift');
+        assert(
+          await page.evaluate(() => !!document.activeElement?.closest('.category-inspector')),
+          'Shift+Tab stays inside the drawer',
+        );
+      }
+      await page.keyboard.press('Escape');
+      await page.waitForFunction(
+        () =>
+          !document.querySelector('.category-inspector') &&
+          document.activeElement?.matches('.account-list-row') &&
+          !document.querySelector('.app-sidebar').inert,
+      );
+      await page.setViewport({ width: 1280, height: 800 });
+      // Keyboard users can type a month directly; the dormant editor stays out of the tab order.
+      await visit('/');
+      await page.focus('.month-stepper-current');
+      await page.keyboard.type('3');
+      await page.keyboard.press('Tab');
+      await page.keyboard.type('2024');
+      await page.keyboard.press('Enter');
+      await page.waitForFunction(
+        () =>
+          document.querySelector('.month-stepper input').value === '2024-03' &&
+          document.activeElement?.matches('.month-stepper-current') &&
+          document.querySelector('.month-stepper input').getAttribute('aria-hidden') === 'true',
+      );
       await visit('/accounts?add=1');
       await checkDialog();
       for (const route of ['/accounts', '/scraping']) {

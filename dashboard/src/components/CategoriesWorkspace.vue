@@ -1,5 +1,7 @@
 <script setup lang="ts">
+import { Switch } from '@/components/ui/switch';
 import { useFormOperation } from '@/composables/useFormOperation';
+import { useDrawerFocus } from '@/composables/useDrawerFocus';
 import SelectField from '@/components/ui/select/SelectField.vue';
 import { computed, onMounted, ref } from 'vue';
 import { Plus, Trash2, X, Pencil } from 'lucide-vue-next';
@@ -64,6 +66,7 @@ const formOperation = useFormOperation();
 const saving = formOperation.pending;
 const error = ref('');
 const selectedId = ref<number | 'new' | null>(null);
+const drawerOpen = useDrawerFocus(selectedId);
 const selected = computed(
   () => categories.value.find((item) => item.id === selectedId.value) ?? null,
 );
@@ -290,10 +293,19 @@ onMounted(load);
         v-if="selectedId !== null"
         type="button"
         class="category-inspector-backdrop"
+        tabindex="-1"
+        aria-hidden="true"
         :aria-label="copy.cancel"
         @click="selectedId = null"
       />
-      <aside v-if="selectedId !== null" class="category-inspector" :aria-label="t('details')">
+      <aside
+        v-if="selectedId !== null"
+        ref="inspector"
+        class="category-inspector"
+        :role="drawerOpen ? 'dialog' : undefined"
+        :aria-modal="drawerOpen ? 'true' : undefined"
+        :aria-label="t('details')"
+      >
         <div class="category-inspector-head">
           <h3>
             <bdi dir="auto">{{ selectedId === 'new' ? copy.newTitle : label }}</bdi>
@@ -314,14 +326,6 @@ onMounted(load);
               >{{ copy.slugHint }}</small
             ></label
           >
-          <fieldset class="category-color-field">
-            <legend>{{ copy.color }}</legend>
-            <CategoryColorPicker :key="selectedId" v-model="color" v-model:valid="colorValid" />
-          </fieldset>
-          <label
-            ><span>{{ copy.rules }}</span
-            ><textarea v-model="rules" rows="4" /><small>{{ copy.rulesHint }}</small></label
-          >
           <label
             ><span>{{ copy.owner }}</span
             ><SelectField
@@ -333,7 +337,16 @@ onMounted(load);
               ]"
           /></label>
           <label v-if="selectedId !== 'new'" class="category-check"
-            ><input v-model="included" type="checkbox" /><span>{{ copy.included }}</span></label
+            ><span>{{ copy.included }}</span
+            ><Switch v-model="included" :aria-label="copy.included"
+          /></label>
+          <fieldset class="category-color-field">
+            <legend>{{ copy.color }}</legend>
+            <CategoryColorPicker :key="selectedId" v-model="color" v-model:valid="colorValid" />
+          </fieldset>
+          <label
+            ><span>{{ copy.rules }}</span
+            ><textarea v-model="rules" rows="4" /><small>{{ copy.rulesHint }}</small></label
           >
         </div>
         <div class="category-inspector-actions">

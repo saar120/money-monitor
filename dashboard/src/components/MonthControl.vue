@@ -1,6 +1,6 @@
 <script setup lang="ts">
-import { computed } from 'vue';
-import { ChevronLeft, ChevronRight } from 'lucide-vue-next';
+import { computed, useTemplateRef } from 'vue';
+import { CalendarDays, ChevronLeft, ChevronRight } from 'lucide-vue-next';
 import { language, t } from '@/lib/language';
 import { isValidMonth } from '@/lib/month';
 
@@ -17,10 +17,49 @@ function shift(delta: number) {
   const value = new Date(Date.UTC(year, month - 1 + delta, 1)).toISOString().slice(0, 7);
   if (!props.maxMonth || value <= props.maxMonth) emit('update:modelValue', value);
 }
+const picker = useTemplateRef<globalThis.HTMLInputElement>('picker');
+const current = useTemplateRef<globalThis.HTMLButtonElement>('current');
+// Typing a digit on the month button moves into the real month/year field, shown over the label.
+function typeIntoPicker(event: KeyboardEvent) {
+  if (!/^\d$/.test(event.key) || event.altKey || event.ctrlKey || event.metaKey) return;
+  // Exposed to assistive technology only while it is the field being edited.
+  picker.value?.removeAttribute('aria-hidden');
+  picker.value?.focus();
+}
+function endEditing(input: globalThis.HTMLInputElement) {
+  commit(input);
+  input.setAttribute('aria-hidden', 'true');
+}
+function leavePicker(event: KeyboardEvent) {
+  const input = event.target as globalThis.HTMLInputElement;
+  if (event.key === 'Enter') commit(input);
+  else if (event.key === 'Escape') input.value = props.modelValue;
+  else return;
+  event.preventDefault();
+  current.value?.focus();
+}
+// The label stays localized; the native month picker opens on demand instead of as an invisible field.
+function openPicker() {
+  const input = picker.value;
+  if (!input) return;
+  try {
+    input.showPicker();
+  } catch {
+    input.focus();
+    input.click();
+  }
+}
+function commit(input: globalThis.HTMLInputElement) {
+  if (isValidMonth(input.value) && (!props.maxMonth || input.value <= props.maxMonth)) {
+    if (input.value !== props.modelValue) emit('update:modelValue', input.value);
+  }
+  // A cleared or rejected picker must not drift from the month the label shows.
+  else input.value = props.modelValue;
+}
 function choose(event: Event) {
   const input = event.target as globalThis.HTMLInputElement;
-  if (isValidMonth(input.value) && (!props.maxMonth || input.value <= props.maxMonth))
-    emit('update:modelValue', input.value);
+  // While typing, each completed segment fires change; wait for Enter or blur to commit.
+  if (document.activeElement !== input) commit(input);
 }
 </script>
 
@@ -29,18 +68,33 @@ function choose(event: Event) {
     <button type="button" :aria-label="t('previous')" @click="shift(-1)">
       <ChevronRight v-if="language === 'he'" :size="17" /><ChevronLeft v-else :size="17" />
     </button>
-    <label class="month-stepper-current">
+    <button
+      ref="current"
+      type="button"
+      class="month-stepper-current"
+      :aria-label="`${t('month')}: ${label}`"
+      aria-haspopup="dialog"
+      @click="openPicker"
+      @keydown="typeIntoPicker"
+    >
       <Transition name="month-label">
         <span :key="modelValue">{{ label }}</span>
       </Transition>
-      <input
-        type="month"
-        :value="modelValue"
-        :max="maxMonth"
-        :aria-label="t('month')"
-        @change="choose"
-      />
-    </label>
+      <CalendarDays class="month-stepper-icon" :size="14" aria-hidden="true" />
+    </button>
+    <input
+      ref="picker"
+      class="month-stepper-input"
+      type="month"
+      tabindex="-1"
+      aria-hidden="true"
+      :aria-label="t('month')"
+      :value="modelValue"
+      :max="maxMonth"
+      @change="choose"
+      @keydown="leavePicker"
+      @blur="endEditing($event.target as HTMLInputElement)"
+    />
     <button
       type="button"
       :aria-label="t('next')"
@@ -54,10 +108,11 @@ function choose(event: Event) {
 
 <style scoped>
 .month-stepper {
+  position: relative;
   display: flex;
   align-items: center;
   justify-content: space-between;
-  min-width: 190px;
+  min-width: 220px;
   height: var(--control-height);
   padding: 0;
   border: 0;
@@ -108,24 +163,48 @@ button:disabled {
   opacity: 0.4;
 }
 .month-stepper-current {
-  position: relative;
   overflow: hidden;
   display: grid;
-  place-items: center;
+  grid-template-columns: auto auto;
+  justify-content: center;
+  align-items: center;
+  column-gap: 6px;
   flex: 1;
+  width: auto;
   height: 100%;
+  color: inherit;
+  font: inherit;
 }
-.month-stepper-current:focus-within {
+.month-stepper-current:active:not(:disabled) {
+  transform: none;
+}
+.month-stepper-current:focus-visible {
   outline: 2px solid var(--accent);
-  outline-offset: 1px;
-  border-radius: 5px;
+  outline-offset: -2px;
 }
-input {
+.month-stepper-icon {
+  grid-area: 1 / 2;
+  color: var(--text-secondary);
+}
+/* Anchors the native picker; visible only while a keyboard user types a month/year into it. */
+.month-stepper-input {
   position: absolute;
-  inset: 0;
-  width: 100%;
-  height: 100%;
+  inset-block: 0;
+  inset-inline: var(--control-height);
   opacity: 0;
-  cursor: pointer;
+  pointer-events: none;
+}
+.month-stepper-input:focus {
+  opacity: 1;
+  pointer-events: auto;
+  padding-inline: 4px;
+  border: 0;
+  border-radius: 5px;
+  outline: 2px solid var(--accent);
+  outline-offset: -2px;
+  background: var(--surface);
+  color: var(--text-primary);
+  font: inherit;
+  text-align: center;
 }
 </style>

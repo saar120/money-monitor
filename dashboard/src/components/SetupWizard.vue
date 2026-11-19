@@ -142,12 +142,12 @@ async function finish(destination: string) {
           copy.back
         }}</Button>
         <span v-else />
-        <Button v-if="step === 1" @click="goToStep(2)">{{ copy.next }}</Button>
+        <Button v-if="step === 1" variant="filled" @click="goToStep(2)">{{ copy.next }}</Button>
         <template v-else>
           <Button variant="ghost" :disabled="saving" @click="finish('/')">{{
             copy.explore
           }}</Button>
-          <Button :disabled="saving" @click="finish('/accounts?add=1')">{{
+          <Button variant="filled" :disabled="saving" @click="finish('/accounts?add=1')">{{
             saving ? copy.saving : copy.connect
           }}</Button>
         </template>

@@ -651,7 +651,7 @@ const fullLiabilityMap = computed(() => {
     <div id="networth-charts" class="networth-charts grid grid-cols-1 lg:grid-cols-2 gap-4">
       <section id="chart-networth-allocation" class="finance-section finance-ledger">
         <header class="finance-section-heading">
-          <h2 class="text-[20px]">{{ t('allocationByType') }}</h2>
+          <h2 class="text-[16px]">{{ t('allocationByType') }}</h2>
         </header>
         <div class="finance-section-content">
           <div class="h-[220px]">
@@ -690,7 +690,7 @@ const fullLiabilityMap = computed(() => {
         <header
           class="finance-section-heading flex flex-row flex-wrap items-center justify-between gap-3 space-y-0 pb-2"
         >
-          <h2 class="text-[20px]">{{ t('netWorthTrend') }}</h2>
+          <h2 class="text-[16px]">{{ t('netWorthTrend') }}</h2>
           <div class="flex flex-wrap items-center gap-2 text-[12px]">
             <div class="comparison-range" role="group" :aria-label="t('timeRange')">
               <button
@@ -704,20 +704,18 @@ const fullLiabilityMap = computed(() => {
                 {{ count === 12 ? '1Y' : `${count}M` }}
               </button>
             </div>
-            <Button
-              size="sm"
-              :variant="showLiquidOnly ? 'ghost' : 'secondary'"
-              class="px-2"
-              @click="showLiquidOnly = false"
-              >{{ t('total') }}</Button
-            >
-            <Button
-              size="sm"
-              :variant="showLiquidOnly ? 'secondary' : 'ghost'"
-              class="px-2"
-              @click="showLiquidOnly = true"
-              >{{ t('liquid') }}</Button
-            >
+            <div class="comparison-range" role="group" :aria-label="t('netWorthTrend')">
+              <button
+                v-for="liquid in [false, true]"
+                :key="String(liquid)"
+                type="button"
+                :class="{ selected: showLiquidOnly === liquid }"
+                :aria-pressed="showLiquidOnly === liquid"
+                @click="showLiquidOnly = liquid"
+              >
+                {{ liquid ? t('liquid') : t('total') }}
+              </button>
+            </div>
           </div>
         </header>
         <div class="finance-section-content">
@@ -744,7 +742,7 @@ const fullLiabilityMap = computed(() => {
     <div class="space-y-8">
       <!-- Assets Section -->
       <div class="space-y-4 animate-fade-in-up stagger-3">
-        <h2 class="text-[20px] font-semibold">{{ t('assets') }}</h2>
+        <h2 class="text-[16px] font-semibold">{{ t('assets') }}</h2>
 
         <section v-if="assets.length > 0" class="finance-section finance-ledger">
           <div
@@ -799,14 +797,14 @@ const fullLiabilityMap = computed(() => {
                   <Pencil class="h-3 w-3" />
                 </button>
                 <button
-                  class="icon-control inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
+                  class="row-delete icon-control inline-flex items-center justify-center rounded-md hover:bg-bg-secondary transition-colors"
                   :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="
                     mutationError = '';
                     deletingAsset = { id: asset.id, name: asset.name };
                   "
                 >
-                  <Trash2 class="h-3 w-3 text-destructive" />
+                  <Trash2 class="h-3.5 w-3.5" />
                 </button>
               </div>
               <button
@@ -831,7 +829,7 @@ const fullLiabilityMap = computed(() => {
 
       <!-- Bank Balances -->
       <div v-if="banks.length > 0" class="space-y-4 animate-fade-in-up stagger-4">
-        <h2 class="text-[20px] font-semibold">{{ t('bankBalances') }}</h2>
+        <h2 class="text-[16px] font-semibold">{{ t('bankBalances') }}</h2>
         <div class="networth-banks grid grid-cols-1 sm:grid-cols-2 xl:grid-cols-3">
           <section v-for="bank in banks" :key="bank.id" class="finance-section finance-ledger">
             <header class="finance-section-heading pb-1">
@@ -848,7 +846,7 @@ const fullLiabilityMap = computed(() => {
 
       <!-- Liabilities Section -->
       <div class="space-y-4 animate-fade-in-up stagger-5">
-        <h2 class="text-[20px] font-semibold">{{ t('liabilities') }}</h2>
+        <h2 class="text-[16px] font-semibold">{{ t('liabilities') }}</h2>
 
         <section v-if="liabilities.length > 0" class="finance-section finance-ledger">
           <template v-for="(liab, idx) in liabilities" :key="liab.id">
@@ -882,14 +880,14 @@ const fullLiabilityMap = computed(() => {
                   <Button
                     variant="ghost"
                     size="icon"
-                    class="w-7"
+                    class="row-delete w-7"
                     :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                     @click="
                       mutationError = '';
                       deletingLiability = { id: liab.id, name: liab.name };
                     "
                   >
-                    <Trash2 class="h-3.5 w-3.5 text-destructive" />
+                    <Trash2 class="h-3.5 w-3.5" />
                   </Button>
                 </div>
               </div>
@@ -1258,18 +1256,18 @@ const fullLiabilityMap = computed(() => {
 
 <style scoped>
 .networth-hero {
-  padding: 24px;
-  border-block: 1px solid var(--separator);
+  padding: 24px 0;
 }
 .finance-section {
   min-width: 0;
 }
+/* Flat sections share the page column instead of insetting like cards. */
 .finance-section-heading {
-  padding: 24px 24px 16px;
+  padding: 24px 0 16px;
 }
 .finance-section-content {
   min-width: 0;
-  padding: 0 24px 24px;
+  padding: 0 0 24px;
 }
 .networth-hero > .finance-section-content {
   padding: 0;
@@ -1286,7 +1284,7 @@ const fullLiabilityMap = computed(() => {
 }
 .networth-banks {
   gap: 24px;
-  padding: 24px 16px;
+  padding: 24px 0;
   border-block: 1px solid var(--separator);
 }
 .networth-banks .finance-section {

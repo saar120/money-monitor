@@ -289,7 +289,7 @@ onMounted(load);
         <div
           v-for="member in members"
           :key="member.id"
-          class="household-member flex flex-wrap items-center gap-3 border-b border-separator/60 px-4 py-4"
+          class="household-member flex flex-wrap items-center gap-3 border-b border-separator/60 py-4"
           :class="{ 'opacity-50': !member.isActive }"
         >
           <template v-if="editingMemberId === member.id">

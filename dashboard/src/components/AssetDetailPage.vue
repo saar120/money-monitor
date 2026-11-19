@@ -105,29 +105,24 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
   border-block-start: 1px solid var(--separator);
 }
 .asset-detail-page :deep(.finance-section-heading) {
-  padding: 0 24px 20px;
+  padding: 0 0 16px;
 }
 .asset-detail-page :deep(.finance-section-heading h2),
 .asset-detail-page :deep(.finance-section > h2) {
-  font-size: 20px;
+  font-size: 16px;
   font-weight: 600;
   line-height: 1.3;
 }
-.asset-detail-page :deep(.finance-section > h2),
-.asset-detail-page :deep(.finance-section > .finance-movement-heading) {
-  padding-inline: 24px;
-}
 .asset-detail-page :deep(.finance-section-content) {
   min-width: 0;
-  padding-inline: 24px;
 }
 .asset-detail-page :deep(.finance-section-ledger) {
   padding-inline: 0;
 }
 .asset-detail-page :deep(.asset-metrics) {
   gap: 24px;
-  padding: 24px;
-  border-block: 1px solid var(--separator);
+  padding: 24px 0;
+  border-block-start: 1px solid var(--separator);
 }
 .asset-detail-page :deep(.asset-metric) {
   min-width: 0;
@@ -144,21 +139,9 @@ const category = computed(() => (asset.value ? getAssetCategory(asset.value.type
   overflow-wrap: anywhere;
 }
 .asset-detail-page :deep(.finance-ledger-row) {
-  padding: 16px;
+  padding: 16px 0;
 }
 .asset-detail-page :deep(.finance-ledger) {
   border-block: 1px solid var(--separator);
-}
-@media (max-width: 640px) {
-  .asset-detail-page :deep(.finance-section-heading),
-  .asset-detail-page :deep(.finance-section-content),
-  .asset-detail-page :deep(.finance-section > h2),
-  .asset-detail-page :deep(.finance-section > .finance-movement-heading),
-  .asset-detail-page :deep(.asset-metrics) {
-    padding-inline: 16px;
-  }
-  .asset-detail-page :deep(.finance-section-ledger) {
-    padding-inline: 0;
-  }
 }
 </style>

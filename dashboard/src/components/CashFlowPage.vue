@@ -22,13 +22,10 @@ function monthKey(back: number) {
   const [year, month] = initial.value.split('-').map(Number) as [number, number];
   return new Date(Date.UTC(year, month - 1 - back, 1)).toISOString().slice(0, 7);
 }
-function monthLabel(key: string) {
+function monthLabel(key: string, month: 'long' | 'short' = 'long') {
   return new Date(`${key}-01T12:00:00`).toLocaleDateString(
     language.value === 'he' ? 'he-IL' : 'en',
-    {
-      month: 'short',
-      year: 'numeric',
-    },
+    { month, year: 'numeric' },
   );
 }
 let requestId = 0;
@@ -183,7 +180,9 @@ function chooseRange(count: 3 | 6 | 12) {
                 class="cashflow-expense"
                 :style="{ height: `${Math.max(3, (row.expense / max) * 100)}%` }"
             /></span>
-            <span class="cashflow-month-label">{{ monthLabel(row.month).split(' ')[0] }}</span>
+            <span class="cashflow-month-label">{{
+              monthLabel(row.month, 'short').split(' ')[0]
+            }}</span>
           </button>
         </div>
         <div class="cashflow-legend">

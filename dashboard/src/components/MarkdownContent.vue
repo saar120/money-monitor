@@ -142,7 +142,7 @@ const renderedBlocks = computed(() =>
 
 .markdown-content :deep(th) {
   padding: 0.5em 0.75em;
-  text-align: left;
+  text-align: start;
   font-weight: 600;
   color: var(--text-secondary);
   font-size: 11px;
@@ -154,6 +154,17 @@ const renderedBlocks = computed(() =>
 .markdown-content :deep(td) {
   padding: 0.4em 0.75em;
   border-bottom: 1px solid var(--separator);
+}
+/* Honor Markdown column alignment; numeric columns read as right-aligned figures. */
+.markdown-content :deep(:is(th, td)[align='right']) {
+  text-align: right;
+  font-variant-numeric: tabular-nums;
+}
+.markdown-content :deep(:is(th, td)[align='left']) {
+  text-align: left;
+}
+.markdown-content :deep(:is(th, td)[align='center']) {
+  text-align: center;
 }
 
 .markdown-content :deep(tbody tr:hover) {
@@ -198,8 +209,8 @@ const renderedBlocks = computed(() =>
 
 /* Blockquotes */
 .markdown-content :deep(blockquote) {
-  border-left: 3px solid var(--accent);
-  padding-left: 0.75em;
+  border-inline-start: 2px solid var(--separator);
+  padding-inline-start: 0.75em;
   margin: 0.5em 0;
   color: var(--text-secondary);
 }

@@ -175,7 +175,7 @@ async function testAlert() {
           <SendHorizonal class="h-3 w-3 mr-1.5" />
           {{ testSending ? copy.sending : copy.test }}
         </Button>
-        <Button size="sm" :disabled="saving" @click="save">
+        <Button variant="filled" size="sm" :disabled="saving" @click="save">
           {{ saving ? copy.saving : copy.save }}
         </Button>
       </div>

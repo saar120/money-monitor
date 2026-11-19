@@ -1,12 +1,13 @@
 <script setup lang="ts">
 import { computed, onMounted, ref, watch, onScopeDispose } from 'vue';
+import MonthControl from './MonthControl.vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import { getCategories, getTransactions, type Category, type Transaction } from '../api/client';
 import { formatCurrency } from '@/lib/format';
 import { normalizeMerchant } from '@/lib/merchant';
 import { isValidMonth } from '@/lib/month';
-import { t } from '@/lib/language';
+import { language, t } from '@/lib/language';
 
 const route = useRoute();
 const today = new Date().toLocaleDateString('en-CA', { timeZone: 'Asia/Jerusalem' });
@@ -17,11 +18,6 @@ const categoryName = computed(() =>
 );
 const categories = ref<Category[]>([]);
 const rows = ref<Transaction[]>([]);
-function setMonth(event: Event) {
-  const input = event.target as globalThis.HTMLInputElement;
-  if (isValidMonth(input.value)) month.value = input.value;
-  else input.value = month.value;
-}
 const loading = ref(true);
 const error = ref('');
 let requestId = 0;
@@ -125,14 +121,11 @@ const activityLink = (transaction: Transaction) => ({
     <RouterLink :to="backLink" class="detail-back"
       ><ArrowLeft :size="15" /> {{ categoryLabel || t('explore') }}</RouterLink
     >
+    <Teleport to="#toolbar-actions"><MonthControl v-model="month" /></Teleport>
     <div class="home-head">
       <div>
         <h1 dir="auto">{{ name }}</h1>
       </div>
-      <label class="month-control"
-        >{{ t('month') }}
-        <input :value="month" type="month" :aria-label="t('month')" @change="setMonth"
-      /></label>
     </div>
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -148,12 +141,11 @@ const activityLink = (transaction: Transaction) => ({
         }}</small>
         <p>
           {{ categoryLabel }} · {{ currentRows.length }}
-          {{ t('transactions') }}
+          {{ currentRows.length === 1 ? t('transaction') : t('transactions') }}
         </p>
       </section>
       <div class="ledger-section-heading explore-subheading">
-        <h2>{{ t('transactions') }}</h2>
-        <span>{{ month }}</span>
+        <h2>{{ t('transactionsHeading') }}</h2>
       </div>
       <div class="ledger-list merchant-transactions">
         <RouterLink
@@ -165,7 +157,14 @@ const activityLink = (transaction: Transaction) => ({
           <span class="explore-row-title"
             ><bdi dir="auto">{{ item.description }}</bdi></span
           >
-          <small>{{ item.reportingDate }}</small>
+          <small
+            ><bdi dir="ltr">{{
+              new Date(`${item.reportingDate.slice(0, 10)}T12:00:00`).toLocaleDateString(
+                language === 'he' ? 'he-IL' : 'en-US',
+                { month: 'short', day: 'numeric' },
+              )
+            }}</bdi></small
+          >
           <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
             >{{ item.chargedAmount > 0 ? '+' : '' }}{{ formatCurrency(item.chargedAmount) }}</strong
           >

@@ -910,11 +910,11 @@ async function confirmDeleteMovement() {
                       <Button
                         variant="ghost"
                         size="icon"
-                        class="w-7"
+                        class="row-delete w-7"
                         :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                         @click="holdingToDelete = h"
                       >
-                        <Trash2 class="h-3.5 w-3.5 text-destructive" />
+                        <Trash2 class="h-3.5 w-3.5" />
                       </Button>
                     </div>
                   </TableCell>
@@ -1050,11 +1050,11 @@ async function confirmDeleteMovement() {
                 <Button
                   variant="ghost"
                   size="icon"
-                  class="w-7 transition-opacity"
+                  class="row-delete w-7 transition-opacity"
                   :aria-label="language === 'he' ? 'מחיקה' : 'Delete'"
                   @click="movementToDelete = m"
                 >
-                  <Trash2 class="h-3.5 w-3.5 text-destructive" />
+                  <Trash2 class="h-3.5 w-3.5" />
                 </Button>
               </div>
             </div>

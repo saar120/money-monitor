@@ -2,6 +2,7 @@
 import { categoryMotionName } from '@/lib/cardMotion';
 import AnimatedAmount from './AnimatedAmount.vue';
 import { computed, onMounted, ref, watch, onScopeDispose } from 'vue';
+import MonthControl from './MonthControl.vue';
 import { useRoute } from 'vue-router';
 import { ArrowLeft, ArrowRight } from 'lucide-vue-next';
 import {
@@ -26,11 +27,6 @@ const category = ref<Category | null>(null);
 const history = ref<SummaryItem[]>([]);
 const previousSpent = ref(0);
 const transactions = ref<Transaction[]>([]);
-function setMonth(event: Event) {
-  const input = event.target as globalThis.HTMLInputElement;
-  if (isValidMonth(input.value)) month.value = input.value;
-  else input.value = month.value;
-}
 const loading = ref(true);
 const error = ref('');
 let requestId = 0;
@@ -149,14 +145,11 @@ const merchantLink = (name: string) => ({
     <RouterLink :to="{ path: '/explore', query: { month } }" class="detail-back"
       ><ArrowLeft :size="15" /> {{ t('explore') }}</RouterLink
     >
+    <Teleport to="#toolbar-actions"><MonthControl v-model="month" /></Teleport>
     <div class="home-head">
       <div>
         <h1>{{ title }}</h1>
       </div>
-      <label class="month-control"
-        >{{ t('month') }}
-        <input :value="month" type="month" :aria-label="t('month')" @change="setMonth"
-      /></label>
     </div>
     <div v-if="error" class="ledger-notice" role="alert">
       {{ error }} <button @click="load">{{ t('retry') }}</button>
@@ -245,7 +238,9 @@ const merchantLink = (name: string) => ({
               }"
               class="explore-row"
             >
-              <span class="explore-row-title" dir="auto">{{ item.description }}</span>
+              <span class="explore-row-title"
+                ><bdi dir="auto">{{ item.description }}</bdi></span
+              >
               <strong :class="item.chargedAmount > 0 ? 'is-positive' : ''"
                 >{{ item.chargedAmount > 0 ? '+' : ''
                 }}{{ formatCurrency(item.chargedAmount) }}</strong
@@ -266,7 +261,7 @@ const merchantLink = (name: string) => ({
               :to="merchantLink(item.name)"
               class="category-merchant-row"
             >
-              <span dir="auto">{{ item.name }}</span
+              <bdi dir="auto">{{ item.name }}</bdi
               ><small>{{ item.count }} {{ t('charges') }}</small>
               <strong>{{ item.total < 0 ? '−' : '' }}{{ formatCurrency(item.total) }}</strong>
             </RouterLink>
