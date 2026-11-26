@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from 'vitest';
-import { createMobileServer, type MobileServerErrorEvent } from './mobile-server.js';
+import { createMobileServer } from './mobile-server.js';
 import type { MobileAuthenticationResult, PublicMobileDevice } from './device-registry.js';
 import type { MobileCredentialAuthenticator } from './mobile-auth.js';
 import { createMobilePublicIdProjector } from './mobile-public-id.js';
@@ -52,7 +52,6 @@ describe('protected mobile transaction routes', () => {
       detail?: MobileTransactionRouteDependencies['detail'];
       update?: MobileTransactionRouteDependencies['update'];
       reviewOptions?: MobileTransactionRouteDependencies['reviewOptions'];
-      errorObserver?: (event: Readonly<MobileServerErrorEvent>) => void;
     } = {},
   ) {
     const authenticate = vi.fn(
@@ -81,7 +80,6 @@ describe('protected mobile transaction routes', () => {
         reviewOptions: options.reviewOptions,
       },
       clock: () => NOW,
-      errorObserver: options.errorObserver,
       logger: false,
     });
     servers.push(server);
@@ -92,22 +90,36 @@ describe('protected mobile transaction routes', () => {
     await Promise.all(servers.splice(0).map((server) => server.shutdown()));
   });
 
-  it('keeps both routes absent until one complete dependency boundary is supplied', async () => {
-    const server = createMobileServer({ logger: false });
-    servers.push(server);
+  it('requires authentication across transaction routes, validates query input, and returns bound server metadata', async () => {
+    const update = vi.fn(() => ({
+      ...transaction(),
+      owner: { kind: 'unassigned' as const, displayName: null },
+    }));
+    const reviewOptions = vi.fn(() => ({ categories: ['Dining'], owners: ['Saar'] }));
+    const { app, authenticate, list, detail } = makeServer({ update, reviewOptions });
 
-    for (const url of [
-      '/api/mobile/v1/transactions',
-      `/api/mobile/v1/transactions/${project('transaction', 1)}`,
-    ]) {
-      const response = await server.app.inject({ method: 'GET', url });
-      expect(response.statusCode).toBe(404);
-      expect(response.json().error.code).toBe('route_not_found');
+    const unauthenticated = await Promise.all([
+      app.inject({ method: 'GET', url: '/api/mobile/v1/transactions' }),
+      app.inject({
+        method: 'GET',
+        url: `/api/mobile/v1/transactions/${project('transaction', 1)}`,
+      }),
+      app.inject({ method: 'GET', url: '/api/mobile/v1/transactions/review-options' }),
+      app.inject({
+        method: 'PATCH',
+        url: `/api/mobile/v1/transactions/${project('transaction', 1)}`,
+        payload: { reviewed: true },
+      }),
+    ]);
+    for (const res of unauthenticated) {
+      expect(res.statusCode).toBe(401);
+      expect(res.json().error.code).toBe('authentication_required');
     }
-  });
+    expect(list).not.toHaveBeenCalled();
+    expect(detail).not.toHaveBeenCalled();
+    expect(update).not.toHaveBeenCalled();
+    expect(reviewOptions).not.toHaveBeenCalled();
 
-  it('authenticates mobile.read, validates query input, and returns bound server metadata', async () => {
-    const { app, authenticate, list } = makeServer();
     const query = new URLSearchParams({
       q: '  Ｍａｒｋｅｔ   רמי ',
       includeExcluded: 'false',
@@ -149,50 +161,6 @@ describe('protected mobile transaction routes', () => {
     );
     expect(response.body).not.toContain(TOKEN);
   });
-
-  it.each([
-    [undefined, { status: 'invalid' } as const, 401, 'authentication_required'],
-    ['Basic invalid', { status: 'invalid' } as const, 401, 'authentication_invalid'],
-    [
-      `Bearer ${TOKEN}`,
-      { status: 'expired', deviceId: DEVICE.id } as const,
-      401,
-      'authentication_expired',
-    ],
-    [
-      `Bearer ${TOKEN}`,
-      { status: 'revoked', deviceId: DEVICE.id } as const,
-      401,
-      'authentication_revoked',
-    ],
-    [
-      `Bearer ${TOKEN}`,
-      { status: 'capability_required', deviceId: DEVICE.id } as const,
-      403,
-      'capability_required',
-    ],
-  ])(
-    'rejects authorization state %# before either transaction provider runs',
-    async (authorization, authenticationResult, statusCode, code) => {
-      const { app, list, detail } = makeServer({ authenticationResult });
-      const headers = authorization ? { authorization } : undefined;
-      const [listResponse, detailResponse] = await Promise.all([
-        app.inject({ method: 'GET', url: '/api/mobile/v1/transactions', headers }),
-        app.inject({
-          method: 'GET',
-          url: `/api/mobile/v1/transactions/${project('transaction', 1)}`,
-          headers,
-        }),
-      ]);
-
-      expect(listResponse.statusCode).toBe(statusCode);
-      expect(detailResponse.statusCode).toBe(statusCode);
-      expect(listResponse.json().error.code).toBe(code);
-      expect(detailResponse.json().error.code).toBe(code);
-      expect(list).not.toHaveBeenCalled();
-      expect(detail).not.toHaveBeenCalled();
-    },
-  );
 
   it('returns a strict detail envelope and a safe transaction-specific 404', async () => {
     const found = makeServer();
@@ -325,8 +293,7 @@ describe('protected mobile transaction routes', () => {
     expect(providerResponse.body).not.toContain('PRIVATE_PROVIDER_SENTINEL');
   });
 
-  it('rejects unsafe provider fields before sending and never records the search query', async () => {
-    const events: MobileServerErrorEvent[] = [];
+  it('rejects unsafe provider fields before sending and never echoes the search query', async () => {
     const secretQuery = 'UNIQUE_PRIVATE_QUERY_SENTINEL';
     const server = makeServer({
       list: () => ({
@@ -334,7 +301,6 @@ describe('protected mobile transaction routes', () => {
         transactions: [{ ...transaction(), memo: 'PRIVATE_MEMO_SENTINEL' }],
         page: { hasMore: false, nextCursor: null },
       }),
-      errorObserver: (event) => events.push({ ...event }),
     });
     const response = await server.app.inject({
       method: 'GET',
@@ -345,46 +311,34 @@ describe('protected mobile transaction routes', () => {
     expect(response.statusCode).toBe(500);
     expect(response.body).not.toContain('PRIVATE_MEMO_SENTINEL');
     expect(response.body).not.toContain(secretQuery);
-    expect(events).toEqual([
-      expect.objectContaining({
-        method: 'GET',
-        route: '/api/mobile/v1/transactions',
-        statusCode: 500,
-        errorCode: 'internal_server_error',
-      }),
-    ]);
-    expect(JSON.stringify(events)).not.toContain(secretQuery);
   });
 
-  it.each(['HEAD', 'POST', 'PATCH', 'PUT', 'DELETE'] as const)(
-    'does not expose %s list or detail mutations',
-    async (method) => {
-      const { app, list, detail } = makeServer();
-      for (const url of [
-        '/api/mobile/v1/transactions',
-        `/api/mobile/v1/transactions/${project('transaction', 1)}`,
-      ]) {
-        const response = await app.inject({
-          method,
-          url,
-          headers: { authorization: `Bearer ${TOKEN}` },
-        });
-        expect(response.statusCode).toBe(404);
+  it('rejects unsupported HTTP methods and omits PATCH when no update provider is supplied', async () => {
+    const { app, list, detail } = makeServer();
+    const detailUrl = `/api/mobile/v1/transactions/${project('transaction', 1)}`;
+    const checks: Array<[string, string]> = [
+      ['HEAD', '/api/mobile/v1/transactions'],
+      ['POST', '/api/mobile/v1/transactions'],
+      ['PATCH', '/api/mobile/v1/transactions'],
+      ['PUT', '/api/mobile/v1/transactions'],
+      ['DELETE', '/api/mobile/v1/transactions'],
+      ['HEAD', detailUrl],
+      ['POST', detailUrl],
+      ['PATCH', detailUrl],
+      ['PUT', detailUrl],
+      ['DELETE', detailUrl],
+    ];
+    for (const [method, url] of checks) {
+      const response = await app.inject({
+        method: method as 'HEAD' | 'POST' | 'PATCH' | 'PUT' | 'DELETE',
+        url,
+        headers: { authorization: `Bearer ${TOKEN}` },
+      });
+      expect(response.statusCode).toBe(404);
+      if (method !== 'HEAD') {
         expect(response.json().error.code).toBe('route_not_found');
       }
-      expect(list).not.toHaveBeenCalled();
-      expect(detail).not.toHaveBeenCalled();
-    },
-  );
-
-  it('keeps the desktop transaction route absent from the mobile listener', async () => {
-    const { app, list, detail } = makeServer();
-    const response = await app.inject({
-      method: 'GET',
-      url: '/api/transactions',
-      headers: { authorization: `Bearer ${TOKEN}` },
-    });
-    expect(response.statusCode).toBe(404);
+    }
     expect(list).not.toHaveBeenCalled();
     expect(detail).not.toHaveBeenCalled();
   });

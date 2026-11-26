@@ -1,8 +1,41 @@
-import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { describe, it, expect, beforeEach, afterEach, vi } from 'vitest';
+import { mkdtempSync, rmSync } from 'node:fs';
+import { tmpdir } from 'node:os';
+import { join } from 'node:path';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
-import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
+import { authHeaders, type TestServer } from '../__tests__/helpers/server.js';
 
 let testDb: TestDb;
+let tempDataDir = '';
+const mockSendTestAlertMessage = vi.fn();
+
+vi.mock('../paths.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../paths.js')>();
+  return {
+    ...actual,
+    get dataDir() {
+      return tempDataDir;
+    },
+    get dbPath() {
+      return join(tempDataDir, 'finance.db');
+    },
+    get demoDbPath() {
+      return join(tempDataDir, 'demo.db');
+    },
+    get credentialsPath() {
+      return join(tempDataDir, 'credentials.enc');
+    },
+    get configFilePath() {
+      return join(tempDataDir, 'config.json');
+    },
+    get chatDir() {
+      return join(tempDataDir, 'chat');
+    },
+    get sessionsDir() {
+      return join(tempDataDir, 'sessions');
+    },
+  };
+});
 
 vi.mock('../db/connection.js', () => ({
   get db() {
@@ -32,210 +65,115 @@ vi.mock('../services/exchange-rates.js', () => ({
     stale: false,
     fetchedAt: new Date().toISOString(),
   }),
-  convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
-    if (currency === 'ILS') return amount;
-    const rate = rates[currency];
-    if (rate === undefined) return 0;
-    return amount * rate;
-  }),
-}));
-
-// ── Mock alert-settings ──
-let settingsStore = getDefaults();
-
-function getDefaults() {
-  return {
-    enabled: true,
-    largeChargeThreshold: 500,
-    unusualSpendingPercent: 30,
-    monthlySummary: { enabled: true, dayOfMonth: 1 },
-    reportScrapeErrors: true,
-    _lastNetWorthTotal: 400000,
-    _knownRecurring: ['Netflix'],
-  };
-}
-
-vi.mock('../telegram/alert-settings.js', () => ({
-  loadAlertSettings: () => ({ ...settingsStore }),
-  updateAlertSettings: (partial: any) => {
-    settingsStore = deepMerge(settingsStore, partial);
-    return { ...settingsStore };
-  },
-  getDefaultSettings: () => ({
-    enabled: true,
-    largeChargeThreshold: 500,
-    unusualSpendingPercent: 30,
-    monthlySummary: { enabled: true, dayOfMonth: 1 },
-    reportScrapeErrors: true,
-  }),
-  getPublicSettings: () => {
-    // eslint-disable-next-line @typescript-eslint/no-unused-vars
-    const { _lastNetWorthTotal, _knownRecurring, ...pub } = settingsStore;
-    return pub;
-  },
+  convertToIls: vi.fn((amount: number) => amount),
 }));
 
 vi.mock('../telegram/alerts.js', () => ({
-  sendTestAlertMessage: vi.fn().mockResolvedValue(undefined),
+  sendTestAlertMessage: mockSendTestAlertMessage,
   registerSendMessage: vi.fn(),
   registerGetChatIds: vi.fn(),
 }));
-
-function deepMerge(target: any, source: any): any {
-  const result = { ...target };
-  for (const key of Object.keys(source)) {
-    if (
-      source[key] &&
-      typeof source[key] === 'object' &&
-      !Array.isArray(source[key]) &&
-      target[key] &&
-      typeof target[key] === 'object'
-    ) {
-      result[key] = deepMerge(target[key], source[key]);
-    } else {
-      result[key] = source[key];
-    }
-  }
-  return result;
-}
 
 describe('alerts routes', () => {
   let server: TestServer;
 
   beforeEach(async () => {
+    vi.resetModules();
+    mockSendTestAlertMessage.mockReset().mockResolvedValue(undefined);
+    tempDataDir = mkdtempSync(join(tmpdir(), 'mm-alerts-routes-'));
     testDb = createTestDb();
-    settingsStore = getDefaults();
+    const { createTestServer } = await import('../__tests__/helpers/server.js');
     server = await createTestServer(testDb);
   });
 
-  afterAll(async () => {
+  afterEach(async () => {
     await server?.close();
+    testDb?.close();
+    rmSync(tempDataDir, { recursive: true, force: true });
   });
 
-  // ── GET /api/alerts/settings ──
-
-  describe('GET /api/alerts/settings', () => {
-    it('returns current alert settings with new flat shape', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/alerts/settings',
-        headers: authHeaders(),
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.enabled).toBe(true);
-      expect(body.largeChargeThreshold).toBe(500);
-      expect(body.unusualSpendingPercent).toBe(30);
-      expect(body.monthlySummary.enabled).toBe(true);
-      expect(body.reportScrapeErrors).toBe(true);
+  it('GET /api/alerts/settings returns real public default settings without internal keys', async () => {
+    const res = await server.inject({
+      method: 'GET',
+      url: '/api/alerts/settings',
+      headers: authHeaders(),
     });
 
-    it('strips internal tracking fields from response', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/alerts/settings',
-        headers: authHeaders(),
-      });
-
-      const body = JSON.parse(res.body);
-      expect(body._lastNetWorthTotal).toBeUndefined();
-      expect(body._knownRecurring).toBeUndefined();
+    expect(res.statusCode).toBe(200);
+    const body = JSON.parse(res.body);
+    expect(body).toEqual({
+      enabled: true,
+      largeChargeThreshold: 500,
+      unusualSpendingPercent: 30,
+      monthlySummary: { enabled: true, dayOfMonth: 1 },
+      reportScrapeErrors: true,
     });
   });
 
-  // ── PATCH /api/alerts/settings ──
-
-  describe('PATCH /api/alerts/settings', () => {
-    it('updates settings with partial merge', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/alerts/settings',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { enabled: false },
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.enabled).toBe(false);
-      // Other settings preserved
-      expect(body.largeChargeThreshold).toBe(500);
+  it('PATCH /api/alerts/settings persists allowed fields and ignores internal or mistyped keys', async () => {
+    const { loadAlertSettings } = await import('../telegram/alert-settings.js');
+    const res = await server.inject({
+      method: 'PATCH',
+      url: '/api/alerts/settings',
+      headers: { ...authHeaders(), 'content-type': 'application/json' },
+      payload: {
+        enabled: false,
+        largeChargeThreshold: 'not-a-number',
+        monthlySummary: { dayOfMonth: 15, enabled: 'invalid' },
+        _lastNetWorthTotal: 999999,
+        _knownRecurring: ['Injected'],
+      },
     });
 
-    it('deep merges nested monthlySummary settings', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/alerts/settings',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { monthlySummary: { dayOfMonth: 15 } },
-      });
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toEqual({
+      enabled: false,
+      largeChargeThreshold: 500,
+      unusualSpendingPercent: 30,
+      monthlySummary: { enabled: true, dayOfMonth: 15 },
+      reportScrapeErrors: true,
+    });
+    expect(loadAlertSettings()._lastNetWorthTotal).toBeUndefined();
+    expect(loadAlertSettings()._knownRecurring).toBeUndefined();
+  });
 
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.monthlySummary.dayOfMonth).toBe(15);
-      expect(body.monthlySummary.enabled).toBe(true);
+  it('POST /api/alerts/settings/reset restores default public settings', async () => {
+    await server.inject({
+      method: 'PATCH',
+      url: '/api/alerts/settings',
+      headers: { ...authHeaders(), 'content-type': 'application/json' },
+      payload: { enabled: false, largeChargeThreshold: 9999 },
     });
 
-    it('strips internal fields from response', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/alerts/settings',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { enabled: false },
-      });
+    const res = await server.inject({
+      method: 'POST',
+      url: '/api/alerts/settings/reset',
+      headers: authHeaders(),
+    });
 
-      const body = JSON.parse(res.body);
-      expect(body._lastNetWorthTotal).toBeUndefined();
-      expect(body._knownRecurring).toBeUndefined();
+    expect(res.statusCode).toBe(200);
+    expect(JSON.parse(res.body)).toMatchObject({
+      enabled: true,
+      largeChargeThreshold: 500,
     });
   });
 
-  // ── POST /api/alerts/settings/reset ──
-
-  describe('POST /api/alerts/settings/reset', () => {
-    it('resets settings to defaults', async () => {
-      settingsStore.enabled = false;
-      settingsStore.largeChargeThreshold = 9999;
-
-      const res = await server.inject({
-        method: 'POST',
-        url: '/api/alerts/settings/reset',
-        headers: authHeaders(),
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.enabled).toBe(true);
-      expect(body.largeChargeThreshold).toBe(500);
+  it('POST /api/alerts/test maps success and send errors', async () => {
+    const ok = await server.inject({
+      method: 'POST',
+      url: '/api/alerts/test',
+      headers: authHeaders(),
     });
+    expect(ok.statusCode).toBe(200);
+    expect(JSON.parse(ok.body)).toEqual({ success: true, message: 'Test alert sent' });
 
-    it('strips internal fields from reset response', async () => {
-      const res = await server.inject({
-        method: 'POST',
-        url: '/api/alerts/settings/reset',
-        headers: authHeaders(),
-      });
-
-      const body = JSON.parse(res.body);
-      expect(body._lastNetWorthTotal).toBeUndefined();
-      expect(body._knownRecurring).toBeUndefined();
+    mockSendTestAlertMessage.mockRejectedValueOnce(new Error('Telegram offline'));
+    const failed = await server.inject({
+      method: 'POST',
+      url: '/api/alerts/test',
+      headers: authHeaders(),
     });
-  });
-
-  // ── POST /api/alerts/test ──
-
-  describe('POST /api/alerts/test', () => {
-    it('sends a test alert and returns success', async () => {
-      const res = await server.inject({
-        method: 'POST',
-        url: '/api/alerts/test',
-        headers: authHeaders(),
-      });
-
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.success).toBe(true);
-      expect(body.message).toContain('Test alert sent');
-    });
+    expect(failed.statusCode).toBe(500);
+    expect(JSON.parse(failed.body)).toEqual({ error: 'Telegram offline' });
   });
 });

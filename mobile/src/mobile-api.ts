@@ -1190,7 +1190,6 @@ export async function completePairing(
   deviceName: string,
   onProgress: (progress: PairingProgress) => void,
   signal?: AbortSignal,
-  pollDelayMs?: number,
 ): Promise<PairingCredential> {
   if (Date.parse(pairing.expiresAt) <= Date.now()) {
     throw new Error(t('thisPairingCodeHasExpiredCreateANewOneOnYourMac'));
@@ -1221,7 +1220,7 @@ export async function completePairing(
     if (Date.parse(pairing.expiresAt) <= Date.now()) {
       throw new Error(t('pairingExpiredBeforeItWasApproved'));
     }
-    await wait(pollDelayMs ?? serverDelay, signal);
+    await wait(serverDelay, signal);
     const statusRoot = object(
       await post(
         pairing.baseURL,

@@ -6,8 +6,12 @@ import { insertLiability } from '../__tests__/helpers/fixtures.js';
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -23,15 +27,17 @@ vi.mock('../scraper/scraper.service.js', () => ({
   startScraping: vi.fn(),
 }));
 
-vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
-  convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
-    if (currency === 'ILS') return amount;
-    const rate = rates[currency];
-    if (rate === undefined) return 0;
-    return amount * rate;
-  }),
-}));
+vi.mock('../services/exchange-rates.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('../services/exchange-rates.js')>();
+  return {
+    ...actual,
+    getExchangeRates: vi.fn().mockResolvedValue({
+      rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+      stale: false,
+      fetchedAt: new Date().toISOString(),
+    }),
+  };
+});
 
 describe('liabilities routes', () => {
   let server: TestServer;
@@ -61,6 +67,7 @@ describe('liabilities routes', () => {
 
     it('returns active liabilities with ILS conversion', async () => {
       insertLiability(testDb.db, { name: 'Mortgage', currency: 'USD', currentBalance: 1000 });
+      insertLiability(testDb.db, { name: 'Old Loan', currency: 'ILS', isActive: false });
 
       const res = await server.inject({
         method: 'GET',
@@ -98,13 +105,25 @@ describe('liabilities routes', () => {
         url: '/api/liabilities',
         headers: { ...authHeaders(), 'content-type': 'application/json' },
         payload: {
-          name: 'Home Loan', type: 'mortgage', currency: 'ILS',
-          originalAmount: 500000, currentBalance: 400000,
+          name: 'Home Loan',
+          type: 'mortgage',
+          currency: 'USD',
+          originalAmount: 10000,
+          currentBalance: 5000,
+          interestRate: 4.5,
+          startDate: '2025-01-01',
+          notes: 'Fixed rate',
         },
       });
       expect(res.statusCode).toBe(201);
       const body = JSON.parse(res.body);
-      expect(body.name).toBe('Home Loan');
+      expect(body).toMatchObject({
+        name: 'Home Loan',
+        currentBalanceIls: 18000,
+        interestRate: 4.5,
+        startDate: '2025-01-01',
+        notes: 'Fixed rate',
+      });
     });
 
     it('returns 409 for duplicate name', async () => {
@@ -115,8 +134,11 @@ describe('liabilities routes', () => {
         url: '/api/liabilities',
         headers: { ...authHeaders(), 'content-type': 'application/json' },
         payload: {
-          name: 'My Loan', type: 'loan', currency: 'ILS',
-          originalAmount: 10000, currentBalance: 8000,
+          name: 'My Loan',
+          type: 'loan',
+          currency: 'ILS',
+          originalAmount: 10000,
+          currentBalance: 8000,
         },
       });
       expect(res.statusCode).toBe(409);
@@ -136,18 +158,30 @@ describe('liabilities routes', () => {
   // ── PUT /api/liabilities/:id ──
 
   describe('PUT /api/liabilities/:id', () => {
-    it('updates a liability', async () => {
+    it('updates a liability and enforces unique names on rename', async () => {
       const liability = insertLiability(testDb.db, { name: 'Loan', currentBalance: 50000 });
+      insertLiability(testDb.db, { name: 'Other Loan' });
 
       const res = await server.inject({
         method: 'PUT',
         url: `/api/liabilities/${liability.id}`,
         headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { currentBalance: 45000 },
+        payload: { name: 'Loan', currentBalance: 45000, notes: 'Updated' },
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.currentBalance).toBe(45000);
+      expect(JSON.parse(res.body)).toMatchObject({
+        name: 'Loan',
+        currentBalance: 45000,
+        notes: 'Updated',
+      });
+
+      const conflict = await server.inject({
+        method: 'PUT',
+        url: `/api/liabilities/${liability.id}`,
+        headers: { ...authHeaders(), 'content-type': 'application/json' },
+        payload: { name: 'Other Loan' },
+      });
+      expect(conflict.statusCode).toBe(409);
     });
 
     it('returns 404 for non-existent liability', async () => {
@@ -183,6 +217,22 @@ describe('liabilities routes', () => {
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(204);
+
+      const active = await server.inject({
+        method: 'GET',
+        url: '/api/liabilities',
+        headers: authHeaders(),
+      });
+      expect(JSON.parse(active.body)).toEqual([]);
+
+      const all = await server.inject({
+        method: 'GET',
+        url: '/api/liabilities?includeInactive=true',
+        headers: authHeaders(),
+      });
+      expect(JSON.parse(all.body)).toEqual([
+        expect.objectContaining({ id: liability.id, isActive: false }),
+      ]);
     });
 
     it('returns 404 for non-existent liability', async () => {

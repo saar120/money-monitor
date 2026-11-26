@@ -2,25 +2,16 @@ import { setActiveLanguage } from './locale-state.ts';
 import assert from 'node:assert/strict';
 import test from 'node:test';
 import {
-  categoryTransactions,
   cashFlowSummary,
   formatCompactNumber,
   formatMoney,
   formatSpendingChange,
   monthlyCategoryNames,
+  monthlyCategorySpending,
+  niceChartMaximum,
   overviewCashFlow,
   spendingTotal,
 } from './money.ts';
-
-test('category drill-down keeps every transaction in the selected month', () => {
-  const transactions = Array.from({ length: 13 }, (_, index) => ({
-    category: 'Groceries',
-    merchant: index === 12 ? 'אושר עד' : `Grocer ${index + 1}`,
-  }));
-
-  assert.equal(categoryTransactions(transactions, 'Groceries').length, 13);
-  assert.equal(categoryTransactions(transactions, 'Groceries').at(-1)?.merchant, 'אושר עד');
-});
 
 test('cash flow reconciles Mac-provided posted income and spending', () => {
   assert.equal(overviewCashFlow(32_512.84, 18_920), 13_592.84);
@@ -87,6 +78,25 @@ test('monthly chart categories stay stable when a different month is selected', 
 
   assert.deepEqual(monthlyCategoryNames(months), ['Housing', 'Dining', 'Groceries']);
   assert.deepEqual(monthlyCategoryNames([...months].reverse()), ['Housing', 'Dining', 'Groceries']);
+});
+
+test('monthly chart totals keep all spending categories and ignore net-received credits', () => {
+  const categories = [
+    { name: 'Housing', spent: 800 },
+    ...Array.from({ length: 19 }, (_, index) => ({ name: `Category ${index + 1}`, spent: 1 })),
+    { name: 'Other', spent: -250 },
+  ];
+
+  assert.equal(monthlyCategorySpending({ categories }), 819);
+  assert.equal(monthlyCategorySpending({ categories: [{ name: 'Other', spent: -250 }] }), 0);
+
+  const names = monthlyCategoryNames([{ categories }]);
+  assert.equal(names.length, 21);
+  assert.equal(names[0], 'Housing');
+  assert.equal(names.at(-1), 'Other');
+
+  assert.equal(niceChartMaximum(819, 5), 1_000);
+  assert.equal(niceChartMaximum(0, 5), 5);
 });
 
 test('Hebrew signed amounts keep their sign beside the number', () => {

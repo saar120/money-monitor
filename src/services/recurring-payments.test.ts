@@ -1,12 +1,18 @@
-import { describe, expect, it } from 'vitest';
-import {
+import { afterEach, beforeEach, describe, expect, it, vi } from 'vitest';
+import { config } from '../config.js';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
+
+const { evaluateTypeSafeMock } = vi.hoisted(() => ({ evaluateTypeSafeMock: vi.fn() }));
+vi.mock('../ai/typesafe/client.js', () => ({ evaluateTypeSafe: evaluateTypeSafeMock }));
+
+const {
   saveRecurringPaymentDecision,
   discoverRecurringPayments,
   readRecurringPaymentDetail,
-  type RecurringTransaction,
-} from './recurring-payments.js';
-import { createTestDb } from '../__tests__/helpers/db.js';
-import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
+  readRecurringPayments,
+} = await import('./recurring-payments.js');
+import type { RecurringTransaction } from './recurring-payments.js';
 
 const today = '2026-09-26';
 const base: RecurringTransaction = {
@@ -313,4 +319,145 @@ it('recurring command receipts survive auto and reject stale decisions atomicall
   } finally {
     testDb.close();
   }
+});
+
+describe('recurring payment Jev classification', () => {
+  let testDb: TestDb;
+  let keySeq = 0;
+  let originalKey: string;
+
+  beforeEach(() => {
+    originalKey = config.TYPESAFE_API_KEY;
+    config.TYPESAFE_API_KEY = `test-recurring-jev-key-${++keySeq}`;
+    evaluateTypeSafeMock.mockReset();
+    evaluateTypeSafeMock.mockImplementation(
+      async ({ questions }: { questions: Record<string, unknown> }) => ({
+        model: 'jev-test',
+        answers: Object.fromEntries(
+          Object.keys(questions).map((id) => [
+            id,
+            {
+              type: 'choice',
+              choice: 'subscription',
+              confidence: 0.95,
+              probabilities: {
+                subscription: 0.95,
+                serviceBill: 0.02,
+                ordinary: 0.01,
+                other: 0.01,
+                unknown: 0.01,
+              },
+            },
+          ]),
+        ),
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    );
+    testDb = createTestDb();
+  });
+
+  afterEach(() => {
+    config.TYPESAFE_API_KEY = originalKey;
+    testDb.close();
+  });
+
+  function seedMonthly(accountId: number, description: string, category?: string) {
+    for (const date of ['2026-07-06', '2026-08-06', '2026-09-06']) {
+      insertTransaction(testDb.db, accountId, {
+        date,
+        processedDate: date,
+        description,
+        category,
+        chargedAmount: -50,
+      });
+    }
+  }
+
+  it('uses Jev to hide repeat shopping without sending editable categories', async () => {
+    const account = insertAccount(testDb.db);
+    seedMonthly(account.id, 'Cafe Example', 'subscriptions');
+    seedMonthly(account.id, 'Utility Example', 'shopping');
+    evaluateTypeSafeMock.mockImplementation(
+      async ({
+        state,
+        questions,
+      }: {
+        state: { candidates: Array<{ name: string }> };
+        questions: Record<string, unknown>;
+      }) => ({
+        model: 'jev-test',
+        answers: Object.fromEntries(
+          Object.keys(questions).map((id, index) => {
+            const choice = state.candidates[index].name.startsWith('Cafe')
+              ? 'ordinary'
+              : 'serviceBill';
+            return [
+              id,
+              {
+                type: 'choice',
+                choice,
+                confidence: 0.96,
+                probabilities: { [choice]: 0.96, unknown: 0.04 },
+              },
+            ];
+          }),
+        ),
+        usage: { input_tokens: 1, output_tokens: 1 },
+      }),
+    );
+
+    const result = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(result).toMatchObject({
+      payments: [{ name: 'Utility Example', kind: 'serviceBill' }],
+      suggestions: [],
+    });
+    expect(JSON.stringify(evaluateTypeSafeMock.mock.calls[0][0])).not.toContain('category');
+  });
+
+  it('keeps candidates in Review when Jev is unavailable', async () => {
+    const account = insertAccount(testDb.db);
+    seedMonthly(account.id, 'Unclassified Provider');
+    evaluateTypeSafeMock.mockRejectedValueOnce(new Error('offline'));
+
+    const first = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(first).toMatchObject({
+      payments: [],
+      suggestions: [{ name: 'Unclassified Provider' }],
+      totals: [],
+    });
+    const retry = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(retry.classificationPending).toBe(false);
+    expect(evaluateTypeSafeMock).toHaveBeenCalledTimes(1);
+  });
+
+  it('retries classification when the TypeSafe key changes during a failed request', async () => {
+    const account = insertAccount(testDb.db);
+    seedMonthly(account.id, 'Key Change Provider');
+    evaluateTypeSafeMock.mockImplementationOnce(async () => {
+      config.TYPESAFE_API_KEY = `replacement-key-${++keySeq}`;
+      throw new Error('previous key failed');
+    });
+
+    const first = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(first.suggestions).toMatchObject([{ name: 'Key Change Provider' }]);
+
+    const retry = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(retry.payments).toMatchObject([{ name: 'Key Change Provider' }]);
+    expect(evaluateTypeSafeMock).toHaveBeenCalledTimes(2);
+  });
+
+  it('returns Review before a slow Jev request can time out the phone', async () => {
+    const account = insertAccount(testDb.db);
+    seedMonthly(account.id, 'Slow Provider');
+    evaluateTypeSafeMock.mockImplementationOnce(() => new Promise(() => {}));
+
+    const started = Date.now();
+    const result = await readRecurringPayments(testDb.db, '2026-09-15');
+    expect(Date.now() - started).toBeLessThan(6_000);
+    expect(result).toMatchObject({
+      payments: [],
+      suggestions: [{ name: 'Slow Provider' }],
+      classificationPending: true,
+    });
+  }, 7_000);
 });

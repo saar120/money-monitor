@@ -35,21 +35,21 @@ describe('summary service', () => {
       expect(result.summary).toHaveLength(0);
     });
 
-    it('groups by category', () => {
+    it('groups by category including uncategorized null rows', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, { category: 'food', chargedAmount: -100 });
       insertTransaction(testDb.db, account.id, { category: 'food', chargedAmount: -50 });
       insertTransaction(testDb.db, account.id, { category: 'transport', chargedAmount: -30 });
+      insertTransaction(testDb.db, account.id, { category: null, chargedAmount: -40 });
 
       const result = getSpendingSummary({}, 'category');
       expect(result.groupBy).toBe('category');
       const rows = result.summary as any[];
-      expect(rows.length).toBeGreaterThanOrEqual(2);
 
       const food = rows.find((s) => s.category === 'food');
-      expect(food).toBeDefined();
-      expect(food.totalAmount).toBe(-150);
-      expect(food.transactionCount).toBe(2);
+      expect(food).toMatchObject({ totalAmount: -150, transactionCount: 2 });
+      const uncategorized = rows.find((s) => s.category === 'uncategorized');
+      expect(uncategorized).toMatchObject({ totalAmount: -40, transactionCount: 1 });
     });
 
     it('groups by month', () => {
@@ -341,16 +341,6 @@ describe('summary service', () => {
       expect(result.summary).toHaveLength(0);
     });
 
-    it('treats uncategorized transactions as "uncategorized"', () => {
-      const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { category: null, chargedAmount: -100 });
-
-      const result = getSpendingSummary({}, 'category');
-      const uncategorized = (result.summary as any[]).find((s) => s.category === 'uncategorized');
-      expect(uncategorized).toBeDefined();
-      expect(uncategorized.totalAmount).toBe(-100);
-    });
-
     it('filters by date range', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, {
@@ -516,7 +506,7 @@ describe('summary service', () => {
   // ── getTopMerchants ──
 
   describe('getTopMerchants', () => {
-    it('filters merchants using reporting dates', () => {
+    it('filters merchants using reporting dates and reports period bounds', () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, {
         description: 'Moved Merchant',
@@ -525,10 +515,18 @@ describe('summary service', () => {
         effectiveDate: '2026-08-31',
         status: 'completed',
       });
+      insertTransaction(testDb.db, account.id, {
+        description: 'Later Merchant',
+        chargedAmount: -200,
+        date: '2026-10-15',
+        processedDate: '2026-10-15',
+        status: 'completed',
+      });
 
       const august = getTopMerchants({ startDate: '2026-08-01', endDate: '2026-08-31' });
       const september = getTopMerchants({ startDate: '2026-09-01', endDate: '2026-09-30' });
 
+      expect(august.period).toEqual({ start_date: '2026-08-01', end_date: '2026-08-31' });
       expect(august.top_merchants).toHaveLength(1);
       expect(august.top_merchants[0].last_transaction_date).toBe('2026-08-31');
       expect(september.top_merchants).toHaveLength(0);
@@ -553,17 +551,14 @@ describe('summary service', () => {
       });
 
       const result = getTopMerchants({});
-      expect(result.top_merchants.length).toBeGreaterThanOrEqual(2);
-
+      expect(result.period).toBe('all_time');
       // Sort is b.total_amount - a.total_amount (descending), so -50 > -300 means Gas Station first
-      const supermarket = result.top_merchants.find((m) => m.merchant === 'Supermarket A');
-      expect(supermarket).toBeDefined();
-      expect(supermarket!.total_amount).toBe(-300);
-      expect(supermarket!.transaction_count).toBe(2);
-
-      const gas = result.top_merchants.find((m) => m.merchant === 'Gas Station B');
-      expect(gas).toBeDefined();
-      expect(gas!.total_amount).toBe(-50);
+      expect(result.top_merchants.map((m) => m.merchant)).toEqual([
+        'Gas Station B',
+        'Supermarket A',
+      ]);
+      expect(result.top_merchants[0]).toMatchObject({ total_amount: -50, transaction_count: 1 });
+      expect(result.top_merchants[1]).toMatchObject({ total_amount: -300, transaction_count: 2 });
     });
 
     it('normalizes descriptions (strips trailing numbers)', () => {
@@ -619,28 +614,6 @@ describe('summary service', () => {
       expect(storeB).toBeUndefined();
     });
 
-    it('filters by date range', () => {
-      const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, {
-        description: 'Store',
-        chargedAmount: -100,
-        date: '2026-01-15',
-        processedDate: '2026-01-15',
-        status: 'completed',
-      });
-      insertTransaction(testDb.db, account.id, {
-        description: 'Store',
-        chargedAmount: -200,
-        date: '2026-03-15',
-        processedDate: '2026-03-15',
-        status: 'completed',
-      });
-
-      const result = getTopMerchants({ startDate: '2026-01-01', endDate: '2026-01-31' });
-      expect(result.top_merchants).toHaveLength(1);
-      expect(result.top_merchants[0].total_amount).toBe(-100);
-    });
-
     it('sorts by count when specified', () => {
       const account = insertAccount(testDb.db);
       // Store A: 1 tx, high amount
@@ -660,16 +633,6 @@ describe('summary service', () => {
 
       const result = getTopMerchants({ sortBy: 'count' });
       expect(result.top_merchants[0].merchant).toBe('Store B');
-    });
-
-    it('returns period info when date range is specified', () => {
-      const result = getTopMerchants({ startDate: '2026-01-01', endDate: '2026-12-31' });
-      expect(result.period).toEqual({ start_date: '2026-01-01', end_date: '2026-12-31' });
-    });
-
-    it('returns all_time when no date range', () => {
-      const result = getTopMerchants({});
-      expect(result.period).toBe('all_time');
     });
   });
 });

@@ -1,4 +1,4 @@
-import { and, asc, eq, gte, isNull, lte, or, sql } from 'drizzle-orm';
+import { and, asc, eq, gte, lte, or, sql } from 'drizzle-orm';
 import type { SQL } from 'drizzle-orm';
 import { db } from '../db/connection.js';
 import { accounts, members, ownershipRules, transactions } from '../db/schema.js';
@@ -28,7 +28,7 @@ export interface OwnershipRuleInput {
 
 const OWNER_TYPES = new Set<OwnerType>(['member', 'shared', 'unassigned']);
 
-export function validateOwnerTarget(target: OwnerTarget) {
+function validateOwnerTarget(target: OwnerTarget) {
   if (!OWNER_TYPES.has(target.type)) {
     return { ok: false as const, error: 'Invalid owner type', status: 400 };
   }
@@ -143,26 +143,6 @@ export function deleteOwnershipRule(id: number) {
   return { ok: true as const };
 }
 
-export function setTransactionOwner(id: number, target: OwnerTarget) {
-  const valid = validateOwnerTarget(target);
-  if (!valid.ok) return valid;
-
-  const [updated] = db
-    .update(transactions)
-    .set({
-      expenseOwnerType: valid.target.type,
-      expenseOwnerMemberId: valid.target.memberId,
-      ownerSource: 'manual',
-      ownerConfidence: 1,
-      ownerReviewReason: null,
-    })
-    .where(eq(transactions.id, id))
-    .returning()
-    .all();
-  if (!updated) return { ok: false as const, error: 'Transaction not found', status: 404 };
-  return { ok: true as const, transaction: updated };
-}
-
 function transactionOwnershipRows(
   ids?: number[],
   startDate?: string,
@@ -232,8 +212,4 @@ export function applyOwnership(
     updated++;
   }
   return { updated };
-}
-
-export function ownershipConditionForRuleCandidates() {
-  return or(isNull(transactions.ownerSource), eq(transactions.ownerSource, 'unassigned'));
 }

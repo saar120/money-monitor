@@ -43,11 +43,11 @@ vi.mock('../config.js', () => ({
 // Import after all mocks are set up
 const {
   resolveApiKey,
-  PROVIDER_KEY_MAP,
   loadCredentials,
   completeOpenAICodexOAuth,
   startOpenAICodexOAuth,
   logoutOpenAICodexOAuth,
+  hasAnthropicOAuth,
   hasOpenAICodexOAuth,
 } = await import('./auth.js');
 
@@ -62,21 +62,6 @@ function resetConfig() {
     OPENROUTER_API_KEY: '',
   });
 }
-
-// ── PROVIDER_KEY_MAP ─────────────────────────────────────────────────────────
-
-describe('PROVIDER_KEY_MAP', () => {
-  it('maps all supported providers to config fields', () => {
-    expect(PROVIDER_KEY_MAP).toEqual({
-      anthropic: 'ANTHROPIC_API_KEY',
-      openai: 'OPENAI_API_KEY',
-      'openai-codex': 'OPENAI_API_KEY',
-      'opencode-go': 'OPENCODE_API_KEY',
-      google: 'GEMINI_API_KEY',
-      openrouter: 'OPENROUTER_API_KEY',
-    });
-  });
-});
 
 // ── resolveApiKey ────────────────────────────────────────────────────────────
 
@@ -138,17 +123,13 @@ describe('resolveApiKey', () => {
     expect(await resolveApiKey('opencode-go')).toBe('opencode-go-key');
   });
 
-  it('returns undefined when no key is available (step 4)', async () => {
-    expect(await resolveApiKey('anthropic')).toBeUndefined();
-  });
-
-  it('returns undefined for unknown provider', async () => {
-    expect(await resolveApiKey('unknown-provider')).toBeUndefined();
-  });
-
-  it('skips empty string config keys', async () => {
-    mockConfig.ANTHROPIC_API_KEY = '';
-    expect(await resolveApiKey('anthropic')).toBeUndefined();
+  it.each([
+    ['missing key', 'anthropic', {}],
+    ['unknown provider', 'unknown-provider', {}],
+    ['empty string config key', 'anthropic', { ANTHROPIC_API_KEY: '' }],
+  ])('returns undefined for %s (step 4)', async (_label, provider, overrides) => {
+    Object.assign(mockConfig, overrides);
+    expect(await resolveApiKey(provider)).toBeUndefined();
   });
 });
 
@@ -162,15 +143,24 @@ describe('OAuth logout', () => {
     );
     mockWriteFileSync.mockReset();
     loadCredentials();
-    mockWriteFileSync.mockClear();
   });
 
-  it('removes only the ChatGPT credentials and persists the change', () => {
+  it('migrates plaintext credentials, removes only ChatGPT credentials, and persists sealed output', () => {
+    // Plaintext JSON loaded in beforeEach is immediately migrated to sealed:v1:
+    expect(mockWriteFileSync).toHaveBeenCalledWith(
+      expect.stringMatching(/^\/tmp\/test-auth\/oauth-credentials\.json\..+\.tmp$/),
+      expect.stringMatching(/^sealed:v1:/),
+      { mode: 0o600, flag: 'wx' },
+    );
+    mockWriteFileSync.mockClear();
+
+    expect(hasAnthropicOAuth()).toBe(true);
     expect(hasOpenAICodexOAuth()).toBe(true);
 
     logoutOpenAICodexOAuth();
 
     expect(hasOpenAICodexOAuth()).toBe(false);
+    expect(hasAnthropicOAuth()).toBe(true);
     expect(mockWriteFileSync).toHaveBeenCalledWith(
       expect.stringMatching(/^\/tmp\/test-auth\/oauth-credentials\.json\..+\.tmp$/),
       expect.stringMatching(/^sealed:v1:/),

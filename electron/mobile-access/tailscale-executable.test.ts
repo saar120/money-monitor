@@ -1,3 +1,4 @@
+import { isAbsolute } from 'node:path';
 import { describe, expect, it, vi } from 'vitest';
 import { resolveTailscaleExecutable } from './tailscale-executable.js';
 
@@ -43,16 +44,17 @@ describe('resolveTailscaleExecutable', () => {
   });
 
   it('ignores relative PATH entries instead of resolving through the app directory', () => {
-    const isExecutable = vi.fn(() => false);
+    const isExecutable = vi.fn((candidate: string) => !isAbsolute(candidate));
 
     expect(
       resolveTailscaleExecutable({
         platform: 'darwin',
-        pathValue: '.:bin',
+        pathValue: 'bin:.',
         isExecutable,
       }),
     ).toBe('tailscale');
-    expect(isExecutable).not.toHaveBeenCalledWith('tailscale');
+    expect(isExecutable).toHaveBeenCalled();
+    expect(isExecutable.mock.calls.every(([candidate]) => isAbsolute(candidate))).toBe(true);
   });
 
   it('falls back to the platform command name when no known file is executable', () => {

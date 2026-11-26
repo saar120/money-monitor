@@ -124,37 +124,3 @@ export function insertLiability(
     .returning()
     .get();
 }
-
-export function insertAssetSnapshot(
-  db: Db,
-  assetId: number,
-  overrides: Partial<typeof schema.assetSnapshots.$inferInsert> = {},
-) {
-  return db
-    .insert(schema.assetSnapshots)
-    .values({
-      assetId,
-      date: '2026-01-01',
-      totalValueIls: 10000,
-      ...overrides,
-    })
-    .returning()
-    .get();
-}
-
-export function insertBalanceHistory(
-  db: Db,
-  accountId: number,
-  overrides: Partial<typeof schema.accountBalanceHistory.$inferInsert> = {},
-) {
-  return db
-    .insert(schema.accountBalanceHistory)
-    .values({
-      accountId,
-      date: '2026-01-01',
-      balance: 5000,
-      ...overrides,
-    })
-    .returning()
-    .get();
-}

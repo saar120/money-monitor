@@ -5,8 +5,12 @@ import { createTestServer, authHeaders, type TestServer } from '../__tests__/hel
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -23,7 +27,11 @@ vi.mock('../scraper/scraper.service.js', () => ({
 }));
 
 vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
+  getExchangeRates: vi.fn().mockResolvedValue({
+    rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+    stale: false,
+    fetchedAt: new Date().toISOString(),
+  }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -65,36 +73,33 @@ describe('categories routes', () => {
   // ── POST /api/categories ──
 
   describe('POST /api/categories', () => {
-    it('creates a category and returns 201', async () => {
+    it('creates a category with optional fields and returns 201', async () => {
       const res = await server.inject({
         method: 'POST',
         url: '/api/categories',
         headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { name: 'groceries', label: 'Groceries' },
+        payload: { name: 'bills', label: 'Bills', color: '#ff0000', rules: 'electric|water' },
       });
       expect(res.statusCode).toBe(201);
       const body = JSON.parse(res.body);
-      expect(body.category.name).toBe('groceries');
-      expect(body.category.label).toBe('Groceries');
+      expect(body.category).toMatchObject({
+        name: 'bills',
+        label: 'Bills',
+        color: '#ff0000',
+        rules: 'electric|water',
+      });
       expect(body.category.id).toBeGreaterThan(0);
     });
 
-    it('returns 400 for invalid name', async () => {
+    it.each([
+      ['invalid name', { name: 'Invalid Name!', label: 'Test' }],
+      ['missing label', { name: 'test' }],
+    ])('returns 400 for %s', async (_label, payload) => {
       const res = await server.inject({
         method: 'POST',
         url: '/api/categories',
         headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { name: 'Invalid Name!', label: 'Test' },
-      });
-      expect(res.statusCode).toBe(400);
-    });
-
-    it('returns 400 for missing label', async () => {
-      const res = await server.inject({
-        method: 'POST',
-        url: '/api/categories',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { name: 'test' },
+        payload,
       });
       expect(res.statusCode).toBe(400);
     });
@@ -110,19 +115,6 @@ describe('categories routes', () => {
       expect(res.statusCode).toBe(409);
       const body = JSON.parse(res.body);
       expect(body.error).toContain('already exists');
-    });
-
-    it('accepts optional color and rules', async () => {
-      const res = await server.inject({
-        method: 'POST',
-        url: '/api/categories',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { name: 'bills', label: 'Bills', color: '#ff0000', rules: 'electric|water' },
-      });
-      expect(res.statusCode).toBe(201);
-      const body = JSON.parse(res.body);
-      expect(body.category.color).toBe('#ff0000');
-      expect(body.category.rules).toBe('electric|water');
     });
   });
 
@@ -150,15 +142,21 @@ describe('categories routes', () => {
       expect(body.category.label).toBe('Food & Drink');
     });
 
-    it('returns 400 for invalid id param', async () => {
-      const res = await server.inject({
-        method: 'PATCH',
-        url: '/api/categories/abc',
-        headers: { ...authHeaders(), 'content-type': 'application/json' },
-        payload: { label: 'Test' },
-      });
-      expect(res.statusCode).toBe(400);
-    });
+    it.each(['PATCH', 'DELETE'] as const)(
+      'returns 400 for invalid id param on %s',
+      async (method) => {
+        const res = await server.inject({
+          method,
+          url: '/api/categories/abc',
+          headers:
+            method === 'PATCH'
+              ? { ...authHeaders(), 'content-type': 'application/json' }
+              : authHeaders(),
+          payload: method === 'PATCH' ? { label: 'Test' } : undefined,
+        });
+        expect(res.statusCode).toBe(400);
+      },
+    );
 
     it('returns 404 for non-existent category', async () => {
       const res = await server.inject({
@@ -174,8 +172,7 @@ describe('categories routes', () => {
   // ── DELETE /api/categories/:id ──
 
   describe('DELETE /api/categories/:id', () => {
-    it('deletes a category', async () => {
-      // Create one to delete
+    it('deletes a category and returns 404 when missing', async () => {
       const createRes = await server.inject({
         method: 'POST',
         url: '/api/categories',
@@ -190,26 +187,14 @@ describe('categories routes', () => {
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.deleted).toBe(true);
-    });
+      expect(JSON.parse(res.body).deleted).toBe(true);
 
-    it('returns 404 for non-existent category', async () => {
-      const res = await server.inject({
+      const missing = await server.inject({
         method: 'DELETE',
-        url: '/api/categories/99999',
+        url: `/api/categories/${id}`,
         headers: authHeaders(),
       });
-      expect(res.statusCode).toBe(404);
-    });
-
-    it('returns 400 for invalid id param', async () => {
-      const res = await server.inject({
-        method: 'DELETE',
-        url: '/api/categories/abc',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(400);
+      expect(missing.statusCode).toBe(404);
     });
   });
 });

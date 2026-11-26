@@ -148,11 +148,6 @@ export interface MobilePairingSessionManagerOptions<Credential> {
   protocolVersion: number;
   credentialIssuer: PairingCredentialIssuer<Credential>;
   clock?: () => Date;
-  idFactory?: () => string;
-  nonceFactory?: () => string;
-  claimantSecretFactory?: () => string;
-  pairingExpiryMs?: number;
-  approvalTimeoutMs?: number;
 }
 
 type InternalPairingStatus =
@@ -212,13 +207,6 @@ function normalizeDeviceName(name: unknown): string | null {
   return normalized;
 }
 
-function validatePositiveDuration(value: number, label: string): number {
-  if (!Number.isFinite(value) || value <= 0) {
-    throw new Error(`${label} must be a positive duration`);
-  }
-  return value;
-}
-
 function validateBaseURL(value: string): string {
   let url: URL;
   try {
@@ -254,11 +242,6 @@ export class MobilePairingSessionManager<Credential> {
 
   private readonly credentialIssuer: PairingCredentialIssuer<Credential>;
   private readonly clock: () => Date;
-  private readonly idFactory: () => string;
-  private readonly nonceFactory: () => string;
-  private readonly claimantSecretFactory: () => string;
-  private readonly pairingExpiryMs: number;
-  private readonly approvalTimeoutMs: number;
   private readonly sessions = new Map<string, InternalPairingSession<Credential>>();
 
   constructor(options: MobilePairingSessionManagerOptions<Credential>) {
@@ -275,17 +258,6 @@ export class MobilePairingSessionManager<Credential> {
     this.protocolVersion = options.protocolVersion;
     this.credentialIssuer = options.credentialIssuer;
     this.clock = options.clock ?? (() => new Date());
-    this.idFactory = options.idFactory ?? randomUUID;
-    this.nonceFactory = options.nonceFactory ?? defaultNonceFactory;
-    this.claimantSecretFactory = options.claimantSecretFactory ?? defaultNonceFactory;
-    this.pairingExpiryMs = validatePositiveDuration(
-      options.pairingExpiryMs ?? DEFAULT_PAIRING_EXPIRY_MS,
-      'Pairing expiry',
-    );
-    this.approvalTimeoutMs = validatePositiveDuration(
-      options.approvalTimeoutMs ?? DEFAULT_APPROVAL_TIMEOUT_MS,
-      'Approval timeout',
-    );
   }
 
   create(input: PairingSessionCreationInput = {}): CreatedPairingSession {
@@ -297,18 +269,10 @@ export class MobilePairingSessionManager<Credential> {
       throw new Error('Replacement device ID must be a valid opaque identifier');
     }
 
-    const pairingId = this.idFactory();
-    if (!pairingId || this.sessions.has(pairingId)) {
-      throw new Error('Pairing ID factory must return a unique non-empty identifier');
-    }
-
-    const nonce = this.nonceFactory();
-    if (!NONCE_PATTERN.test(nonce)) {
-      throw new Error('Nonce factory must return a 256-bit base64url nonce');
-    }
-
+    const pairingId = randomUUID();
+    const nonce = defaultNonceFactory();
     const createdAtMs = this.nowMs();
-    const qrExpiresAtMs = createdAtMs + this.pairingExpiryMs;
+    const qrExpiresAtMs = createdAtMs + DEFAULT_PAIRING_EXPIRY_MS;
     this.sessions.set(pairingId, {
       pairingId,
       nonceDigest: digestNonce(nonce),
@@ -374,12 +338,8 @@ export class MobilePairingSessionManager<Credential> {
       return { status: 'invalid_nonce' };
     }
 
-    const claimantSecret = this.claimantSecretFactory();
-    if (!NONCE_PATTERN.test(claimantSecret)) {
-      throw new Error('Claimant secret factory must return a 256-bit base64url secret');
-    }
-
-    const approvalExpiresAtMs = Math.min(now + this.approvalTimeoutMs, session.qrExpiresAtMs);
+    const claimantSecret = defaultNonceFactory();
+    const approvalExpiresAtMs = Math.min(now + DEFAULT_APPROVAL_TIMEOUT_MS, session.qrExpiresAtMs);
     session.status = 'pending_approval';
     session.nonceDigest = null;
     session.claimantSecretDigest = digestNonce(claimantSecret);

@@ -1,251 +1,232 @@
-import { afterEach, describe, expect, it, vi } from 'vitest';
+import { afterEach, describe, expect, it } from 'vitest';
+import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
+import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
 import { createMobileServer } from './mobile-server.js';
-import type { MobileCredentialAuthenticator } from './mobile-auth.js';
-import type { PublicMobileDevice } from './device-registry.js';
-import {
-  projectMobileRecurringPaymentDetail,
-  projectMobileRecurringPayments,
-} from './production-mobile-access.js';
-import { createMobilePublicIdProjector } from './mobile-public-id.js';
+import { createProductionMobileAccess } from './production-mobile-access.js';
 
-const token = 'A'.repeat(43);
-const publicAccountId = `account_${'b'.repeat(22)}`;
-const device: PublicMobileDevice = {
-  id: 'test-device',
-  name: 'iPhone',
-  capabilities: ['mobile.read'],
-  protocolVersion: 1,
-  tokenVersion: 1,
-  createdAt: '2026-09-01T00:00:00.000Z',
-  lastUsedAt: null,
-  expiresAt: null,
-  rotatedAt: null,
-  revokedAt: null,
-};
+const NOW = new Date('2026-07-15T10:00:00.000Z');
+const SERVER_ID = '11111111-1111-4111-8111-111111111111';
+const PUBLIC_ID_KEY = 'private-public-id-key-material-that-is-at-least-32-chars';
+const BASE_URL = '/api/mobile/v1/recurring-payments';
 
 describe('mobile recurring payments route', () => {
+  const databases: TestDb[] = [];
   const servers: Array<ReturnType<typeof createMobileServer>> = [];
+
+  function createHarness() {
+    const database = createTestDb();
+    databases.push(database);
+    const access = createProductionMobileAccess({
+      db: database.db,
+      serverId: SERVER_ID,
+      publicIdKey: PUBLIC_ID_KEY,
+      server: {
+        displayName: 'Saar’s Mac',
+        serverVersion: '0.3.5',
+        minimumClientVersion: '0.1.0',
+      },
+      readNetWorthIls: () => 0,
+      clock: () => NOW,
+    });
+    const issued = access.deviceRegistry.issue({ name: 'Personal iPhone' });
+    const server = createMobileServer({
+      recurringPayments: access.recurringPaymentsDependencies,
+      transactions: access.transactionDependencies,
+      clock: () => NOW,
+      logger: false,
+    });
+    servers.push(server);
+    return {
+      database,
+      server,
+      headers: { authorization: `Bearer ${issued.token}` },
+    };
+  }
+
   afterEach(async () => {
     await Promise.all(servers.splice(0).map((server) => server.shutdown()));
+    databases.splice(0).forEach((database) => database.close());
   });
 
-  it('requires mobile.read and returns the bound result', async () => {
-    const authenticate = vi.fn(() => ({ status: 'authenticated' as const, device }));
-    const authenticator: MobileCredentialAuthenticator = { authenticate };
-    const provide = vi.fn((asOfDate: string) => ({
-      payments: [],
-      suggestions: [],
-      excluded: [],
-      totals: [],
-      asOfDate,
-    }));
-    const server = createMobileServer({
-      recurringPayments: {
-        authenticator,
-        server: { id: '11111111-1111-4111-8111-111111111111', protocolVersion: 1 },
-        provide,
-      },
-      clock: () => new Date('2026-09-26T09:00:00.000Z'),
-      logger: false,
-    });
-    servers.push(server);
+  it('requires authentication, validates decisions, and persists subscription review updates', async () => {
+    const { database, server, headers } = createHarness();
+    const account = insertAccount(database.db);
+    for (const date of ['2026-04-20', '2026-05-20', '2026-06-20']) {
+      insertTransaction(database.db, account.id, {
+        date,
+        processedDate: date,
+        description: 'Holmes Place',
+        chargedAmount: -50,
+        category: 'fitness',
+      });
+    }
 
-    const anonymous = await server.app.inject({
-      method: 'GET',
-      url: '/api/mobile/v1/recurring-payments',
-    });
-    expect(anonymous.statusCode).toBe(401);
-    const response = await server.app.inject({
-      method: 'GET',
-      url: '/api/mobile/v1/recurring-payments',
-      headers: { authorization: `Bearer ${token}` },
-    });
-    expect(response.statusCode).toBe(200);
-    expect(authenticate).toHaveBeenCalledWith(token, 'mobile.read');
-    expect(provide).toHaveBeenCalledWith('2026-09-26');
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.json()).toMatchObject({
-      data: { payments: [], totals: [], asOfDate: '2026-09-26' },
-      meta: { server: { id: '11111111-1111-4111-8111-111111111111' } },
-    });
-  });
+    expect((await server.app.inject({ method: 'GET', url: BASE_URL })).statusCode).toBe(401);
 
-  it('normalizes legacy shekel codes before the mobile contract sees them', () => {
-    const payment = {
-      accountId: 1,
-      merchantKey: 'netflix',
-      name: 'Netflix',
-      accountName: 'Card',
-      currencyCode: '₪',
-      usualAmount: 50,
-      monthlyCost: 50,
-      annualCost: 600,
-      frequency: 'monthly' as const,
-      occurrences: 3,
-      lastChargeDate: '2026-09-06',
-      nextExpectedDate: '2026-10-06',
-      confidence: 'likely' as const,
-      kind: 'subscription' as const,
-      source: 'automatic' as const,
-    };
-    const publicId = createMobilePublicIdProjector(
-      'private-public-id-key-material-that-is-at-least-32-chars',
-    );
-    const result = projectMobileRecurringPayments(
-      {
-        asOfDate: '2026-09-26',
-        classificationPending: false,
-        payments: [payment],
-        suggestions: [],
-        excluded: [],
-        totals: [
-          { currencyCode: '₪', monthlyCost: 50, annualCost: 600 },
-          { currencyCode: 'ILS', monthlyCost: 20, annualCost: 240 },
-        ],
+    const initial = await server.app.inject({ method: 'GET', url: BASE_URL, headers });
+    expect(initial.statusCode).toBe(200);
+    expect(initial.headers['cache-control']).toBe('no-store');
+    expect(initial.json()).toMatchObject({
+      data: {
+        payments: [],
+        suggestions: [{ name: 'Holmes Place' }],
+        asOfDate: '2026-07-15',
       },
-      publicId,
-    );
-    expect(result.payments[0].currencyCode).toBe('ILS');
-    expect(result.payments[0].accountId).toMatch(/^account_[A-Za-z0-9_-]{22}$/);
-    expect(result.totals).toEqual([{ currencyCode: 'ILS', monthlyCost: 70, annualCost: 840 }]);
-    const detail = projectMobileRecurringPaymentDetail(
-      {
-        payment,
-        previousAmount: null,
-        changedOnDate: null,
-        transactions: [
-          { id: 42, date: '2026-09-06', description: 'Netflix', amount: 50, inPattern: true },
-        ],
-      },
-      publicId,
-    );
-    expect(detail.transactions[0].id).toMatch(/^transaction_[A-Za-z0-9_-]{22}$/);
-    expect(detail.transactions[0].id).not.toBe('42');
-  });
+      meta: { server: { id: SERVER_ID } },
+    });
 
-  it('validates authenticated review decisions on the paired Mac', async () => {
-    const decide = vi.fn(
+    const candidate = initial.json().data.suggestions[0];
+    expect(candidate.accountId).toMatch(/^account_[A-Za-z0-9_-]{22}$/);
+    expect(candidate.merchantKey).toMatch(/^[a-f0-9]{64}$/);
+
+    const detailUrl = `${BASE_URL}/detail?${new URLSearchParams({
+      accountId: candidate.accountId,
+      currencyCode: candidate.currencyCode,
+      merchantKey: candidate.merchantKey,
+    })}`;
+    expect((await server.app.inject({ method: 'GET', url: detailUrl })).statusCode).toBe(401);
+
+    const detail = await server.app.inject({ method: 'GET', url: detailUrl, headers });
+    expect(detail.statusCode).toBe(200);
+    const chargeId = detail.json().data.transactions[0].id as string;
+    expect(chargeId).toMatch(/^transaction_[A-Za-z0-9_-]{22}$/);
+    expect(
       (
-        _input: {
-          accountId: string;
-          currencyCode: string;
-          merchantKey: string;
-          decision: string;
-          commandId: string;
-        },
-        asOfDate: string,
-      ) => ({
-        receipt: { commandId: _input.commandId, resourceVersion: 1 },
-        result: { payments: [], suggestions: [], excluded: [], totals: [], asOfDate },
-      }),
-    );
-    const server = createMobileServer({
-      recurringPayments: {
-        authenticator: { authenticate: () => ({ status: 'authenticated', device }) },
-        server: { id: '11111111-1111-4111-8111-111111111111', protocolVersion: 1 },
-        provide: () => ({
-          payments: [],
-          suggestions: [],
-          excluded: [],
-          totals: [],
-          asOfDate: '2026-09-26',
-        }),
-        decide,
-      },
-      clock: () => new Date('2026-09-26T09:00:00.000Z'),
-      logger: false,
-    });
-    servers.push(server);
-    const url = '/api/mobile/v1/recurring-payments/decision';
-    const payload = {
-      accountId: publicAccountId,
-      currencyCode: 'ILS',
-      merchantKey: 'netflix',
-      decision: 'exclude',
+        await server.app.inject({
+          method: 'GET',
+          url: `/api/mobile/v1/transactions/${chargeId}`,
+          headers,
+        })
+      ).statusCode,
+    ).toBe(200);
+
+    const decisionPayload = {
+      accountId: candidate.accountId,
+      currencyCode: candidate.currencyCode,
+      merchantKey: candidate.merchantKey,
+      decision: 'include',
       commandId: '11111111-1111-4111-8111-111111111112',
-      expectedVersion: 0,
+      expectedVersion: candidate.resourceVersion ?? 0,
     };
-    expect((await server.app.inject({ method: 'PUT', url, payload })).statusCode).toBe(401);
-    const headers = { authorization: `Bearer ${token}` };
     expect(
       (
         await server.app.inject({
           method: 'PUT',
-          url,
+          url: `${BASE_URL}/decision`,
+          payload: decisionPayload,
+        })
+      ).statusCode,
+    ).toBe(401);
+    expect(
+      (
+        await server.app.inject({
+          method: 'PUT',
+          url: `${BASE_URL}/decision`,
           headers,
-          payload: { ...payload, decision: 'other' },
+          payload: { ...decisionPayload, decision: 'other' },
         })
       ).statusCode,
     ).toBe(400);
-    const response = await server.app.inject({ method: 'PUT', url, headers, payload });
-    expect(response.statusCode).toBe(200);
-    expect(decide).toHaveBeenCalledWith(payload, '2026-09-26', device.id);
+
+    const saved = await server.app.inject({
+      method: 'PUT',
+      url: `${BASE_URL}/decision`,
+      headers,
+      payload: decisionPayload,
+    });
+    expect(saved.statusCode).toBe(200);
+    expect(saved.json().data.result).toMatchObject({
+      payments: [{ name: 'Holmes Place' }],
+      suggestions: [],
+    });
+
+    const reread = await server.app.inject({ method: 'GET', url: BASE_URL, headers });
+    expect(reread.json().data.payments).toHaveLength(1);
   });
 
-  it('serves authenticated payment details with charge history', async () => {
-    const merchantKey = 'a'.repeat(64);
-    const detail = vi.fn(() => ({
-      payment: {
-        accountId: publicAccountId,
-        merchantKey,
-        name: 'Codex Subscription',
-        accountName: 'Card',
-        currencyCode: 'ILS',
-        usualAmount: 100,
-        monthlyCost: 100,
-        annualCost: 1200,
-        frequency: 'monthly',
-        occurrences: 3,
-        lastChargeDate: '2026-09-06',
-        nextExpectedDate: '2026-10-06',
-        confidence: 'likely',
-        kind: 'subscription',
-        source: 'manual',
-      },
-      previousAmount: 20,
-      changedOnDate: '2026-09-06',
-      transactions: [
-        {
-          id: `transaction_${'a'.repeat(22)}`,
-          date: '2026-09-06',
-          description: 'Codex Subscription',
-          amount: 100,
-          inPattern: true,
+  it('normalizes legacy shekel codes, merges currency totals, and serves price-change detail through production ports', async () => {
+    const { database, server, headers } = createHarness();
+    const account = insertAccount(database.db, { displayName: 'Card' });
+    const shekelCharges = [
+      ['2026-03-20', -40],
+      ['2026-04-20', -40],
+      ['2026-05-20', -50],
+      ['2026-06-20', -50],
+    ] as const;
+    for (const [date, chargedAmount] of shekelCharges) {
+      insertTransaction(database.db, account.id, {
+        date,
+        processedDate: date,
+        description: 'Netflix',
+        chargedAmount,
+        chargedCurrency: '₪',
+      });
+    }
+    for (const date of ['2026-04-20', '2026-05-20', '2026-06-20']) {
+      insertTransaction(database.db, account.id, {
+        date,
+        processedDate: date,
+        description: 'Spotify',
+        chargedAmount: -20,
+        chargedCurrency: 'ILS',
+      });
+    }
+
+    const initial = await server.app.inject({ method: 'GET', url: BASE_URL, headers });
+    expect(initial.statusCode).toBe(200);
+    const suggestions = initial.json().data.suggestions as Array<{
+      name: string;
+      accountId: string;
+      currencyCode: string;
+      merchantKey: string;
+      resourceVersion?: number;
+    }>;
+    expect(suggestions.map((item) => item.name).sort()).toEqual(['Netflix', 'Spotify']);
+
+    for (const [index, suggestion] of suggestions.entries()) {
+      expect(suggestion.currencyCode).toBe('ILS');
+      expect(suggestion.accountId).toMatch(/^account_[A-Za-z0-9_-]{22}$/);
+      const res = await server.app.inject({
+        method: 'PUT',
+        url: `${BASE_URL}/decision`,
+        headers,
+        payload: {
+          accountId: suggestion.accountId,
+          currencyCode: suggestion.currencyCode,
+          merchantKey: suggestion.merchantKey,
+          decision: 'include',
+          commandId: `11111111-1111-4111-8111-11111111111${index + 3}`,
+          expectedVersion: suggestion.resourceVersion ?? 0,
         },
-      ],
-    }));
-    const server = createMobileServer({
-      recurringPayments: {
-        authenticator: { authenticate: () => ({ status: 'authenticated', device }) },
-        server: { id: '11111111-1111-4111-8111-111111111111', protocolVersion: 1 },
-        provide: () => ({
-          payments: [],
-          suggestions: [],
-          excluded: [],
-          totals: [],
-          asOfDate: '2026-09-26',
-        }),
-        detail,
-      },
-      clock: () => new Date('2026-09-26T09:00:00.000Z'),
-      logger: false,
-    });
-    servers.push(server);
-    const url = `/api/mobile/v1/recurring-payments/detail?accountId=${publicAccountId}&currencyCode=ILS&merchantKey=${merchantKey}`;
-    expect((await server.app.inject({ method: 'GET', url })).statusCode).toBe(401);
-    const response = await server.app.inject({
+      });
+      expect(res.statusCode).toBe(200);
+    }
+
+    const listed = await server.app.inject({ method: 'GET', url: BASE_URL, headers });
+    expect(listed.statusCode).toBe(200);
+    expect(listed.json().data.totals).toEqual([
+      { currencyCode: 'ILS', monthlyCost: 70, annualCost: 840 },
+    ]);
+
+    const netflix = suggestions.find((item) => item.name === 'Netflix')!;
+    const detail = await server.app.inject({
       method: 'GET',
-      url,
-      headers: { authorization: `Bearer ${token}` },
+      url: `${BASE_URL}/detail?${new URLSearchParams({
+        accountId: netflix.accountId,
+        currencyCode: netflix.currencyCode,
+        merchantKey: netflix.merchantKey,
+      })}`,
+      headers,
     });
-    expect(response.statusCode).toBe(200);
-    expect(response.json().data).toMatchObject({
-      previousAmount: 20,
-      transactions: [{ inPattern: true }],
+    expect(detail.statusCode).toBe(200);
+    expect(detail.json().data).toMatchObject({
+      payment: { name: 'Netflix', currencyCode: 'ILS' },
+      previousAmount: 40,
+      changedOnDate: '2026-05-20',
     });
-    expect(detail).toHaveBeenCalledWith(
-      { accountId: publicAccountId, currencyCode: 'ILS', merchantKey },
-      '2026-09-26',
-    );
+    expect(detail.json().data.transactions[0]).toMatchObject({
+      inPattern: true,
+    });
+    expect(detail.json().data.transactions[0].id).toMatch(/^transaction_[A-Za-z0-9_-]{22}$/);
   });
 });

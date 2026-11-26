@@ -12,13 +12,8 @@ import { runPostScrapeAlerts } from '../telegram/alerts.js';
 import type { ScrapeResult } from '../scraper/scraper.service.js';
 
 const active = new Map<number, Promise<void>>();
-export function enqueuePostImport(
-  source: string,
-  ids: number[],
-  results: ScrapeResult[] = [],
-  database = db,
-) {
-  return database
+export function enqueuePostImport(source: string, ids: number[], results: ScrapeResult[] = []) {
+  return db
     .insert(postImportJobs)
     .values({ source, transactionIds: JSON.stringify(ids), results: JSON.stringify(results) })
     .returning()

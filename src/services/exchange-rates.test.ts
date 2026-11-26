@@ -43,30 +43,20 @@ describe('exchange-rates service', () => {
   // ── convertToIls ──
 
   describe('convertToIls', () => {
-    it('returns amount unchanged for ILS', () => {
-      expect(convertToIls(100, 'ILS', { ILS: 1, USD: 3.6 })).toBe(100);
-    });
-
-    it('converts USD using rate', () => {
-      expect(convertToIls(100, 'USD', { ILS: 1, USD: 3.6 })).toBe(360);
-    });
-
-    it('converts EUR using rate', () => {
-      expect(convertToIls(50, 'EUR', { ILS: 1, EUR: 3.9 })).toBe(195);
-    });
-
-    it('returns 0 for unknown currency', () => {
+    it.each([
+      [100, 'ILS', { ILS: 1, USD: 3.6 }, 100],
+      [100, 'USD', { ILS: 1, USD: 3.6 }, 360],
+      [50, 'EUR', { ILS: 1, EUR: 3.9 }, 195],
+      [0, 'USD', { ILS: 1, USD: 3.6 }, 0],
+      [-100, 'USD', { ILS: 1, USD: 3.6 }, -360],
+      [100, 'XYZ', { ILS: 1 }, 0],
+    ])('converts %d %s -> %d', (amount, currency, rates, expected) => {
       const consoleSpy = vi.spyOn(console, 'warn').mockImplementation(() => {});
-      expect(convertToIls(100, 'XYZ', { ILS: 1 })).toBe(0);
-      consoleSpy.mockRestore();
-    });
-
-    it('handles zero amount', () => {
-      expect(convertToIls(0, 'USD', { ILS: 1, USD: 3.6 })).toBe(0);
-    });
-
-    it('handles negative amounts', () => {
-      expect(convertToIls(-100, 'USD', { ILS: 1, USD: 3.6 })).toBe(-360);
+      try {
+        expect(convertToIls(amount, currency, rates)).toBe(expected);
+      } finally {
+        consoleSpy.mockRestore();
+      }
     });
   });
 

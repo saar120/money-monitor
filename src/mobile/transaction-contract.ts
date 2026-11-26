@@ -1,6 +1,5 @@
 import { z } from 'zod';
 import {
-  bootstrapCurrencyCodeSchema,
   bootstrapFinancialDateSchema,
   bootstrapInstantSchema,
   bootstrapMoneySchema,
@@ -268,6 +267,3 @@ export function validateMobileTransactionDetailEnvelope(
 ): MobileTransactionValidationResult<MobileTransactionDetailEnvelope> {
   return validateEnvelope(input, mobileTransactionDetailEnvelopeSchema);
 }
-
-// Exported for Swift/server fixture parity tests.
-export { bootstrapCurrencyCodeSchema as mobileTransactionCurrencyCodeSchema };

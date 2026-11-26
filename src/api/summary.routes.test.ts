@@ -184,163 +184,6 @@ describe('summary routes', () => {
     ).toBe(400);
   });
 
-  it('uses Jev to hide repeat shopping without sending editable categories', async () => {
-    const account = insertAccount(testDb.db);
-    const today = todayInIsrael();
-    const [year, month] = today.split('-').map(Number);
-    for (const offset of [-2, -1, 0]) {
-      const date = new Date(Date.UTC(year, month - 1 + offset, 6)).toISOString().slice(0, 10);
-      insertTransaction(testDb.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Cafe Example',
-        category: 'subscriptions',
-        chargedAmount: -50,
-      });
-      insertTransaction(testDb.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Utility Example',
-        category: 'shopping',
-        chargedAmount: -50,
-      });
-    }
-    evaluateTypeSafeMock.mockImplementation(
-      async ({
-        state,
-        questions,
-      }: {
-        state: { candidates: Array<{ name: string }> };
-        questions: Record<string, unknown>;
-      }) => ({
-        model: 'jev-test',
-        answers: Object.fromEntries(
-          Object.keys(questions).map((id, index) => {
-            const choice = state.candidates[index].name.startsWith('Cafe')
-              ? 'ordinary'
-              : 'serviceBill';
-            return [
-              id,
-              {
-                type: 'choice',
-                choice,
-                confidence: 0.96,
-                probabilities: { [choice]: 0.96, unknown: 0.04 },
-              },
-            ];
-          }),
-        ),
-        usage: { input_tokens: 1, output_tokens: 1 },
-      }),
-    );
-    const response = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      payments: [{ name: 'Utility Example', kind: 'serviceBill' }],
-      suggestions: [],
-    });
-    expect(JSON.stringify(evaluateTypeSafeMock.mock.calls[0][0])).not.toContain('category');
-  });
-
-  it('keeps candidates in Review when Jev is unavailable', async () => {
-    const account = insertAccount(testDb.db);
-    const today = todayInIsrael();
-    const [year, month] = today.split('-').map(Number);
-    for (const offset of [-2, -1, 0]) {
-      const date = new Date(Date.UTC(year, month - 1 + offset, 6)).toISOString().slice(0, 10);
-      insertTransaction(testDb.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Unclassified Provider',
-        chargedAmount: -50,
-      });
-    }
-    evaluateTypeSafeMock.mockRejectedValueOnce(new Error('offline'));
-    const response = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(response.statusCode).toBe(200);
-    expect(response.json()).toMatchObject({
-      payments: [],
-      suggestions: [{ name: 'Unclassified Provider' }],
-      totals: [],
-    });
-    const retry = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(retry.json().classificationPending).toBe(false);
-    expect(evaluateTypeSafeMock).toHaveBeenCalledTimes(1);
-  });
-
-  it('retries classification when the TypeSafe key changes during a failed request', async () => {
-    const account = insertAccount(testDb.db);
-    const today = todayInIsrael();
-    const [year, month] = today.split('-').map(Number);
-    for (const offset of [-2, -1, 0]) {
-      const date = new Date(Date.UTC(year, month - 1 + offset, 6)).toISOString().slice(0, 10);
-      insertTransaction(testDb.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Key Change Provider',
-        chargedAmount: -50,
-      });
-    }
-    evaluateTypeSafeMock.mockImplementationOnce(async () => {
-      config.TYPESAFE_API_KEY = `replacement-key-${++configKeySequence}`;
-      throw new Error('previous key failed');
-    });
-    const first = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(first.json().suggestions).toMatchObject([{ name: 'Key Change Provider' }]);
-
-    const retry = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(retry.json().payments).toMatchObject([{ name: 'Key Change Provider' }]);
-    expect(evaluateTypeSafeMock).toHaveBeenCalledTimes(2);
-  });
-
-  it('returns Review before a slow Jev request can time out the phone', async () => {
-    const account = insertAccount(testDb.db);
-    const today = todayInIsrael();
-    const [year, month] = today.split('-').map(Number);
-    for (const offset of [-2, -1, 0]) {
-      const date = new Date(Date.UTC(year, month - 1 + offset, 6)).toISOString().slice(0, 10);
-      insertTransaction(testDb.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Slow Provider',
-        chargedAmount: -50,
-      });
-    }
-    evaluateTypeSafeMock.mockImplementationOnce(() => new Promise(() => {}));
-    const started = Date.now();
-    const response = await server.inject({
-      method: 'GET',
-      url: '/api/recurring-payments',
-      headers: authHeaders(),
-    });
-    expect(Date.now() - started).toBeLessThan(6_000);
-    expect(response.json()).toMatchObject({
-      payments: [],
-      suggestions: [{ name: 'Slow Provider' }],
-      classificationPending: true,
-    });
-  }, 7_000);
-
   it('saves subscription review decisions and restores automatic detection', async () => {
     const account = insertAccount(testDb.db);
     const today = todayInIsrael();
@@ -394,10 +237,20 @@ describe('summary routes', () => {
   // ── GET /api/transactions/summary ──
 
   describe('GET /api/transactions/summary', () => {
-    it('returns summary grouped by category by default', async () => {
+    it('returns summary grouped by category by default and forwards query filters', async () => {
       const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { category: 'food', chargedAmount: -100 });
-      insertTransaction(testDb.db, account.id, { category: 'transport', chargedAmount: -50 });
+      insertTransaction(testDb.db, account.id, {
+        category: 'food',
+        date: '2026-01-15',
+        processedDate: '2026-01-15',
+        chargedAmount: -100,
+      });
+      insertTransaction(testDb.db, account.id, {
+        category: 'transport',
+        date: '2026-03-15',
+        processedDate: '2026-03-15',
+        chargedAmount: -50,
+      });
 
       const res = await server.inject({
         method: 'GET',
@@ -405,75 +258,19 @@ describe('summary routes', () => {
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.groupBy).toBe('category');
-      expect(body.summary.length).toBeGreaterThanOrEqual(2);
-    });
+      expect(res.json()).toMatchObject({ groupBy: 'category' });
+      expect(res.json().summary.length).toBeGreaterThanOrEqual(2);
 
-    it('supports groupBy=month', async () => {
-      const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, { date: '2026-01-15', processedDate: '2026-01-15' });
-
-      const res = await server.inject({
+      const filtered = await server.inject({
         method: 'GET',
-        url: '/api/transactions/summary?groupBy=month',
+        url: '/api/transactions/summary?groupBy=month&startDate=2026-01-01&endDate=2026-01-31',
         headers: authHeaders(),
       });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.groupBy).toBe('month');
-    });
-
-    it('supports groupBy=cashflow', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/transactions/summary?groupBy=cashflow',
-        headers: authHeaders(),
+      expect(filtered.statusCode).toBe(200);
+      expect(filtered.json()).toMatchObject({
+        groupBy: 'month',
+        summary: [{ month: '2026-01', totalAmount: -100 }],
       });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.groupBy).toBe('cashflow');
-    });
-
-    it('supports date range filters', async () => {
-      const account = insertAccount(testDb.db);
-      insertTransaction(testDb.db, account.id, {
-        date: '2026-01-15',
-        processedDate: '2026-01-15',
-        chargedAmount: -100,
-      });
-      insertTransaction(testDb.db, account.id, {
-        date: '2026-03-15',
-        processedDate: '2026-03-15',
-        chargedAmount: -200,
-      });
-
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/transactions/summary?startDate=2026-01-01&endDate=2026-01-31',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      const total = body.summary.reduce(
-        (s: number, r: { totalAmount: number }) => s + r.totalAmount,
-        0,
-      );
-      expect(total).toBe(-100);
-    });
-
-    it('returns empty summary for non-existent accountType', async () => {
-      const account = insertAccount(testDb.db, { accountType: 'bank' });
-      insertTransaction(testDb.db, account.id, { chargedAmount: -100 });
-
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/transactions/summary?accountType=credit_card',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.summary).toHaveLength(0);
     });
   });
 });

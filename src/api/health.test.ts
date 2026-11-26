@@ -70,14 +70,15 @@ describe('health & auth routes', () => {
   // ── Auth ──
 
   describe('authentication', () => {
-    it('returns 401 for authenticated routes without token', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/categories',
-      });
+    it.each([
+      ['missing header', '/api/categories', undefined],
+      ['invalid Bearer token', '/api/categories', { authorization: 'Bearer wrong-token' }],
+      ['missing Bearer prefix', '/api/categories', { authorization: 'test-token' }],
+      ['legacy URL query token', '/api/scrape/events?token=test-token', undefined],
+    ])('returns 401 for %s', async (_label, url, headers) => {
+      const res = await server.inject({ method: 'GET', url, headers });
       expect(res.statusCode).toBe(401);
-      const body = JSON.parse(res.body);
-      expect(body.error).toBe('Unauthorized');
+      expect(JSON.parse(res.body).error).toBe('Unauthorized');
     });
 
     it('accepts valid Bearer token', async () => {
@@ -89,40 +90,11 @@ describe('health & auth routes', () => {
       expect(res.statusCode).toBe(200);
     });
 
-    it('rejects invalid Bearer token', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/categories',
-        headers: { authorization: 'Bearer wrong-token' },
-      });
-      expect(res.statusCode).toBe(401);
-    });
-
-    it('rejects request without Bearer prefix', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/categories',
-        headers: { authorization: 'test-token' },
-      });
-      expect(res.statusCode).toBe(401);
+    it('sets browser security headers', async () => {
+      const response = await server.inject({ method: 'GET', url: '/api/health' });
+      expect(response.headers['cache-control']).toBe('no-store');
+      expect(response.headers['content-security-policy']).toContain("script-src 'self'");
+      expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
     });
   });
-});
-
-it('rejects legacy URL bearer tokens and sets browser security headers', async () => {
-  testDb = createTestDb();
-  const server = await createTestServer(testDb);
-  try {
-    const denied = await server.inject({
-      method: 'GET',
-      url: '/api/scrape/events?token=test-token',
-    });
-    expect(denied.statusCode).toBe(401);
-    const response = await server.inject({ method: 'GET', url: '/api/health' });
-    expect(response.headers['cache-control']).toBe('no-store');
-    expect(response.headers['content-security-policy']).toContain("script-src 'self'");
-    expect(response.headers['content-security-policy']).toContain("frame-ancestors 'none'");
-  } finally {
-    await server.close();
-  }
 });

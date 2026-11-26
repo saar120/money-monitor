@@ -21,11 +21,7 @@ export function getActiveSessions(): ActiveSession[] {
   return Array.from(activeSessions.values());
 }
 
-export function getActiveSession(sessionId: number): ActiveSession | undefined {
-  return activeSessions.get(sessionId);
-}
-
-export function createSession(
+function createSession(
   trigger: 'manual' | 'scheduled' | 'single',
   accountIds: number[],
 ): { session: ScrapeSession; abortController: AbortController } {
@@ -44,7 +40,7 @@ export function createSession(
   return { session, abortController };
 }
 
-export function registerActiveSession(
+function registerActiveSession(
   session: ScrapeSession,
   abortController: AbortController,
   promise: Promise<void>,
@@ -52,10 +48,7 @@ export function registerActiveSession(
   activeSessions.set(session.id, { session, abortController, promise, revision: 1 });
 }
 
-export function completeSession(
-  sessionId: number,
-  status: 'completed' | 'error' | 'cancelled',
-): void {
+function completeSession(sessionId: number, status: 'completed' | 'error' | 'cancelled'): void {
   const active = activeSessions.get(sessionId);
   if (active?.abortController.signal.aborted) status = 'cancelled';
   db.update(scrapeSessions)

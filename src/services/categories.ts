@@ -19,16 +19,6 @@ export function listCategories() {
   return db.select().from(categories).all();
 }
 
-export function isCategoryIgnored(categoryName: string | null): boolean {
-  if (!categoryName) return false;
-  const cat = db
-    .select({ ignoredFromStats: categories.ignoredFromStats })
-    .from(categories)
-    .where(eq(categories.name, categoryName))
-    .get();
-  return cat?.ignoredFromStats ?? false;
-}
-
 // ── Writes ──
 
 function validateMemberOwner(memberId: number) {

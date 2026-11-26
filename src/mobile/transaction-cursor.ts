@@ -78,12 +78,8 @@ export function canonicalTransactionFilterFingerprint(query: MobileTransactionQu
   return createHash('sha256').update(canonical, 'utf8').digest('hex');
 }
 
-export function createMobileTransactionCursorCodec(
-  secret: string,
-  options: { randomBytes?: (size: number) => Buffer } = {},
-) {
+export function createMobileTransactionCursorCodec(secret: string) {
   const key = derivedCursorKey(secret);
-  const makeRandomBytes = options.randomBytes ?? randomBytes;
 
   function encode(
     position: Readonly<MobileTransactionCursorPosition>,
@@ -101,8 +97,7 @@ export function createMobileTransactionCursorCodec(
       throw new MobileTransactionCursorError();
     }
 
-    const iv = makeRandomBytes(IV_BYTES);
-    if (iv.length !== IV_BYTES) throw new MobileTransactionCursorError();
+    const iv = randomBytes(IV_BYTES);
     const plaintext: CursorPlaintext = {
       version: 1,
       date: position.date,

@@ -1,8 +1,8 @@
 import type { MobileBootstrapServerIdentity } from './bootstrap-adapter.js';
 import { createMobileBootstrapAdapter } from './bootstrap-adapter.js';
+import { mobileFinancialDateFor } from './bootstrap-contract.js';
 import {
   createProductionMobileBootstrapPorts,
-  financialDateInIsrael,
   type ProductionMobileBootstrapPortOptions,
 } from './bootstrap-production-ports.js';
 import { MOBILE_PROTOCOL_VERSION } from './contract.js';
@@ -12,17 +12,12 @@ import {
   MOBILE_READ_CAPABILITY,
   MobileDeviceRegistry,
   type MobileDeviceCredential,
-  type MobileDeviceRegistryOptions,
 } from './device-registry.js';
 import type {
   MobilePairingPublicSessions,
   MobilePairingRouteDependencies,
 } from './pairing-routes.js';
-import {
-  MobilePairingSessionManager,
-  type PairingRequestInput,
-  type MobilePairingSessionManagerOptions,
-} from './pairing-session.js';
+import { MobilePairingSessionManager, type PairingRequestInput } from './pairing-session.js';
 import type { MobileBootstrapRouteDependencies } from './mobile-server.js';
 import { createProductionMobileTransactionPorts } from './transaction-production-ports.js';
 import type { MobileTransactionRouteDependencies } from './transaction-routes.js';
@@ -63,7 +58,7 @@ function projectRecurringPayment(
   };
 }
 
-export function projectMobileRecurringPaymentDetail(
+function projectMobileRecurringPaymentDetail(
   detail: RecurringPaymentDetail,
   publicId: MobilePublicIdProjector,
 ) {
@@ -78,7 +73,7 @@ export function projectMobileRecurringPaymentDetail(
   };
 }
 
-export function projectMobileRecurringPayments(
+function projectMobileRecurringPayments(
   result: RecurringPaymentsResult,
   publicId: MobilePublicIdProjector,
 ) {
@@ -104,12 +99,6 @@ export function projectMobileRecurringPayments(
 }
 
 type PairingManager = MobilePairingSessionManager<MobileDeviceCredential>;
-type PairingManagerOverrides = Partial<
-  Pick<
-    MobilePairingSessionManagerOptions<MobileDeviceCredential>,
-    'idFactory' | 'nonceFactory' | 'claimantSecretFactory' | 'pairingExpiryMs' | 'approvalTimeoutMs'
-  >
->;
 
 export interface ProductionMobileAccessOptions {
   db: ProductionMobileBootstrapPortOptions['db'];
@@ -125,9 +114,6 @@ export interface ProductionMobileAccessOptions {
   isMobileReadAvailable?: () => boolean;
   fallbackCurrencyCode?: string;
   clock?: () => Date;
-  /** Deterministic factories are accepted for tests; production uses CSPRNG defaults. */
-  deviceRegistryOptions?: Omit<MobileDeviceRegistryOptions, 'clock'>;
-  pairingManagerOptions?: PairingManagerOverrides;
 }
 
 export interface ProductionMobileAccess {
@@ -159,10 +145,7 @@ export function createProductionMobileAccess(
 ): ProductionMobileAccess {
   const serverId = stableServerId(options.serverId);
   const clock = options.clock ?? (() => new Date());
-  const deviceRegistry = new MobileDeviceRegistry(options.db, {
-    ...options.deviceRegistryOptions,
-    clock,
-  });
+  const deviceRegistry = new MobileDeviceRegistry(options.db, { clock });
 
   const ports = createProductionMobileBootstrapPorts({
     db: options.db,
@@ -190,7 +173,7 @@ export function createProductionMobileAccess(
       (async () => {
         const total = await options.readNetWorthIls({
           calculatedAt: clock().toISOString(),
-          financialDate: financialDateInIsrael(clock()),
+          financialDate: mobileFinancialDateFor(clock()),
         });
         return { total, assetsTotal: total, liabilitiesTotal: 0 };
       }),
@@ -203,7 +186,6 @@ export function createProductionMobileAccess(
     server: { ...options.server, id: serverId },
     fallbackCurrencyCode: options.fallbackCurrencyCode ?? 'ILS',
     clock,
-    financialDateFor: financialDateInIsrael,
   });
   function assertMobileReadAvailable(): void {
     if (options.isMobileReadAvailable && !options.isMobileReadAvailable()) {
@@ -345,7 +327,6 @@ export function createProductionMobileAccess(
         });
       },
       clock,
-      ...options.pairingManagerOptions,
     });
 
     pairingGeneration = nextGeneration;

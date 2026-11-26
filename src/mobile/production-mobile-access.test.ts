@@ -2,11 +2,7 @@ import { afterEach, describe, expect, it } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import * as schema from '../db/schema.js';
 import { MOBILE_PROTOCOL_VERSION } from './contract.js';
-import type {
-  MobileDeviceCredential,
-  MobileDeviceRegistryOptions,
-  PublicMobileDevice,
-} from './device-registry.js';
+import type { MobileDeviceCredential, PublicMobileDevice } from './device-registry.js';
 import { MOBILE_PAIRING_START_ROUTE } from './pairing-routes.js';
 import type { MobilePairingSessionManager } from './pairing-session.js';
 import {
@@ -15,14 +11,11 @@ import {
 } from './production-mobile-access.js';
 import { createMobileServer } from './mobile-server.js';
 import { createMobilePublicIdProjector } from './mobile-public-id.js';
-import { insertAccount, insertTransaction } from '../__tests__/helpers/fixtures.js';
 
 const NOW = new Date('2026-07-15T10:00:00.000Z');
 const SERVER_ID = '11111111-1111-4111-8111-aaaaaaaaaaaa';
 const SERVER_ID_INPUT = SERVER_ID.toUpperCase();
 const PUBLIC_ID_KEY = 'private-public-id-key-material-that-is-at-least-32-chars';
-const DEVICE_TOKEN = 'T'.repeat(43);
-const CLAIMANT_SECRET = 'C'.repeat(43);
 const PUBLIC_URL = 'https://money-monitor.tailnet.ts.net:8443/money-monitor';
 const REPLACEMENT_URL = 'https://replacement.tailnet.ts.net:8443/money-monitor';
 
@@ -62,19 +55,23 @@ function pairingInput(
   };
 }
 
+function requestPairing(
+  access: ProductionMobileAccess,
+  input: ReturnType<typeof pairingInput>['input'],
+) {
+  const requested = access.pairingDependencies.sessions.request(input);
+  expect(requested.status).toBe('pending_approval');
+  if (requested.status !== 'pending_approval') throw new Error('expected pending_approval');
+  return requested.claimantSecret;
+}
+
 describe('production mobile access composition', () => {
   const databases: TestDb[] = [];
   const servers: Array<ReturnType<typeof createMobileServer>> = [];
 
-  function createHarness(
-    deviceRegistryOptions: Omit<MobileDeviceRegistryOptions, 'clock'> = {
-      idFactory: () => 'device-01',
-      tokenFactory: () => DEVICE_TOKEN,
-    },
-  ): Harness {
+  function createHarness(): Harness {
     const database = createTestDb();
     databases.push(database);
-    let pairingSequence = 0;
     const access = createProductionMobileAccess({
       db: database.db,
       serverId: SERVER_ID_INPUT,
@@ -86,12 +83,6 @@ describe('production mobile access composition', () => {
       },
       readNetWorthIls: () => 123_456.78,
       clock: () => NOW,
-      deviceRegistryOptions,
-      pairingManagerOptions: {
-        idFactory: () => `pairing-${++pairingSequence}`,
-        nonceFactory: () => String.fromCharCode(64 + pairingSequence).repeat(43),
-        claimantSecretFactory: () => CLAIMANT_SECRET,
-      },
     });
     return { database, access };
   }
@@ -145,81 +136,6 @@ describe('production mobile access composition', () => {
     });
   });
 
-  it('persists a mobile subscription review decision for subsequent reads', async () => {
-    const { access, database } = createHarness();
-    const account = insertAccount(database.db);
-    for (const date of ['2026-04-20', '2026-05-20', '2026-06-20']) {
-      insertTransaction(database.db, account.id, {
-        date,
-        processedDate: date,
-        description: 'Holmes Place',
-        chargedAmount: -50,
-        category: 'fitness',
-      });
-    }
-    const issued = access.deviceRegistry.issue({ name: 'Personal iPhone' });
-    const server = createMobileServer({
-      recurringPayments: access.recurringPaymentsDependencies,
-      transactions: access.transactionDependencies,
-      clock: () => NOW,
-      logger: false,
-    });
-    servers.push(server);
-    const url = '/api/mobile/v1/recurring-payments';
-    const headers = { authorization: `Bearer ${issued.token}` };
-    const initial = await server.app.inject({ method: 'GET', url, headers });
-    expect(initial.statusCode).toBe(200);
-    expect(initial.json().data).toMatchObject({
-      payments: [],
-      suggestions: [{ name: 'Holmes Place' }],
-    });
-    const candidate = initial.json().data.suggestions[0];
-    expect(candidate.accountId).toMatch(/^account_[A-Za-z0-9_-]{22}$/);
-    expect(candidate.merchantKey).toMatch(/^[a-f0-9]{64}$/);
-    const detailQuery = new URLSearchParams({
-      accountId: candidate.accountId,
-      currencyCode: candidate.currencyCode,
-      merchantKey: candidate.merchantKey,
-    });
-    const detail = await server.app.inject({
-      method: 'GET',
-      url: `${url}/detail?${detailQuery}`,
-      headers,
-    });
-    expect(detail.statusCode).toBe(200);
-    const chargeId = detail.json().data.transactions[0].id;
-    expect(chargeId).toMatch(/^transaction_[A-Za-z0-9_-]{22}$/);
-    expect(
-      (
-        await server.app.inject({
-          method: 'GET',
-          url: `/api/mobile/v1/transactions/${chargeId}`,
-          headers,
-        })
-      ).statusCode,
-    ).toBe(200);
-    const saved = await server.app.inject({
-      method: 'PUT',
-      url: `${url}/decision`,
-      headers,
-      payload: {
-        accountId: candidate.accountId,
-        currencyCode: candidate.currencyCode,
-        merchantKey: candidate.merchantKey,
-        decision: 'include',
-        commandId: '11111111-1111-4111-8111-111111111112',
-        expectedVersion: candidate.resourceVersion ?? 0,
-      },
-    });
-    expect(saved.statusCode).toBe(200);
-    expect(saved.json().data.result).toMatchObject({
-      payments: [{ name: 'Holmes Place' }],
-      suggestions: [],
-    });
-    const reread = await server.app.inject({ method: 'GET', url, headers });
-    expect(reread.json().data.payments).toHaveLength(1);
-  });
-
   it('fails bootstrap, transaction list, and detail closed when the desktop source is unavailable', async () => {
     const database = createTestDb();
     databases.push(database);
@@ -266,41 +182,36 @@ describe('production mobile access composition', () => {
     const manager = access.createPairingManager(PUBLIC_URL);
     const { input } = pairingInput(manager);
 
-    expect(access.pairingDependencies.sessions.request(input).status).toBe('pending_approval');
-    expect(access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET)).toEqual({
+    const claimantSecret = requestPairing(access, input);
+    expect(access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret)).toEqual({
       status: 'approval_required',
     });
     expect(manager.approve(input.pairingId)).toEqual({ status: 'approved' });
 
-    const result = access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET);
+    const result = access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret);
     expect(result).toMatchObject({
       status: 'claimed',
       credential: {
-        token: DEVICE_TOKEN,
         device: {
-          id: 'device-01',
           capabilities: ['mobile.read'],
           protocolVersion: MOBILE_PROTOCOL_VERSION,
         },
       },
     });
-    expect(access.deviceRegistry.authenticate(DEVICE_TOKEN, 'mobile.read').status).toBe(
+    if (result.status !== 'claimed') throw new Error('expected claimed');
+    const issued = result.credential as MobileDeviceCredential;
+    expect(issued.token).toMatch(/^[A-Za-z0-9_-]{43}$/);
+    expect(access.deviceRegistry.authenticate(issued.token, 'mobile.read').status).toBe(
       'authenticated',
     );
 
     const stored = database.db.select().from(schema.mobileDevices).get();
-    expect(stored?.tokenDigest).not.toBe(DEVICE_TOKEN);
-    expect(JSON.stringify(stored)).not.toContain(DEVICE_TOKEN);
+    expect(stored?.tokenDigest).not.toBe(issued.token);
+    expect(JSON.stringify(stored)).not.toContain(issued.token);
   });
 
   it('re-pairs by atomically rotating one existing identity after explicit approval', () => {
-    const originalToken = 'O'.repeat(43);
-    const replacementToken = 'R'.repeat(43);
-    const tokens = [originalToken, replacementToken];
-    const { access } = createHarness({
-      idFactory: () => 'device-01',
-      tokenFactory: () => tokens.shift() ?? 'X'.repeat(43),
-    });
+    const { access } = createHarness();
     const original = access.deviceRegistry.issue({
       name: 'Personal iPhone',
       capabilities: ['mobile.read'],
@@ -310,43 +221,47 @@ describe('production mobile access composition', () => {
     const { qrPayload, input } = pairingInput(manager, 'Personal iPhone', original.device.id);
 
     expect(qrPayload).not.toHaveProperty('replacementDeviceId');
-    expect(access.pairingDependencies.sessions.request(input).status).toBe('pending_approval');
-    expect(access.deviceRegistry.authenticate(originalToken).status).toBe('authenticated');
+    expect(JSON.stringify(manager.inspectAll())).not.toContain(original.device.id);
+    const claimantSecret = requestPairing(access, input);
+    expect(access.deviceRegistry.authenticate(original.token).status).toBe('authenticated');
     expect(manager.approve(input.pairingId)).toEqual({ status: 'approved' });
 
-    const claimed = access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET);
+    const claimed = access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret);
     expect(claimed).toMatchObject({
       status: 'claimed',
       credential: {
-        token: replacementToken,
         device: { id: original.device.id, tokenVersion: 2 },
       },
     });
+    if (claimed.status !== 'claimed') throw new Error('expected claimed');
+    const replacement = claimed.credential as MobileDeviceCredential;
+    expect(replacement.token).not.toBe(original.token);
     expect(
-      access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET),
+      access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret),
     ).toMatchObject({
       status: 'claimed',
       isRetry: true,
       credential: {
-        token: replacementToken,
+        token: replacement.token,
         device: { id: original.device.id, tokenVersion: 2 },
       },
     });
-    expect(access.deviceRegistry.authenticate(originalToken).status).toBe('invalid');
-    expect(access.deviceRegistry.authenticate(replacementToken).status).toBe('authenticated');
+    expect(access.deviceRegistry.authenticate(original.token).status).toBe('invalid');
+    expect(access.deviceRegistry.authenticate(replacement.token).status).toBe('authenticated');
     expect(access.deviceRegistry.list()).toHaveLength(1);
+    expect(JSON.stringify(manager.inspectAll())).not.toContain(original.device.id);
   });
 
   it('fails a re-pair closed when its server-side target is missing, revoked, or expired', () => {
     const missing = createHarness();
     const missingManager = missing.access.createPairingManager(PUBLIC_URL);
     const missingPairing = pairingInput(missingManager, 'Personal iPhone', 'missing-device');
-    missing.access.pairingDependencies.sessions.request(missingPairing.input);
+    const missingClaimant = requestPairing(missing.access, missingPairing.input);
     missingManager.approve(missingPairing.input.pairingId);
     expect(
       missing.access.pairingDependencies.sessions.claim(
         missingPairing.input.pairingId,
-        CLAIMANT_SECRET,
+        missingClaimant,
       ),
     ).toEqual({ status: 'credential_issue_failed' });
     expect(missing.access.deviceRegistry.list()).toEqual([]);
@@ -355,13 +270,13 @@ describe('production mobile access composition', () => {
     const original = revoked.access.deviceRegistry.issue({ name: 'Personal iPhone' });
     const revokedManager = revoked.access.createPairingManager(PUBLIC_URL);
     const revokedPairing = pairingInput(revokedManager, 'Personal iPhone', original.device.id);
-    revoked.access.pairingDependencies.sessions.request(revokedPairing.input);
+    const revokedClaimant = requestPairing(revoked.access, revokedPairing.input);
     expect(revoked.access.deviceRegistry.revoke(original.device.id)).toBe(true);
     revokedManager.approve(revokedPairing.input.pairingId);
     expect(
       revoked.access.pairingDependencies.sessions.claim(
         revokedPairing.input.pairingId,
-        CLAIMANT_SECRET,
+        revokedClaimant,
       ),
     ).toEqual({ status: 'credential_issue_failed' });
     expect(revoked.access.deviceRegistry.list()).toEqual([
@@ -379,12 +294,12 @@ describe('production mobile access composition', () => {
       'Personal iPhone',
       expiredOriginal.device.id,
     );
-    expired.access.pairingDependencies.sessions.request(expiredPairing.input);
+    const expiredClaimant = requestPairing(expired.access, expiredPairing.input);
     expiredManager.approve(expiredPairing.input.pairingId);
     expect(
       expired.access.pairingDependencies.sessions.claim(
         expiredPairing.input.pairingId,
-        CLAIMANT_SECRET,
+        expiredClaimant,
       ),
     ).toEqual({ status: 'credential_issue_failed' });
     expect(expired.access.deviceRegistry.list()).toEqual([
@@ -406,15 +321,16 @@ describe('production mobile access composition', () => {
       protocolVersion: MOBILE_PROTOCOL_VERSION,
       deviceName: 'Personal iPhone',
     };
+    const claimantSecret = 'C'.repeat(43);
 
     expect(access.pairingDependencies.sessions.request(missingInput)).toEqual({
       status: 'pairing_not_found',
     });
     expect(
-      access.pairingDependencies.sessions.poll(missingInput.pairingId, CLAIMANT_SECRET),
+      access.pairingDependencies.sessions.poll(missingInput.pairingId, claimantSecret),
     ).toEqual({ status: 'pairing_not_found' });
     expect(
-      access.pairingDependencies.sessions.claim(missingInput.pairingId, CLAIMANT_SECRET),
+      access.pairingDependencies.sessions.claim(missingInput.pairingId, claimantSecret),
     ).toEqual({
       status: 'pairing_not_found',
     });
@@ -435,18 +351,18 @@ describe('production mobile access composition', () => {
     const { access } = createHarness();
     const manager = access.createPairingManager(PUBLIC_URL);
     const { input } = pairingInput(manager);
-    access.pairingDependencies.sessions.request(input);
+    const claimantSecret = requestPairing(access, input);
 
     access.clearPairingManager();
 
-    expect(access.pairingDependencies.sessions.poll(input.pairingId, CLAIMANT_SECRET)).toEqual({
+    expect(access.pairingDependencies.sessions.poll(input.pairingId, claimantSecret)).toEqual({
       status: 'pairing_not_found',
     });
-    expect(access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET)).toEqual({
+    expect(access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret)).toEqual({
       status: 'pairing_not_found',
     });
     expect(manager.approve(input.pairingId)).toEqual({ status: 'approved' });
-    expect(manager.claim(input.pairingId, CLAIMANT_SECRET)).toEqual({
+    expect(manager.claim(input.pairingId, claimantSecret)).toEqual({
       status: 'credential_issue_failed',
     });
     expect(access.deviceRegistry.list()).toEqual([]);
@@ -456,26 +372,24 @@ describe('production mobile access composition', () => {
     const { access } = createHarness();
     const oldManager = access.createPairingManager(PUBLIC_URL);
     const oldPairing = pairingInput(oldManager, 'Old iPhone');
-    access.pairingDependencies.sessions.request(oldPairing.input);
+    const oldClaimant = requestPairing(access, oldPairing.input);
     oldManager.approve(oldPairing.input.pairingId);
 
     const newManager = access.createPairingManager(REPLACEMENT_URL);
 
     expect(
-      access.pairingDependencies.sessions.poll(oldPairing.input.pairingId, CLAIMANT_SECRET),
+      access.pairingDependencies.sessions.poll(oldPairing.input.pairingId, oldClaimant),
     ).toEqual({ status: 'pairing_not_found' });
-    expect(oldManager.claim(oldPairing.input.pairingId, CLAIMANT_SECRET)).toEqual({
+    expect(oldManager.claim(oldPairing.input.pairingId, oldClaimant)).toEqual({
       status: 'credential_issue_failed',
     });
     expect(access.deviceRegistry.list()).toEqual([]);
 
     const newPairing = pairingInput(newManager, 'New iPhone');
-    expect(access.pairingDependencies.sessions.request(newPairing.input).status).toBe(
-      'pending_approval',
-    );
+    const newClaimant = requestPairing(access, newPairing.input);
     expect(newManager.approve(newPairing.input.pairingId)).toEqual({ status: 'approved' });
     expect(
-      access.pairingDependencies.sessions.claim(newPairing.input.pairingId, CLAIMANT_SECRET).status,
+      access.pairingDependencies.sessions.claim(newPairing.input.pairingId, newClaimant).status,
     ).toBe('claimed');
     expect(access.deviceRegistry.list()).toHaveLength(1);
   });
@@ -484,15 +398,16 @@ describe('production mobile access composition', () => {
     const { access } = createHarness();
     const manager = access.createPairingManager(PUBLIC_URL);
     const { input } = pairingInput(manager);
-    access.pairingDependencies.sessions.request(input);
+    const claimantSecret = requestPairing(access, input);
     manager.approve(input.pairingId);
-    expect(access.pairingDependencies.sessions.claim(input.pairingId, CLAIMANT_SECRET).status).toBe(
-      'claimed',
-    );
+    const claimed = access.pairingDependencies.sessions.claim(input.pairingId, claimantSecret);
+    expect(claimed.status).toBe('claimed');
+    if (claimed.status !== 'claimed') throw new Error('expected claimed');
+    const issued = claimed.credential as MobileDeviceCredential;
 
     access.clearPairingManager();
 
-    expect(access.deviceRegistry.authenticate(DEVICE_TOKEN).status).toBe('authenticated');
+    expect(access.deviceRegistry.authenticate(issued.token).status).toBe('authenticated');
   });
 
   it('validates stable identity and treats a failed URL replacement transactionally', () => {

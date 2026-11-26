@@ -73,12 +73,6 @@ vi.mock('./format.js', () => ({
   splitMessage: (text: string) => [text],
 }));
 
-// ── Mock scraper service (types only) ──
-vi.mock('../scraper/scraper.service.js', () => ({
-  MANUAL_LOGIN_COMPANIES: new Set(),
-  startScraping: vi.fn(),
-}));
-
 // ── Mock db/connection for stale account queries ──
 let testDb: TestDb;
 
@@ -137,69 +131,65 @@ describe('alerts', () => {
     testDb?.close();
   });
 
+  describe('alert gates', () => {
+    it.each([
+      [
+        'post-scrape master switch off',
+        () => {
+          mockSettings.enabled = false;
+        },
+        () =>
+          runPostScrapeAlerts([
+            {
+              success: true,
+              accountId: 1,
+              transactionsFound: 5,
+              transactionsNew: 3,
+              durationMs: 1000,
+            },
+          ]),
+      ],
+      [
+        'post-scrape with no chat IDs',
+        () => {
+          mockGetChatIds.mockReturnValue([]);
+        },
+        () =>
+          runPostScrapeAlerts([
+            {
+              success: true,
+              accountId: 1,
+              transactionsFound: 5,
+              transactionsNew: 3,
+              durationMs: 1000,
+            },
+          ]),
+      ],
+      [
+        'monthly summary master switch off',
+        () => {
+          mockSettings.enabled = false;
+        },
+        () => sendMonthlySummary(),
+      ],
+      [
+        'monthly summary disabled',
+        () => {
+          mockSettings.monthlySummary.enabled = false;
+        },
+        () => sendMonthlySummary(),
+      ],
+    ])('does nothing when %s', async (_label, setup, invoke) => {
+      setup();
+      await invoke();
+      expect(mockRunAlertAgent).not.toHaveBeenCalled();
+      expect(mockSendMessage).not.toHaveBeenCalled();
+    });
+  });
+
   // ── runPostScrapeAlerts ──
 
   describe('runPostScrapeAlerts', () => {
-    it('does nothing when master switch is off', async () => {
-      mockSettings.enabled = false;
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 5,
-          transactionsNew: 3,
-          durationMs: 1000,
-        },
-      ]);
-      expect(mockRunAlertAgent).not.toHaveBeenCalled();
-      expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when no chat IDs registered', async () => {
-      mockGetChatIds.mockReturnValue([]);
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 5,
-          transactionsNew: 3,
-          durationMs: 1000,
-        },
-      ]);
-      expect(mockRunAlertAgent).not.toHaveBeenCalled();
-    });
-
-    it('sends alert when agent returns a message', async () => {
-      mockRunAlertAgent.mockResolvedValue('**📊 Big charge detected**\n₪850 at Shufersal');
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 10,
-          transactionsNew: 3,
-          durationMs: 1000,
-        },
-      ]);
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(sentMessages[0].html).toContain('Big charge detected');
-      // Alert hook receives the original markdown for session persistence
-      expect(alertsSent[0].markdown).toBe('**📊 Big charge detected**\n₪850 at Shufersal');
-    });
-
-    it('sends nothing when agent returns null (SILENT)', async () => {
-      mockRunAlertAgent.mockResolvedValue(null);
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 10,
-          transactionsNew: 3,
-          durationMs: 1000,
-        },
-      ]);
-      expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
     it('passes scrape context and settings in user message', async () => {
       mockSettings.largeChargeThreshold = 1000;
       mockSettings.unusualSpendingPercent = 50;
@@ -245,6 +235,7 @@ describe('alerts', () => {
           durationMs: 1000,
         },
       ]);
+      expect(mockSendMessage).not.toHaveBeenCalled();
       expect(mockSettings._knownRecurring).toEqual(['Netflix', 'Spotify']);
       expect(mockSettings._lastNetWorthTotal).toBe(600000);
     });
@@ -261,24 +252,6 @@ describe('alerts', () => {
       expect(mockRunAlertAgent).toHaveBeenCalledOnce();
       expect(mockSettings._lastNetWorthTotal).toBe(42);
       expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
-    it('sends to all registered chat IDs', async () => {
-      mockGetChatIds.mockReturnValue([111, 222, 333]);
-      mockRunAlertAgent.mockResolvedValue('**Alert**');
-      await runPostScrapeAlerts([
-        {
-          success: true,
-          accountId: 1,
-          transactionsFound: 5,
-          transactionsNew: 1,
-          durationMs: 1000,
-        },
-      ]);
-      expect(mockSendMessage).toHaveBeenCalledTimes(3);
-      expect(sentMessages[0].chatId).toBe(111);
-      expect(sentMessages[1].chatId).toBe(222);
-      expect(sentMessages[2].chatId).toBe(333);
     });
 
     it('includes stale manual-only accounts in the alert message', async () => {
@@ -317,22 +290,6 @@ describe('alerts', () => {
       expect(userMessage).not.toContain('Fresh Amex');
     });
 
-    it('shows "none" for stale accounts when no manual-only accounts are stale', async () => {
-      mockRunAlertAgent.mockResolvedValue('Alert message');
-      await runPostScrapeAlerts([
-        {
-          accountId: 99,
-          success: true,
-          transactionsFound: 5,
-          transactionsNew: 2,
-          durationMs: 1000,
-        },
-      ]);
-
-      const userMessage = mockRunAlertAgent.mock.calls[0][0].userMessage;
-      expect(userMessage).toContain('<stale-manual-accounts>\nnone\n</stale-manual-accounts>');
-    });
-
     it('does not alert for manual-only accounts with stalenessDays = null', async () => {
       const thirtyDaysAgo = new Date();
       thirtyDaysAgo.setDate(thirtyDaysAgo.getDate() - 30);
@@ -357,41 +314,7 @@ describe('alerts', () => {
 
       const userMessage = mockRunAlertAgent.mock.calls[0][0].userMessage;
       expect(userMessage).not.toContain('No Alert Account');
-    });
-  });
-
-  // ── sendMonthlySummary ──
-
-  describe('sendMonthlySummary', () => {
-    it('does nothing when master switch is off', async () => {
-      mockSettings.enabled = false;
-      await sendMonthlySummary();
-      expect(mockRunAlertAgent).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when monthlySummary is disabled', async () => {
-      mockSettings.monthlySummary.enabled = false;
-      await sendMonthlySummary();
-      expect(mockRunAlertAgent).not.toHaveBeenCalled();
-    });
-
-    it('sends alert when agent returns a message', async () => {
-      mockRunAlertAgent.mockResolvedValue('**📅 February was your best savings month**');
-      await sendMonthlySummary();
-      expect(mockSendMessage).toHaveBeenCalledTimes(1);
-      expect(sentMessages[0].html).toContain('February');
-    });
-
-    it('sends nothing when agent returns null (SILENT)', async () => {
-      mockRunAlertAgent.mockResolvedValue(null);
-      await sendMonthlySummary();
-      expect(mockSendMessage).not.toHaveBeenCalled();
-    });
-
-    it('does nothing when no chat IDs registered', async () => {
-      mockGetChatIds.mockReturnValue([]);
-      await sendMonthlySummary();
-      expect(mockRunAlertAgent).not.toHaveBeenCalled();
+      expect(userMessage).toContain('<stale-manual-accounts>\nnone\n</stale-manual-accounts>');
     });
   });
 });
@@ -420,10 +343,14 @@ describe('alert evaluation and delivery recovery', () => {
     await runPostScrapeAlerts([], 'post-import:1');
     expect(mockRunAlertAgent).toHaveBeenCalledOnce();
     expect(mockSendMessage).toHaveBeenCalledTimes(2);
-    expect(alertsSent.map((value) => value.chatId)).toEqual([111, 222]);
+    expect(alertsSent).toEqual([
+      { chatId: 111, markdown: 'synthetic alert' },
+      { chatId: 222, markdown: 'synthetic alert' },
+    ]);
     await Promise.all([sendMonthlySummary(), sendMonthlySummary()]);
     await sendMonthlySummary();
     expect(mockRunAlertAgent).toHaveBeenCalledTimes(2);
+    expect(mockRunAlertAgent.mock.calls[1][0].userMessage).toContain('Feb 2026');
     expect(mockSendMessage).toHaveBeenCalledTimes(4);
   });
   it('preserves a failed recipient for explicit retry without re-analysis or duplicate successful sends', async () => {

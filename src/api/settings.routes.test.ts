@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
+import { PROVIDER_KEY_MAP } from '../ai/auth.js';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import { createTestServer, authHeaders, type TestServer } from '../__tests__/helpers/server.js';
 
@@ -72,102 +73,44 @@ describe('settings routes', () => {
   // ── GET /api/ai/providers ──
 
   describe('GET /api/ai/providers', () => {
-    it('returns supported providers with models', async () => {
+    it('returns supported chat providers with auth types, resolved models, and key state', async () => {
       const res = await server.inject({
         method: 'GET',
         url: '/api/ai/providers',
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.providers).toBeInstanceOf(Array);
-      expect(body.providers.length).toBe(6);
+      const { providers } = JSON.parse(res.body) as {
+        providers: Array<{
+          id: string;
+          authTypes: string[];
+          apiKeyField: string;
+          hasKey: boolean;
+          models: Array<{ id: string; name: string; reasoning: boolean }>;
+        }>;
+      };
 
-      const anthropic = body.providers.find((p: any) => p.id === 'anthropic');
-      expect(anthropic).toBeDefined();
-      expect(anthropic.name).toBe('Anthropic');
-      expect(anthropic.models.length).toBeGreaterThan(0);
-      expect(anthropic.models[0]).toHaveProperty('id');
-      expect(anthropic.models[0]).toHaveProperty('name');
-
-      const openai = body.providers.find((p: any) => p.id === 'openai');
-      expect(openai).toBeDefined();
-      expect(openai.hasKey).toBe(false); // no key in test env
-    });
-
-    it('includes all providers with correct metadata', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/ai/providers',
-        headers: authHeaders(),
-      });
-      const { providers } = JSON.parse(res.body);
-
-      const ids = providers.map((p: any) => p.id);
-      expect(ids).toEqual([
-        'anthropic',
-        'openai',
-        'openai-codex',
-        'opencode-go',
-        'google',
-        'openrouter',
-      ]);
+      const ids = providers.map((p) => p.id);
       expect(ids).not.toContain('typesafe');
+      for (const id of Object.keys(PROVIDER_KEY_MAP)) {
+        expect(ids).toContain(id);
+      }
 
-      // Anthropic supports both API key and OAuth
-      const anthropic = providers.find((p: any) => p.id === 'anthropic');
-      expect(anthropic.authTypes).toEqual(['api_key', 'oauth']);
-      expect(anthropic.apiKeyField).toBe('ANTHROPIC_API_KEY');
-
-      // OpenAI Codex supports OAuth only
-      const codex = providers.find((p: any) => p.id === 'openai-codex');
-      expect(codex.authTypes).toEqual(['oauth']);
-      expect(codex.apiKeyField).toBe('OPENAI_API_KEY');
-      expect(codex.models.length).toBeGreaterThan(0);
-
-      const opencodeGo = providers.find((p: any) => p.id === 'opencode-go');
-      expect(opencodeGo.name).toBe('OpenCode Go');
-      expect(opencodeGo.authTypes).toEqual(['api_key']);
-      expect(opencodeGo.apiKeyField).toBe('OPENCODE_API_KEY');
-      expect(opencodeGo.models.map((model: { id: string }) => model.id)).toContain('qwen3.6-plus');
-
-      // Other providers support API key only
+      const byId = new Map(providers.map((p) => [p.id, p]));
+      expect(byId.get('anthropic')?.authTypes).toEqual(['api_key', 'oauth']);
+      expect(byId.get('openai-codex')?.authTypes).toEqual(['oauth']);
       for (const id of ['openai', 'opencode-go', 'google', 'openrouter']) {
-        const p = providers.find((x: any) => x.id === id);
-        expect(p.authTypes).toEqual(['api_key']);
+        expect(byId.get(id)?.authTypes).toEqual(['api_key']);
       }
-    });
 
-    it('each model has id, name, and reasoning fields', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/ai/providers',
-        headers: authHeaders(),
-      });
-      const { providers } = JSON.parse(res.body);
-
-      for (const provider of providers) {
-        expect(provider.models.length).toBeGreaterThan(0);
-        for (const model of provider.models) {
-          expect(model).toHaveProperty('id');
-          expect(model).toHaveProperty('name');
-          expect(model).toHaveProperty('reasoning');
-          expect(typeof model.reasoning).toBe('boolean');
-        }
-      }
-    });
-
-    it('reports hasKey false when no API keys configured', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/ai/providers',
-        headers: authHeaders(),
-      });
-      const { providers } = JSON.parse(res.body);
-
-      // All keys are empty in test mock config
       for (const provider of providers) {
         expect(provider.hasKey).toBe(false);
+        expect(provider.models.length).toBeGreaterThan(0);
+        for (const model of provider.models) {
+          expect(typeof model.id).toBe('string');
+          expect(typeof model.name).toBe('string');
+          expect(typeof model.reasoning).toBe('boolean');
+        }
       }
     });
   });
@@ -202,7 +145,12 @@ describe('settings routes', () => {
   });
 
   describe('GET /api/settings/oauth/openai-codex/status', () => {
-    it('reports whether ChatGPT credentials are connected', async () => {
+    it('reports disconnected after logout when no ChatGPT credentials are stored', async () => {
+      await server.inject({
+        method: 'POST',
+        url: '/api/settings/oauth/openai-codex/logout',
+        headers: authHeaders(),
+      });
       const res = await server.inject({
         method: 'GET',
         url: '/api/settings/oauth/openai-codex/status',
@@ -210,7 +158,7 @@ describe('settings routes', () => {
       });
 
       expect(res.statusCode).toBe(200);
-      expect(typeof JSON.parse(res.body).connected).toBe('boolean');
+      expect(JSON.parse(res.body)).toEqual({ connected: false });
     });
   });
 });

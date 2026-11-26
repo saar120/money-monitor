@@ -130,23 +130,6 @@ describe('MobileAccessRuntime', () => {
     ]);
   });
 
-  it('starts the loopback server before reconciling its actual port', async () => {
-    const events: string[] = [];
-    const context = runtime({ events });
-
-    await expect(context.subject.start(true)).resolves.toEqual(RUNNING_STATE);
-    expect(events).toEqual(['server:start:127.0.0.1', 'serve:enable:43123']);
-    expect(context.serveCoordinator.requests).toEqual([{ enabled: true, mobilePort: 43123 }]);
-  });
-
-  it('returns a coordinator failure without closing the mobile server', async () => {
-    const context = runtime({ states: [NOT_INSTALLED_STATE] });
-
-    await expect(context.subject.start(true)).resolves.toEqual(NOT_INSTALLED_STATE);
-    expect(context.server.closeCalls).toBe(0);
-    expect(context.serverFactory.startCalls).toBe(1);
-  });
-
   it('reconciles on resume after the mobile server starts, including transport recovery', async () => {
     const neverStarted = runtime();
     await expect(neverStarted.subject.resume()).resolves.toEqual({
@@ -156,8 +139,11 @@ describe('MobileAccessRuntime', () => {
     expect(neverStarted.serveCoordinator.requests).toHaveLength(0);
 
     const failed = runtime({ states: [NOT_INSTALLED_STATE, RUNNING_STATE] });
-    await failed.subject.start(true);
+    await expect(failed.subject.start(true)).resolves.toEqual(NOT_INSTALLED_STATE);
+    expect(failed.server.closeCalls).toBe(0);
+    expect(failed.serverFactory.startCalls).toBe(1);
     await expect(failed.subject.resume()).resolves.toEqual(RUNNING_STATE);
+    expect(failed.serverFactory.startCalls).toBe(1);
     expect(failed.serveCoordinator.requests).toEqual([
       { enabled: true, mobilePort: 43123 },
       { enabled: true, mobilePort: 43123 },
@@ -193,7 +179,7 @@ describe('MobileAccessRuntime', () => {
     };
     const events: string[] = [];
     const context = runtime({ states: [RUNNING_STATE, disabledState], events });
-    await context.subject.start(true);
+    await expect(context.subject.start(true)).resolves.toEqual(RUNNING_STATE);
 
     const [first, second] = await Promise.all([
       context.subject.disable(),
@@ -243,8 +229,32 @@ describe('MobileAccessRuntime', () => {
     const context = runtime({ states: [RUNNING_STATE, RUNNING_STATE, disabledState] });
     await context.subject.start(true);
 
-    await Promise.all([context.subject.resume(), context.subject.disable()]);
+    let markResumeStarted!: () => void;
+    const resumeStarted = new Promise<void>((resolve) => {
+      markResumeStarted = resolve;
+    });
+    let releaseResume!: () => void;
+    const resumeGate = new Promise<void>((resolve) => {
+      releaseResume = resolve;
+    });
+    context.serveCoordinator.onReconcile = () => {
+      context.serveCoordinator.onReconcile = null;
+      markResumeStarted();
+      return resumeGate;
+    };
 
+    const resumePromise = context.subject.resume();
+    await resumeStarted;
+    const disablePromise = context.subject.disable();
+    await Promise.resolve();
+    await Promise.resolve();
+    expect(context.serveCoordinator.requests).toHaveLength(2);
+
+    releaseResume();
+    await expect(Promise.all([resumePromise, disablePromise])).resolves.toEqual([
+      RUNNING_STATE,
+      disabledState,
+    ]);
     expect(context.serveCoordinator.requests).toEqual([
       { enabled: true, mobilePort: 43123 },
       { enabled: true, mobilePort: 43123 },

@@ -205,17 +205,18 @@ describe('Telegram polling and reply ownership', () => {
     ]);
   });
   it('stops typing while an action is in flight without scheduling a late timer', async () => {
+    await bot.startTelegramBot();
     vi.useFakeTimers();
-    let finish!: () => void;
-    const action = vi.fn(
+    let finishTyping!: () => void;
+    const action = vi.mocked(instance().api.sendChatAction);
+    action.mockImplementationOnce(
       () =>
-        new Promise<void>((r) => {
-          finish = r;
+        new Promise<void>((resolve) => {
+          finishTyping = resolve;
         }),
     );
-    const stopTyping = bot.startTypingLoop(123, { sendChatAction: action } as any, () => true);
-    stopTyping();
-    finish();
+    await handler('message:text')(context());
+    finishTyping();
     await vi.advanceTimersByTimeAsync(20_000);
     expect(action).toHaveBeenCalledOnce();
   });

@@ -20,7 +20,6 @@ vi.mock('israeli-bank-scrapers-core', () => ({
 }));
 vi.mock('./credential-store.js', () => ({ getCredentials: () => ({}) }));
 vi.mock('./chromium.js', () => ({ ensureChromium: async () => '/chromium' }));
-vi.mock('../ai/agent.js', () => ({ batchCategorize: vi.fn().mockResolvedValue(undefined) }));
 vi.mock('../services/ownership.js', () => ({ applyOwnership: vi.fn() }));
 
 const { scrapeAccount } = await import('./scraper.service.js');

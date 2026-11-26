@@ -1,5 +1,5 @@
 import type { FastifyReply } from 'fastify';
-import { createHash, randomUUID } from 'node:crypto';
+import { createHash } from 'node:crypto';
 import { advisorChartSchema, type AdvisorChart } from './advisor-chart.js';
 import type { ChatEvent, ChatMessage } from './agent.js';
 import { getSession, listSessions, updateSession, type Session } from './sessions.js';
@@ -252,7 +252,6 @@ export const advisorReplies = createAdvisorReplies({
   update: updateSession,
   list: listSessions,
 });
-export const newReplyId = randomUUID;
 
 export async function streamAdvisorOperation(
   reply: FastifyReply,

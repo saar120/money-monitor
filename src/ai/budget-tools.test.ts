@@ -183,25 +183,6 @@ describe('manageBudget', () => {
     expect(result.color).toBe('#FF5733');
   });
 
-  it('returns error when create is missing required fields', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'create', name: 'Food' }));
-    expect(result.error).toContain('amount');
-  });
-
-  it('returns error when create has empty category_names', async () => {
-    const result = JSON.parse(
-      await manageBudget({
-        action: 'create',
-        name: 'Food',
-        amount: 500,
-        category_names: [],
-      }),
-    );
-    expect(result.error).toContain('category');
-  });
-
-  // ── update ──
-
   it('updates a budget', async () => {
     const budget = insertBudget({ name: 'Old Name' });
 
@@ -217,16 +198,6 @@ describe('manageBudget', () => {
     expect(result.amount).toBe(2000);
   });
 
-  it('returns error when update is missing budget_id', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'update', name: 'New Name' }));
-    expect(result.error).toContain('budget_id');
-  });
-
-  it('returns error when updating non-existent budget', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'update', budget_id: 999, name: 'X' }));
-    expect(result.error).toContain('not found');
-  });
-
   // ── delete ──
 
   it('deletes a budget', async () => {
@@ -234,22 +205,27 @@ describe('manageBudget', () => {
 
     const result = JSON.parse(await manageBudget({ action: 'delete', budget_id: budget.id }));
     expect(result.success).toBe(true);
+    expect(JSON.parse(await getBudgetProgress({ budget_id: budget.id }))).toEqual({
+      error: 'Budget not found',
+    });
   });
 
-  it('returns error when delete is missing budget_id', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'delete' }));
-    expect(result.error).toContain('budget_id');
-  });
+  // ── validation errors ──
 
-  it('returns error when deleting non-existent budget', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'delete', budget_id: 999 }));
-    expect(result.error).toContain('not found');
-  });
-
-  // ── unknown action ──
-
-  it('returns error for unknown action', async () => {
-    const result = JSON.parse(await manageBudget({ action: 'archive' } as any));
-    expect(result.error).toContain('Unknown action');
+  it.each([
+    ['create missing amount', { action: 'create', name: 'Food' }, 'amount'],
+    [
+      'create empty categories',
+      { action: 'create', name: 'Food', amount: 500, category_names: [] },
+      'category',
+    ],
+    ['update missing budget_id', { action: 'update', name: 'New Name' }, 'budget_id'],
+    ['update non-existent budget', { action: 'update', budget_id: 999, name: 'X' }, 'not found'],
+    ['delete missing budget_id', { action: 'delete' }, 'budget_id'],
+    ['delete non-existent budget', { action: 'delete', budget_id: 999 }, 'not found'],
+    ['unknown action', { action: 'archive' }, 'Unknown action'],
+  ])('returns error for %s', async (_label, input, expectedError) => {
+    const result = JSON.parse(await manageBudget(input as any));
+    expect(result.error).toContain(expectedError);
   });
 });

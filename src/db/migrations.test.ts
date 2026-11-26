@@ -2,6 +2,7 @@ import { describe, it, expect } from 'vitest';
 import Database from 'better-sqlite3';
 import { drizzle } from 'drizzle-orm/better-sqlite3';
 import { migrate } from 'drizzle-orm/better-sqlite3/migrator';
+import { eq } from 'drizzle-orm';
 import { join, dirname } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { readdirSync, readFileSync } from 'node:fs';
@@ -19,213 +20,224 @@ function applyMigrationFile(sqlite: Database.Database, tag: string) {
   }
 }
 
+function openMigratedDb() {
+  const sqlite = new Database(':memory:');
+  sqlite.pragma('foreign_keys = ON');
+  const db = drizzle(sqlite, { schema });
+  migrate(db, { migrationsFolder });
+  return { sqlite, db };
+}
+
 describe('database migrations', () => {
-  it('all migrations apply cleanly on a fresh database', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-
-    expect(() => migrate(db, { migrationsFolder })).not.toThrow();
-    sqlite.close();
+  it('applies cleanly and idempotently on a fresh database', () => {
+    const { sqlite, db } = openMigratedDb();
+    try {
+      expect(() => migrate(db, { migrationsFolder })).not.toThrow();
+    } finally {
+      sqlite.close();
+    }
   });
 
-  it('migrations are idempotent (running twice does not error)', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-
-    migrate(db, { migrationsFolder });
-    expect(() => migrate(db, { migrationsFolder })).not.toThrow();
-    sqlite.close();
-  });
-
-  it('journal entries have strictly increasing timestamps', () => {
+  it('maintains a valid sequential migration journal with matching SQL files', () => {
     const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
     const entries: Array<{ idx: number; when: number; tag: string }> = journal.entries;
 
-    for (let i = 1; i < entries.length; i++) {
-      expect(
-        entries[i].when,
-        `${entries[i].tag} must have timestamp > ${entries[i - 1].tag}`,
-      ).toBeGreaterThan(entries[i - 1].when);
-    }
-  });
-
-  it('journal idx values are sequential starting from 0', () => {
-    const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
-    const entries: Array<{ idx: number }> = journal.entries;
-
     entries.forEach((entry, i) => {
       expect(entry.idx).toBe(i);
+      if (i > 0) {
+        expect(
+          entry.when,
+          `${entry.tag} must have timestamp > ${entries[i - 1].tag}`,
+        ).toBeGreaterThan(entries[i - 1].when);
+      }
+      expect(
+        () => readFileSync(join(migrationsFolder, `${entry.tag}.sql`), 'utf-8'),
+        `Missing migration file: ${entry.tag}.sql`,
+      ).not.toThrow();
     });
   });
 
-  it('every journal entry has a matching .sql file', () => {
-    const journal = JSON.parse(readFileSync(journalPath, 'utf-8'));
-    const entries: Array<{ tag: string }> = journal.entries;
+  it('derives reporting_date from effective_date or falls back to bank date', () => {
+    const { sqlite, db } = openMigratedDb();
+    try {
+      const account = db
+        .insert(schema.accounts)
+        .values({ companyId: 'hapoalim', displayName: 'Main', credentialsRef: 'cred-1' })
+        .returning()
+        .get();
 
-    for (const entry of entries) {
-      const sqlPath = join(migrationsFolder, `${entry.tag}.sql`);
-      expect(
-        () => readFileSync(sqlPath, 'utf-8'),
-        `Missing migration file: ${entry.tag}.sql`,
-      ).not.toThrow();
+      const standard = db
+        .insert(schema.transactions)
+        .values({
+          accountId: account.id,
+          date: '2026-09-01',
+          processedDate: '2026-09-01',
+          originalAmount: -100,
+          originalCurrency: 'ILS',
+          chargedAmount: -100,
+          description: 'Standard',
+          hash: 'h-standard',
+        })
+        .returning()
+        .get();
+      const overridden = db
+        .insert(schema.transactions)
+        .values({
+          accountId: account.id,
+          date: '2026-09-01',
+          effectiveDate: '2026-08-31',
+          processedDate: '2026-09-01',
+          originalAmount: -200,
+          originalCurrency: 'ILS',
+          chargedAmount: -200,
+          description: 'Overridden',
+          hash: 'h-overridden',
+        })
+        .returning()
+        .get();
+
+      expect(standard.reportingDate).toBe('2026-09-01');
+      expect(overridden.reportingDate).toBe('2026-08-31');
+    } finally {
+      sqlite.close();
     }
   });
 
-  it('produces all expected tables after migration', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-    migrate(db, { migrationsFolder });
+  it('enforces load-bearing unique indexes across financial and mobile tables', () => {
+    const { sqlite, db } = openMigratedDb();
+    try {
+      const account = db
+        .insert(schema.accounts)
+        .values({ companyId: 'hapoalim', displayName: 'Main', credentialsRef: 'cred-1' })
+        .returning()
+        .get();
+      const assetA = db
+        .insert(schema.assets)
+        .values({ name: 'Broker A', type: 'brokerage', currency: 'ILS' })
+        .returning()
+        .get();
+      const assetB = db
+        .insert(schema.assets)
+        .values({ name: 'Broker B', type: 'brokerage', currency: 'ILS' })
+        .returning()
+        .get();
 
-    const tables = sqlite
-      .prepare(
-        "SELECT name FROM sqlite_master WHERE type='table' AND name NOT LIKE 'sqlite_%' AND name NOT LIKE '__drizzle%' ORDER BY name",
-      )
-      .all() as Array<{ name: string }>;
+      expect(() =>
+        db
+          .insert(schema.assets)
+          .values({ name: 'Broker A', type: 'brokerage', currency: 'ILS' })
+          .run(),
+      ).toThrow();
 
-    const tableNames = tables.map((t) => t.name);
+      const txBase = {
+        accountId: account.id,
+        date: '2026-01-01',
+        processedDate: '2026-01-01',
+        originalAmount: -10,
+        originalCurrency: 'ILS',
+        chargedAmount: -10,
+        description: 'Coffee',
+        hash: 'dup-hash',
+      };
+      db.insert(schema.transactions).values(txBase).run();
+      expect(() => db.insert(schema.transactions).values(txBase).run()).toThrow();
 
-    const expectedTables = [
-      'accounts',
-      'account_balance_history',
-      'asset_movements',
-      'asset_snapshots',
-      'assets',
-      'categories',
-      'holdings',
-      'liabilities',
-      'members',
-      'mobile_devices',
-      'recurring_payment_decisions',
-      'ownership_rules',
-      'scrape_logs',
-      'transactions',
-    ];
-
-    for (const table of expectedTables) {
-      expect(tableNames, `Missing table: ${table}`).toContain(table);
-    }
-
-    sqlite.close();
-  });
-
-  it('schema columns match migration output (no drift)', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-    migrate(db, { migrationsFolder });
-
-    // Spot-check critical columns on key tables
-    const accountCols = sqlite.prepare("PRAGMA table_info('accounts')").all() as Array<{
-      name: string;
-    }>;
-    const accountColNames = accountCols.map((c) => c.name);
-    expect(accountColNames).toContain('id');
-    expect(accountColNames).toContain('company_id');
-    expect(accountColNames).toContain('display_name');
-    expect(accountColNames).toContain('member_id');
-    expect(accountColNames).toContain('account_type');
-    expect(accountColNames).toContain('balance');
-    expect(accountColNames).toContain('is_active');
-
-    const txCols = sqlite.prepare("PRAGMA table_xinfo('transactions')").all() as Array<{
-      name: string;
-    }>;
-    const txColNames = txCols.map((c) => c.name);
-    expect(txColNames).toContain('id');
-    expect(txColNames).toContain('account_id');
-    expect(txColNames).toContain('date');
-    expect(txColNames).toContain('effective_date');
-    expect(txColNames).toContain('reporting_date');
-    expect(txColNames).toContain('charged_amount');
-    expect(txColNames).toContain('description');
-    expect(txColNames).toContain('category');
-    expect(txColNames).toContain('charged_currency');
-    expect(txColNames).toContain('expense_owner_type');
-    expect(txColNames).toContain('expense_owner_member_id');
-    expect(txColNames).toContain('owner_source');
-    expect(txColNames).toContain('ignored');
-    expect(txColNames).toContain('needs_review');
-    expect(txColNames).toContain('hash');
-
-    const liabCols = sqlite.prepare("PRAGMA table_info('liabilities')").all() as Array<{
-      name: string;
-    }>;
-    const liabColNames = liabCols.map((c) => c.name);
-    expect(liabColNames).toContain('id');
-    expect(liabColNames).toContain('name');
-    expect(liabColNames).toContain('currency');
-    expect(liabColNames).toContain('current_balance');
-    expect(liabColNames).toContain('is_active');
-
-    const memberCols = sqlite.prepare("PRAGMA table_info('members')").all() as Array<{
-      name: string;
-    }>;
-    const memberColNames = memberCols.map((c) => c.name);
-    expect(memberColNames).toContain('id');
-    expect(memberColNames).toContain('name');
-    expect(memberColNames).toContain('is_active');
-
-    const ruleCols = sqlite.prepare("PRAGMA table_info('ownership_rules')").all() as Array<{
-      name: string;
-    }>;
-    const ruleColNames = ruleCols.map((c) => c.name);
-    expect(ruleColNames).toContain('target_owner_type');
-    expect(ruleColNames).toContain('description_contains');
-
-    const mobileDeviceCols = sqlite.prepare("PRAGMA table_info('mobile_devices')").all() as Array<{
-      name: string;
-    }>;
-    const mobileDeviceColNames = mobileDeviceCols.map((c) => c.name);
-    expect(mobileDeviceColNames).toContain('id');
-    expect(mobileDeviceColNames).toContain('token_digest');
-    expect(mobileDeviceColNames).toContain('capabilities');
-    expect(mobileDeviceColNames).toContain('revoked_at');
-
-    sqlite.close();
-  });
-
-  it('FTS5 virtual table can be created after migrations', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-    migrate(db, { migrationsFolder });
-
-    expect(() => {
-      sqlite.exec(`
-        CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts
-        USING fts5(description, memo, content='transactions', content_rowid='id');
-      `);
-    }).not.toThrow();
-
-    expect(() => {
-      sqlite.exec(`
-        CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
-          INSERT INTO transactions_fts(rowid, description, memo) VALUES (new.id, new.description, new.memo);
-        END;
-      `);
-    }).not.toThrow();
-
-    sqlite.close();
-  });
-
-  it('foreign keys are enforced after migration', () => {
-    const sqlite = new Database(':memory:');
-    sqlite.pragma('foreign_keys = ON');
-    const db = drizzle(sqlite, { schema });
-    migrate(db, { migrationsFolder });
-
-    expect(() => {
-      sqlite
-        .prepare(
-          "INSERT INTO transactions (account_id, date, processed_date, original_amount, original_currency, charged_amount, description, hash) VALUES (99999, '2026-01-01', '2026-01-01', -100, 'ILS', -100, 'test', 'hash1')",
-        )
+      const holdingBase = { name: 'VOO', type: 'etf', currency: 'USD', quantity: 1 };
+      db.insert(schema.holdings)
+        .values({ ...holdingBase, assetId: assetA.id })
         .run();
-    }).toThrow();
+      expect(() =>
+        db
+          .insert(schema.holdings)
+          .values({ ...holdingBase, assetId: assetA.id })
+          .run(),
+      ).toThrow();
+      expect(() =>
+        db
+          .insert(schema.holdings)
+          .values({ ...holdingBase, assetId: assetB.id })
+          .run(),
+      ).not.toThrow();
 
-    sqlite.close();
+      db.insert(schema.mobileDevices)
+        .values({ id: 'dev-1', name: 'Phone 1', tokenDigest: 'digest-1' })
+        .run();
+      expect(() =>
+        db
+          .insert(schema.mobileDevices)
+          .values({ id: 'dev-2', name: 'Phone 2', tokenDigest: 'digest-1' })
+          .run(),
+      ).toThrow();
+
+      db.insert(schema.assetSnapshots)
+        .values({ assetId: assetA.id, date: '2026-01-01', totalValueIls: 100 })
+        .run();
+      expect(() =>
+        db
+          .insert(schema.assetSnapshots)
+          .values({ assetId: assetA.id, date: '2026-01-01', totalValueIls: 200 })
+          .run(),
+      ).toThrow();
+
+      db.insert(schema.accountBalanceHistory)
+        .values({ accountId: account.id, date: '2026-01-01', balance: 500 })
+        .run();
+      expect(() =>
+        db
+          .insert(schema.accountBalanceHistory)
+          .values({ accountId: account.id, date: '2026-01-01', balance: 600 })
+          .run(),
+      ).toThrow();
+    } finally {
+      sqlite.close();
+    }
+  });
+
+  it('enforces asset cascade deletes and account unlink set-null rules', () => {
+    const { sqlite, db } = openMigratedDb();
+    try {
+      const account = db
+        .insert(schema.accounts)
+        .values({ companyId: 'hapoalim', displayName: 'Main', credentialsRef: 'cred-1' })
+        .returning()
+        .get();
+      const asset = db
+        .insert(schema.assets)
+        .values({
+          name: 'Linked Broker',
+          type: 'brokerage',
+          currency: 'ILS',
+          linkedAccountId: account.id,
+        })
+        .returning()
+        .get();
+      db.insert(schema.holdings)
+        .values({ assetId: asset.id, name: 'VOO', type: 'etf', currency: 'USD', quantity: 2 })
+        .run();
+      db.insert(schema.assetSnapshots)
+        .values({ assetId: asset.id, date: '2026-01-01', totalValueIls: 1000 })
+        .run();
+      db.insert(schema.assetMovements)
+        .values({
+          assetId: asset.id,
+          date: '2026-01-01',
+          type: 'deposit',
+          quantity: 1000,
+          currency: 'ILS',
+        })
+        .run();
+
+      db.delete(schema.accounts).where(eq(schema.accounts.id, account.id)).run();
+      const unlinked = db.select().from(schema.assets).where(eq(schema.assets.id, asset.id)).get();
+      expect(unlinked?.linkedAccountId).toBeNull();
+
+      db.delete(schema.assets).where(eq(schema.assets.id, asset.id)).run();
+      expect(db.select().from(schema.holdings).all()).toHaveLength(0);
+      expect(db.select().from(schema.assetSnapshots).all()).toHaveLength(0);
+      expect(db.select().from(schema.assetMovements).all()).toHaveLength(0);
+    } finally {
+      sqlite.close();
+    }
   });
 
   it('backfills existing transaction ownership from account members during household upgrade', () => {

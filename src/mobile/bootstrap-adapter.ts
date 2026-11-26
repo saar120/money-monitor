@@ -123,10 +123,6 @@ export interface CreateMobileBootstrapAdapterOptions {
   server: MobileBootstrapServerIdentity;
   fallbackCurrencyCode: string;
   clock?: () => Date;
-  /** Resolves the finance calendar date (for example in Asia/Jerusalem). */
-  financialDateFor?: (instant: Date) => string;
-  snapshotIdFactory?: () => string;
-  completeSnapshotMaxAgeSeconds?: number;
 }
 
 export type BootstrapSectionFailureCode = BootstrapSectionError['code'];
@@ -275,17 +271,13 @@ function fallbackBudgetPulse(
 
 export function createMobileBootstrapAdapter(options: CreateMobileBootstrapAdapterOptions) {
   const clock = options.clock ?? (() => new Date());
-  const snapshotIdFactory = options.snapshotIdFactory ?? randomUUID;
-  const completeMaxAge = options.completeSnapshotMaxAgeSeconds ?? 300;
 
   return async function provideMobileBootstrap(): Promise<BootstrapSuccessEnvelope> {
     const calculationInstant = clock();
     const calculatedAt = calculationInstant.toISOString();
     const context: Readonly<BootstrapReadContext> = Object.freeze({
       calculatedAt,
-      financialDate:
-        options.financialDateFor?.(calculationInstant) ??
-        mobileFinancialDateFor(calculationInstant),
+      financialDate: mobileFinancialDateFor(calculationInstant),
     });
 
     // Deferring invocation into a promise also captures ports that throw
@@ -359,7 +351,7 @@ export function createMobileBootstrapAdapter(options: CreateMobileBootstrapAdapt
         financialDate: context.financialDate,
         source: MOBILE_RESPONSE_SOURCE,
         bootstrapSchemaVersion: BOOTSTRAP_SCHEMA_VERSION,
-        snapshotId: snapshotIdFactory(),
+        snapshotId: randomUUID(),
         server: {
           id: options.server.id,
           displayName: options.server.displayName,
@@ -375,7 +367,7 @@ export function createMobileBootstrapAdapter(options: CreateMobileBootstrapAdapt
           ? { status: 'not_cacheable' as const, maxAgeSeconds: 0 }
           : {
               status: 'cacheable' as const,
-              maxAgeSeconds: completeMaxAge,
+              maxAgeSeconds: 300,
               staleAt: new Date(Date.parse(calculatedAt) + 24 * 60 * 60 * 1000).toISOString(),
               deleteAfter: new Date(
                 Date.parse(calculatedAt) + 7 * 24 * 60 * 60 * 1000,

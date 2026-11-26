@@ -85,7 +85,7 @@ describe('transactions routes', () => {
     });
     expect(response.statusCode).toBe(200);
     expect(response.json().transactions).toHaveLength(1);
-    expect(response.json().pagination.total).toBe(6);
+    expect(response.json().pagination).toMatchObject({ total: 6, hasMore: true });
     expect(response.json().totals).toEqual(
       expect.arrayContaining([
         { currency: 'ILS', income: 100, expense: 30 },
@@ -388,43 +388,17 @@ describe('transactions routes', () => {
   });
 
   describe('GET /api/transactions', () => {
-    it('returns empty list with pagination', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/transactions',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transactions).toHaveLength(0);
-      expect(body.pagination).toBeDefined();
-      expect(body.pagination.total).toBe(0);
-    });
-
-    it('returns transactions with pagination', async () => {
-      const account = insertAccount(testDb.db);
-      for (let i = 0; i < 3; i++) {
-        insertTransaction(testDb.db, account.id);
-      }
-
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/transactions?limit=2',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.transactions).toHaveLength(2);
-      expect(body.pagination.total).toBe(3);
-      expect(body.pagination.hasMore).toBe(true);
-    });
-
-    it('supports query filters', async () => {
+    it('supports query filters and sorting', async () => {
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, {
         category: 'food',
-        date: '2026-01-15',
-        processedDate: '2026-01-15',
+        date: '2026-01-20',
+        processedDate: '2026-01-20',
+      });
+      insertTransaction(testDb.db, account.id, {
+        category: 'food',
+        date: '2026-01-10',
+        processedDate: '2026-01-10',
       });
       insertTransaction(testDb.db, account.id, {
         category: 'transport',
@@ -434,13 +408,15 @@ describe('transactions routes', () => {
 
       const res = await server.inject({
         method: 'GET',
-        url: '/api/transactions?category=food&startDate=2026-01-01&endDate=2026-01-31',
+        url: '/api/transactions?category=food&startDate=2026-01-01&endDate=2026-01-31&sortBy=date&sortOrder=asc',
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
       const body = JSON.parse(res.body);
-      expect(body.transactions).toHaveLength(1);
-      expect(body.transactions[0].category).toBe('food');
+      expect(body.transactions.map((t: { date: string }) => t.date)).toEqual([
+        '2026-01-10',
+        '2026-01-20',
+      ]);
     });
 
     it('finds uncategorized transactions from category drilldown', async () => {
