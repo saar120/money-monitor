@@ -7,7 +7,6 @@ import {
 import { mobileTransactionQuerySchema } from './transaction-contract.js';
 
 const KEY = 'production-mobile-cursor-secret-with-at-least-32-characters';
-const FIXED_IV = Buffer.from('00112233445566778899aabb', 'hex');
 
 function query(overrides: Record<string, unknown> = {}) {
   return mobileTransactionQuerySchema.parse({ q: 'רמי Market', ...overrides });
@@ -15,7 +14,7 @@ function query(overrides: Record<string, unknown> = {}) {
 
 describe('mobile transaction cursor', () => {
   it('round-trips an encrypted keyset position without exposing IDs or search text', () => {
-    const codec = createMobileTransactionCursorCodec(KEY, { randomBytes: () => FIXED_IV });
+    const codec = createMobileTransactionCursorCodec(KEY);
     const filterFingerprint = canonicalTransactionFilterFingerprint(query());
     const binding = { filterFingerprint, financialDate: '2026-07-16' };
     const cursor = codec.encode(

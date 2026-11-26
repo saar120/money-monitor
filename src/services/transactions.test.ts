@@ -16,13 +16,8 @@ vi.mock('../db/connection.js', () => ({
   closeAll: () => {},
 }));
 
-const {
-  commandTransaction,
-  listTransactions,
-  buildTransactionFilters,
-  getNeedsReviewCount,
-  categorizeTransaction,
-} = await import('./transactions.js');
+const { commandTransaction, listTransactions, getNeedsReviewCount, categorizeTransaction } =
+  await import('./transactions.js');
 
 describe('transactions service', () => {
   beforeEach(() => {
@@ -42,22 +37,15 @@ describe('transactions service', () => {
       expect(result.pagination).toEqual({ total: 0, offset: 0, limit: 50, hasMore: false });
     });
 
-    it('returns transactions with default pagination', () => {
-      const account = insertAccount(testDb.db);
-      for (let i = 0; i < 3; i++) {
-        insertTransaction(testDb.db, account.id, { description: `Tx ${i}` });
-      }
-      const result = listTransactions({});
-      expect(result.transactions).toHaveLength(3);
-      expect(result.pagination.total).toBe(3);
-      expect(result.pagination.hasMore).toBe(false);
-    });
-
-    it('respects limit and offset for pagination', () => {
+    it('respects default and explicit limit/offset pagination', () => {
       const account = insertAccount(testDb.db);
       for (let i = 0; i < 5; i++) {
         insertTransaction(testDb.db, account.id, { description: `Tx ${i}` });
       }
+      const all = listTransactions({});
+      expect(all.transactions).toHaveLength(5);
+      expect(all.pagination).toEqual({ total: 5, offset: 0, limit: 50, hasMore: false });
+
       const page1 = listTransactions({}, { limit: 2, offset: 0 });
       expect(page1.transactions).toHaveLength(2);
       expect(page1.pagination).toEqual({ total: 5, offset: 0, limit: 2, hasMore: true });
@@ -222,43 +210,11 @@ describe('transactions service', () => {
     });
   });
 
-  // ── buildTransactionFilters ──
-
-  describe('buildTransactionFilters', () => {
-    it('returns empty conditions with no params', () => {
-      const result = buildTransactionFilters({});
-      expect(result.conditions).toHaveLength(0);
-      expect(result.empty).toBe(false);
-    });
-
-    it('returns empty=true when accountType has no matching accounts', () => {
-      // No accounts in DB at all for 'credit_card'
-      const result = buildTransactionFilters({ accountType: 'credit_card' });
-      expect(result.empty).toBe(true);
-    });
-
-    it('builds conditions for accountType with matching accounts', () => {
-      insertAccount(testDb.db, { accountType: 'bank' });
-      const result = buildTransactionFilters({ accountType: 'bank' });
-      expect(result.empty).toBe(false);
-      expect(result.conditions.length).toBeGreaterThan(0);
-    });
-
-    it('builds conditions for date range', () => {
-      const result = buildTransactionFilters({ startDate: '2026-01-01', endDate: '2026-12-31' });
-      expect(result.empty).toBe(false);
-      expect(result.conditions).toHaveLength(2);
-    });
-  });
-
   // ── getNeedsReviewCount ──
 
   describe('getNeedsReviewCount', () => {
-    it('returns 0 when no transactions need review', () => {
-      expect(getNeedsReviewCount()).toBe(0);
-    });
-
     it('counts transactions that need review', () => {
+      expect(getNeedsReviewCount()).toBe(0);
       const account = insertAccount(testDb.db);
       insertTransaction(testDb.db, account.id, { needsReview: true });
       insertTransaction(testDb.db, account.id, { needsReview: true });

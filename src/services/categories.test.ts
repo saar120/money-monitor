@@ -21,7 +21,7 @@ vi.mock('../db/connection.js', () => ({
   closeAll: () => {},
 }));
 
-const { listCategories, createCategory, updateCategory, deleteCategory, isCategoryIgnored } =
+const { listCategories, createCategory, updateCategory, deleteCategory } =
   await import('./categories.js');
 
 describe('categories service', () => {
@@ -44,25 +44,26 @@ describe('categories service', () => {
       expect(names).toContain('food');
       expect(names).toContain('transport');
     });
-
-    it('returns newly inserted categories alongside seeded ones', () => {
-      const before = listCategories().length;
-      insertCategory(testDb.db, { name: 'custom-cat', label: 'Custom' });
-      const after = listCategories();
-      expect(after).toHaveLength(before + 1);
-      expect(after.map((c) => c.name)).toContain('custom-cat');
-    });
   });
 
   // ── createCategory ──
 
   describe('createCategory', () => {
-    it('creates a category and returns ok:true', () => {
-      const result = createCategory({ name: 'groceries', label: 'Groceries' });
+    it('creates a category with optional fields and returns ok:true', () => {
+      const result = createCategory({
+        name: 'bills',
+        label: 'Bills',
+        color: '#ff0000',
+        rules: 'electric|water',
+      });
       expect(result.ok).toBe(true);
       if (result.ok) {
-        expect(result.category.name).toBe('groceries');
-        expect(result.category.label).toBe('Groceries');
+        expect(result.category).toMatchObject({
+          name: 'bills',
+          label: 'Bills',
+          color: '#ff0000',
+          rules: 'electric|water',
+        });
         expect(result.category.id).toBeGreaterThan(0);
       }
     });
@@ -74,29 +75,6 @@ describe('categories service', () => {
       if (!result.ok) {
         expect(result.status).toBe(409);
         expect(result.error).toContain('already exists');
-      }
-    });
-
-    it('returns 409 when creating duplicate of a newly created category', () => {
-      createCategory({ name: 'new-cat', label: 'New' });
-      const result = createCategory({ name: 'new-cat', label: 'New again' });
-      expect(result.ok).toBe(false);
-      if (!result.ok) {
-        expect(result.status).toBe(409);
-      }
-    });
-
-    it('creates category with optional color and rules', () => {
-      const result = createCategory({
-        name: 'bills',
-        label: 'Bills',
-        color: '#ff0000',
-        rules: 'electric|water',
-      });
-      expect(result.ok).toBe(true);
-      if (result.ok) {
-        expect(result.category.color).toBe('#ff0000');
-        expect(result.category.rules).toBe('electric|water');
       }
     });
 
@@ -239,28 +217,6 @@ describe('categories service', () => {
       if (!result.ok) {
         expect(result.status).toBe(404);
       }
-    });
-  });
-
-  // ── isCategoryIgnored ──
-
-  describe('isCategoryIgnored', () => {
-    it('returns false for null category', () => {
-      expect(isCategoryIgnored(null)).toBe(false);
-    });
-
-    it('returns false for non-existent category', () => {
-      expect(isCategoryIgnored('nonexistent')).toBe(false);
-    });
-
-    it('returns false for category with ignoredFromStats=false', () => {
-      // seeded 'food' has ignoredFromStats=false by default
-      expect(isCategoryIgnored('food')).toBe(false);
-    });
-
-    it('returns true for category with ignoredFromStats=true', () => {
-      insertCategory(testDb.db, { name: 'internal', label: 'Internal', ignoredFromStats: true });
-      expect(isCategoryIgnored('internal')).toBe(true);
     });
   });
 });

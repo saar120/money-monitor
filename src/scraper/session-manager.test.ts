@@ -39,22 +39,18 @@ describe('getUniqueActiveAccounts', () => {
     testDb?.close();
   });
 
-  it('excludes manual-scrape-only accounts', () => {
-    insertAccount(testDb.db, { displayName: 'Regular', manualScrapeOnly: false });
-    insertAccount(testDb.db, { displayName: 'Manual Only', manualScrapeOnly: true });
+  it('excludes manual-scrape-only and inactive accounts', () => {
+    insertAccount(testDb.db, { displayName: 'Regular', manualScrapeOnly: false, isActive: true });
+    insertAccount(testDb.db, {
+      displayName: 'Manual Only',
+      manualScrapeOnly: true,
+      isActive: true,
+    });
+    insertAccount(testDb.db, { displayName: 'Inactive', manualScrapeOnly: false, isActive: false });
 
     const result = getUniqueActiveAccounts();
     expect(result).toHaveLength(1);
     expect(result[0].displayName).toBe('Regular');
-  });
-
-  it('excludes inactive accounts', () => {
-    insertAccount(testDb.db, { displayName: 'Active', isActive: true });
-    insertAccount(testDb.db, { displayName: 'Inactive', isActive: false });
-
-    const result = getUniqueActiveAccounts();
-    expect(result).toHaveLength(1);
-    expect(result[0].displayName).toBe('Active');
   });
 
   it('deduplicates by credentialsRef', () => {
@@ -84,18 +80,10 @@ describe('getUniqueActiveAccounts', () => {
     expect(result).toHaveLength(1);
     expect(result[0].displayName).toBe('Auto');
   });
-
-  it('returns empty array when all accounts are manual-only', () => {
-    insertAccount(testDb.db, { manualScrapeOnly: true });
-    insertAccount(testDb.db, { manualScrapeOnly: true });
-
-    const result = getUniqueActiveAccounts();
-    expect(result).toHaveLength(0);
-  });
 });
 
 it('keeps cancelled work admitted until the active step drains and forbids overlap', async () => {
-  const { runScrapeSession, cancelSession, hasActiveSessions, getActiveSession } =
+  const { runScrapeSession, cancelSession, hasActiveSessions, getActiveSessions } =
     await import('./session-manager.js');
   const { scrapeAccount } = await import('./scraper.service.js');
   testDb = createTestDb();
@@ -109,10 +97,11 @@ it('keeps cancelled work admitted until the active step drains and forbids overl
   );
   const { session } = runScrapeSession('single', [account]);
   await Promise.resolve();
-  const completion = getActiveSession(session.id)!.promise;
+  const active = () => getActiveSessions().find((entry) => entry.session.id === session.id);
+  const completion = active()!.promise;
   expect(cancelSession(session.id)).toBe(true);
   expect(hasActiveSessions()).toBe(true);
-  expect(getActiveSession(session.id)!.session.status).toBe('cancelling');
+  expect(active()!.session.status).toBe('cancelling');
   expect(() => runScrapeSession('single', [account])).toThrow('already in progress');
   release({ results: [], categorizePending: null });
   await completion;
@@ -125,7 +114,7 @@ it('keeps cancelled work admitted until the active step drains and forbids overl
 it.each([false, true])(
   'hands the complete %s mixed session to the existing alert consumer once',
   async (mixed) => {
-    const { runScrapeSession, getActiveSession } = await import('./session-manager.js');
+    const { runScrapeSession, getActiveSessions } = await import('./session-manager.js');
     const { scrapeAccount } = await import('./scraper.service.js');
     const { runPostScrapeAlerts } = await import('../telegram/alerts.js');
     vi.mocked(runPostScrapeAlerts).mockClear();
@@ -160,7 +149,7 @@ it.each([false, true])(
       results.push(success);
     }
     const { session } = runScrapeSession('manual', accounts);
-    await getActiveSession(session.id)!.promise;
+    await getActiveSessions().find((entry) => entry.session.id === session.id)!.promise;
     expect(runPostScrapeAlerts).toHaveBeenCalledTimes(1);
     expect(runPostScrapeAlerts).toHaveBeenCalledWith(
       results,

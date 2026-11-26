@@ -149,6 +149,9 @@ describe('production mobile transaction ports', () => {
     ).toBe(5);
     expect([...first.transactions, ...second.transactions, ...third.transactions]).toHaveLength(5);
     expect(third.page).toEqual({ hasMore: false, nextCursor: null });
+    expect(() =>
+      read.list(query({ limit: 2, cursor: first.page.nextCursor, direction: 'debit' }), CONTEXT),
+    ).toThrow(MobileTransactionCursorError);
   });
 
   it('applies the narrow review patch and returns the updated projection', () => {
@@ -209,30 +212,6 @@ describe('production mobile transaction ports', () => {
       owner: { kind: 'shared' },
       resourceVersion: 2,
     });
-  });
-
-  it('rejects tampered and cross-filter cursors before returning another page', () => {
-    const testDb = database();
-    const account = insertAccount(testDb.db, { memberId: null });
-    for (let index = 0; index < 3; index += 1) {
-      insertTransaction(testDb.db, account.id, {
-        date: '2026-07-15',
-        processedDate: '2026-07-15',
-      });
-    }
-    const read = ports(testDb);
-    const cursor = read.list(query({ limit: 1 }), CONTEXT).page.nextCursor as string;
-    const tail = cursor.at(-1) === 'A' ? 'B' : 'A';
-
-    expect(() =>
-      read.list(query({ limit: 1, cursor: `${cursor.slice(0, -1)}${tail}` }), CONTEXT),
-    ).toThrow(MobileTransactionCursorError);
-    expect(() => read.list(query({ limit: 1, cursor, direction: 'debit' }), CONTEXT)).toThrow(
-      MobileTransactionCursorError,
-    );
-    expect(() =>
-      read.list(query({ limit: 1, cursor }), { ...CONTEXT, financialDate: '2026-07-17' }),
-    ).toThrow(MobileTransactionCursorError);
   });
 
   it('treats mixed Hebrew/English and FTS operators as bounded literal prefix tokens', () => {

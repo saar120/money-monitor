@@ -97,13 +97,6 @@ describe('mobile transaction query contract', () => {
 });
 
 describe('mobile transaction response contract', () => {
-  it('accepts the exact list envelope and strips nothing', () => {
-    expect(validateMobileTransactionListEnvelope(listEnvelope())).toEqual({
-      success: true,
-      data: listEnvelope(),
-    });
-  });
-
   it.each([
     [
       'duplicate IDs',

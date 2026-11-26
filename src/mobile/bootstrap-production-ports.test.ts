@@ -6,11 +6,7 @@ import {
   createMobileBootstrapAdapter,
   MobileBootstrapSectionReadError,
 } from './bootstrap-adapter.js';
-import {
-  createProductionMobileBootstrapPorts,
-  financialDateInIsrael,
-  maskAccountIdentifier,
-} from './bootstrap-production-ports.js';
+import { createProductionMobileBootstrapPorts } from './bootstrap-production-ports.js';
 
 const KEY = 'production-mobile-public-id-key-32-chars-minimum';
 const CONTEXT = {
@@ -47,8 +43,6 @@ describe('production mobile bootstrap ports', () => {
       },
       fallbackCurrencyCode: 'ILS',
       clock: () => instants.shift() ?? new Date('2026-07-15T10:00:01.000Z'),
-      financialDateFor: financialDateInIsrael,
-      snapshotIdFactory: () => 'snapshot_production_empty',
     });
 
     const result = await provide();
@@ -72,6 +66,12 @@ describe('production mobile bootstrap ports', () => {
       credentialsRef: 'FORBIDDEN_SECRET_SENTINEL',
       lastScrapedAt: '2026-07-15T09:30:00.000Z',
       stalenessDays: 2,
+    });
+    insertAccount(db, {
+      memberId: 1,
+      companyId: 'leumi',
+      displayName: 'Unnumbered Account',
+      accountNumber: null,
     });
     insertCategory(db, { name: 'groceries', label: 'Groceries' });
     const transaction = insertTransaction(db, account.id, {
@@ -144,6 +144,10 @@ describe('production mobile bootstrap ports', () => {
       type: 'unknown',
       identifierMask: '•••• 3456',
       freshness: { status: 'fresh', lastSuccessfulSyncAt: '2026-07-15T09:30:00.000Z' },
+    });
+    expect(accounts[1]).toMatchObject({
+      displayName: 'Unnumbered Account',
+      identifierMask: '•••• NA',
     });
     expect(home.netWorth.amount.value).toBe('250000.28');
     expect(home.income.amount.value).toBe('0.00');
@@ -245,7 +249,6 @@ describe('production mobile bootstrap ports', () => {
       },
       fallbackCurrencyCode: 'ILS',
       clock: () => instants.shift() ?? new Date('2026-07-15T10:00:01.000Z'),
-      snapshotIdFactory: () => 'snapshot_invalid_currency',
     });
 
     const result = await provide();
@@ -297,13 +300,5 @@ describe('production mobile bootstrap ports', () => {
     expect(error).toBeInstanceOf(MobileBootstrapSectionReadError);
     expect(error).toMatchObject({ code: 'source_unavailable', retryable: true });
     expect(JSON.stringify(error)).not.toContain('/Users/private');
-  });
-
-  it('uses the Israel finance calendar and masks identifiers on the server', () => {
-    expect(financialDateInIsrael(new Date('2026-07-14T21:30:00.000Z'))).toBe('2026-07-15');
-    expect(financialDateInIsrael(new Date('2026-12-14T22:30:00.000Z'))).toBe('2026-12-15');
-    expect(maskAccountIdentifier(null)).toBe('•••• NA');
-    expect(maskAccountIdentifier('1')).toBe('•••• NA');
-    expect(maskAccountIdentifier('1234-5678-9012')).toBe('•••• 9012');
   });
 });

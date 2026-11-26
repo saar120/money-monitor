@@ -6,8 +6,12 @@ import { insertAccount, insertLiability } from '../__tests__/helpers/fixtures.js
 let testDb: TestDb;
 
 vi.mock('../db/connection.js', () => ({
-  get db() { return testDb.db; },
-  get sqlite() { return testDb.sqlite; },
+  get db() {
+    return testDb.db;
+  },
+  get sqlite() {
+    return testDb.sqlite;
+  },
   isDemoMode: () => false,
   closeAll: () => {},
 }));
@@ -24,7 +28,11 @@ vi.mock('../scraper/scraper.service.js', () => ({
 }));
 
 vi.mock('../services/exchange-rates.js', () => ({
-  getExchangeRates: vi.fn().mockResolvedValue({ rates: { ILS: 1, USD: 3.6, EUR: 3.9 }, stale: false, fetchedAt: new Date().toISOString() }),
+  getExchangeRates: vi.fn().mockResolvedValue({
+    rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
+    stale: false,
+    fetchedAt: new Date().toISOString(),
+  }),
   convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
     if (currency === 'ILS') return amount;
     const rate = rates[currency];
@@ -48,23 +56,19 @@ describe('net-worth routes', () => {
   // ── GET /api/net-worth ──
 
   describe('GET /api/net-worth', () => {
-    it('returns net worth with empty DB', async () => {
-      const res = await server.inject({
-        method: 'GET',
-        url: '/api/net-worth',
-        headers: authHeaders(),
-      });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.total).toBe(0);
-      expect(body.banksTotal).toBe(0);
-      expect(body.assetsTotal).toBe(0);
-      expect(body.liabilitiesTotal).toBe(0);
-    });
-
     it('returns calculated net worth with data', async () => {
-      insertAccount(testDb.db, { displayName: 'Bank', accountType: 'bank', balance: 10000, isActive: true });
-      insertLiability(testDb.db, { name: 'Loan', currency: 'ILS', currentBalance: 3000, isActive: true });
+      insertAccount(testDb.db, {
+        displayName: 'Bank',
+        accountType: 'bank',
+        balance: 10000,
+        isActive: true,
+      });
+      insertLiability(testDb.db, {
+        name: 'Loan',
+        currency: 'ILS',
+        currentBalance: 3000,
+        isActive: true,
+      });
 
       const res = await server.inject({
         method: 'GET',
@@ -82,31 +86,29 @@ describe('net-worth routes', () => {
   // ── GET /api/net-worth/history ──
 
   describe('GET /api/net-worth/history', () => {
-    it('returns history series', async () => {
+    it('passes query parameters through and validates history bounds', async () => {
       const res = await server.inject({
         method: 'GET',
         url: '/api/net-worth/history?startDate=2026-01-01&endDate=2026-03-01&granularity=monthly',
         headers: authHeaders(),
       });
       expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.series).toBeDefined();
-      expect(Array.isArray(body.series)).toBe(true);
-    });
+      const body = JSON.parse(res.body) as { series: Array<{ date: string }> };
+      expect(body.series.map((p) => p.date)).toEqual(['2026-01-01', '2026-02-01', '2026-03-01']);
 
-    it('returns empty series for future dates with no data', async () => {
-      const res = await server.inject({
+      const invalidGranularity = await server.inject({
         method: 'GET',
-        url: '/api/net-worth/history?startDate=2030-01-01&endDate=2030-03-01&granularity=monthly',
+        url: '/api/net-worth/history?granularity=hourly',
         headers: authHeaders(),
       });
-      expect(res.statusCode).toBe(200);
-      const body = JSON.parse(res.body);
-      expect(body.series).toBeDefined();
-      // Series will have date points but all zeros
-      for (const point of body.series) {
-        expect(point.total).toBe(0);
-      }
+      expect(invalidGranularity.statusCode).toBe(400);
+
+      const tooManyPoints = await server.inject({
+        method: 'GET',
+        url: '/api/net-worth/history?startDate=2020-01-01&endDate=2026-01-01&granularity=daily',
+        headers: authHeaders(),
+      });
+      expect(tooManyPoints.statusCode).toBe(400);
     });
   });
 });

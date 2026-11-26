@@ -389,8 +389,19 @@ describe('MobileAccessControl', () => {
     const context = harness();
     await context.control.setEnabled(true);
 
+    const order: string[] = [];
+    context.persistEnabled.mockImplementation((enabled) => {
+      order.push(`persist:${enabled}`);
+    });
+    const originalDisable = context.runtime.disable.bind(context.runtime);
+    vi.spyOn(context.runtime, 'disable').mockImplementation(async () => {
+      order.push('runtime:disable');
+      return originalDisable();
+    });
+
     const snapshot = await context.control.setEnabled(false);
 
+    expect(order).toEqual(['persist:false', 'runtime:disable']);
     expect(context.persistEnabled).toHaveBeenLastCalledWith(false);
     expect(context.runtime.calls).toEqual(['start:true', 'disable']);
     expect(snapshot).toMatchObject({ enabled: false, pairingAvailable: false });

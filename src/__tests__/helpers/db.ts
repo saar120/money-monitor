@@ -22,26 +22,5 @@ export function createTestDb(): TestDb {
   const db = drizzle(sqlite, { schema });
   migrate(db, { migrationsFolder });
 
-  sqlite.exec(`
-    CREATE VIRTUAL TABLE IF NOT EXISTS transactions_fts
-    USING fts5(description, memo, content='transactions', content_rowid='id');
-  `);
-  sqlite.exec(`
-    CREATE TRIGGER IF NOT EXISTS transactions_ai AFTER INSERT ON transactions BEGIN
-      INSERT INTO transactions_fts(rowid, description, memo) VALUES (new.id, new.description, new.memo);
-    END;
-  `);
-  sqlite.exec(`
-    CREATE TRIGGER IF NOT EXISTS transactions_ad AFTER DELETE ON transactions BEGIN
-      INSERT INTO transactions_fts(transactions_fts, rowid, description, memo) VALUES('delete', old.id, old.description, old.memo);
-    END;
-  `);
-  sqlite.exec(`
-    CREATE TRIGGER IF NOT EXISTS transactions_au AFTER UPDATE ON transactions BEGIN
-      INSERT INTO transactions_fts(transactions_fts, rowid, description, memo) VALUES('delete', old.id, old.description, old.memo);
-      INSERT INTO transactions_fts(rowid, description, memo) VALUES (new.id, new.description, new.memo);
-    END;
-  `);
-
   return { db, sqlite, close: () => sqlite.close() };
 }

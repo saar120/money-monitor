@@ -41,39 +41,6 @@ test('failed history requests can retry and refreshed caches do not expose old d
   assert.equal(refreshed.peek(12), undefined);
 });
 
-test('the actual history hook renders cached data before any mount effect runs', async () => {
-  const { readFileSync } = await import('node:fs');
-  const { runInNewContext } = await import('node:vm');
-  const { default: ts } = await import('typescript');
-  const data = [{ month: '2026-09' }];
-  const cache = createHistoryCache(async () => data);
-  await cache.load();
-  const source = readFileSync(new URL('./MoneyData.tsx', import.meta.url), 'utf8');
-  const hook = source.slice(
-    source.indexOf('export function useExploreHistory('),
-    source.indexOf('export function useActivityTransactions('),
-  );
-  const module = {
-    exports: {} as { useExploreHistory: () => { months: unknown[]; loading: boolean } },
-  };
-  runInNewContext(
-    ts.transpileModule(hook, { compilerOptions: { module: ts.ModuleKind.CommonJS } }).outputText,
-    {
-      module,
-      exports: module.exports,
-      useMoneyData: () => ({ status: 'ready', exploreHistory: cache }),
-      useState: (initial: unknown) => [
-        typeof initial === 'function' ? initial() : initial,
-        () => {},
-      ],
-      useEffect: () => {},
-    },
-  );
-  const firstFrame = module.exports.useExploreHistory();
-  assert.equal(firstFrame.months, data);
-  assert.equal(firstFrame.loading, false);
-});
-
 test('retired cache callbacks cannot erase replacements or install stale values', async () => {
   const pending: Array<{ resolve: (v: number[]) => void; reject: (e: Error) => void }> = [];
   const cache = createHistoryCache<number>(

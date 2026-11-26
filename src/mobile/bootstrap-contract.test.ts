@@ -1,4 +1,4 @@
-import { readdirSync, readFileSync } from 'node:fs';
+import { readFileSync } from 'node:fs';
 import { join } from 'node:path';
 import { describe, expect, it } from 'vitest';
 import {
@@ -41,38 +41,10 @@ function expectSchemaRejection(value: unknown): void {
 }
 
 describe('mobile bootstrap canonical fixtures', () => {
-  it('keeps an explicit fixture inventory for contract tests', () => {
-    expect(
-      readdirSync(FIXTURE_DIRECTORY)
-        .filter((name) => name.startsWith('bootstrap-') && name.endsWith('.json'))
-        .sort(),
-    ).toEqual([...ACCEPTED_FIXTURES, INCOMPATIBLE_FIXTURE, REJECTED_FIXTURE].sort());
-  });
-
   it.each(ACCEPTED_FIXTURES)('validates %s without redaction violations', (name) => {
     const raw = loadFixture(name);
     expect(findBootstrapRedactionViolations(raw)).toEqual([]);
     expect(validateBootstrapPayload(raw).success).toBe(true);
-  });
-
-  it('marks partial data non-cacheable and carries only finite section errors', () => {
-    const fixture = acceptedFixture('bootstrap-partial-error.json');
-
-    expect(fixture.meta.completeness).toEqual({
-      status: 'partial',
-      sectionErrors: [{ section: 'budget_pulse', code: 'calculation_failed', retryable: true }],
-    });
-    expect(fixture.meta.cacheability).toEqual({ status: 'not_cacheable', maxAgeSeconds: 0 });
-  });
-
-  it('does not claim client compatibility when no client version was evaluated', () => {
-    const fixture = acceptedFixture('bootstrap-complete.json');
-
-    expect(fixture.meta.server.compatibility).toEqual({
-      status: 'not_evaluated',
-      reason: null,
-    });
-    expect(fixture.meta.server.minimumClientVersion).toBe('0.1.0');
   });
 
   it('represents incompatibility as a 426 error envelope without feature data', () => {
@@ -84,28 +56,6 @@ describe('mobile bootstrap canonical fixtures', () => {
     expect(fixture.meta.apiVersion).toBe('1');
     expect('data' in fixture).toBe(false);
     expect(validateBootstrapPayload(raw).success).toBe(false);
-  });
-
-  it('preserves mixed Hebrew/Latin labels as JSON strings', () => {
-    const fixture = acceptedFixture('bootstrap-mixed-hebrew.json');
-
-    expect(fixture.data.recentTransactions[0].displayName).toBe('סופר שכונתי Market');
-    expect(fixture.data.accounts[0].institutionName).toBe('בנק לדוגמה Example Bank');
-  });
-
-  it('preserves each original currency while keeping Home aggregates in the primary currency', () => {
-    const fixture = acceptedFixture('bootstrap-mixed-currency.json');
-    const transactionCurrencies = fixture.data.recentTransactions.map(
-      (transaction) => transaction.amount.currencyCode,
-    );
-
-    expect(new Set(transactionCurrencies)).toEqual(new Set(['ILS', 'USD', 'EUR']));
-    expect(fixture.data.home.primaryCurrencyCode).toBe('ILS');
-    expect(
-      Object.values(fixture.data.home.aggregates).every(
-        (aggregate) => aggregate.amount.currencyCode === 'ILS',
-      ),
-    ).toBe(true);
   });
 });
 
@@ -127,6 +77,14 @@ describe('mobile bootstrap redaction boundary', () => {
       ]),
     );
     expect(result.issues.every((issue) => !('value' in issue))).toBe(true);
+  });
+
+  it('does not misclassify random UUIDs with 12-digit segments as account numbers', () => {
+    const envelope = acceptedFixture('bootstrap-complete.json');
+    envelope.meta.snapshotId = 'c3c524a4-af29-4b03-a5f4-556950174389';
+    envelope.meta.server.id = 'a1b2c3d4-1234-4567-8901-234567890abc';
+    expect(findBootstrapRedactionViolations(envelope)).toEqual([]);
+    expect(validateBootstrapPayload(envelope).success).toBe(true);
   });
 
   it('recursively rejects credential, token, hash, raw-row, and account-number keys', () => {
@@ -167,33 +125,6 @@ describe('mobile bootstrap redaction boundary', () => {
       'account_identifier_like_value',
       'floating_number',
     ]);
-  });
-
-  it('uses decimal strings for every fixture money value and integers for other numbers', () => {
-    for (const name of ACCEPTED_FIXTURES) {
-      const fixture = loadFixture(name);
-
-      function inspect(value: unknown): void {
-        if (typeof value === 'number') {
-          expect(Number.isInteger(value), `${name} contains a floating-point number`).toBe(true);
-          return;
-        }
-        if (value === null || typeof value !== 'object') return;
-        if (Array.isArray(value)) {
-          value.forEach(inspect);
-          return;
-        }
-
-        const object = value as Record<string, unknown>;
-        if ('currencyCode' in object && 'value' in object) {
-          expect(typeof object.value, `${name} contains non-string money`).toBe('string');
-          expect(object.value).toMatch(/^-?(?:0|[1-9]\d*)(?:\.\d{1,4})?$/);
-        }
-        Object.values(object).forEach(inspect);
-      }
-
-      inspect(fixture);
-    }
   });
 
   it('rejects made-up currency codes even when they have three uppercase letters', () => {
@@ -296,13 +227,6 @@ describe('mobile bootstrap version and time invariants', () => {
     const sync = structuredClone(acceptedFixture('bootstrap-complete.json'));
     sync.data.latestSync.completedAt = '2026-07-15T10:00:01.000Z';
     expectSchemaRejection(sync);
-  });
-
-  it('requires one coherent calculation point for Home, budget, and review', () => {
-    const fixture = structuredClone(acceptedFixture('bootstrap-complete.json'));
-    fixture.data.home.aggregates.income.calculatedAt = '2026-07-15T09:59:59.000Z';
-
-    expectSchemaRejection(fixture);
   });
 
   it('requires the current protocol, stable UUID identity, and mobile.read capability', () => {

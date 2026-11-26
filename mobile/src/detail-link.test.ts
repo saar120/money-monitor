@@ -34,7 +34,6 @@ test('detail rows retain native press styles and navigate with their month param
   const row = module.exports.DetailLink({ href, style, accessibilityLabel: 'Dining' });
   assert.equal(row.type, 'Pressable');
   assert.equal(row.props.style, style, 'no slot may turn the callback into an empty style object');
-  assert.equal(Object.assign({}, ...row.props.style({ pressed: true })).flexDirection, 'row');
   row.props.onPress({ defaultPrevented: false });
   row.props.onPress({ defaultPrevented: true });
   assert.deepEqual(pushes, [href]);

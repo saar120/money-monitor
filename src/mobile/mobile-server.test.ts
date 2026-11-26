@@ -1,5 +1,10 @@
 import { afterEach, describe, expect, it } from 'vitest';
-import { createMobileServer, MOBILE_SERVER_HOST } from './mobile-server.js';
+import {
+  createMobileServer,
+  MOBILE_SERVER_HOST,
+  type MobileServerErrorEvent,
+} from './mobile-server.js';
+import type { PublicMobileDevice } from './device-registry.js';
 
 const GENERATED_AT = new Date('2026-07-15T09:30:00.000Z');
 
@@ -56,6 +61,7 @@ describe('mobile-only server', () => {
   it.each([
     ['desktop health', '/api/health'],
     ['accounts', '/api/accounts'],
+    ['transactions', '/api/transactions'],
     ['settings', '/api/settings'],
     ['scraping', '/api/scrape'],
     ['Advisor', '/api/ai/chat'],
@@ -108,5 +114,71 @@ describe('mobile-only server', () => {
       `Mobile server may bind only to ${MOBILE_SERVER_HOST}`,
     );
     expect(app.server.listening).toBe(false);
+  });
+
+  it.each([
+    ['GET', '/api/mobile/v1/bootstrap'],
+    ['POST', '/api/mobile/v1/pairing/start'],
+    ['POST', '/api/mobile/v1/pairing/status'],
+    ['POST', '/api/mobile/v1/pairing/exchange'],
+    ['GET', '/api/mobile/v1/transactions'],
+    ['GET', '/api/mobile/v1/transactions/transaction_0123456789abcdef012345'],
+  ] as const)('keeps optional %s %s absent until its boundary is supplied', async (method, url) => {
+    const { app } = makeServer();
+
+    const response = await app.inject({ method, url });
+
+    expect(response.statusCode).toBe(404);
+    expect(response.json().error.code).toBe('route_not_found');
+  });
+
+  it('emits only allow-listed error metadata without tokens, paths, or query strings', async () => {
+    const token = 'A'.repeat(43);
+    const events: MobileServerErrorEvent[] = [];
+    const device: PublicMobileDevice = {
+      id: 'device-01',
+      name: 'Personal iPhone',
+      capabilities: ['mobile.read'],
+      protocolVersion: 1,
+      tokenVersion: 1,
+      createdAt: GENERATED_AT.toISOString(),
+      lastUsedAt: null,
+      expiresAt: null,
+      rotatedAt: null,
+      revokedAt: null,
+    };
+    const server = createMobileServer({
+      bootstrap: {
+        authenticator: { authenticate: () => ({ status: 'authenticated', device }) },
+        provide: () =>
+          Promise.reject(new Error(`Bearer ${token} at /Users/private/finance.sqlite`)),
+      },
+      errorObserver: (event) => events.push({ ...event }),
+      logger: false,
+    });
+    openServers.push(server);
+
+    const response = await server.app.inject({
+      method: 'GET',
+      url: '/api/mobile/v1/bootstrap?q=PRIVATE_QUERY_SENTINEL',
+      headers: { authorization: `Bearer ${token}` },
+    });
+
+    expect(response.statusCode).toBe(500);
+    expect(events).toHaveLength(1);
+    expect(events[0]).toMatchObject({
+      method: 'GET',
+      route: '/api/mobile/v1/bootstrap',
+      statusCode: 500,
+      errorCode: 'internal_server_error',
+    });
+    expect(Object.keys(events[0]).sort()).toEqual(
+      ['requestId', 'method', 'route', 'statusCode', 'errorCode'].sort(),
+    );
+    const serialized = JSON.stringify(events[0]);
+    expect(serialized).not.toContain(token);
+    expect(serialized).not.toContain('/Users/private');
+    expect(serialized).not.toContain('finance.sqlite');
+    expect(serialized).not.toContain('PRIVATE_QUERY_SENTINEL');
   });
 });

@@ -70,8 +70,17 @@ describe('One Zero workbook parser', () => {
     ]);
   });
 
-  it('rejects a workbook with an unexpected header shape', () => {
-    const sheet = XLSX.utils.aoa_to_sheet([['wrong', ...headers.slice(1)]]);
+  it.each([
+    ['unexpected header name', [['wrong', ...headers.slice(1)]]],
+    [
+      'extra column',
+      [
+        [...headers, 'עמודה נוספת'],
+        ['04/08/2026', '03/08/2026', 'העברות', 'Extra column', '-1', 'ILS', 'חיוב', '1', 'r1', 'x'],
+      ],
+    ],
+  ])('rejects a workbook with %s', (_label, rows) => {
+    const sheet = XLSX.utils.aoa_to_sheet(rows);
     const workbook = XLSX.utils.book_new();
     XLSX.utils.book_append_sheet(workbook, sheet, 'Movements');
     const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
@@ -90,16 +99,5 @@ describe('One Zero workbook parser', () => {
       movementDate: '2025-08-04',
       valueDate: '2025-08-03',
     });
-  });
-
-  it('rejects extra columns instead of accepting a non-exact statement header row', () => {
-    const sheet = XLSX.utils.aoa_to_sheet([
-      [...headers, 'עמודה נוספת'],
-      ['04/08/2026', '03/08/2026', 'העברות', 'Extra column', '-1', 'ILS', 'חיוב', '1', 'r1', 'x'],
-    ]);
-    const workbook = XLSX.utils.book_new();
-    XLSX.utils.book_append_sheet(workbook, sheet, 'Movements');
-    const buffer = XLSX.write(workbook, { type: 'buffer', bookType: 'xlsx' });
-    expect(() => parseOneZeroWorkbook(buffer)).toThrow(/headers/);
   });
 });

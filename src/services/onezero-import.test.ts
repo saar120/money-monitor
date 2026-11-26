@@ -16,7 +16,9 @@ vi.mock('../db/connection.js', () => ({
 }));
 
 vi.mock('./ownership.js', () => ({ applyOwnership: vi.fn() }));
-vi.mock('../ai/agent.js', () => ({ batchCategorize: vi.fn().mockResolvedValue(undefined) }));
+vi.mock('../ai/categorization/index.js', () => ({
+  batchCategorize: vi.fn().mockResolvedValue({ categorized: 0 }),
+}));
 
 const { commitOneZeroImport, createOneZeroImportPreview } = await import('./onezero-import.js');
 
@@ -145,5 +147,32 @@ describe('One Zero import', () => {
     await Promise.resolve();
     expect(testDb.db.select().from(transactions).all()).toHaveLength(0);
     expect(testDb.db.select().from(postImportJobs).all()).toHaveLength(0);
+  });
+
+  it('marks ambiguous multi-candidate rows and refuses to commit them', () => {
+    const account = insertAccount(testDb.db, { companyId: 'oneZero' });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-08-03',
+      processedDate: '2026-08-05',
+      chargedAmount: -150,
+      originalAmount: -150,
+    });
+    insertTransaction(testDb.db, account.id, {
+      date: '2026-08-04',
+      processedDate: '2026-08-06',
+      chargedAmount: -150,
+      originalAmount: -150,
+    });
+    const buffer = workbookBuffer();
+    expect(createOneZeroImportPreview(account.id, buffer)).toMatchObject({
+      ambiguousCount: 1,
+      rows: [
+        { row: 2, status: 'ambiguous' },
+        { row: 3, status: 'new' },
+      ],
+    });
+    expect(() => commitOneZeroImport(account.id, buffer, randomUUID())).toThrow(
+      'Import contains ambiguous rows',
+    );
   });
 });

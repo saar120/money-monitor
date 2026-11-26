@@ -176,7 +176,7 @@ async function handleUserMessage(
   }
 }
 
-export function startTypingLoop(chatId: number, api: Bot['api'], owns: () => boolean): () => void {
+function startTypingLoop(chatId: number, api: Bot['api'], owns: () => boolean): () => void {
   let timer: ReturnType<typeof setTimeout> | undefined;
   let stopped = false;
   const stop = () => {

@@ -70,7 +70,7 @@ describe('getLatestScrapeTransactions', () => {
     expect(result).toEqual({ error: 'No scrape sessions found' });
   });
 
-  it('ignores running sessions but includes error sessions', () => {
+  it('ignores running sessions', () => {
     insertSession({ status: 'running' });
 
     const result = JSON.parse(getLatestScrapeTransactions());

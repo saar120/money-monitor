@@ -1,3 +1,4 @@
+import { randomUUID } from 'node:crypto';
 import { describe, it, expect, beforeEach, afterAll, vi } from 'vitest';
 import { createTestDb, type TestDb } from '../__tests__/helpers/db.js';
 import {
@@ -20,8 +21,8 @@ vi.mock('../db/connection.js', () => ({
   closeAll: () => {},
 }));
 
-const { applyOwnership, createOwnershipRule, setTransactionOwner } = await import('./ownership.js');
-const { listTransactions } = await import('./transactions.js');
+const { applyOwnership, createOwnershipRule } = await import('./ownership.js');
+const { commandTransaction, listTransactions } = await import('./transactions.js');
 
 describe('ownership service', () => {
   beforeEach(() => {
@@ -118,8 +119,16 @@ describe('ownership service', () => {
     const account = insertAccount(testDb.db, { memberId: 1 });
     const tx = insertTransaction(testDb.db, account.id);
 
-    const manual = setTransactionOwner(tx.id, { type: 'member', memberId: member.id });
-    expect(manual.ok).toBe(true);
+    const manual = commandTransaction(
+      tx.id,
+      {
+        commandId: randomUUID(),
+        expectedVersion: 1,
+        patch: { owner: { type: 'member', memberId: member.id } },
+      },
+      'desktop',
+    );
+    expect(manual.transaction.ownerSource).toBe('manual');
 
     applyOwnership({ ids: [tx.id] });
     let [updated] = listTransactions({

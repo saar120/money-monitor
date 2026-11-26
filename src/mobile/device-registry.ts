@@ -46,14 +46,12 @@ export interface MobileDeviceCredential {
 
 export interface MobileDeviceRegistryOptions {
   clock?: () => Date;
-  tokenFactory?: () => string;
-  idFactory?: () => string;
 }
 
 const TOKEN_PATTERN = /^[A-Za-z0-9_-]{43}$/;
 const MAX_DEVICE_NAME_LENGTH = 80;
 
-export function digestMobileToken(token: string): string {
+function digestMobileToken(token: string): string {
   return createHash('sha256').update(token, 'utf8').digest('hex');
 }
 
@@ -106,23 +104,16 @@ function safeDigestMatch(storedDigest: string, candidateDigest: string): boolean
 
 export class MobileDeviceRegistry {
   private readonly clock: () => Date;
-  private readonly tokenFactory: () => string;
-  private readonly idFactory: () => string;
 
   constructor(
     private readonly database: Database,
     options: MobileDeviceRegistryOptions = {},
   ) {
     this.clock = options.clock ?? (() => new Date());
-    this.tokenFactory = options.tokenFactory ?? generateMobileToken;
-    this.idFactory = options.idFactory ?? randomUUID;
   }
 
   issue(input: IssueMobileDeviceInput): MobileDeviceCredential {
-    const token = this.tokenFactory();
-    if (!TOKEN_PATTERN.test(token)) {
-      throw new Error('Token factory must return a 256-bit base64url token');
-    }
+    const token = generateMobileToken();
 
     const capabilities = input.capabilities ?? [MOBILE_READ_CAPABILITY];
     if (
@@ -140,7 +131,7 @@ export class MobileDeviceRegistry {
     const row = this.database
       .insert(schema.mobileDevices)
       .values({
-        id: this.idFactory(),
+        id: randomUUID(),
         name: normalizeDeviceName(input.name),
         tokenDigest: digestMobileToken(token),
         capabilities: JSON.stringify([...new Set(capabilities)].sort()),
@@ -214,10 +205,7 @@ export class MobileDeviceRegistry {
   }
 
   rotate(deviceId: string): MobileDeviceCredential | null {
-    const token = this.tokenFactory();
-    if (!TOKEN_PATTERN.test(token)) {
-      throw new Error('Token factory must return a 256-bit base64url token');
-    }
+    const token = generateMobileToken();
 
     const rotatedAt = this.clock().toISOString();
     const row = this.database

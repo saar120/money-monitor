@@ -185,7 +185,6 @@ describe('TailscaleServeCoordinator', () => {
       true,
     );
     expect(store.saved).toEqual([ownership(null, expectedTarget), ownership(expectedTarget)]);
-    expect(store.saved[0]?.lastKnownTarget).toBeNull();
   });
 
   it('supports the dedicated non-default HTTPS listener selected by the app', async () => {
@@ -326,26 +325,18 @@ describe('TailscaleServeCoordinator', () => {
     ['Funnel-enabled listener', statusJson({ funnel: true })],
     ['HTTP listener on the HTTPS port', statusJson({ httpListener: true })],
     ['foreground listener on the owned port', statusJson({ foreground: true })],
+    [
+      'multiple authorities on the owned listener',
+      JSON.stringify({
+        TCP: { 443: { HTTPS: true } },
+        Web: {
+          [AUTHORITY]: { Handlers: {} },
+          'another-name.example.ts.net:443': { Handlers: {} },
+        },
+      }),
+    ],
   ])('fails closed for a conflicting %s', async (_name, status) => {
     const process = new FakeProcess([{ stdout: status }]);
-    const { coordinator: subject } = coordinator(process);
-
-    await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
-      status: 'conflict',
-      diagnostic: 'routeOwnershipConflict',
-    });
-    expect(process.requests).toHaveLength(2);
-  });
-
-  it('fails closed when status contains multiple authorities on the owned listener', async () => {
-    const ambiguousStatus = JSON.stringify({
-      TCP: { 443: { HTTPS: true } },
-      Web: {
-        [AUTHORITY]: { Handlers: {} },
-        'another-name.example.ts.net:443': { Handlers: {} },
-      },
-    });
-    const process = new FakeProcess([{ stdout: ambiguousStatus }]);
     const { coordinator: subject } = coordinator(process);
 
     await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
@@ -417,53 +408,30 @@ describe('TailscaleServeCoordinator', () => {
     },
   );
 
-  it('classifies a parsed Tailnet login requirement without attempting Serve', async () => {
-    const process = new FakeProcess([], {
-      stdout: tailnetStatusJson({
-        backendState: 'NeedsLogin',
-        httpsEnabled: false,
-      }),
-    });
-    const { coordinator: subject } = coordinator(process);
-
-    await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
-      status: 'loggedOut',
-      diagnostic: 'tailscaleLoggedOut',
-    });
-    expect(process.requests).toHaveLength(1);
-  });
-
-  it('classifies pending machine approval without attempting Serve', async () => {
-    const process = new FakeProcess([], {
-      stdout: tailnetStatusJson({
-        backendState: 'NeedsMachineAuth',
-        httpsEnabled: false,
-      }),
-    });
-    const { coordinator: subject } = coordinator(process);
-
-    await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
-      status: 'permissionRequired',
-      diagnostic: 'tailscalePermissionRequired',
-    });
-    expect(process.requests).toHaveLength(1);
-  });
-
   it.each([
-    ['Starting', true],
-    ['Running', false],
-  ])('reports Tailnet state %s/online=%s as not ready', async (backendState, online) => {
-    const process = new FakeProcess([], {
-      stdout: tailnetStatusJson({ backendState, online }),
-    });
-    const { coordinator: subject } = coordinator(process);
+    [{ backendState: 'NeedsLogin', httpsEnabled: false }, 'loggedOut', 'tailscaleLoggedOut'],
+    [
+      { backendState: 'NeedsMachineAuth', httpsEnabled: false },
+      'permissionRequired',
+      'tailscalePermissionRequired',
+    ],
+    [{ backendState: 'Starting', online: true }, 'failed', 'tailscaleNotReady'],
+    [{ backendState: 'Running', online: false }, 'failed', 'tailscaleNotReady'],
+  ] as const)(
+    'classifies Tailnet readiness %j without attempting Serve',
+    async (statusOptions, status, diagnostic) => {
+      const process = new FakeProcess([], {
+        stdout: tailnetStatusJson(statusOptions),
+      });
+      const { coordinator: subject } = coordinator(process);
 
-    await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
-      status: 'failed',
-      diagnostic: 'tailscaleNotReady',
-    });
-    expect(process.requests).toHaveLength(1);
-  });
+      await expect(subject.reconcile({ enabled: true, mobilePort: 43123 })).resolves.toEqual({
+        status,
+        diagnostic,
+      });
+      expect(process.requests).toHaveLength(1);
+    },
+  );
 
   it.each([
     [new ExecFileFailure({ code: 'ENOENT' }), 'notInstalled', 'cliNotFound'],

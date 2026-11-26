@@ -26,7 +26,7 @@ export class TelegramDeliveryError extends Error {
 }
 export class TelegramRejected extends Error {}
 export class TelegramImageExpired extends TelegramRejected {}
-export function isKnownTelegramRejection(error: unknown) {
+function isKnownTelegramRejection(error: unknown) {
   return (
     error instanceof TelegramRejected ||
     (error instanceof GrammyError && error.error_code >= 400 && error.error_code < 500)

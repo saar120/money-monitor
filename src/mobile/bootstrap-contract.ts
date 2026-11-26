@@ -601,12 +601,15 @@ const SECRET_PREFIX_VALUE_PATTERN =
 const TOKEN_VALUE_PATTERN =
   /^(?:[A-Za-z0-9_-]{43}|eyJ[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+\.[A-Za-z0-9_-]+)$/;
 const HASH_VALUE_PATTERN = /^[a-fA-F0-9]{64}$/;
+const UUID_VALUE_PATTERN =
+  /^[0-9a-f]{8}-[0-9a-f]{4}-[1-8][0-9a-f]{3}-[89ab][0-9a-f]{3}-[0-9a-f]{12}$/i;
 
 function normalizedKey(key: string): string {
   return key.replace(/[^A-Za-z0-9]/g, '').toLowerCase();
 }
 
 function containsLongFinancialIdentifier(value: string): boolean {
+  if (UUID_VALUE_PATTERN.test(value)) return false;
   return (value.match(/[\d -]{12,32}/g) ?? []).some((candidate) => {
     const digits = candidate.replace(/\D/g, '');
     return digits.length >= 12 && digits.length <= 19;

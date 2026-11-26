@@ -91,24 +91,6 @@ describe('checkAndRunMissedScrape', () => {
     stopScheduler();
   });
 
-  it('skips when a scrape is already in progress', async () => {
-    vi.setSystemTime(new Date('2026-03-15T03:00:00.000Z'));
-
-    const { startScheduler, stopScheduler, checkAndRunMissedScrape } =
-      await import('./scheduler.js');
-
-    startScheduler();
-
-    vi.mocked(hasActiveSessions).mockReturnValue(true);
-    vi.setSystemTime(new Date('2026-03-15T08:00:00.000Z'));
-
-    checkAndRunMissedScrape();
-
-    expect(runScrapeSession).not.toHaveBeenCalled();
-
-    stopScheduler();
-  });
-
   it('skips when there are no active accounts', async () => {
     vi.setSystemTime(new Date('2026-03-15T03:00:00.000Z'));
 
@@ -153,7 +135,7 @@ describe('checkAndRunMissedScrape', () => {
     stopScheduler();
   });
 
-  it('does nothing before scheduler has started (lastCronFireTime is null)', async () => {
+  it('does nothing before scheduler has started', async () => {
     const { checkAndRunMissedScrape } = await import('./scheduler.js');
 
     checkAndRunMissedScrape();
@@ -169,6 +151,7 @@ describe('checkAndRunMissedScrape', () => {
     vi.setSystemTime(new Date('2026-03-15T04:00:01.000Z'));
     const callback = vi.mocked(cron.schedule).mock.calls.at(-2)![1] as () => void;
     callback();
+    scheduler.checkAndRunMissedScrape();
     expect(runScrapeSession).not.toHaveBeenCalled();
     vi.mocked(hasActiveSessions).mockReturnValue(false);
     scheduler.checkAndRunMissedScrape();

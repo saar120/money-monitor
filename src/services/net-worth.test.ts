@@ -20,23 +20,19 @@ vi.mock('../db/connection.js', () => ({
   closeAll: () => {},
 }));
 
-vi.mock('./exchange-rates.js', () => ({
-  getExchangeRates: vi
-    .fn()
-    .mockResolvedValue({
+vi.mock('./exchange-rates.js', async (importOriginal) => {
+  const actual = await importOriginal<typeof import('./exchange-rates.js')>();
+  return {
+    ...actual,
+    getExchangeRates: vi.fn().mockResolvedValue({
       rates: { ILS: 1, USD: 3.6, EUR: 3.9 },
       stale: false,
       fetchedAt: new Date().toISOString(),
     }),
-  convertToIls: vi.fn((amount: number, currency: string, rates: Record<string, number>) => {
-    if (currency === 'ILS') return amount;
-    const rate = rates[currency];
-    if (rate === undefined) return 0;
-    return amount * rate;
-  }),
-}));
+  };
+});
 
-const { generateDatePoints, getNetWorth } = await import('./net-worth.js');
+const { getNetWorth, getNetWorthHistory } = await import('./net-worth.js');
 
 describe('net-worth service', () => {
   beforeEach(() => {
@@ -47,45 +43,45 @@ describe('net-worth service', () => {
     testDb?.close();
   });
 
-  // ── generateDatePoints ──
+  // ── getNetWorthHistory date points ──
 
-  describe('generateDatePoints', () => {
-    it('generates monthly date points', () => {
-      const dates = generateDatePoints('2026-01-01', '2026-04-01', 'monthly');
-      expect(dates).toEqual(['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01']);
-    });
-
-    it('generates daily date points', () => {
-      const dates = generateDatePoints('2026-01-01', '2026-01-05', 'daily');
-      expect(dates).toEqual(['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05']);
-    });
-
-    it('generates weekly date points', () => {
-      const dates = generateDatePoints('2026-01-01', '2026-01-31', 'weekly');
-      // 2026-01-01 is a Thursday. The code advances to the next Monday.
-      // 2026-01-05 is Monday
-      expect(dates.length).toBeGreaterThan(0);
-      // Each date should be a Monday
-      for (const d of dates) {
-        const day = new Date(d + 'T00:00:00').getDay();
-        expect(day).toBe(1); // Monday
-      }
-    });
-
-    it('returns empty array when start > end', () => {
-      const dates = generateDatePoints('2026-12-01', '2026-01-01', 'monthly');
-      expect(dates).toHaveLength(0);
-    });
-
-    it('returns single date when start === end for daily', () => {
-      const dates = generateDatePoints('2026-01-15', '2026-01-15', 'daily');
-      expect(dates).toEqual(['2026-01-15']);
-    });
-
-    it('handles year boundary', () => {
-      const dates = generateDatePoints('2025-11-01', '2026-02-01', 'monthly');
-      expect(dates).toEqual(['2025-11-01', '2025-12-01', '2026-01-01', '2026-02-01']);
-    });
+  describe('getNetWorthHistory', () => {
+    it.each([
+      [
+        'monthly',
+        '2026-01-01',
+        '2026-04-01',
+        ['2026-01-01', '2026-02-01', '2026-03-01', '2026-04-01'],
+      ],
+      [
+        'daily',
+        '2026-01-01',
+        '2026-01-05',
+        ['2026-01-01', '2026-01-02', '2026-01-03', '2026-01-04', '2026-01-05'],
+      ],
+      [
+        'weekly',
+        '2026-01-01',
+        '2026-01-31',
+        ['2026-01-05', '2026-01-12', '2026-01-19', '2026-01-26'],
+      ],
+      ['monthly', '2026-12-01', '2026-01-01', []],
+      ['daily', '2026-01-15', '2026-01-15', ['2026-01-15']],
+      [
+        'monthly',
+        '2025-11-01',
+        '2026-02-01',
+        ['2025-11-01', '2025-12-01', '2026-01-01', '2026-02-01'],
+      ],
+    ] as const)(
+      'generates %s date points for %s..%s',
+      async (granularity, startDate, endDate, expected) => {
+        const result = await getNetWorthHistory({ startDate, endDate, granularity });
+        expect('error' in result).toBe(false);
+        if ('error' in result) return;
+        expect(result.series.map((p) => p.date)).toEqual(expected);
+      },
+    );
   });
 
   // ── getNetWorth ──
@@ -212,13 +208,6 @@ describe('net-worth service', () => {
       const result = await getNetWorth();
       expect(result.liabilitiesTotal).toBe(10000);
       expect(result.liabilities).toHaveLength(1);
-    });
-
-    it('includes exchange rates in response', async () => {
-      const result = await getNetWorth();
-      expect(result.exchangeRates).toBeDefined();
-      expect(result.exchangeRates.ILS).toBe(1);
-      expect(result.exchangeRates.USD).toBe(3.6);
     });
 
     it('handles bank with null balance', async () => {

@@ -182,3 +182,27 @@ it('accepts an explicit SILENT response as a completed analysis baseline', async
   expect(fixture.settings._lastNetWorthTotal).toBe(100);
   expect(fixture.send).not.toHaveBeenCalled();
 });
+
+it('extracts only <message> content and honors <message>[SILENT]</message> after reasoning', async () => {
+  registerGetChatIds(() => [123]);
+  fixture.prompt.mockImplementationOnce(async () => {
+    end('stop', 'Let me analyze the data.\n\n<message>⚠️ CLAUDE AI ₪314.90</message>');
+  });
+  const alertId = enqueuePostImport('synthetic-message-tag', [], results);
+  await runPostImport(alertId);
+  expect(fixture.send).toHaveBeenCalledOnce();
+  expect(fixture.send.mock.calls[0][1]).toContain('CLAUDE AI');
+  expect(fixture.send.mock.calls[0][1]).not.toContain('Let me analyze');
+
+  fixture.send.mockClear();
+  fixture.settings._lastNetWorthTotal = 42;
+  fixture.prompt.mockImplementationOnce(async () => {
+    end('stop', 'Nothing noteworthy.\n\n<message>[SILENT]</message>');
+  });
+  const silentId = enqueuePostImport('synthetic-silent-tag', [], results);
+  await runPostImport(silentId);
+  const rows = database.db.select().from(alertEvaluations).all();
+  expect(JSON.parse(rows.at(-1)!.payload).state).toBe('silent');
+  expect(fixture.settings._lastNetWorthTotal).toBe(100);
+  expect(fixture.send).not.toHaveBeenCalled();
+});

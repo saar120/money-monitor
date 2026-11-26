@@ -185,14 +185,6 @@ export function appendMessage(
   return msg;
 }
 
-export function getSessionMessages(
-  id: string,
-): Array<{ role: 'user' | 'assistant'; content: string }> | null {
-  const session = getSession(id);
-  if (!session) return null;
-  return session.messages.map((m) => ({ role: m.role, content: m.content }));
-}
-
 export function updateSession(id: string, change: (session: Session) => Session): Session | null {
   const current = getSession(id);
   if (!current) return null;

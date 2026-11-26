@@ -248,7 +248,7 @@ test('completes the Mac approval flow and returns the device credential', async 
         data: {
           status: 'pending_approval',
           expiresAt: '2099-01-01T00:00:00.000Z',
-          pollAfterSeconds: 1,
+          pollAfterSeconds: 0,
           claimantSecret: 'C'.repeat(43),
         },
       },
@@ -292,8 +292,6 @@ test('completes the Mac approval flow and returns the device credential', async 
       },
       'Saar’s iPhone',
       (value) => progress.push(value),
-      undefined,
-      0,
     );
 
     assert.deepEqual(progress, ['requesting', 'awaiting-approval', 'exchanging']);
@@ -367,6 +365,19 @@ test('maps the complete Activity filter set onto the transaction query', async (
 test('follows transaction cursors so the review queue cannot stop at the first page', async () => {
   const paths: string[] = [];
   const originalFetch = globalThis.fetch;
+  const makeTx = (id: string, displayName: string) => ({
+    id,
+    occurredOn: '2026-09-08',
+    displayName,
+    amount: { value: '12.00', currencyCode: 'ILS' },
+    direction: 'debit',
+    status: 'posted',
+    category: null,
+    account: { id: 'account_1', displayName: 'Checking', identifierMask: '•••• 1234' },
+    owner: { kind: 'shared', displayName: null },
+    needsReview: true,
+    excludedFromReports: false,
+  });
   globalThis.fetch = async (input) => {
     const url = new URL(String(input));
     paths.push(url.toString());
@@ -375,7 +386,9 @@ test('follows transaction cursors so the review queue cannot stop at the first p
       JSON.stringify({
         data: {
           financialDate: '2026-09-08',
-          transactions: secondPage ? [] : [],
+          transactions: secondPage
+            ? [makeTx('transaction_2', 'Second Page Store')]
+            : [makeTx('transaction_1', 'First Page Store')],
           page: secondPage
             ? { hasMore: false, nextCursor: null }
             : { hasMore: true, nextCursor: 'cursor_v1_next' },
@@ -387,7 +400,7 @@ test('follows transaction cursors so the review queue cannot stop at the first p
   };
 
   try {
-    await fetchTransactions(
+    const result = await fetchTransactions(
       {
         serverId: '11111111-1111-4111-8111-111111111111',
         baseURL: 'https://money-monitor.tailnet.ts.net/money-monitor',
@@ -397,6 +410,12 @@ test('follows transaction cursors so the review queue cannot stop at the first p
     );
     assert.equal(paths.length, 2);
     assert.equal(new URL(paths[1]!).searchParams.get('cursor'), 'cursor_v1_next');
+    assert.deepEqual(
+      result.transactions.map((t) => t.id),
+      ['transaction_1', 'transaction_2'],
+    );
+    assert.equal(result.hasMore, false);
+    assert.equal(result.nextCursor, null);
   } finally {
     globalThis.fetch = originalFetch;
   }

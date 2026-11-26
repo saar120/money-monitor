@@ -69,10 +69,6 @@ export const transactionQuerySchema = z.object({
   sortOrder: z.enum(['asc', 'desc']).default('desc'),
 });
 
-export const ignoreTransactionSchema = z.object({
-  ignored: z.boolean(),
-});
-
 // ─── Summary Query ───
 
 export const summaryQuerySchema = z.object({

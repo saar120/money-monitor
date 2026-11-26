@@ -1,7 +1,6 @@
 import { and, desc, eq, gte, lte, sql } from 'drizzle-orm';
 import type { BetterSQLite3Database } from 'drizzle-orm/better-sqlite3';
 import * as schema from '../db/schema.js';
-import { mobileFinancialDateFor } from './bootstrap-contract.js';
 import {
   MobileBootstrapSectionReadError,
   type BootstrapReadContext,
@@ -23,8 +22,6 @@ import {
 
 type MoneyMonitorDatabase = BetterSQLite3Database<typeof schema>;
 type Awaitable<T> = T | Promise<T>;
-export { MOBILE_FINANCE_TIME_ZONE } from './bootstrap-contract.js';
-export { maskAccountIdentifier } from './mobile-transaction-projection.js';
 
 export interface ProductionMobileBootstrapPortOptions {
   db: MoneyMonitorDatabase;
@@ -32,10 +29,6 @@ export interface ProductionMobileBootstrapPortOptions {
   publicIdKey: string;
   /** Existing net-worth service projected to its single public aggregate. */
   readNetWorthIls: (context: Readonly<BootstrapReadContext>) => Awaitable<number>;
-}
-
-export function financialDateInIsrael(instant: Date): string {
-  return mobileFinancialDateFor(instant);
 }
 
 function normalizeInstant(value: string | null): string | null {
